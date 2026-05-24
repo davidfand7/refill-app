@@ -21,7 +21,7 @@
  * No UI, no magic-link round-trip, no auto-parse race.
  */
 
-import { createFileRoute, useParams } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -43,6 +43,7 @@ const TEST_PASSWORD = "RefillTest2026!";
 
 function DevPersonaPage() {
   const { persona } = useParams({ from: "/dev/$persona" });
+  const navigate = useNavigate();
   const [status, setStatus] = useState<"working" | "error">("working");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -58,8 +59,6 @@ function DevPersonaPage() {
     let cancelled = false;
     void (async () => {
       try {
-        // Sign out any existing session first so the new one takes cleanly.
-        await supabase.auth.signOut();
         const { error } = await supabase.auth.signInWithPassword({
           email: config.email,
           password: TEST_PASSWORD,
@@ -70,9 +69,11 @@ function DevPersonaPage() {
           setErrorMsg(error.message);
           return;
         }
-        // Hard-navigate so the new session's middleware/gate logic fires
-        // cleanly with no React state holdovers.
-        window.location.assign(config.home);
+        // SPA navigate (NOT window.location.assign) — keeps AuthProvider's
+        // session state in memory across the route change. Hard-navigate
+        // throws it away and races re-hydration → AppLayout sees !user
+        // momentarily → bounces to /login.
+        void navigate({ to: config.home });
       } catch (err) {
         if (cancelled) return;
         setStatus("error");
@@ -83,7 +84,7 @@ function DevPersonaPage() {
     return () => {
       cancelled = true;
     };
-  }, [persona]);
+  }, [persona, navigate]);
 
   return (
     <div
