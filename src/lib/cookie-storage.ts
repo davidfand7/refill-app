@@ -20,8 +20,16 @@ function isLocalhost(hostname: string): boolean {
 
 function cookieDomain(): string | undefined {
   if (typeof window === "undefined") return undefined;
-  if (isLocalhost(window.location.hostname)) return undefined; // browser sets cookie on localhost without explicit domain
-  return COOKIE_DOMAIN_PROD;
+  const host = window.location.hostname;
+  if (isLocalhost(host)) return undefined; // browser sets cookie on localhost without explicit domain
+  // Only force the .getrefill.app domain when actually on getrefill.app.
+  // On workers.dev / preview URLs, forcing Domain=.getrefill.app makes the
+  // browser silently REJECT the cookie → session never persists across page
+  // loads → useIsAdmin & friends see no auth on /app/admin hard-refresh.
+  if (host === "getrefill.app" || host.endsWith(".getrefill.app")) {
+    return COOKIE_DOMAIN_PROD;
+  }
+  return undefined;
 }
 
 function readCookie(name: string): string | null {

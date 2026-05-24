@@ -10,7 +10,7 @@
  *   spa-owner / null → /app/refill (default, lets RefillShell gate further
  *                                   on tenant membership)
  *   rep              → /app/rep
- *   developer        → /app/admin/personas (admin testing entry)
+ *   developer        → /app/admin (admin testing entry)
  *   admin            → /app/admin
  *
  * Session-storage gate fires once per sign-in so a user who navigates back
@@ -32,7 +32,7 @@ export function postLoginTarget(
   if (primaryRole === "rep") return { href: "/app/rep", crossHost: false };
   if (primaryRole === "admin") return { href: "/app/admin", crossHost: false };
   if (primaryRole === "developer") {
-    return { href: "/app/admin/personas", crossHost: false };
+    return { href: "/app/admin", crossHost: false };
   }
   // spa-owner + null fall here. RefillShell's own non-tenant gate decides
   // whether to render or bounce to /onboard.

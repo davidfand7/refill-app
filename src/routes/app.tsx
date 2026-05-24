@@ -70,7 +70,7 @@ function AppLayout() {
       return;
     }
     if (primaryRole === "developer") {
-      void navigate({ to: "/app/admin/personas", replace: true });
+      void navigate({ to: "/app/admin", replace: true });
       return;
     }
     if (tenantMembership.tenant) {
