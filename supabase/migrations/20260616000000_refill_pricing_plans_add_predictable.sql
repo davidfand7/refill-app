@@ -24,9 +24,9 @@ alter table public.refill_pricing_plans
 -- constraint immediately without waiting for the periodic refresh.
 notify pgrst, 'reload schema';
 
--- Verify: should return all three rows.
-select unnest(enum_range(null::text)::text[]) from (select null::text limit 0) _;
--- (^ no-op smoke; the real verification is INSERT plan='predictable' succeeds.)
+-- Cleave fix 2026-05-24: removed leftover smoke-test line that called
+-- enum_range(null::text) — broken (text isn't an enum) and not load-bearing
+-- (the real verification is the constraint check below).
 select conname, pg_get_constraintdef(oid)
 from pg_constraint
 where conname = 'refill_pricing_plans_plan_check';

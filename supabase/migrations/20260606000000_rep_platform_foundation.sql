@@ -100,7 +100,10 @@ create table if not exists public.rep_commission_ledger (
   commission_usd        numeric(12,2) not null,
   status                text not null default 'pending'
                           check (status in ('pending', 'paid', 'voided')),
-  stripe_payout_id      uuid references public.payout_requests(id) on delete set null,
+  -- Cleave fix 2026-05-24: dropped FK to public.payout_requests
+  -- (Agentiport-only table, not ported). Kept as nullable uuid for
+  -- analytics stitching, no referential integrity.
+  stripe_payout_id      uuid,
   paid_at               timestamptz,
   notes                 text,
   created_at            timestamptz not null default now(),
