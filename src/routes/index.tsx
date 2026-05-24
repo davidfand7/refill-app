@@ -14,8 +14,8 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Agentiport — Import any agent. Export to any runtime." },
-      { name: "description", content: "The port where agents dock. Bidirectional adapters for Hermes, MCP, n8n, LangGraph, CrewAI, Composio, and Make. Open source." },
+      { title: "Refill — refill your schedule, recover your revenue." },
+      { name: "description", content: "Refill catches the cancellations your front desk doesn't have time to chase, fills the slots automatically, and only bills when we recover real money for you." },
       // noindex stays during stealth — remove when ready for public launch
       { name: "robots", content: "noindex, nofollow" },
     ],
