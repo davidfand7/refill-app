@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useShell } from "@/lib/shell";
+import { useAuth } from "@/lib/auth";
 import {
   ArrowRight, Zap, DollarSign, Sparkles,
   Github, CheckCircle2, RefreshCw,
@@ -105,11 +106,16 @@ function VerticalLanding({
 
 function useSignedInRedirect(target: string) {
   const navigate = useNavigate();
+  const { session } = useAuth();
+  // Cleave fix 2026-05-24: was getSession() racing the supabase-js
+  // auto-parse of #access_token. Now reacts to useAuth()'s reactive
+  // session — when supabase-js fires onAuthStateChange post-auto-parse,
+  // session becomes non-null and we navigate.
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) navigate({ to: target });
-    });
-  }, [navigate, target]);
+    if (session) {
+      void navigate({ to: target });
+    }
+  }, [session, navigate, target]);
 }
 
 // v414 — Refill standalone landing at getrefill.app/. Sparse,
