@@ -15,7 +15,7 @@
  * the post-magic-link redirect).
  */
 
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import { DemoModeProvider } from "@/lib/demo-mode";
@@ -38,6 +38,7 @@ type PrimaryRole = "spa-owner" | "rep" | "developer" | "admin" | null;
 function AppLayout() {
   const { user, session, loading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const tenantMembership = useTenantMembership();
   const repProfile = useRepProfile();
   const [primaryRole, setPrimaryRole] = useState<PrimaryRole>(null);
@@ -54,6 +55,39 @@ function AppLayout() {
       .then((r) => setPrimaryRole((r?.primaryRole as PrimaryRole) ?? null))
       .catch(() => setPrimaryRole(null));
   }, [user, loading, session?.access_token, navigate]);
+
+  // Auto-dispatch users landing on bare /app to their shell home. Without
+  // this, magic-link-driven landings sit on /app with an empty Outlet.
+  useEffect(() => {
+    if (loading || !user) return;
+    if (location.pathname !== "/app" && location.pathname !== "/app/") return;
+    if (primaryRole === "rep" || repProfile.profile) {
+      void navigate({ to: "/app/rep", replace: true });
+      return;
+    }
+    if (primaryRole === "admin") {
+      void navigate({ to: "/app/admin", replace: true });
+      return;
+    }
+    if (primaryRole === "developer") {
+      void navigate({ to: "/app/admin/personas", replace: true });
+      return;
+    }
+    if (tenantMembership.tenant) {
+      void navigate({ to: "/app/refill", replace: true });
+      return;
+    }
+    // No role + no tenant + no rep profile yet — could still be loading.
+    // Wait for the async checks to settle; we'll re-fire when state updates.
+  }, [
+    location.pathname,
+    primaryRole,
+    repProfile.profile,
+    tenantMembership.tenant,
+    user,
+    loading,
+    navigate,
+  ]);
 
   if (loading) {
     return (
