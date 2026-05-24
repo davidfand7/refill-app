@@ -9,38 +9,188 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
+import { Route as ScanRouteImport } from './routes/scan'
+import { Route as PricingRouteImport } from './routes/pricing'
+import { Route as PersonasRouteImport } from './routes/personas'
+import { Route as OnboardRouteImport } from './routes/onboard'
+import { Route as BookRouteImport } from './routes/book'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RSlugRouteImport } from './routes/r.$slug'
+import { Route as RescueClaimTokenRouteImport } from './routes/rescue.claim.$token'
 
+const UnsubscribeRoute = UnsubscribeRouteImport.update({
+  id: '/unsubscribe',
+  path: '/unsubscribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScanRoute = ScanRouteImport.update({
+  id: '/scan',
+  path: '/scan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PersonasRoute = PersonasRouteImport.update({
+  id: '/personas',
+  path: '/personas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardRoute = OnboardRouteImport.update({
+  id: '/onboard',
+  path: '/onboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BookRoute = BookRouteImport.update({
+  id: '/book',
+  path: '/book',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RSlugRoute = RSlugRouteImport.update({
+  id: '/r/$slug',
+  path: '/r/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RescueClaimTokenRoute = RescueClaimTokenRouteImport.update({
+  id: '/rescue/claim/$token',
+  path: '/rescue/claim/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/book': typeof BookRoute
+  '/onboard': typeof OnboardRoute
+  '/personas': typeof PersonasRoute
+  '/pricing': typeof PricingRoute
+  '/scan': typeof ScanRoute
+  '/unsubscribe': typeof UnsubscribeRoute
+  '/r/$slug': typeof RSlugRoute
+  '/rescue/claim/$token': typeof RescueClaimTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/book': typeof BookRoute
+  '/onboard': typeof OnboardRoute
+  '/personas': typeof PersonasRoute
+  '/pricing': typeof PricingRoute
+  '/scan': typeof ScanRoute
+  '/unsubscribe': typeof UnsubscribeRoute
+  '/r/$slug': typeof RSlugRoute
+  '/rescue/claim/$token': typeof RescueClaimTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/book': typeof BookRoute
+  '/onboard': typeof OnboardRoute
+  '/personas': typeof PersonasRoute
+  '/pricing': typeof PricingRoute
+  '/scan': typeof ScanRoute
+  '/unsubscribe': typeof UnsubscribeRoute
+  '/r/$slug': typeof RSlugRoute
+  '/rescue/claim/$token': typeof RescueClaimTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/book'
+    | '/onboard'
+    | '/personas'
+    | '/pricing'
+    | '/scan'
+    | '/unsubscribe'
+    | '/r/$slug'
+    | '/rescue/claim/$token'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/book'
+    | '/onboard'
+    | '/personas'
+    | '/pricing'
+    | '/scan'
+    | '/unsubscribe'
+    | '/r/$slug'
+    | '/rescue/claim/$token'
+  id:
+    | '__root__'
+    | '/'
+    | '/book'
+    | '/onboard'
+    | '/personas'
+    | '/pricing'
+    | '/scan'
+    | '/unsubscribe'
+    | '/r/$slug'
+    | '/rescue/claim/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BookRoute: typeof BookRoute
+  OnboardRoute: typeof OnboardRoute
+  PersonasRoute: typeof PersonasRoute
+  PricingRoute: typeof PricingRoute
+  ScanRoute: typeof ScanRoute
+  UnsubscribeRoute: typeof UnsubscribeRoute
+  RSlugRoute: typeof RSlugRoute
+  RescueClaimTokenRoute: typeof RescueClaimTokenRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/unsubscribe': {
+      id: '/unsubscribe'
+      path: '/unsubscribe'
+      fullPath: '/unsubscribe'
+      preLoaderRoute: typeof UnsubscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scan': {
+      id: '/scan'
+      path: '/scan'
+      fullPath: '/scan'
+      preLoaderRoute: typeof ScanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/personas': {
+      id: '/personas'
+      path: '/personas'
+      fullPath: '/personas'
+      preLoaderRoute: typeof PersonasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboard': {
+      id: '/onboard'
+      path: '/onboard'
+      fullPath: '/onboard'
+      preLoaderRoute: typeof OnboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/book': {
+      id: '/book'
+      path: '/book'
+      fullPath: '/book'
+      preLoaderRoute: typeof BookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +198,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/r/$slug': {
+      id: '/r/$slug'
+      path: '/r/$slug'
+      fullPath: '/r/$slug'
+      preLoaderRoute: typeof RSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rescue/claim/$token': {
+      id: '/rescue/claim/$token'
+      path: '/rescue/claim/$token'
+      fullPath: '/rescue/claim/$token'
+      preLoaderRoute: typeof RescueClaimTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BookRoute: BookRoute,
+  OnboardRoute: OnboardRoute,
+  PersonasRoute: PersonasRoute,
+  PricingRoute: PricingRoute,
+  ScanRoute: ScanRoute,
+  UnsubscribeRoute: UnsubscribeRoute,
+  RSlugRoute: RSlugRoute,
+  RescueClaimTokenRoute: RescueClaimTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
