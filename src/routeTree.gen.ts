@@ -19,6 +19,7 @@ import { Route as BookRouteImport } from './routes/book'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RSlugRouteImport } from './routes/r.$slug'
+import { Route as DevPersonaRouteImport } from './routes/dev.$persona'
 import { Route as AppRepRouteImport } from './routes/app.rep'
 import { Route as AppRefillRouteImport } from './routes/app.refill'
 import { Route as ApiRefillPortalRouteImport } from './routes/api.refill-portal'
@@ -132,6 +133,11 @@ const IndexRoute = IndexRouteImport.update({
 const RSlugRoute = RSlugRouteImport.update({
   id: '/r/$slug',
   path: '/r/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevPersonaRoute = DevPersonaRouteImport.update({
+  id: '/dev/$persona',
+  path: '/dev/$persona',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRepRoute = AppRepRouteImport.update({
@@ -480,6 +486,7 @@ export interface FileRoutesByFullPath {
   '/api/refill-portal': typeof ApiRefillPortalRoute
   '/app/refill': typeof AppRefillRouteWithChildren
   '/app/rep': typeof AppRepRouteWithChildren
+  '/dev/$persona': typeof DevPersonaRoute
   '/r/$slug': typeof RSlugRoute
   '/api/cron/emma-invoice': typeof ApiCronEmmaInvoiceRoute
   '/api/cron/emma-preshow-sweep': typeof ApiCronEmmaPreshowSweepRoute
@@ -554,6 +561,7 @@ export interface FileRoutesByTo {
   '/unsubscribe': typeof UnsubscribeRoute
   '/api/refill-checkout': typeof ApiRefillCheckoutRoute
   '/api/refill-portal': typeof ApiRefillPortalRoute
+  '/dev/$persona': typeof DevPersonaRoute
   '/r/$slug': typeof RSlugRoute
   '/api/cron/emma-invoice': typeof ApiCronEmmaInvoiceRoute
   '/api/cron/emma-preshow-sweep': typeof ApiCronEmmaPreshowSweepRoute
@@ -627,6 +635,7 @@ export interface FileRoutesById {
   '/api/refill-portal': typeof ApiRefillPortalRoute
   '/app/refill': typeof AppRefillRouteWithChildren
   '/app/rep': typeof AppRepRouteWithChildren
+  '/dev/$persona': typeof DevPersonaRoute
   '/r/$slug': typeof RSlugRoute
   '/api/cron/emma-invoice': typeof ApiCronEmmaInvoiceRoute
   '/api/cron/emma-preshow-sweep': typeof ApiCronEmmaPreshowSweepRoute
@@ -705,6 +714,7 @@ export interface FileRouteTypes {
     | '/api/refill-portal'
     | '/app/refill'
     | '/app/rep'
+    | '/dev/$persona'
     | '/r/$slug'
     | '/api/cron/emma-invoice'
     | '/api/cron/emma-preshow-sweep'
@@ -779,6 +789,7 @@ export interface FileRouteTypes {
     | '/unsubscribe'
     | '/api/refill-checkout'
     | '/api/refill-portal'
+    | '/dev/$persona'
     | '/r/$slug'
     | '/api/cron/emma-invoice'
     | '/api/cron/emma-preshow-sweep'
@@ -851,6 +862,7 @@ export interface FileRouteTypes {
     | '/api/refill-portal'
     | '/app/refill'
     | '/app/rep'
+    | '/dev/$persona'
     | '/r/$slug'
     | '/api/cron/emma-invoice'
     | '/api/cron/emma-preshow-sweep'
@@ -926,6 +938,7 @@ export interface RootRouteChildren {
   UnsubscribeRoute: typeof UnsubscribeRoute
   ApiRefillCheckoutRoute: typeof ApiRefillCheckoutRoute
   ApiRefillPortalRoute: typeof ApiRefillPortalRoute
+  DevPersonaRoute: typeof DevPersonaRoute
   RSlugRoute: typeof RSlugRoute
   ApiCronEmmaInvoiceRoute: typeof ApiCronEmmaInvoiceRoute
   ApiCronEmmaPreshowSweepRoute: typeof ApiCronEmmaPreshowSweepRoute
@@ -1011,6 +1024,13 @@ declare module '@tanstack/react-router' {
       path: '/r/$slug'
       fullPath: '/r/$slug'
       preLoaderRoute: typeof RSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dev/$persona': {
+      id: '/dev/$persona'
+      path: '/dev/$persona'
+      fullPath: '/dev/$persona'
+      preLoaderRoute: typeof DevPersonaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/rep': {
@@ -1655,6 +1675,7 @@ const rootRouteChildren: RootRouteChildren = {
   UnsubscribeRoute: UnsubscribeRoute,
   ApiRefillCheckoutRoute: ApiRefillCheckoutRoute,
   ApiRefillPortalRoute: ApiRefillPortalRoute,
+  DevPersonaRoute: DevPersonaRoute,
   RSlugRoute: RSlugRoute,
   ApiCronEmmaInvoiceRoute: ApiCronEmmaInvoiceRoute,
   ApiCronEmmaPreshowSweepRoute: ApiCronEmmaPreshowSweepRoute,
