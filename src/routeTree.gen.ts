@@ -14,6 +14,7 @@ import { Route as ScanRouteImport } from './routes/scan'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PersonasRouteImport } from './routes/personas'
 import { Route as OnboardRouteImport } from './routes/onboard'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as BookRouteImport } from './routes/book'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
@@ -106,6 +107,11 @@ const PersonasRoute = PersonasRouteImport.update({
 const OnboardRoute = OnboardRouteImport.update({
   id: '/onboard',
   path: '/onboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookRoute = BookRouteImport.update({
@@ -464,6 +470,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/book': typeof BookRoute
+  '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
   '/personas': typeof PersonasRoute
   '/pricing': typeof PricingRoute
@@ -539,6 +546,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/book': typeof BookRoute
+  '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
   '/personas': typeof PersonasRoute
   '/pricing': typeof PricingRoute
@@ -609,6 +617,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/book': typeof BookRoute
+  '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
   '/personas': typeof PersonasRoute
   '/pricing': typeof PricingRoute
@@ -686,6 +695,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/book'
+    | '/login'
     | '/onboard'
     | '/personas'
     | '/pricing'
@@ -761,6 +771,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/book'
+    | '/login'
     | '/onboard'
     | '/personas'
     | '/pricing'
@@ -830,6 +841,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/book'
+    | '/login'
     | '/onboard'
     | '/personas'
     | '/pricing'
@@ -906,6 +918,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   BookRoute: typeof BookRoute
+  LoginRoute: typeof LoginRoute
   OnboardRoute: typeof OnboardRoute
   PersonasRoute: typeof PersonasRoute
   PricingRoute: typeof PricingRoute
@@ -963,6 +976,13 @@ declare module '@tanstack/react-router' {
       path: '/onboard'
       fullPath: '/onboard'
       preLoaderRoute: typeof OnboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/book': {
@@ -1627,6 +1647,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   BookRoute: BookRoute,
+  LoginRoute: LoginRoute,
   OnboardRoute: OnboardRoute,
   PersonasRoute: PersonasRoute,
   PricingRoute: PricingRoute,
