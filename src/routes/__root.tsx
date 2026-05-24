@@ -5,6 +5,7 @@ import {
   Scripts,
 } from "@tanstack/react-router";
 import appCss from "../styles.css?url";
+import { AuthProvider } from "@/lib/auth";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -34,7 +35,9 @@ function RootComponent() {
         <HeadContent />
       </head>
       <body>
-        <Outlet />
+        <AuthProvider>
+          <Outlet />
+        </AuthProvider>
         <Scripts />
       </body>
     </html>
