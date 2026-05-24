@@ -31,7 +31,7 @@ export const Route = createFileRoute("/dev/$persona")({
 });
 
 const PERSONAS = {
-  admin: { email: "admin@refill-demo.test", home: "/app/admin/personas" },
+  admin: { email: "admin@refill-demo.test", home: "/app/admin" },
   kelly: { email: "kelly@refill-demo.test", home: "/app/rep" },
   maria: { email: "maria@refill-demo.test", home: "/app/rep" },
   karen: { email: "karen@rejuv-demo.test", home: "/app/refill" },
