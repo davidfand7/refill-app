@@ -1,0 +1,916 @@
+/**
+ * /app/rep/outreach — Phase 2E rep-facing outreach surface (v397).
+ *
+ * Read-only browse of the shared template library + a "Send to a spa"
+ * mini-form. Pure rep-facing UI: no edit, no bulk import, no version
+ * history. The admin surface at /app/admin/outreach owns those.
+ *
+ * Flow:
+ *   1. Rep lands on the page → list templates grouped by ICP.
+ *   2. Picks a template → side panel opens with subject/body preview.
+ *   3. Fills recipient email + first name + spa name (+ optional context).
+ *   4. Hits Send → server fn validates rep-or-admin, fires the pipeline.
+ *      When OUTREACH_LIVE=true on the worker, Resend POSTs; otherwise the
+ *      send stays in dry_run mode (per project_outreach_paused) and the
+ *      UI shows the rendered preview as audit.
+ *
+ * The From: line shows the rep's display name when sent by a rep — Kelly
+ * appears in the spa owner's inbox, not "Karen Anderson". sent_by on the
+ * engagement row attributes the send for the commission cascade.
+ */
+
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { Send, Sparkles, X } from "lucide-react";
+import { z } from "zod";
+
+import { useAuth } from "@/lib/auth";
+import {
+  getMyRepAccount,
+  type RepAccountRow,
+} from "@/server/rep-platform";
+import {
+  listMyOutreachSends,
+  listOutreachTemplates,
+  type OutreachSendRow,
+  type OutreachTemplate,
+} from "@/server/refill-outreach";
+import {
+  getOutreachSendMode,
+  sendOutreachEmail,
+  type SendMode,
+} from "@/server/refill-outreach-send";
+
+// v407 Pinch #16: URL-param pre-fill schema. Any link can deep-link a
+// pre-populated send via /app/rep/outreach?to=&firstName=&spaName=&icp=&channel=.
+// All params optional + tolerant — bad/missing values are ignored, the form
+// just renders empty for those fields. Strings are length-capped to keep the
+// URL from blowing up on paste/copy.
+const outreachSearchSchema = z.object({
+  to: z.string().email().max(120).optional(),
+  firstName: z.string().min(1).max(80).optional(),
+  spaName: z.string().min(1).max(120).optional(),
+  icp: z.coerce.number().int().min(1).max(3).optional(),
+  channel: z.string().min(1).max(40).optional(),
+});
+
+export const Route = createFileRoute("/app/rep/outreach")({
+  validateSearch: (search: Record<string, unknown>) =>
+    outreachSearchSchema.parse(search),
+  component: OutreachPage,
+});
+
+// v407 Pinch #16: smart defaults for the two fields that are effectively
+// constants per-spa (Rejuv's recovered $ + how long Refill has been running).
+// Reps shouldn't retype these on every send. Surfaces as placeholder values
+// AND as initial form state so a Send-without-typing fires with real numbers.
+// When Karen's actual figures update, change these constants — or in a future
+// ship promote them to a per-rep tenant config column.
+const REJUV_RECOVERED_DEFAULT = "12,400";
+const REJUV_RECOVERED_WEEKS_DEFAULT = "8";
+
+type SendResult = {
+  mode: SendMode;
+  eventId: string;
+  renderedSubject: string | null;
+  renderedBody: string;
+  replyTo: string;
+  message: string;
+};
+
+function OutreachPage() {
+  const { session, loading: authLoading } = useAuth();
+  const accessToken = session?.access_token;
+  // v407 Pinch #16: read URL params for form pre-fill. validateSearch above
+  // already coerced + bounded the values; anything missing comes back undefined.
+  const prefill = Route.useSearch();
+
+  const [rep, setRep] = useState<RepAccountRow | null>(null);
+  const [templates, setTemplates] = useState<OutreachTemplate[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<OutreachTemplate | null>(null);
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<SendResult | null>(null);
+  // v404 Pinch #14b: pre-click send-mode affordance. Null until resolved.
+  const [liveEnabled, setLiveEnabled] = useState<boolean | null>(null);
+  // v405.3 Pinch #13: past-sends history. Refetched after every send so the
+  // panel updates without a page reload.
+  const [sends, setSends] = useState<OutreachSendRow[]>([]);
+  // v407 Pinch #16: form initial state hydrates from URL search params for
+  // recipient fields + falls back to Rejuv default constants for the two
+  // effectively-fixed stats. Reps stop retyping the same numbers every send.
+  const [form, setForm] = useState({
+    recipientEmail: prefill.to ?? "",
+    firstName: prefill.firstName ?? "",
+    spaName: prefill.spaName ?? "",
+    rejuvRecoveredAmount: REJUV_RECOVERED_DEFAULT,
+    rejuvRecoveredWeeks: REJUV_RECOVERED_WEEKS_DEFAULT,
+  });
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!accessToken) {
+      setLoaded(true);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const [repRes, tplRes, modeRes, sendsRes] = await Promise.all([
+          getMyRepAccount({ data: { accessToken } }),
+          listOutreachTemplates({ data: { accessToken } }).catch(() => ({
+            templates: [],
+          })),
+          // v404 Pinch #14b: fetch send-mode alongside profile/templates so
+          // the button labels render correctly on first paint, not after a
+          // post-click reveal. Fail-soft to dry-run framing if it errors.
+          getOutreachSendMode({ data: { accessToken } }).catch(() => ({
+            liveEnabled: false,
+          })),
+          // v405.3 Pinch #13: pull past-sends history alongside the rest so
+          // the panel hydrates on first paint. Fail-soft to empty array if
+          // the query errors (e.g. caller is admin with no rep profile yet).
+          listMyOutreachSends({ data: { accessToken } }).catch(() => ({
+            sends: [],
+          })),
+        ]);
+        if (cancelled) return;
+        setRep(repRes.rep);
+        setTemplates(tplRes.templates);
+        setLiveEnabled(modeRes.liveEnabled);
+        setSends(sendsRes.sends);
+      } catch (err) {
+        if (!cancelled) {
+          setError(
+            err instanceof Error ? err.message : "Couldn't load outreach.",
+          );
+        }
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, accessToken]);
+
+  const grouped = useMemo(() => groupByIcp(templates), [templates]);
+
+  // v407 Pinch #16: auto-select template when the URL specifies icp + channel.
+  // Runs after templates load (the auto-pick can't happen until the library
+  // is in state). Guarded by `selected` so a manual deselect doesn't get
+  // reverted on re-render.
+  useEffect(() => {
+    if (selected || !templates.length) return;
+    if (prefill.icp == null || !prefill.channel) return;
+    const match = templates.find(
+      (t) => t.icp === prefill.icp && t.channel === prefill.channel,
+    );
+    if (match) setSelected(match);
+  }, [templates, prefill.icp, prefill.channel, selected]);
+
+  const handleSend = async () => {
+    if (!accessToken || !selected || sending) return;
+    if (!form.recipientEmail || !form.firstName) {
+      setError("Recipient email + first name are required.");
+      return;
+    }
+    setSending(true);
+    setError(null);
+    setResult(null);
+    try {
+      const res = await sendOutreachEmail({
+        data: {
+          accessToken,
+          icp: selected.icp,
+          channel: selected.channel,
+          recipientEmail: form.recipientEmail,
+          recipientFirstName: form.firstName,
+          sourceContext: rep ? `rep:${rep.displayName}` : undefined,
+          context: {
+            firstName: form.firstName,
+            spaName: form.spaName || undefined,
+            rejuvRecoveredAmount: form.rejuvRecoveredAmount || undefined,
+            rejuvRecoveredWeeks: form.rejuvRecoveredWeeks || undefined,
+          },
+        },
+      });
+      setResult({
+        mode: res.mode,
+        eventId: res.eventId,
+        renderedSubject: res.renderedSubject,
+        renderedBody: res.renderedBody,
+        replyTo: res.replyTo,
+        message: res.message,
+      });
+      // v405.3 Pinch #13: refresh history immediately so the rep sees the
+      // send they just dispatched at the top of the panel. Fail-soft —
+      // the send already succeeded; a refresh miss is non-fatal.
+      try {
+        const { sends: latest } = await listMyOutreachSends({
+          data: { accessToken },
+        });
+        setSends(latest);
+      } catch {
+        // Ignore — the next page load will pick it up.
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Send failed.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (authLoading || !loaded) {
+    return <Pulse label="Loading outreach…" />;
+  }
+
+  if (!accessToken) {
+    return (
+      <Page>
+        <Heading>Outreach</Heading>
+        <Lede>Sign in to access the outreach library.</Lede>
+      </Page>
+    );
+  }
+
+  if (!rep) {
+    return (
+      <Page>
+        <Heading>Outreach</Heading>
+        <Lede>
+          Set up your rep profile to use the outreach library. Every send is
+          attributed to you, so the spa owner sees your name — not a generic
+          Refill persona.
+        </Lede>
+        <Link
+          to="/app/rep/referral-links"
+          className="inline-flex items-center gap-2 rounded-md px-5 py-2.5 text-[14px] font-semibold shadow-sm transition"
+          style={{ background: "#056048", color: "#fbfaf7" }}
+        >
+          Set up rep profile
+        </Link>
+      </Page>
+    );
+  }
+
+  return (
+    <Page wide>
+      <Heading>Outreach</Heading>
+      <Lede>
+        Pick a template, fill in the prospect&apos;s details, and the email
+        goes out as <strong>{rep.displayName}</strong>. Replies route back
+        through the platform so you can track conversion.
+      </Lede>
+
+      {templates.length === 0 ? (
+        <EmptyTemplates />
+      ) : (
+        <div className="grid md:grid-cols-[1fr_1fr] gap-6 mt-6">
+          {/* Left column: template grid */}
+          <div className="space-y-5">
+            {[1, 2, 3].map((icp) => {
+              const tpls = grouped.get(icp) ?? [];
+              if (tpls.length === 0) return null;
+              return (
+                <IcpSection
+                  key={icp}
+                  icp={icp}
+                  templates={tpls}
+                  selectedId={selected?.id}
+                  onPick={(t) => {
+                    setSelected(t);
+                    setResult(null);
+                    setError(null);
+                  }}
+                />
+              );
+            })}
+          </div>
+
+          {/* Right column: detail + send */}
+          <div className="md:sticky md:top-6 self-start">
+            {selected ? (
+              <SendPanel
+                template={selected}
+                form={form}
+                onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+                onClose={() => {
+                  setSelected(null);
+                  setResult(null);
+                }}
+                onSend={handleSend}
+                sending={sending}
+                result={result}
+                liveEnabled={liveEnabled}
+              />
+            ) : (
+              <Hint>Pick a template on the left to see the preview.</Hint>
+            )}
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div
+          className="mt-4 rounded-md px-3 py-2 text-[13px]"
+          style={{ background: "#fdecec", color: "#8a1616" }}
+        >
+          {error}
+        </div>
+      )}
+
+      {/* v405.3 Pinch #13: past-sends panel. Surfaces the rep's outreach
+          history below the template grid so every visit to /outreach is
+          aware of prior work — no more first-touch-every-time feel. */}
+      {sends.length > 0 && <PastSendsPanel sends={sends} />}
+    </Page>
+  );
+}
+
+function PastSendsPanel({ sends }: { sends: OutreachSendRow[] }) {
+  return (
+    <div
+      className="mt-10 rounded-xl border bg-white"
+      style={{ borderColor: "#e6e2d6" }}
+    >
+      <div
+        className="flex items-center justify-between px-5 py-3 border-b"
+        style={{ borderColor: "#f0ebe0", background: "#fbfaf7" }}
+      >
+        <h2
+          className="text-[14px] font-semibold tracking-tight"
+          style={{ color: "#1c2024" }}
+        >
+          Your recent sends
+        </h2>
+        <span
+          className="text-[11px] uppercase tracking-wider font-semibold"
+          style={{ color: "#8a9098" }}
+        >
+          {sends.length} {sends.length === 1 ? "send" : "sends"}
+        </span>
+      </div>
+      <ul className="divide-y" style={{ borderColor: "#f0ebe0" }}>
+        {sends.map((s) => (
+          <PastSendRow key={s.id} send={s} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function PastSendRow({ send }: { send: OutreachSendRow }) {
+  const recipientLabel =
+    send.recipientFirstName
+      ? `${send.recipientFirstName} · ${send.recipientEmail}`
+      : send.recipientEmail;
+  return (
+    <li className="flex items-center justify-between gap-4 px-5 py-3">
+      <div className="min-w-0 flex-1">
+        <div
+          className="text-[13px] font-medium truncate"
+          style={{ color: "#1c2024" }}
+        >
+          {recipientLabel}
+        </div>
+        <div
+          className="text-[12px] mt-0.5 truncate"
+          style={{ color: "#8a9098" }}
+        >
+          ICP {send.icp} · {send.channel}
+          {send.renderedSubject ? ` · "${send.renderedSubject}"` : ""}
+        </div>
+      </div>
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <ConversionPills send={send} />
+        <SendModeBadge mode={send.sendMode} />
+        <span
+          className="text-[12px] tabular-nums"
+          style={{ color: "#8a9098" }}
+        >
+          {formatRelativeShort(send.sentAt)}
+        </span>
+      </div>
+    </li>
+  );
+}
+
+function ConversionPills({ send }: { send: OutreachSendRow }) {
+  return (
+    <>
+      {send.convertedAt ? (
+        <span
+          className="text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5"
+          style={{ background: "#e8f3ed", color: "#056048" }}
+        >
+          Converted
+        </span>
+      ) : send.responseReceivedAt ? (
+        <span
+          className="text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5"
+          style={{ background: "#e8f3ed", color: "#056048" }}
+        >
+          Replied
+        </span>
+      ) : send.openedAt ? (
+        <span
+          className="text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5"
+          style={{ background: "#fdf6e6", color: "#8a6d10" }}
+        >
+          Opened
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+function SendModeBadge({ mode }: { mode: string }) {
+  const palette =
+    mode === "live"
+      ? { bg: "#fde8e8", fg: "#b91c1c" }
+      : mode === "test"
+        ? { bg: "#fdf6e6", fg: "#8a6d10" }
+        : { bg: "#f0ebe0", fg: "#5a6068" };
+  const label = mode === "live" ? "Live" : mode === "test" ? "Test" : "Dry-run";
+  return (
+    <span
+      className="text-[10px] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5"
+      style={{ background: palette.bg, color: palette.fg }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function formatRelativeShort(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day}d`;
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function groupByIcp(
+  templates: OutreachTemplate[],
+): Map<number, OutreachTemplate[]> {
+  const map = new Map<number, OutreachTemplate[]>();
+  for (const t of templates) {
+    const list = map.get(t.icp) ?? [];
+    list.push(t);
+    map.set(t.icp, list);
+  }
+  return map;
+}
+
+function IcpSection({
+  icp,
+  templates,
+  selectedId,
+  onPick,
+}: {
+  icp: number;
+  templates: OutreachTemplate[];
+  selectedId?: string;
+  onPick: (t: OutreachTemplate) => void;
+}) {
+  const label =
+    icp === 1
+      ? "ICP 1 · warm intro"
+      : icp === 2
+        ? "ICP 2 · cold spa"
+        : "ICP 3 · Acuity-detected";
+  return (
+    <div>
+      <div
+        className="text-[11px] uppercase tracking-wider font-semibold mb-2"
+        style={{ color: "#8a9098" }}
+      >
+        {label}
+      </div>
+      <div className="space-y-2">
+        {templates.map((t) => {
+          const isSelected = t.id === selectedId;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onPick(t)}
+              className="w-full text-left rounded-lg border p-3 transition hover:shadow-sm"
+              style={{
+                borderColor: isSelected ? "#056048" : "#e6e2d6",
+                background: isSelected ? "#f0f5ef" : "#fff",
+                boxShadow: isSelected
+                  ? "0 0 0 2px rgba(5,96,72,0.12)"
+                  : undefined,
+              }}
+            >
+              <div
+                className="text-[13px] font-semibold mb-0.5"
+                style={{ color: "#1c2024" }}
+              >
+                {t.channel}
+              </div>
+              <div
+                className="text-[12px] truncate"
+                style={{ color: "#5a6068" }}
+              >
+                {t.subject ?? "(no subject — Loom-style channel)"}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SendPanel({
+  template,
+  form,
+  onChange,
+  onClose,
+  onSend,
+  sending,
+  result,
+  liveEnabled,
+}: {
+  template: OutreachTemplate;
+  form: {
+    recipientEmail: string;
+    firstName: string;
+    spaName: string;
+    rejuvRecoveredAmount: string;
+    rejuvRecoveredWeeks: string;
+  };
+  onChange: (patch: Partial<typeof form>) => void;
+  onClose: () => void;
+  onSend: () => void;
+  sending: boolean;
+  result: SendResult | null;
+  liveEnabled: boolean | null;
+}) {
+  return (
+    <div
+      className="rounded-xl border bg-white p-5"
+      style={{ borderColor: "#e6e2d6" }}
+    >
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="min-w-0">
+          <div
+            className="text-[11px] uppercase tracking-wider font-semibold"
+            style={{ color: "#8a9098" }}
+          >
+            ICP {template.icp} · {template.channel}
+          </div>
+          {template.subject && (
+            <div
+              className="text-[15px] font-semibold mt-1"
+              style={{ color: "#1c2024" }}
+            >
+              {template.subject}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="rounded p-1 transition hover:bg-[#fbfaf7]"
+          style={{ color: "#8a9098" }}
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* Body preview (read-only, raw template — placeholders show literal) */}
+      <details className="mb-4">
+        <summary
+          className="text-[12px] cursor-pointer"
+          style={{ color: "#5a6068" }}
+        >
+          View template body
+        </summary>
+        <div
+          className="mt-2 rounded-md border p-3 text-[13px] leading-[1.55] max-h-64 overflow-y-auto"
+          style={{
+            borderColor: "#f0ebe0",
+            background: "#fbfaf7",
+            color: "#1c2024",
+          }}
+          dangerouslySetInnerHTML={{ __html: template.body }}
+        />
+      </details>
+
+      {!result ? (
+        <>
+          <div className="space-y-3">
+            <Field
+              label="Recipient email"
+              value={form.recipientEmail}
+              onChange={(v) => onChange({ recipientEmail: v })}
+              placeholder="kelly@example.com"
+              type="email"
+            />
+            <Field
+              label="First name"
+              value={form.firstName}
+              onChange={(v) => onChange({ firstName: v })}
+              placeholder="Kelly"
+            />
+            <Field
+              label="Spa name"
+              value={form.spaName}
+              onChange={(v) => onChange({ spaName: v })}
+              placeholder="Lakeside Aesthetics"
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Field
+                label="$ recovered (optional)"
+                value={form.rejuvRecoveredAmount}
+                onChange={(v) => onChange({ rejuvRecoveredAmount: v })}
+                placeholder="4,275"
+              />
+              <Field
+                label="Weeks (optional)"
+                value={form.rejuvRecoveredWeeks}
+                onChange={(v) => onChange({ rejuvRecoveredWeeks: v })}
+                placeholder="5"
+              />
+            </div>
+          </div>
+
+          {/* v404 Pinch #14b: button telegraphs the send mode BEFORE click.
+              LIVE renders in danger-red to break muscle-memory; dry-run keeps
+              the emerald. liveEnabled === null means we haven't resolved yet
+              (defensive — fall through to dry-run framing). */}
+          <button
+            type="button"
+            onClick={onSend}
+            disabled={sending || liveEnabled === null}
+            className="mt-4 inline-flex items-center gap-2 rounded-md px-5 py-2.5 text-[14px] font-semibold shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              background: liveEnabled === true ? "#b91c1c" : "#056048",
+              color: "#fbfaf7",
+            }}
+          >
+            <Send className="h-4 w-4" />
+            {sending
+              ? "Sending…"
+              : liveEnabled === true
+                ? "Send LIVE"
+                : "Send (dry-run)"}
+          </button>
+          <p
+            className="text-[12px] mt-2"
+            style={{ color: "#8a9098" }}
+          >
+            <Sparkles
+              className="inline h-3 w-3 mr-0.5"
+              style={{
+                color: liveEnabled === true ? "#b91c1c" : "#8a6d10",
+              }}
+            />
+            {liveEnabled === true
+              ? "OUTREACH_LIVE is ON — clicking Send fires a real Resend email."
+              : "OUTREACH_LIVE is OFF — clicking Send logs a dry-run row, no email fires."}
+            {" "}Sends with your name in the From line. Replies route back
+            through the platform — you&apos;ll see them in your inbox.
+          </p>
+        </>
+      ) : (
+        <SendResultPanel result={result} />
+      )}
+    </div>
+  );
+}
+
+function SendResultPanel({ result }: { result: SendResult }) {
+  const modeBadge =
+    result.mode === "live"
+      ? { bg: "#e8f3ed", fg: "#056048", label: "Live · sent" }
+      : result.mode === "test"
+        ? { bg: "#fdf6e6", fg: "#8a6d10", label: "Test render" }
+        : { bg: "#f0ebe0", fg: "#5a6068", label: "Dry run · queued" };
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <span
+          className="text-[11px] font-semibold uppercase tracking-wide rounded-full px-2.5 py-0.5"
+          style={{ background: modeBadge.bg, color: modeBadge.fg }}
+        >
+          {modeBadge.label}
+        </span>
+      </div>
+      <p
+        className="text-[13px] leading-[1.55] mb-3"
+        style={{ color: "#5a6068" }}
+      >
+        {result.message}
+      </p>
+      {result.renderedSubject && (
+        <div className="mb-3">
+          <div
+            className="text-[10px] uppercase tracking-wider font-semibold mb-1"
+            style={{ color: "#8a9098" }}
+          >
+            Subject
+          </div>
+          <div
+            className="text-[13px] font-semibold"
+            style={{ color: "#1c2024" }}
+          >
+            {result.renderedSubject}
+          </div>
+        </div>
+      )}
+      <div className="mb-3">
+        <div
+          className="text-[10px] uppercase tracking-wider font-semibold mb-1"
+          style={{ color: "#8a9098" }}
+        >
+          Reply-To
+        </div>
+        <div
+          className="text-[12px] font-mono break-all"
+          style={{ color: "#5a6068" }}
+        >
+          {result.replyTo}
+        </div>
+      </div>
+      <div>
+        <div
+          className="text-[10px] uppercase tracking-wider font-semibold mb-1"
+          style={{ color: "#8a9098" }}
+        >
+          Body preview
+        </div>
+        <div
+          className="rounded-md border p-3 text-[13px] leading-[1.55] max-h-64 overflow-y-auto"
+          style={{
+            borderColor: "#f0ebe0",
+            background: "#fbfaf7",
+            color: "#1c2024",
+          }}
+          dangerouslySetInnerHTML={{ __html: result.renderedBody }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <label className="block">
+      <span
+        className="text-[11px] uppercase tracking-wider font-semibold"
+        style={{ color: "#8a9098" }}
+      >
+        {label}
+      </span>
+      <input
+        type={type ?? "text"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="mt-1 w-full rounded-md border px-3 py-2 text-[14px] focus:outline-none transition"
+        style={{
+          borderColor: "#e6e2d6",
+          background: "#fff",
+          color: "#1c2024",
+        }}
+      />
+    </label>
+  );
+}
+
+function EmptyTemplates() {
+  return (
+    <div
+      className="rounded-lg border p-6 text-center mt-4"
+      style={{
+        borderColor: "#e6e2d6",
+        background: "#fbfaf7",
+        borderStyle: "dashed",
+      }}
+    >
+      <div
+        className="text-[15px] font-semibold mb-1.5"
+        style={{ color: "#1c2024" }}
+      >
+        No templates available yet
+      </div>
+      <p
+        className="text-[13px] leading-[1.55] max-w-md mx-auto"
+        style={{ color: "#5a6068" }}
+      >
+        The shared template library is empty. An admin can populate it from
+        the polished outreach doc.
+      </p>
+    </div>
+  );
+}
+
+function Hint({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="rounded-xl border-2 border-dashed p-6 text-center"
+      style={{ borderColor: "#e6e2d6", background: "#fbfaf7" }}
+    >
+      <p className="text-[13px]" style={{ color: "#5a6068" }}>
+        {children}
+      </p>
+    </div>
+  );
+}
+
+// ─── presentational shell ────────────────────────────────────────────────
+
+function Page({
+  children,
+  wide,
+}: {
+  children: React.ReactNode;
+  wide?: boolean;
+}) {
+  return (
+    <div
+      className="min-h-screen px-5 sm:px-8 py-12 sm:py-16"
+      style={{ background: "#fbfaf7", color: "#1c2024" }}
+    >
+      <div
+        className={`w-full mx-auto ${wide ? "max-w-4xl" : "max-w-2xl"}`}
+      >
+        <div
+          className="rounded-xl border bg-white p-7 sm:p-10 shadow-sm"
+          style={{ borderColor: "#e6e2d6" }}
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Heading({ children }: { children: React.ReactNode }) {
+  return (
+    <h1
+      className="text-[28px] leading-[1.15] font-semibold tracking-tight mb-3"
+      style={{
+        fontFamily: "Georgia, 'Times New Roman', serif",
+        color: "#1c2024",
+      }}
+    >
+      {children}
+    </h1>
+  );
+}
+
+function Lede({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[15px] leading-[1.6] mb-2" style={{ color: "#5a6068" }}>
+      {children}
+    </p>
+  );
+}
+
+function Pulse({ label }: { label: string }) {
+  return (
+    <div
+      className="min-h-screen flex flex-col items-center justify-center gap-4"
+      style={{ background: "#fbfaf7" }}
+      role="status"
+      aria-live="polite"
+    >
+      <div
+        className="h-9 w-9 rounded-full animate-pulse"
+        style={{ background: "#056048" }}
+        aria-hidden
+      />
+      <div className="text-[14px]" style={{ color: "#5a6068" }}>
+        {label}
+      </div>
+    </div>
+  );
+}
