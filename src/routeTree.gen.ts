@@ -20,8 +20,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as RSlugRouteImport } from './routes/r.$slug'
 import { Route as AppRepRouteImport } from './routes/app.rep'
 import { Route as AppRefillRouteImport } from './routes/app.refill'
+import { Route as ApiRefillPortalRouteImport } from './routes/api.refill-portal'
+import { Route as ApiRefillCheckoutRouteImport } from './routes/api.refill-checkout'
 import { Route as AppRepIndexRouteImport } from './routes/app.rep.index'
 import { Route as AppRefillIndexRouteImport } from './routes/app.refill.index'
+import { Route as AppAdminIndexRouteImport } from './routes/app.admin.index'
 import { Route as RescueClaimTokenRouteImport } from './routes/rescue.claim.$token'
 import { Route as AppRepTodayRouteImport } from './routes/app.rep.today'
 import { Route as AppRepSendsRouteImport } from './routes/app.rep.sends'
@@ -48,6 +51,18 @@ import { Route as AppRefillHealthRouteImport } from './routes/app.refill.health'
 import { Route as AppRefillCampaignsRouteImport } from './routes/app.refill.campaigns'
 import { Route as AppRefillBillingRouteImport } from './routes/app.refill.billing'
 import { Route as AppRefillAppointmentsRouteImport } from './routes/app.refill.appointments'
+import { Route as AppAdminRefillTrialsRouteImport } from './routes/app.admin.refill-trials'
+import { Route as AppAdminPersonasRouteImport } from './routes/app.admin.personas'
+import { Route as AppAdminOutreachRouteImport } from './routes/app.admin.outreach'
+import { Route as ApiTwilioInboundRouteImport } from './routes/api.twilio.inbound'
+import { Route as ApiCronRefillTrialDripRouteImport } from './routes/api.cron.refill-trial-drip'
+import { Route as ApiCronRefillInvoiceRouteImport } from './routes/api.cron.refill-invoice'
+import { Route as ApiCronEmmaSweepRouteImport } from './routes/api.cron.emma-sweep'
+import { Route as ApiCronEmmaReliabilitySweepRouteImport } from './routes/api.cron.emma-reliability-sweep'
+import { Route as ApiCronEmmaReconcileRouteImport } from './routes/api.cron.emma-reconcile'
+import { Route as ApiCronEmmaRecommendationsRouteImport } from './routes/api.cron.emma-recommendations'
+import { Route as ApiCronEmmaPreshowSweepRouteImport } from './routes/api.cron.emma-preshow-sweep'
+import { Route as ApiCronEmmaInvoiceRouteImport } from './routes/api.cron.emma-invoice'
 import { Route as AppRepPromotionsIndexRouteImport } from './routes/app.rep.promotions.index'
 import { Route as AppRefillPatientsIndexRouteImport } from './routes/app.refill.patients.index'
 import { Route as AppRefillCampaignsIndexRouteImport } from './routes/app.refill.campaigns.index'
@@ -63,8 +78,10 @@ import { Route as AppRefillPatientsContactsRouteImport } from './routes/app.refi
 import { Route as AppRefillPatientsPatientIdRouteImport } from './routes/app.refill.patients.$patientId'
 import { Route as AppRefillCampaignsNewRouteImport } from './routes/app.refill.campaigns.new'
 import { Route as AppRefillCampaignsCampaignIdRouteImport } from './routes/app.refill.campaigns.$campaignId'
+import { Route as ApiIntegrationsAcuityOauthCallbackRouteImport } from './routes/api.integrations.acuity.oauth-callback'
 import { Route as AppRefillCampaignsCampaignIdIndexRouteImport } from './routes/app.refill.campaigns.$campaignId.index'
 import { Route as AppRefillCampaignsCampaignIdBlastRouteImport } from './routes/app.refill.campaigns.$campaignId.blast'
+import { Route as ApiWebhooksSchedulerAcuitySecretRouteImport } from './routes/api.webhooks.scheduler.acuity.$secret'
 
 const UnsubscribeRoute = UnsubscribeRouteImport.update({
   id: '/unsubscribe',
@@ -121,6 +138,16 @@ const AppRefillRoute = AppRefillRouteImport.update({
   path: '/refill',
   getParentRoute: () => AppRoute,
 } as any)
+const ApiRefillPortalRoute = ApiRefillPortalRouteImport.update({
+  id: '/api/refill-portal',
+  path: '/api/refill-portal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiRefillCheckoutRoute = ApiRefillCheckoutRouteImport.update({
+  id: '/api/refill-checkout',
+  path: '/api/refill-checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRepIndexRoute = AppRepIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -130,6 +157,11 @@ const AppRefillIndexRoute = AppRefillIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppRefillRoute,
+} as any)
+const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/admin/',
+  getParentRoute: () => AppRoute,
 } as any)
 const RescueClaimTokenRoute = RescueClaimTokenRouteImport.update({
   id: '/rescue/claim/$token',
@@ -261,6 +293,68 @@ const AppRefillAppointmentsRoute = AppRefillAppointmentsRouteImport.update({
   path: '/appointments',
   getParentRoute: () => AppRefillRoute,
 } as any)
+const AppAdminRefillTrialsRoute = AppAdminRefillTrialsRouteImport.update({
+  id: '/admin/refill-trials',
+  path: '/admin/refill-trials',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminPersonasRoute = AppAdminPersonasRouteImport.update({
+  id: '/admin/personas',
+  path: '/admin/personas',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminOutreachRoute = AppAdminOutreachRouteImport.update({
+  id: '/admin/outreach',
+  path: '/admin/outreach',
+  getParentRoute: () => AppRoute,
+} as any)
+const ApiTwilioInboundRoute = ApiTwilioInboundRouteImport.update({
+  id: '/api/twilio/inbound',
+  path: '/api/twilio/inbound',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronRefillTrialDripRoute = ApiCronRefillTrialDripRouteImport.update({
+  id: '/api/cron/refill-trial-drip',
+  path: '/api/cron/refill-trial-drip',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronRefillInvoiceRoute = ApiCronRefillInvoiceRouteImport.update({
+  id: '/api/cron/refill-invoice',
+  path: '/api/cron/refill-invoice',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronEmmaSweepRoute = ApiCronEmmaSweepRouteImport.update({
+  id: '/api/cron/emma-sweep',
+  path: '/api/cron/emma-sweep',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronEmmaReliabilitySweepRoute =
+  ApiCronEmmaReliabilitySweepRouteImport.update({
+    id: '/api/cron/emma-reliability-sweep',
+    path: '/api/cron/emma-reliability-sweep',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCronEmmaReconcileRoute = ApiCronEmmaReconcileRouteImport.update({
+  id: '/api/cron/emma-reconcile',
+  path: '/api/cron/emma-reconcile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronEmmaRecommendationsRoute =
+  ApiCronEmmaRecommendationsRouteImport.update({
+    id: '/api/cron/emma-recommendations',
+    path: '/api/cron/emma-recommendations',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiCronEmmaPreshowSweepRoute = ApiCronEmmaPreshowSweepRouteImport.update({
+  id: '/api/cron/emma-preshow-sweep',
+  path: '/api/cron/emma-preshow-sweep',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronEmmaInvoiceRoute = ApiCronEmmaInvoiceRouteImport.update({
+  id: '/api/cron/emma-invoice',
+  path: '/api/cron/emma-invoice',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRepPromotionsIndexRoute = AppRepPromotionsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -341,6 +435,12 @@ const AppRefillCampaignsCampaignIdRoute =
     path: '/$campaignId',
     getParentRoute: () => AppRefillCampaignsRoute,
   } as any)
+const ApiIntegrationsAcuityOauthCallbackRoute =
+  ApiIntegrationsAcuityOauthCallbackRouteImport.update({
+    id: '/api/integrations/acuity/oauth-callback',
+    path: '/api/integrations/acuity/oauth-callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AppRefillCampaignsCampaignIdIndexRoute =
   AppRefillCampaignsCampaignIdIndexRouteImport.update({
     id: '/',
@@ -353,6 +453,12 @@ const AppRefillCampaignsCampaignIdBlastRoute =
     path: '/blast',
     getParentRoute: () => AppRefillCampaignsCampaignIdRoute,
   } as any)
+const ApiWebhooksSchedulerAcuitySecretRoute =
+  ApiWebhooksSchedulerAcuitySecretRouteImport.update({
+    id: '/api/webhooks/scheduler/acuity/$secret',
+    path: '/api/webhooks/scheduler/acuity/$secret',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -363,9 +469,23 @@ export interface FileRoutesByFullPath {
   '/pricing': typeof PricingRoute
   '/scan': typeof ScanRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/api/refill-checkout': typeof ApiRefillCheckoutRoute
+  '/api/refill-portal': typeof ApiRefillPortalRoute
   '/app/refill': typeof AppRefillRouteWithChildren
   '/app/rep': typeof AppRepRouteWithChildren
   '/r/$slug': typeof RSlugRoute
+  '/api/cron/emma-invoice': typeof ApiCronEmmaInvoiceRoute
+  '/api/cron/emma-preshow-sweep': typeof ApiCronEmmaPreshowSweepRoute
+  '/api/cron/emma-recommendations': typeof ApiCronEmmaRecommendationsRoute
+  '/api/cron/emma-reconcile': typeof ApiCronEmmaReconcileRoute
+  '/api/cron/emma-reliability-sweep': typeof ApiCronEmmaReliabilitySweepRoute
+  '/api/cron/emma-sweep': typeof ApiCronEmmaSweepRoute
+  '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
+  '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
+  '/api/twilio/inbound': typeof ApiTwilioInboundRoute
+  '/app/admin/outreach': typeof AppAdminOutreachRoute
+  '/app/admin/personas': typeof AppAdminPersonasRoute
+  '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
   '/app/refill/appointments': typeof AppRefillAppointmentsRoute
   '/app/refill/billing': typeof AppRefillBillingRoute
   '/app/refill/campaigns': typeof AppRefillCampaignsRouteWithChildren
@@ -392,8 +512,10 @@ export interface FileRoutesByFullPath {
   '/app/rep/sends': typeof AppRepSendsRoute
   '/app/rep/today': typeof AppRepTodayRoute
   '/rescue/claim/$token': typeof RescueClaimTokenRoute
+  '/app/admin/': typeof AppAdminIndexRoute
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
+  '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
   '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
@@ -409,6 +531,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/campaigns/': typeof AppRefillCampaignsIndexRoute
   '/app/refill/patients/': typeof AppRefillPatientsIndexRoute
   '/app/rep/promotions/': typeof AppRepPromotionsIndexRoute
+  '/api/webhooks/scheduler/acuity/$secret': typeof ApiWebhooksSchedulerAcuitySecretRoute
   '/app/refill/campaigns/$campaignId/blast': typeof AppRefillCampaignsCampaignIdBlastRoute
   '/app/refill/campaigns/$campaignId/': typeof AppRefillCampaignsCampaignIdIndexRoute
 }
@@ -421,7 +544,21 @@ export interface FileRoutesByTo {
   '/pricing': typeof PricingRoute
   '/scan': typeof ScanRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/api/refill-checkout': typeof ApiRefillCheckoutRoute
+  '/api/refill-portal': typeof ApiRefillPortalRoute
   '/r/$slug': typeof RSlugRoute
+  '/api/cron/emma-invoice': typeof ApiCronEmmaInvoiceRoute
+  '/api/cron/emma-preshow-sweep': typeof ApiCronEmmaPreshowSweepRoute
+  '/api/cron/emma-recommendations': typeof ApiCronEmmaRecommendationsRoute
+  '/api/cron/emma-reconcile': typeof ApiCronEmmaReconcileRoute
+  '/api/cron/emma-reliability-sweep': typeof ApiCronEmmaReliabilitySweepRoute
+  '/api/cron/emma-sweep': typeof ApiCronEmmaSweepRoute
+  '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
+  '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
+  '/api/twilio/inbound': typeof ApiTwilioInboundRoute
+  '/app/admin/outreach': typeof AppAdminOutreachRoute
+  '/app/admin/personas': typeof AppAdminPersonasRoute
+  '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
   '/app/refill/appointments': typeof AppRefillAppointmentsRoute
   '/app/refill/billing': typeof AppRefillBillingRoute
   '/app/refill/health': typeof AppRefillHealthRoute
@@ -445,8 +582,10 @@ export interface FileRoutesByTo {
   '/app/rep/sends': typeof AppRepSendsRoute
   '/app/rep/today': typeof AppRepTodayRoute
   '/rescue/claim/$token': typeof RescueClaimTokenRoute
+  '/app/admin': typeof AppAdminIndexRoute
   '/app/refill': typeof AppRefillIndexRoute
   '/app/rep': typeof AppRepIndexRoute
+  '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
   '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
@@ -461,6 +600,7 @@ export interface FileRoutesByTo {
   '/app/refill/campaigns': typeof AppRefillCampaignsIndexRoute
   '/app/refill/patients': typeof AppRefillPatientsIndexRoute
   '/app/rep/promotions': typeof AppRepPromotionsIndexRoute
+  '/api/webhooks/scheduler/acuity/$secret': typeof ApiWebhooksSchedulerAcuitySecretRoute
   '/app/refill/campaigns/$campaignId/blast': typeof AppRefillCampaignsCampaignIdBlastRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdIndexRoute
 }
@@ -474,9 +614,23 @@ export interface FileRoutesById {
   '/pricing': typeof PricingRoute
   '/scan': typeof ScanRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/api/refill-checkout': typeof ApiRefillCheckoutRoute
+  '/api/refill-portal': typeof ApiRefillPortalRoute
   '/app/refill': typeof AppRefillRouteWithChildren
   '/app/rep': typeof AppRepRouteWithChildren
   '/r/$slug': typeof RSlugRoute
+  '/api/cron/emma-invoice': typeof ApiCronEmmaInvoiceRoute
+  '/api/cron/emma-preshow-sweep': typeof ApiCronEmmaPreshowSweepRoute
+  '/api/cron/emma-recommendations': typeof ApiCronEmmaRecommendationsRoute
+  '/api/cron/emma-reconcile': typeof ApiCronEmmaReconcileRoute
+  '/api/cron/emma-reliability-sweep': typeof ApiCronEmmaReliabilitySweepRoute
+  '/api/cron/emma-sweep': typeof ApiCronEmmaSweepRoute
+  '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
+  '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
+  '/api/twilio/inbound': typeof ApiTwilioInboundRoute
+  '/app/admin/outreach': typeof AppAdminOutreachRoute
+  '/app/admin/personas': typeof AppAdminPersonasRoute
+  '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
   '/app/refill/appointments': typeof AppRefillAppointmentsRoute
   '/app/refill/billing': typeof AppRefillBillingRoute
   '/app/refill/campaigns': typeof AppRefillCampaignsRouteWithChildren
@@ -503,8 +657,10 @@ export interface FileRoutesById {
   '/app/rep/sends': typeof AppRepSendsRoute
   '/app/rep/today': typeof AppRepTodayRoute
   '/rescue/claim/$token': typeof RescueClaimTokenRoute
+  '/app/admin/': typeof AppAdminIndexRoute
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
+  '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
   '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
@@ -520,6 +676,7 @@ export interface FileRoutesById {
   '/app/refill/campaigns/': typeof AppRefillCampaignsIndexRoute
   '/app/refill/patients/': typeof AppRefillPatientsIndexRoute
   '/app/rep/promotions/': typeof AppRepPromotionsIndexRoute
+  '/api/webhooks/scheduler/acuity/$secret': typeof ApiWebhooksSchedulerAcuitySecretRoute
   '/app/refill/campaigns/$campaignId/blast': typeof AppRefillCampaignsCampaignIdBlastRoute
   '/app/refill/campaigns/$campaignId/': typeof AppRefillCampaignsCampaignIdIndexRoute
 }
@@ -534,9 +691,23 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/scan'
     | '/unsubscribe'
+    | '/api/refill-checkout'
+    | '/api/refill-portal'
     | '/app/refill'
     | '/app/rep'
     | '/r/$slug'
+    | '/api/cron/emma-invoice'
+    | '/api/cron/emma-preshow-sweep'
+    | '/api/cron/emma-recommendations'
+    | '/api/cron/emma-reconcile'
+    | '/api/cron/emma-reliability-sweep'
+    | '/api/cron/emma-sweep'
+    | '/api/cron/refill-invoice'
+    | '/api/cron/refill-trial-drip'
+    | '/api/twilio/inbound'
+    | '/app/admin/outreach'
+    | '/app/admin/personas'
+    | '/app/admin/refill-trials'
     | '/app/refill/appointments'
     | '/app/refill/billing'
     | '/app/refill/campaigns'
@@ -563,8 +734,10 @@ export interface FileRouteTypes {
     | '/app/rep/sends'
     | '/app/rep/today'
     | '/rescue/claim/$token'
+    | '/app/admin/'
     | '/app/refill/'
     | '/app/rep/'
+    | '/api/integrations/acuity/oauth-callback'
     | '/app/refill/campaigns/$campaignId'
     | '/app/refill/campaigns/new'
     | '/app/refill/patients/$patientId'
@@ -580,6 +753,7 @@ export interface FileRouteTypes {
     | '/app/refill/campaigns/'
     | '/app/refill/patients/'
     | '/app/rep/promotions/'
+    | '/api/webhooks/scheduler/acuity/$secret'
     | '/app/refill/campaigns/$campaignId/blast'
     | '/app/refill/campaigns/$campaignId/'
   fileRoutesByTo: FileRoutesByTo
@@ -592,7 +766,21 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/scan'
     | '/unsubscribe'
+    | '/api/refill-checkout'
+    | '/api/refill-portal'
     | '/r/$slug'
+    | '/api/cron/emma-invoice'
+    | '/api/cron/emma-preshow-sweep'
+    | '/api/cron/emma-recommendations'
+    | '/api/cron/emma-reconcile'
+    | '/api/cron/emma-reliability-sweep'
+    | '/api/cron/emma-sweep'
+    | '/api/cron/refill-invoice'
+    | '/api/cron/refill-trial-drip'
+    | '/api/twilio/inbound'
+    | '/app/admin/outreach'
+    | '/app/admin/personas'
+    | '/app/admin/refill-trials'
     | '/app/refill/appointments'
     | '/app/refill/billing'
     | '/app/refill/health'
@@ -616,8 +804,10 @@ export interface FileRouteTypes {
     | '/app/rep/sends'
     | '/app/rep/today'
     | '/rescue/claim/$token'
+    | '/app/admin'
     | '/app/refill'
     | '/app/rep'
+    | '/api/integrations/acuity/oauth-callback'
     | '/app/refill/campaigns/new'
     | '/app/refill/patients/$patientId'
     | '/app/refill/patients/contacts'
@@ -632,6 +822,7 @@ export interface FileRouteTypes {
     | '/app/refill/campaigns'
     | '/app/refill/patients'
     | '/app/rep/promotions'
+    | '/api/webhooks/scheduler/acuity/$secret'
     | '/app/refill/campaigns/$campaignId/blast'
     | '/app/refill/campaigns/$campaignId'
   id:
@@ -644,9 +835,23 @@ export interface FileRouteTypes {
     | '/pricing'
     | '/scan'
     | '/unsubscribe'
+    | '/api/refill-checkout'
+    | '/api/refill-portal'
     | '/app/refill'
     | '/app/rep'
     | '/r/$slug'
+    | '/api/cron/emma-invoice'
+    | '/api/cron/emma-preshow-sweep'
+    | '/api/cron/emma-recommendations'
+    | '/api/cron/emma-reconcile'
+    | '/api/cron/emma-reliability-sweep'
+    | '/api/cron/emma-sweep'
+    | '/api/cron/refill-invoice'
+    | '/api/cron/refill-trial-drip'
+    | '/api/twilio/inbound'
+    | '/app/admin/outreach'
+    | '/app/admin/personas'
+    | '/app/admin/refill-trials'
     | '/app/refill/appointments'
     | '/app/refill/billing'
     | '/app/refill/campaigns'
@@ -673,8 +878,10 @@ export interface FileRouteTypes {
     | '/app/rep/sends'
     | '/app/rep/today'
     | '/rescue/claim/$token'
+    | '/app/admin/'
     | '/app/refill/'
     | '/app/rep/'
+    | '/api/integrations/acuity/oauth-callback'
     | '/app/refill/campaigns/$campaignId'
     | '/app/refill/campaigns/new'
     | '/app/refill/patients/$patientId'
@@ -690,6 +897,7 @@ export interface FileRouteTypes {
     | '/app/refill/campaigns/'
     | '/app/refill/patients/'
     | '/app/rep/promotions/'
+    | '/api/webhooks/scheduler/acuity/$secret'
     | '/app/refill/campaigns/$campaignId/blast'
     | '/app/refill/campaigns/$campaignId/'
   fileRoutesById: FileRoutesById
@@ -703,8 +911,21 @@ export interface RootRouteChildren {
   PricingRoute: typeof PricingRoute
   ScanRoute: typeof ScanRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
+  ApiRefillCheckoutRoute: typeof ApiRefillCheckoutRoute
+  ApiRefillPortalRoute: typeof ApiRefillPortalRoute
   RSlugRoute: typeof RSlugRoute
+  ApiCronEmmaInvoiceRoute: typeof ApiCronEmmaInvoiceRoute
+  ApiCronEmmaPreshowSweepRoute: typeof ApiCronEmmaPreshowSweepRoute
+  ApiCronEmmaRecommendationsRoute: typeof ApiCronEmmaRecommendationsRoute
+  ApiCronEmmaReconcileRoute: typeof ApiCronEmmaReconcileRoute
+  ApiCronEmmaReliabilitySweepRoute: typeof ApiCronEmmaReliabilitySweepRoute
+  ApiCronEmmaSweepRoute: typeof ApiCronEmmaSweepRoute
+  ApiCronRefillInvoiceRoute: typeof ApiCronRefillInvoiceRoute
+  ApiCronRefillTrialDripRoute: typeof ApiCronRefillTrialDripRoute
+  ApiTwilioInboundRoute: typeof ApiTwilioInboundRoute
   RescueClaimTokenRoute: typeof RescueClaimTokenRoute
+  ApiIntegrationsAcuityOauthCallbackRoute: typeof ApiIntegrationsAcuityOauthCallbackRoute
+  ApiWebhooksSchedulerAcuitySecretRoute: typeof ApiWebhooksSchedulerAcuitySecretRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -786,6 +1007,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillRouteImport
       parentRoute: typeof AppRoute
     }
+    '/api/refill-portal': {
+      id: '/api/refill-portal'
+      path: '/api/refill-portal'
+      fullPath: '/api/refill-portal'
+      preLoaderRoute: typeof ApiRefillPortalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/refill-checkout': {
+      id: '/api/refill-checkout'
+      path: '/api/refill-checkout'
+      fullPath: '/api/refill-checkout'
+      preLoaderRoute: typeof ApiRefillCheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/rep/': {
       id: '/app/rep/'
       path: '/'
@@ -799,6 +1034,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/refill/'
       preLoaderRoute: typeof AppRefillIndexRouteImport
       parentRoute: typeof AppRefillRoute
+    }
+    '/app/admin/': {
+      id: '/app/admin/'
+      path: '/admin'
+      fullPath: '/app/admin/'
+      preLoaderRoute: typeof AppAdminIndexRouteImport
+      parentRoute: typeof AppRoute
     }
     '/rescue/claim/$token': {
       id: '/rescue/claim/$token'
@@ -982,6 +1224,90 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillAppointmentsRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/admin/refill-trials': {
+      id: '/app/admin/refill-trials'
+      path: '/admin/refill-trials'
+      fullPath: '/app/admin/refill-trials'
+      preLoaderRoute: typeof AppAdminRefillTrialsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/admin/personas': {
+      id: '/app/admin/personas'
+      path: '/admin/personas'
+      fullPath: '/app/admin/personas'
+      preLoaderRoute: typeof AppAdminPersonasRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/admin/outreach': {
+      id: '/app/admin/outreach'
+      path: '/admin/outreach'
+      fullPath: '/app/admin/outreach'
+      preLoaderRoute: typeof AppAdminOutreachRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/api/twilio/inbound': {
+      id: '/api/twilio/inbound'
+      path: '/api/twilio/inbound'
+      fullPath: '/api/twilio/inbound'
+      preLoaderRoute: typeof ApiTwilioInboundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/refill-trial-drip': {
+      id: '/api/cron/refill-trial-drip'
+      path: '/api/cron/refill-trial-drip'
+      fullPath: '/api/cron/refill-trial-drip'
+      preLoaderRoute: typeof ApiCronRefillTrialDripRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/refill-invoice': {
+      id: '/api/cron/refill-invoice'
+      path: '/api/cron/refill-invoice'
+      fullPath: '/api/cron/refill-invoice'
+      preLoaderRoute: typeof ApiCronRefillInvoiceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/emma-sweep': {
+      id: '/api/cron/emma-sweep'
+      path: '/api/cron/emma-sweep'
+      fullPath: '/api/cron/emma-sweep'
+      preLoaderRoute: typeof ApiCronEmmaSweepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/emma-reliability-sweep': {
+      id: '/api/cron/emma-reliability-sweep'
+      path: '/api/cron/emma-reliability-sweep'
+      fullPath: '/api/cron/emma-reliability-sweep'
+      preLoaderRoute: typeof ApiCronEmmaReliabilitySweepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/emma-reconcile': {
+      id: '/api/cron/emma-reconcile'
+      path: '/api/cron/emma-reconcile'
+      fullPath: '/api/cron/emma-reconcile'
+      preLoaderRoute: typeof ApiCronEmmaReconcileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/emma-recommendations': {
+      id: '/api/cron/emma-recommendations'
+      path: '/api/cron/emma-recommendations'
+      fullPath: '/api/cron/emma-recommendations'
+      preLoaderRoute: typeof ApiCronEmmaRecommendationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/emma-preshow-sweep': {
+      id: '/api/cron/emma-preshow-sweep'
+      path: '/api/cron/emma-preshow-sweep'
+      fullPath: '/api/cron/emma-preshow-sweep'
+      preLoaderRoute: typeof ApiCronEmmaPreshowSweepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/emma-invoice': {
+      id: '/api/cron/emma-invoice'
+      path: '/api/cron/emma-invoice'
+      fullPath: '/api/cron/emma-invoice'
+      preLoaderRoute: typeof ApiCronEmmaInvoiceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/rep/promotions/': {
       id: '/app/rep/promotions/'
       path: '/'
@@ -1087,6 +1413,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillCampaignsCampaignIdRouteImport
       parentRoute: typeof AppRefillCampaignsRoute
     }
+    '/api/integrations/acuity/oauth-callback': {
+      id: '/api/integrations/acuity/oauth-callback'
+      path: '/api/integrations/acuity/oauth-callback'
+      fullPath: '/api/integrations/acuity/oauth-callback'
+      preLoaderRoute: typeof ApiIntegrationsAcuityOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/refill/campaigns/$campaignId/': {
       id: '/app/refill/campaigns/$campaignId/'
       path: '/'
@@ -1100,6 +1433,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/refill/campaigns/$campaignId/blast'
       preLoaderRoute: typeof AppRefillCampaignsCampaignIdBlastRouteImport
       parentRoute: typeof AppRefillCampaignsCampaignIdRoute
+    }
+    '/api/webhooks/scheduler/acuity/$secret': {
+      id: '/api/webhooks/scheduler/acuity/$secret'
+      path: '/api/webhooks/scheduler/acuity/$secret'
+      fullPath: '/api/webhooks/scheduler/acuity/$secret'
+      preLoaderRoute: typeof ApiWebhooksSchedulerAcuitySecretRouteImport
+      parentRoute: typeof rootRouteImport
     }
   }
 }
@@ -1266,11 +1606,19 @@ const AppRepRouteWithChildren =
 interface AppRouteChildren {
   AppRefillRoute: typeof AppRefillRouteWithChildren
   AppRepRoute: typeof AppRepRouteWithChildren
+  AppAdminOutreachRoute: typeof AppAdminOutreachRoute
+  AppAdminPersonasRoute: typeof AppAdminPersonasRoute
+  AppAdminRefillTrialsRoute: typeof AppAdminRefillTrialsRoute
+  AppAdminIndexRoute: typeof AppAdminIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppRefillRoute: AppRefillRouteWithChildren,
   AppRepRoute: AppRepRouteWithChildren,
+  AppAdminOutreachRoute: AppAdminOutreachRoute,
+  AppAdminPersonasRoute: AppAdminPersonasRoute,
+  AppAdminRefillTrialsRoute: AppAdminRefillTrialsRoute,
+  AppAdminIndexRoute: AppAdminIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
@@ -1284,8 +1632,22 @@ const rootRouteChildren: RootRouteChildren = {
   PricingRoute: PricingRoute,
   ScanRoute: ScanRoute,
   UnsubscribeRoute: UnsubscribeRoute,
+  ApiRefillCheckoutRoute: ApiRefillCheckoutRoute,
+  ApiRefillPortalRoute: ApiRefillPortalRoute,
   RSlugRoute: RSlugRoute,
+  ApiCronEmmaInvoiceRoute: ApiCronEmmaInvoiceRoute,
+  ApiCronEmmaPreshowSweepRoute: ApiCronEmmaPreshowSweepRoute,
+  ApiCronEmmaRecommendationsRoute: ApiCronEmmaRecommendationsRoute,
+  ApiCronEmmaReconcileRoute: ApiCronEmmaReconcileRoute,
+  ApiCronEmmaReliabilitySweepRoute: ApiCronEmmaReliabilitySweepRoute,
+  ApiCronEmmaSweepRoute: ApiCronEmmaSweepRoute,
+  ApiCronRefillInvoiceRoute: ApiCronRefillInvoiceRoute,
+  ApiCronRefillTrialDripRoute: ApiCronRefillTrialDripRoute,
+  ApiTwilioInboundRoute: ApiTwilioInboundRoute,
   RescueClaimTokenRoute: RescueClaimTokenRoute,
+  ApiIntegrationsAcuityOauthCallbackRoute:
+    ApiIntegrationsAcuityOauthCallbackRoute,
+  ApiWebhooksSchedulerAcuitySecretRoute: ApiWebhooksSchedulerAcuitySecretRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
