@@ -18,7 +18,7 @@
  * this component renders, we return null (defensive — should never
  * happen given the app.tsx branch).
  */
-import { RepShellChrome } from "@/components/lizzie/RepShellChrome";
+import { RefillRepShellChrome } from "@/components/refill/RefillRepShellChrome";
 import { useRepProfile } from "@/lib/use-rep-profile";
 
 export function RepShell({ children }: { children: React.ReactNode }) {
@@ -26,7 +26,7 @@ export function RepShell({ children }: { children: React.ReactNode }) {
   if (repProfile.status !== "rep") return null;
   return (
     <div className="min-h-screen" style={{ background: "#fbfaf7" }}>
-      <RepShellChrome rep={repProfile.rep} />
+      <RefillRepShellChrome rep={repProfile.rep} />
       <main className="flex-1 min-w-0 pb-16 md:pb-0">{children}</main>
     </div>
   );

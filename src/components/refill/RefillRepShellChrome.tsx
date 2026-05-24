@@ -1,66 +1,37 @@
 /**
- * RepShellChrome — Refill-rep workspace header + DemoBanner + RepNav,
- * factored into a single shell-level component (Phase 3.1.4, v401).
+ * RefillRepShellChrome — Refill rep workspace header + nav.
  *
- * Before this ship, every rep route mounted its own DemoBanner +
- * RepNav inline AND called getMyRepAccount independently to know
- * whether to show the demo banner. That meant:
- *   - 6&times; duplicate getMyRepAccount roundtrips per rep session
- *   - 6 places to keep the demo-banner visible / wipe-instruction in sync
- *   - 6 places to update if the chip nav set ever changes
+ * Sibling of RefillShellChrome (spa-owner side). Renders:
+ *   - Top header (Refill wordmark + theme/settings/sign-out user controls)
+ *   - DemoBanner (when demo mode is on)
+ *   - RefillRepNav (6-chip nav for primary rep surfaces)
  *
- * Now the chrome lives ONCE in the shell, and per-route mounts of
- * &lt;DemoBanner&gt; / &lt;RepNav&gt; are stripped (Phase 3.1.10).
- *
- * Active chip is derived from useLocation(), not passed by callers —
- * the shell ALWAYS knows which route is mounted, so the callers don't
- * need to pass an `active` prop.
- *
- * Visual language: Refill emerald (#056048) on light ink (#fbfaf7) per
- * the rep-platform aesthetic. No sidebar. Workspace identity reads
- * &quot;Refill / Rep platform&quot; — not &quot;Agentiport / Workspace.&quot; This is the
- * fix for Pinch #6 (workspace identity leakage) from the 2026-05-22
- * Kelly Caffee dry-run.
+ * Per project_refill_trojan_horse_thesis: stays narrow + visually identical
+ * to the spa-owner chrome so the two sides read as siblings, not as
+ * different products.
  */
 import { Link, useLocation } from "@tanstack/react-router";
-import { LogOut, Moon, Settings, Sun } from "lucide-react";
+import { LogOut, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { DemoBanner } from "@/components/lizzie/DemoBanner";
+import { DemoBanner } from "@/components/DemoBanner";
 import { NotificationCenter } from "@/components/NotificationCenter";
-import { RepNav } from "@/components/lizzie/RepNav";
+import { RefillRepNav, type RefillRepNavKey } from "@/components/refill/RefillRepNav";
 import { useAuth } from "@/lib/auth";
-import type { RepAccountRow } from "@/server/rep-platform";
 import { applyTheme, getStoredTheme, type Theme } from "@/lib/theme";
+import type { RepAccountRow } from "@/server/rep-platform";
 
-type RepNavKey =
-  | "home"
-  | "economics"
-  | "referral-links"
-  | "outreach"
-  | "recruit"
-  | "network"
-  | "ledger"
-  | "integrations";
-
-function deriveActiveKey(pathname: string): RepNavKey | undefined {
-  if (pathname.startsWith("/app/rep/economics")) return "economics";
-  if (pathname.startsWith("/app/rep/referral-links")) return "referral-links";
-  // v408: recruit check must precede outreach since "/recruit" and "/outreach"
-  // are distinct prefixes and order doesn't matter here, but keeping them
-  // adjacent visually mirrors the nav order.
-  if (pathname.startsWith("/app/rep/recruit")) return "recruit";
+function deriveActiveKey(pathname: string): RefillRepNavKey | undefined {
   if (pathname.startsWith("/app/rep/outreach")) return "outreach";
+  if (pathname.startsWith("/app/rep/recruit")) return "recruit";
   if (pathname.startsWith("/app/rep/network")) return "network";
   if (pathname.startsWith("/app/rep/ledger")) return "ledger";
+  if (pathname.startsWith("/app/rep/referral-links")) return "referral-links";
   if (pathname.startsWith("/app/rep/integrations")) return "integrations";
-  // v412: /app/rep + /app/rep/ (rep home) light up the Home chip.
-  // Exact match — not prefix — so nothing else accidentally claims it.
-  if (pathname === "/app/rep" || pathname === "/app/rep/") return "home";
   return undefined;
 }
 
-export function RepShellChrome({ rep }: { rep: RepAccountRow }) {
+export function RefillRepShellChrome({ rep: _rep }: { rep: RepAccountRow }) {
   const location = useLocation();
   const { user, signOut } = useAuth();
   const [theme, setTheme] = useState<Theme>("system");
@@ -79,10 +50,7 @@ export function RepShellChrome({ rep }: { rep: RepAccountRow }) {
     <>
       <header
         className="sticky top-0 z-30 border-b backdrop-blur"
-        style={{
-          background: "rgba(251, 250, 247, 0.92)",
-          borderColor: "#e6e2d6",
-        }}
+        style={{ background: "rgba(251, 250, 247, 0.92)", borderColor: "#e6e2d6" }}
       >
         <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4">
           <Link to="/app/rep" className="flex items-center gap-2.5 shrink-0">
@@ -101,7 +69,7 @@ export function RepShellChrome({ rep }: { rep: RepAccountRow }) {
                 Refill
               </div>
               <div className="text-[11px] -mt-0.5" style={{ color: "#8a9098" }}>
-                Rep platform
+                / rep platform
               </div>
             </div>
           </Link>
@@ -116,14 +84,13 @@ export function RepShellChrome({ rep }: { rep: RepAccountRow }) {
             >
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
-            <Link
-              to="/app/settings"
-              className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs text-ink-soft hover:bg-sidebar-accent/60 hover:text-foreground transition-colors"
-              title="Settings"
+            <span
+              className="hidden sm:inline truncate max-w-[14ch] text-xs px-2"
+              style={{ color: "#8a9098" }}
+              title={user?.email ?? ""}
             >
-              <Settings className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline truncate max-w-[14ch]">{user?.email}</span>
-            </Link>
+              {user?.email}
+            </span>
             <button
               onClick={signOut}
               title="Sign out"
@@ -137,8 +104,8 @@ export function RepShellChrome({ rep }: { rep: RepAccountRow }) {
       </header>
 
       <div className="mx-auto max-w-6xl px-4 pt-4">
-        <DemoBanner isDemo={rep.isDemo} wipeFnName="wipe_kelly_demo_data" />
-        <RepNav active={activeKey} />
+        <DemoBanner />
+        <RefillRepNav active={activeKey} />
       </div>
     </>
   );

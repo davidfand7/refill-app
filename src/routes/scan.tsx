@@ -50,7 +50,7 @@ import {
   type ParsedAppointmentFile,
   type ColAliases,
 } from "@/lib/appointment-csv";
-import { parseCsvGrid } from "@/lib/liz-csv";
+import { parseCsvGrid } from "@/lib/csv-grid";
 import {
   analyzeScannedAppointments,
   formatUsd,

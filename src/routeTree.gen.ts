@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as ScanRouteImport } from './routes/scan'
 import { Route as PricingRouteImport } from './routes/pricing'
-import { Route as PersonasRouteImport } from './routes/personas'
 import { Route as OnboardRouteImport } from './routes/onboard'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as BookRouteImport } from './routes/book'
@@ -28,25 +27,17 @@ import { Route as AppRepIndexRouteImport } from './routes/app.rep.index'
 import { Route as AppRefillIndexRouteImport } from './routes/app.refill.index'
 import { Route as AppAdminIndexRouteImport } from './routes/app.admin.index'
 import { Route as RescueClaimTokenRouteImport } from './routes/rescue.claim.$token'
-import { Route as AppRepTodayRouteImport } from './routes/app.rep.today'
-import { Route as AppRepSendsRouteImport } from './routes/app.rep.sends'
 import { Route as AppRepReferralLinksRouteImport } from './routes/app.rep.referral-links'
 import { Route as AppRepRecruitRouteImport } from './routes/app.rep.recruit'
-import { Route as AppRepPromotionsRouteImport } from './routes/app.rep.promotions'
 import { Route as AppRepOutreachRouteImport } from './routes/app.rep.outreach'
 import { Route as AppRepNetworkRouteImport } from './routes/app.rep.network'
 import { Route as AppRepLedgerRouteImport } from './routes/app.rep.ledger'
 import { Route as AppRepIntegrationsRouteImport } from './routes/app.rep.integrations'
-import { Route as AppRepInboxRouteImport } from './routes/app.rep.inbox'
 import { Route as AppRepEconomicsRouteImport } from './routes/app.rep.economics'
-import { Route as AppRepDiagRouteImport } from './routes/app.rep.diag'
-import { Route as AppRepCadenceRouteImport } from './routes/app.rep.cadence'
-import { Route as AppRepAccountsRouteImport } from './routes/app.rep.accounts'
 import { Route as AppRefillSharingRouteImport } from './routes/app.refill.sharing'
 import { Route as AppRefillRescueRouteImport } from './routes/app.refill.rescue'
 import { Route as AppRefillReportsRouteImport } from './routes/app.refill.reports'
 import { Route as AppRefillRecoveryRouteImport } from './routes/app.refill.recovery'
-import { Route as AppRefillPromosRouteImport } from './routes/app.refill.promos'
 import { Route as AppRefillPatientsRouteImport } from './routes/app.refill.patients'
 import { Route as AppRefillInboxRouteImport } from './routes/app.refill.inbox'
 import { Route as AppRefillHealthRouteImport } from './routes/app.refill.health'
@@ -54,7 +45,6 @@ import { Route as AppRefillCampaignsRouteImport } from './routes/app.refill.camp
 import { Route as AppRefillBillingRouteImport } from './routes/app.refill.billing'
 import { Route as AppRefillAppointmentsRouteImport } from './routes/app.refill.appointments'
 import { Route as AppAdminRefillTrialsRouteImport } from './routes/app.admin.refill-trials'
-import { Route as AppAdminPersonasRouteImport } from './routes/app.admin.personas'
 import { Route as AppAdminOutreachRouteImport } from './routes/app.admin.outreach'
 import { Route as ApiTwilioInboundRouteImport } from './routes/api.twilio.inbound'
 import { Route as ApiCronRefillTrialDripRouteImport } from './routes/api.cron.refill-trial-drip'
@@ -65,11 +55,8 @@ import { Route as ApiCronEmmaReconcileRouteImport } from './routes/api.cron.emma
 import { Route as ApiCronEmmaRecommendationsRouteImport } from './routes/api.cron.emma-recommendations'
 import { Route as ApiCronEmmaPreshowSweepRouteImport } from './routes/api.cron.emma-preshow-sweep'
 import { Route as ApiCronEmmaInvoiceRouteImport } from './routes/api.cron.emma-invoice'
-import { Route as AppRepPromotionsIndexRouteImport } from './routes/app.rep.promotions.index'
 import { Route as AppRefillPatientsIndexRouteImport } from './routes/app.refill.patients.index'
 import { Route as AppRefillCampaignsIndexRouteImport } from './routes/app.refill.campaigns.index'
-import { Route as AppRepPromotionsPromotionIdRouteImport } from './routes/app.rep.promotions.$promotionId'
-import { Route as AppRepAccountsAccountIdRouteImport } from './routes/app.rep.accounts.$accountId'
 import { Route as AppRefillWaitlistSeedRouteImport } from './routes/app.refill.waitlist.seed'
 import { Route as AppRefillWaitlistBulkRouteImport } from './routes/app.refill.waitlist.bulk'
 import { Route as AppRefillSettingsSenderRouteImport } from './routes/app.refill.settings.sender'
@@ -98,11 +85,6 @@ const ScanRoute = ScanRouteImport.update({
 const PricingRoute = PricingRouteImport.update({
   id: '/pricing',
   path: '/pricing',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PersonasRoute = PersonasRouteImport.update({
-  id: '/personas',
-  path: '/personas',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardRoute = OnboardRouteImport.update({
@@ -180,16 +162,6 @@ const RescueClaimTokenRoute = RescueClaimTokenRouteImport.update({
   path: '/rescue/claim/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppRepTodayRoute = AppRepTodayRouteImport.update({
-  id: '/today',
-  path: '/today',
-  getParentRoute: () => AppRepRoute,
-} as any)
-const AppRepSendsRoute = AppRepSendsRouteImport.update({
-  id: '/sends',
-  path: '/sends',
-  getParentRoute: () => AppRepRoute,
-} as any)
 const AppRepReferralLinksRoute = AppRepReferralLinksRouteImport.update({
   id: '/referral-links',
   path: '/referral-links',
@@ -198,11 +170,6 @@ const AppRepReferralLinksRoute = AppRepReferralLinksRouteImport.update({
 const AppRepRecruitRoute = AppRepRecruitRouteImport.update({
   id: '/recruit',
   path: '/recruit',
-  getParentRoute: () => AppRepRoute,
-} as any)
-const AppRepPromotionsRoute = AppRepPromotionsRouteImport.update({
-  id: '/promotions',
-  path: '/promotions',
   getParentRoute: () => AppRepRoute,
 } as any)
 const AppRepOutreachRoute = AppRepOutreachRouteImport.update({
@@ -225,29 +192,9 @@ const AppRepIntegrationsRoute = AppRepIntegrationsRouteImport.update({
   path: '/integrations',
   getParentRoute: () => AppRepRoute,
 } as any)
-const AppRepInboxRoute = AppRepInboxRouteImport.update({
-  id: '/inbox',
-  path: '/inbox',
-  getParentRoute: () => AppRepRoute,
-} as any)
 const AppRepEconomicsRoute = AppRepEconomicsRouteImport.update({
   id: '/economics',
   path: '/economics',
-  getParentRoute: () => AppRepRoute,
-} as any)
-const AppRepDiagRoute = AppRepDiagRouteImport.update({
-  id: '/diag',
-  path: '/diag',
-  getParentRoute: () => AppRepRoute,
-} as any)
-const AppRepCadenceRoute = AppRepCadenceRouteImport.update({
-  id: '/cadence',
-  path: '/cadence',
-  getParentRoute: () => AppRepRoute,
-} as any)
-const AppRepAccountsRoute = AppRepAccountsRouteImport.update({
-  id: '/accounts',
-  path: '/accounts',
   getParentRoute: () => AppRepRoute,
 } as any)
 const AppRefillSharingRoute = AppRefillSharingRouteImport.update({
@@ -268,11 +215,6 @@ const AppRefillReportsRoute = AppRefillReportsRouteImport.update({
 const AppRefillRecoveryRoute = AppRefillRecoveryRouteImport.update({
   id: '/recovery',
   path: '/recovery',
-  getParentRoute: () => AppRefillRoute,
-} as any)
-const AppRefillPromosRoute = AppRefillPromosRouteImport.update({
-  id: '/promos',
-  path: '/promos',
   getParentRoute: () => AppRefillRoute,
 } as any)
 const AppRefillPatientsRoute = AppRefillPatientsRouteImport.update({
@@ -308,11 +250,6 @@ const AppRefillAppointmentsRoute = AppRefillAppointmentsRouteImport.update({
 const AppAdminRefillTrialsRoute = AppAdminRefillTrialsRouteImport.update({
   id: '/admin/refill-trials',
   path: '/admin/refill-trials',
-  getParentRoute: () => AppRoute,
-} as any)
-const AppAdminPersonasRoute = AppAdminPersonasRouteImport.update({
-  id: '/admin/personas',
-  path: '/admin/personas',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminOutreachRoute = AppAdminOutreachRouteImport.update({
@@ -367,11 +304,6 @@ const ApiCronEmmaInvoiceRoute = ApiCronEmmaInvoiceRouteImport.update({
   path: '/api/cron/emma-invoice',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppRepPromotionsIndexRoute = AppRepPromotionsIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppRepPromotionsRoute,
-} as any)
 const AppRefillPatientsIndexRoute = AppRefillPatientsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -381,17 +313,6 @@ const AppRefillCampaignsIndexRoute = AppRefillCampaignsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppRefillCampaignsRoute,
-} as any)
-const AppRepPromotionsPromotionIdRoute =
-  AppRepPromotionsPromotionIdRouteImport.update({
-    id: '/$promotionId',
-    path: '/$promotionId',
-    getParentRoute: () => AppRepPromotionsRoute,
-  } as any)
-const AppRepAccountsAccountIdRoute = AppRepAccountsAccountIdRouteImport.update({
-  id: '/$accountId',
-  path: '/$accountId',
-  getParentRoute: () => AppRepAccountsRoute,
 } as any)
 const AppRefillWaitlistSeedRoute = AppRefillWaitlistSeedRouteImport.update({
   id: '/waitlist/seed',
@@ -478,7 +399,6 @@ export interface FileRoutesByFullPath {
   '/book': typeof BookRoute
   '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
-  '/personas': typeof PersonasRoute
   '/pricing': typeof PricingRoute
   '/scan': typeof ScanRoute
   '/unsubscribe': typeof UnsubscribeRoute
@@ -498,7 +418,6 @@ export interface FileRoutesByFullPath {
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/app/admin/outreach': typeof AppAdminOutreachRoute
-  '/app/admin/personas': typeof AppAdminPersonasRoute
   '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
   '/app/refill/appointments': typeof AppRefillAppointmentsRoute
   '/app/refill/billing': typeof AppRefillBillingRoute
@@ -506,25 +425,17 @@ export interface FileRoutesByFullPath {
   '/app/refill/health': typeof AppRefillHealthRoute
   '/app/refill/inbox': typeof AppRefillInboxRoute
   '/app/refill/patients': typeof AppRefillPatientsRouteWithChildren
-  '/app/refill/promos': typeof AppRefillPromosRoute
   '/app/refill/recovery': typeof AppRefillRecoveryRoute
   '/app/refill/reports': typeof AppRefillReportsRoute
   '/app/refill/rescue': typeof AppRefillRescueRoute
   '/app/refill/sharing': typeof AppRefillSharingRoute
-  '/app/rep/accounts': typeof AppRepAccountsRouteWithChildren
-  '/app/rep/cadence': typeof AppRepCadenceRoute
-  '/app/rep/diag': typeof AppRepDiagRoute
   '/app/rep/economics': typeof AppRepEconomicsRoute
-  '/app/rep/inbox': typeof AppRepInboxRoute
   '/app/rep/integrations': typeof AppRepIntegrationsRoute
   '/app/rep/ledger': typeof AppRepLedgerRoute
   '/app/rep/network': typeof AppRepNetworkRoute
   '/app/rep/outreach': typeof AppRepOutreachRoute
-  '/app/rep/promotions': typeof AppRepPromotionsRouteWithChildren
   '/app/rep/recruit': typeof AppRepRecruitRoute
   '/app/rep/referral-links': typeof AppRepReferralLinksRoute
-  '/app/rep/sends': typeof AppRepSendsRoute
-  '/app/rep/today': typeof AppRepTodayRoute
   '/rescue/claim/$token': typeof RescueClaimTokenRoute
   '/app/admin/': typeof AppAdminIndexRoute
   '/app/refill/': typeof AppRefillIndexRoute
@@ -540,11 +451,8 @@ export interface FileRoutesByFullPath {
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
   '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
-  '/app/rep/accounts/$accountId': typeof AppRepAccountsAccountIdRoute
-  '/app/rep/promotions/$promotionId': typeof AppRepPromotionsPromotionIdRoute
   '/app/refill/campaigns/': typeof AppRefillCampaignsIndexRoute
   '/app/refill/patients/': typeof AppRefillPatientsIndexRoute
-  '/app/rep/promotions/': typeof AppRepPromotionsIndexRoute
   '/api/webhooks/scheduler/acuity/$secret': typeof ApiWebhooksSchedulerAcuitySecretRoute
   '/app/refill/campaigns/$campaignId/blast': typeof AppRefillCampaignsCampaignIdBlastRoute
   '/app/refill/campaigns/$campaignId/': typeof AppRefillCampaignsCampaignIdIndexRoute
@@ -555,7 +463,6 @@ export interface FileRoutesByTo {
   '/book': typeof BookRoute
   '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
-  '/personas': typeof PersonasRoute
   '/pricing': typeof PricingRoute
   '/scan': typeof ScanRoute
   '/unsubscribe': typeof UnsubscribeRoute
@@ -573,30 +480,22 @@ export interface FileRoutesByTo {
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/app/admin/outreach': typeof AppAdminOutreachRoute
-  '/app/admin/personas': typeof AppAdminPersonasRoute
   '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
   '/app/refill/appointments': typeof AppRefillAppointmentsRoute
   '/app/refill/billing': typeof AppRefillBillingRoute
   '/app/refill/health': typeof AppRefillHealthRoute
   '/app/refill/inbox': typeof AppRefillInboxRoute
-  '/app/refill/promos': typeof AppRefillPromosRoute
   '/app/refill/recovery': typeof AppRefillRecoveryRoute
   '/app/refill/reports': typeof AppRefillReportsRoute
   '/app/refill/rescue': typeof AppRefillRescueRoute
   '/app/refill/sharing': typeof AppRefillSharingRoute
-  '/app/rep/accounts': typeof AppRepAccountsRouteWithChildren
-  '/app/rep/cadence': typeof AppRepCadenceRoute
-  '/app/rep/diag': typeof AppRepDiagRoute
   '/app/rep/economics': typeof AppRepEconomicsRoute
-  '/app/rep/inbox': typeof AppRepInboxRoute
   '/app/rep/integrations': typeof AppRepIntegrationsRoute
   '/app/rep/ledger': typeof AppRepLedgerRoute
   '/app/rep/network': typeof AppRepNetworkRoute
   '/app/rep/outreach': typeof AppRepOutreachRoute
   '/app/rep/recruit': typeof AppRepRecruitRoute
   '/app/rep/referral-links': typeof AppRepReferralLinksRoute
-  '/app/rep/sends': typeof AppRepSendsRoute
-  '/app/rep/today': typeof AppRepTodayRoute
   '/rescue/claim/$token': typeof RescueClaimTokenRoute
   '/app/admin': typeof AppAdminIndexRoute
   '/app/refill': typeof AppRefillIndexRoute
@@ -611,11 +510,8 @@ export interface FileRoutesByTo {
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
   '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
-  '/app/rep/accounts/$accountId': typeof AppRepAccountsAccountIdRoute
-  '/app/rep/promotions/$promotionId': typeof AppRepPromotionsPromotionIdRoute
   '/app/refill/campaigns': typeof AppRefillCampaignsIndexRoute
   '/app/refill/patients': typeof AppRefillPatientsIndexRoute
-  '/app/rep/promotions': typeof AppRepPromotionsIndexRoute
   '/api/webhooks/scheduler/acuity/$secret': typeof ApiWebhooksSchedulerAcuitySecretRoute
   '/app/refill/campaigns/$campaignId/blast': typeof AppRefillCampaignsCampaignIdBlastRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdIndexRoute
@@ -627,7 +523,6 @@ export interface FileRoutesById {
   '/book': typeof BookRoute
   '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
-  '/personas': typeof PersonasRoute
   '/pricing': typeof PricingRoute
   '/scan': typeof ScanRoute
   '/unsubscribe': typeof UnsubscribeRoute
@@ -647,7 +542,6 @@ export interface FileRoutesById {
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/app/admin/outreach': typeof AppAdminOutreachRoute
-  '/app/admin/personas': typeof AppAdminPersonasRoute
   '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
   '/app/refill/appointments': typeof AppRefillAppointmentsRoute
   '/app/refill/billing': typeof AppRefillBillingRoute
@@ -655,25 +549,17 @@ export interface FileRoutesById {
   '/app/refill/health': typeof AppRefillHealthRoute
   '/app/refill/inbox': typeof AppRefillInboxRoute
   '/app/refill/patients': typeof AppRefillPatientsRouteWithChildren
-  '/app/refill/promos': typeof AppRefillPromosRoute
   '/app/refill/recovery': typeof AppRefillRecoveryRoute
   '/app/refill/reports': typeof AppRefillReportsRoute
   '/app/refill/rescue': typeof AppRefillRescueRoute
   '/app/refill/sharing': typeof AppRefillSharingRoute
-  '/app/rep/accounts': typeof AppRepAccountsRouteWithChildren
-  '/app/rep/cadence': typeof AppRepCadenceRoute
-  '/app/rep/diag': typeof AppRepDiagRoute
   '/app/rep/economics': typeof AppRepEconomicsRoute
-  '/app/rep/inbox': typeof AppRepInboxRoute
   '/app/rep/integrations': typeof AppRepIntegrationsRoute
   '/app/rep/ledger': typeof AppRepLedgerRoute
   '/app/rep/network': typeof AppRepNetworkRoute
   '/app/rep/outreach': typeof AppRepOutreachRoute
-  '/app/rep/promotions': typeof AppRepPromotionsRouteWithChildren
   '/app/rep/recruit': typeof AppRepRecruitRoute
   '/app/rep/referral-links': typeof AppRepReferralLinksRoute
-  '/app/rep/sends': typeof AppRepSendsRoute
-  '/app/rep/today': typeof AppRepTodayRoute
   '/rescue/claim/$token': typeof RescueClaimTokenRoute
   '/app/admin/': typeof AppAdminIndexRoute
   '/app/refill/': typeof AppRefillIndexRoute
@@ -689,11 +575,8 @@ export interface FileRoutesById {
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
   '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
-  '/app/rep/accounts/$accountId': typeof AppRepAccountsAccountIdRoute
-  '/app/rep/promotions/$promotionId': typeof AppRepPromotionsPromotionIdRoute
   '/app/refill/campaigns/': typeof AppRefillCampaignsIndexRoute
   '/app/refill/patients/': typeof AppRefillPatientsIndexRoute
-  '/app/rep/promotions/': typeof AppRepPromotionsIndexRoute
   '/api/webhooks/scheduler/acuity/$secret': typeof ApiWebhooksSchedulerAcuitySecretRoute
   '/app/refill/campaigns/$campaignId/blast': typeof AppRefillCampaignsCampaignIdBlastRoute
   '/app/refill/campaigns/$campaignId/': typeof AppRefillCampaignsCampaignIdIndexRoute
@@ -706,7 +589,6 @@ export interface FileRouteTypes {
     | '/book'
     | '/login'
     | '/onboard'
-    | '/personas'
     | '/pricing'
     | '/scan'
     | '/unsubscribe'
@@ -726,7 +608,6 @@ export interface FileRouteTypes {
     | '/api/cron/refill-trial-drip'
     | '/api/twilio/inbound'
     | '/app/admin/outreach'
-    | '/app/admin/personas'
     | '/app/admin/refill-trials'
     | '/app/refill/appointments'
     | '/app/refill/billing'
@@ -734,25 +615,17 @@ export interface FileRouteTypes {
     | '/app/refill/health'
     | '/app/refill/inbox'
     | '/app/refill/patients'
-    | '/app/refill/promos'
     | '/app/refill/recovery'
     | '/app/refill/reports'
     | '/app/refill/rescue'
     | '/app/refill/sharing'
-    | '/app/rep/accounts'
-    | '/app/rep/cadence'
-    | '/app/rep/diag'
     | '/app/rep/economics'
-    | '/app/rep/inbox'
     | '/app/rep/integrations'
     | '/app/rep/ledger'
     | '/app/rep/network'
     | '/app/rep/outreach'
-    | '/app/rep/promotions'
     | '/app/rep/recruit'
     | '/app/rep/referral-links'
-    | '/app/rep/sends'
-    | '/app/rep/today'
     | '/rescue/claim/$token'
     | '/app/admin/'
     | '/app/refill/'
@@ -768,11 +641,8 @@ export interface FileRouteTypes {
     | '/app/refill/settings/sender'
     | '/app/refill/waitlist/bulk'
     | '/app/refill/waitlist/seed'
-    | '/app/rep/accounts/$accountId'
-    | '/app/rep/promotions/$promotionId'
     | '/app/refill/campaigns/'
     | '/app/refill/patients/'
-    | '/app/rep/promotions/'
     | '/api/webhooks/scheduler/acuity/$secret'
     | '/app/refill/campaigns/$campaignId/blast'
     | '/app/refill/campaigns/$campaignId/'
@@ -783,7 +653,6 @@ export interface FileRouteTypes {
     | '/book'
     | '/login'
     | '/onboard'
-    | '/personas'
     | '/pricing'
     | '/scan'
     | '/unsubscribe'
@@ -801,30 +670,22 @@ export interface FileRouteTypes {
     | '/api/cron/refill-trial-drip'
     | '/api/twilio/inbound'
     | '/app/admin/outreach'
-    | '/app/admin/personas'
     | '/app/admin/refill-trials'
     | '/app/refill/appointments'
     | '/app/refill/billing'
     | '/app/refill/health'
     | '/app/refill/inbox'
-    | '/app/refill/promos'
     | '/app/refill/recovery'
     | '/app/refill/reports'
     | '/app/refill/rescue'
     | '/app/refill/sharing'
-    | '/app/rep/accounts'
-    | '/app/rep/cadence'
-    | '/app/rep/diag'
     | '/app/rep/economics'
-    | '/app/rep/inbox'
     | '/app/rep/integrations'
     | '/app/rep/ledger'
     | '/app/rep/network'
     | '/app/rep/outreach'
     | '/app/rep/recruit'
     | '/app/rep/referral-links'
-    | '/app/rep/sends'
-    | '/app/rep/today'
     | '/rescue/claim/$token'
     | '/app/admin'
     | '/app/refill'
@@ -839,11 +700,8 @@ export interface FileRouteTypes {
     | '/app/refill/settings/sender'
     | '/app/refill/waitlist/bulk'
     | '/app/refill/waitlist/seed'
-    | '/app/rep/accounts/$accountId'
-    | '/app/rep/promotions/$promotionId'
     | '/app/refill/campaigns'
     | '/app/refill/patients'
-    | '/app/rep/promotions'
     | '/api/webhooks/scheduler/acuity/$secret'
     | '/app/refill/campaigns/$campaignId/blast'
     | '/app/refill/campaigns/$campaignId'
@@ -854,7 +712,6 @@ export interface FileRouteTypes {
     | '/book'
     | '/login'
     | '/onboard'
-    | '/personas'
     | '/pricing'
     | '/scan'
     | '/unsubscribe'
@@ -874,7 +731,6 @@ export interface FileRouteTypes {
     | '/api/cron/refill-trial-drip'
     | '/api/twilio/inbound'
     | '/app/admin/outreach'
-    | '/app/admin/personas'
     | '/app/admin/refill-trials'
     | '/app/refill/appointments'
     | '/app/refill/billing'
@@ -882,25 +738,17 @@ export interface FileRouteTypes {
     | '/app/refill/health'
     | '/app/refill/inbox'
     | '/app/refill/patients'
-    | '/app/refill/promos'
     | '/app/refill/recovery'
     | '/app/refill/reports'
     | '/app/refill/rescue'
     | '/app/refill/sharing'
-    | '/app/rep/accounts'
-    | '/app/rep/cadence'
-    | '/app/rep/diag'
     | '/app/rep/economics'
-    | '/app/rep/inbox'
     | '/app/rep/integrations'
     | '/app/rep/ledger'
     | '/app/rep/network'
     | '/app/rep/outreach'
-    | '/app/rep/promotions'
     | '/app/rep/recruit'
     | '/app/rep/referral-links'
-    | '/app/rep/sends'
-    | '/app/rep/today'
     | '/rescue/claim/$token'
     | '/app/admin/'
     | '/app/refill/'
@@ -916,11 +764,8 @@ export interface FileRouteTypes {
     | '/app/refill/settings/sender'
     | '/app/refill/waitlist/bulk'
     | '/app/refill/waitlist/seed'
-    | '/app/rep/accounts/$accountId'
-    | '/app/rep/promotions/$promotionId'
     | '/app/refill/campaigns/'
     | '/app/refill/patients/'
-    | '/app/rep/promotions/'
     | '/api/webhooks/scheduler/acuity/$secret'
     | '/app/refill/campaigns/$campaignId/blast'
     | '/app/refill/campaigns/$campaignId/'
@@ -932,7 +777,6 @@ export interface RootRouteChildren {
   BookRoute: typeof BookRoute
   LoginRoute: typeof LoginRoute
   OnboardRoute: typeof OnboardRoute
-  PersonasRoute: typeof PersonasRoute
   PricingRoute: typeof PricingRoute
   ScanRoute: typeof ScanRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
@@ -975,13 +819,6 @@ declare module '@tanstack/react-router' {
       path: '/pricing'
       fullPath: '/pricing'
       preLoaderRoute: typeof PricingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/personas': {
-      id: '/personas'
-      path: '/personas'
-      fullPath: '/personas'
-      preLoaderRoute: typeof PersonasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/onboard': {
@@ -1089,20 +926,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RescueClaimTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/app/rep/today': {
-      id: '/app/rep/today'
-      path: '/today'
-      fullPath: '/app/rep/today'
-      preLoaderRoute: typeof AppRepTodayRouteImport
-      parentRoute: typeof AppRepRoute
-    }
-    '/app/rep/sends': {
-      id: '/app/rep/sends'
-      path: '/sends'
-      fullPath: '/app/rep/sends'
-      preLoaderRoute: typeof AppRepSendsRouteImport
-      parentRoute: typeof AppRepRoute
-    }
     '/app/rep/referral-links': {
       id: '/app/rep/referral-links'
       path: '/referral-links'
@@ -1115,13 +938,6 @@ declare module '@tanstack/react-router' {
       path: '/recruit'
       fullPath: '/app/rep/recruit'
       preLoaderRoute: typeof AppRepRecruitRouteImport
-      parentRoute: typeof AppRepRoute
-    }
-    '/app/rep/promotions': {
-      id: '/app/rep/promotions'
-      path: '/promotions'
-      fullPath: '/app/rep/promotions'
-      preLoaderRoute: typeof AppRepPromotionsRouteImport
       parentRoute: typeof AppRepRoute
     }
     '/app/rep/outreach': {
@@ -1152,39 +968,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRepIntegrationsRouteImport
       parentRoute: typeof AppRepRoute
     }
-    '/app/rep/inbox': {
-      id: '/app/rep/inbox'
-      path: '/inbox'
-      fullPath: '/app/rep/inbox'
-      preLoaderRoute: typeof AppRepInboxRouteImport
-      parentRoute: typeof AppRepRoute
-    }
     '/app/rep/economics': {
       id: '/app/rep/economics'
       path: '/economics'
       fullPath: '/app/rep/economics'
       preLoaderRoute: typeof AppRepEconomicsRouteImport
-      parentRoute: typeof AppRepRoute
-    }
-    '/app/rep/diag': {
-      id: '/app/rep/diag'
-      path: '/diag'
-      fullPath: '/app/rep/diag'
-      preLoaderRoute: typeof AppRepDiagRouteImport
-      parentRoute: typeof AppRepRoute
-    }
-    '/app/rep/cadence': {
-      id: '/app/rep/cadence'
-      path: '/cadence'
-      fullPath: '/app/rep/cadence'
-      preLoaderRoute: typeof AppRepCadenceRouteImport
-      parentRoute: typeof AppRepRoute
-    }
-    '/app/rep/accounts': {
-      id: '/app/rep/accounts'
-      path: '/accounts'
-      fullPath: '/app/rep/accounts'
-      preLoaderRoute: typeof AppRepAccountsRouteImport
       parentRoute: typeof AppRepRoute
     }
     '/app/refill/sharing': {
@@ -1213,13 +1001,6 @@ declare module '@tanstack/react-router' {
       path: '/recovery'
       fullPath: '/app/refill/recovery'
       preLoaderRoute: typeof AppRefillRecoveryRouteImport
-      parentRoute: typeof AppRefillRoute
-    }
-    '/app/refill/promos': {
-      id: '/app/refill/promos'
-      path: '/promos'
-      fullPath: '/app/refill/promos'
-      preLoaderRoute: typeof AppRefillPromosRouteImport
       parentRoute: typeof AppRefillRoute
     }
     '/app/refill/patients': {
@@ -1269,13 +1050,6 @@ declare module '@tanstack/react-router' {
       path: '/admin/refill-trials'
       fullPath: '/app/admin/refill-trials'
       preLoaderRoute: typeof AppAdminRefillTrialsRouteImport
-      parentRoute: typeof AppRoute
-    }
-    '/app/admin/personas': {
-      id: '/app/admin/personas'
-      path: '/admin/personas'
-      fullPath: '/app/admin/personas'
-      preLoaderRoute: typeof AppAdminPersonasRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/admin/outreach': {
@@ -1348,13 +1122,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronEmmaInvoiceRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/app/rep/promotions/': {
-      id: '/app/rep/promotions/'
-      path: '/'
-      fullPath: '/app/rep/promotions/'
-      preLoaderRoute: typeof AppRepPromotionsIndexRouteImport
-      parentRoute: typeof AppRepPromotionsRoute
-    }
     '/app/refill/patients/': {
       id: '/app/refill/patients/'
       path: '/'
@@ -1368,20 +1135,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/refill/campaigns/'
       preLoaderRoute: typeof AppRefillCampaignsIndexRouteImport
       parentRoute: typeof AppRefillCampaignsRoute
-    }
-    '/app/rep/promotions/$promotionId': {
-      id: '/app/rep/promotions/$promotionId'
-      path: '/$promotionId'
-      fullPath: '/app/rep/promotions/$promotionId'
-      preLoaderRoute: typeof AppRepPromotionsPromotionIdRouteImport
-      parentRoute: typeof AppRepPromotionsRoute
-    }
-    '/app/rep/accounts/$accountId': {
-      id: '/app/rep/accounts/$accountId'
-      path: '/$accountId'
-      fullPath: '/app/rep/accounts/$accountId'
-      preLoaderRoute: typeof AppRepAccountsAccountIdRouteImport
-      parentRoute: typeof AppRepAccountsRoute
     }
     '/app/refill/waitlist/seed': {
       id: '/app/refill/waitlist/seed'
@@ -1542,7 +1295,6 @@ interface AppRefillRouteChildren {
   AppRefillHealthRoute: typeof AppRefillHealthRoute
   AppRefillInboxRoute: typeof AppRefillInboxRoute
   AppRefillPatientsRoute: typeof AppRefillPatientsRouteWithChildren
-  AppRefillPromosRoute: typeof AppRefillPromosRoute
   AppRefillRecoveryRoute: typeof AppRefillRecoveryRoute
   AppRefillReportsRoute: typeof AppRefillReportsRoute
   AppRefillRescueRoute: typeof AppRefillRescueRoute
@@ -1562,7 +1314,6 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillHealthRoute: AppRefillHealthRoute,
   AppRefillInboxRoute: AppRefillInboxRoute,
   AppRefillPatientsRoute: AppRefillPatientsRouteWithChildren,
-  AppRefillPromosRoute: AppRefillPromosRoute,
   AppRefillRecoveryRoute: AppRefillRecoveryRoute,
   AppRefillReportsRoute: AppRefillReportsRoute,
   AppRefillRescueRoute: AppRefillRescueRoute,
@@ -1579,64 +1330,25 @@ const AppRefillRouteWithChildren = AppRefillRoute._addFileChildren(
   AppRefillRouteChildren,
 )
 
-interface AppRepAccountsRouteChildren {
-  AppRepAccountsAccountIdRoute: typeof AppRepAccountsAccountIdRoute
-}
-
-const AppRepAccountsRouteChildren: AppRepAccountsRouteChildren = {
-  AppRepAccountsAccountIdRoute: AppRepAccountsAccountIdRoute,
-}
-
-const AppRepAccountsRouteWithChildren = AppRepAccountsRoute._addFileChildren(
-  AppRepAccountsRouteChildren,
-)
-
-interface AppRepPromotionsRouteChildren {
-  AppRepPromotionsPromotionIdRoute: typeof AppRepPromotionsPromotionIdRoute
-  AppRepPromotionsIndexRoute: typeof AppRepPromotionsIndexRoute
-}
-
-const AppRepPromotionsRouteChildren: AppRepPromotionsRouteChildren = {
-  AppRepPromotionsPromotionIdRoute: AppRepPromotionsPromotionIdRoute,
-  AppRepPromotionsIndexRoute: AppRepPromotionsIndexRoute,
-}
-
-const AppRepPromotionsRouteWithChildren =
-  AppRepPromotionsRoute._addFileChildren(AppRepPromotionsRouteChildren)
-
 interface AppRepRouteChildren {
-  AppRepAccountsRoute: typeof AppRepAccountsRouteWithChildren
-  AppRepCadenceRoute: typeof AppRepCadenceRoute
-  AppRepDiagRoute: typeof AppRepDiagRoute
   AppRepEconomicsRoute: typeof AppRepEconomicsRoute
-  AppRepInboxRoute: typeof AppRepInboxRoute
   AppRepIntegrationsRoute: typeof AppRepIntegrationsRoute
   AppRepLedgerRoute: typeof AppRepLedgerRoute
   AppRepNetworkRoute: typeof AppRepNetworkRoute
   AppRepOutreachRoute: typeof AppRepOutreachRoute
-  AppRepPromotionsRoute: typeof AppRepPromotionsRouteWithChildren
   AppRepRecruitRoute: typeof AppRepRecruitRoute
   AppRepReferralLinksRoute: typeof AppRepReferralLinksRoute
-  AppRepSendsRoute: typeof AppRepSendsRoute
-  AppRepTodayRoute: typeof AppRepTodayRoute
   AppRepIndexRoute: typeof AppRepIndexRoute
 }
 
 const AppRepRouteChildren: AppRepRouteChildren = {
-  AppRepAccountsRoute: AppRepAccountsRouteWithChildren,
-  AppRepCadenceRoute: AppRepCadenceRoute,
-  AppRepDiagRoute: AppRepDiagRoute,
   AppRepEconomicsRoute: AppRepEconomicsRoute,
-  AppRepInboxRoute: AppRepInboxRoute,
   AppRepIntegrationsRoute: AppRepIntegrationsRoute,
   AppRepLedgerRoute: AppRepLedgerRoute,
   AppRepNetworkRoute: AppRepNetworkRoute,
   AppRepOutreachRoute: AppRepOutreachRoute,
-  AppRepPromotionsRoute: AppRepPromotionsRouteWithChildren,
   AppRepRecruitRoute: AppRepRecruitRoute,
   AppRepReferralLinksRoute: AppRepReferralLinksRoute,
-  AppRepSendsRoute: AppRepSendsRoute,
-  AppRepTodayRoute: AppRepTodayRoute,
   AppRepIndexRoute: AppRepIndexRoute,
 }
 
@@ -1647,7 +1359,6 @@ interface AppRouteChildren {
   AppRefillRoute: typeof AppRefillRouteWithChildren
   AppRepRoute: typeof AppRepRouteWithChildren
   AppAdminOutreachRoute: typeof AppAdminOutreachRoute
-  AppAdminPersonasRoute: typeof AppAdminPersonasRoute
   AppAdminRefillTrialsRoute: typeof AppAdminRefillTrialsRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
 }
@@ -1656,7 +1367,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppRefillRoute: AppRefillRouteWithChildren,
   AppRepRoute: AppRepRouteWithChildren,
   AppAdminOutreachRoute: AppAdminOutreachRoute,
-  AppAdminPersonasRoute: AppAdminPersonasRoute,
   AppAdminRefillTrialsRoute: AppAdminRefillTrialsRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
 }
@@ -1669,7 +1379,6 @@ const rootRouteChildren: RootRouteChildren = {
   BookRoute: BookRoute,
   LoginRoute: LoginRoute,
   OnboardRoute: OnboardRoute,
-  PersonasRoute: PersonasRoute,
   PricingRoute: PricingRoute,
   ScanRoute: ScanRoute,
   UnsubscribeRoute: UnsubscribeRoute,

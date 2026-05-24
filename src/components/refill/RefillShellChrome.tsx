@@ -15,7 +15,7 @@ import { Link, useLocation } from "@tanstack/react-router";
 import { LogOut, Moon, Settings, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { DemoBanner } from "@/components/lizzie/DemoBanner";
+import { DemoBanner } from "@/components/DemoBanner";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { RefillNav, type RefillNavKey } from "@/components/refill/RefillNav";
 import { useAuth } from "@/lib/auth";
@@ -108,7 +108,7 @@ export function RefillShellChrome({ tenant }: { tenant: MyTenant }) {
       </header>
 
       <div className="mx-auto max-w-6xl px-4 pt-4">
-        <DemoBanner isDemo={tenant.isDemo} wipeFnName="wipe_karen_demo_data" />
+        <DemoBanner />
         <RefillNav active={activeKey} />
       </div>
     </>

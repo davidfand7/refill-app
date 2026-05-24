@@ -18,7 +18,7 @@
  * as patient-csv.ts.
  */
 
-import { parseCsvGrid } from "@/lib/liz-csv";
+import { parseCsvGrid } from "@/lib/csv-grid";
 
 // ─── Public output shape ──────────────────────────────────────────────────
 

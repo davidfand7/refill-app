@@ -38,7 +38,7 @@ import {
   type ParsedAppointment,
 } from "@/lib/appointment-csv";
 import { mapCsvHeaders, type AiMappingResult } from "@/server/emma-csv-mapper.functions";
-import { parseCsvGrid } from "@/lib/liz-csv";
+import { parseCsvGrid } from "@/lib/csv-grid";
 import {
   nameMatchCandidates,
   normalizeEmail,

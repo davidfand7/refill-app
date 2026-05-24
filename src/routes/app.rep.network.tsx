@@ -16,7 +16,7 @@ import { useEffect, useState } from "react";
 import { Network, Users } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
-import { LiveEarningsCard } from "@/components/lizzie/LiveEarningsCard";
+import { LiveEarningsCard } from "@/components/refill/LiveEarningsCard";
 import {
   getMyNetwork,
   getMyRepAccount,

@@ -24,7 +24,6 @@ import {
   FlaskConical,
   Loader2,
   Mail,
-  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -45,13 +44,6 @@ interface AdminSurface {
 
 const ADMIN_SURFACES: AdminSurface[] = [
   {
-    path: "/app/admin/personas",
-    label: "Persona switcher",
-    description:
-      "Sign in as Kelly (rep), Maria (downstream rep), or Karen (spa owner) to test the system end-to-end without bouncing through magic links.",
-    icon: Users,
-  },
-  {
     path: "/app/admin/outreach",
     label: "Outreach templates",
     description:
@@ -66,6 +58,10 @@ const ADMIN_SURFACES: AdminSurface[] = [
     icon: FlaskConical,
   },
 ];
+
+// Persona testing moved to direct URLs (no admin gate, no extra UI):
+//   /dev/admin · /dev/kelly · /dev/maria · /dev/karen
+// See src/routes/dev.$persona.tsx
 
 function AdminIndexPage() {
   const { session, loading: authLoading } = useAuth();

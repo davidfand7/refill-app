@@ -33,7 +33,7 @@
  * Established 2026-05-15 (Patient Architecture P1).
  */
 
-import { parseCsvGrid } from "@/lib/liz-csv";
+import { parseCsvGrid } from "@/lib/csv-grid";
 import { normalizePatientName } from "@/lib/normalize-patient";
 import {
   resolveProduct,

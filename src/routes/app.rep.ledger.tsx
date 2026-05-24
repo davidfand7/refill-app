@@ -13,7 +13,7 @@ import { useEffect, useState } from "react";
 import { Receipt } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
-import { LiveEarningsCard } from "@/components/lizzie/LiveEarningsCard";
+import { LiveEarningsCard } from "@/components/refill/LiveEarningsCard";
 import {
   getMyLedger,
   getMyRepAccount,
