@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+/*
+ * Refill brand tokens.
+ *
+ * Source of truth: openagenticv4/src/lib/brand.ts (Refill variant).
+ * Mirrored here so the cleave is self-contained — no cross-repo lookups.
+ *
+ * Aesthetic anchor: paper background, emerald accent, Georgia serif
+ * headlines, single-card composition. Matches v414 landing + v416.A.2
+ * login. The visual identity established as Refill-pure during the
+ * Agentiport-substrate-leak cleanup arc.
+ */
+@theme {
+  --color-paper: #fbfaf7;
+  --color-ink: #1c2024;
+  --color-ink-soft: #5a6068;
+  --color-ink-faint: #8a9098;
+  --color-emerald: #056048;
+  --color-emerald-soft: #e8f1ed;
+  --color-emerald-pale: #f3f7f5;
+  --color-border-soft: #e6e2d6;
+  --color-rose: #b94842;
+  --color-rose-soft: #fdecec;
+  --color-amber: #8a6d0c;
+  --color-amber-soft: #fdf6dc;
+
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+html,
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

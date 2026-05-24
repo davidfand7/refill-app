@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "refill-app",
+  "compatibility_date": "2025-09-24",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "src/worker.ts",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./dist/client"
+  },
+  "vars": {
+    "REFILL_FROM_ENABLED": "1",
+    "REFILL_PUBLIC_ORIGIN": "https://getrefill.app"
+  }
+  // Secrets (SUPABASE_*, RESEND_*, TWILIO_*, STRIPE_*, ACUITY_*) set via
+  // `wrangler secret put <NAME>` — they do NOT live in this file.
+  //
+  // Cron triggers added in Phase 2 step 2.7 once the schema is in place.
+}
