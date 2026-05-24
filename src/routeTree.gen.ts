@@ -15,9 +15,37 @@ import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PersonasRouteImport } from './routes/personas'
 import { Route as OnboardRouteImport } from './routes/onboard'
 import { Route as BookRouteImport } from './routes/book'
+import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RSlugRouteImport } from './routes/r.$slug'
+import { Route as AppRefillRouteImport } from './routes/app.refill'
+import { Route as AppRefillIndexRouteImport } from './routes/app.refill.index'
 import { Route as RescueClaimTokenRouteImport } from './routes/rescue.claim.$token'
+import { Route as AppRefillSharingRouteImport } from './routes/app.refill.sharing'
+import { Route as AppRefillRescueRouteImport } from './routes/app.refill.rescue'
+import { Route as AppRefillReportsRouteImport } from './routes/app.refill.reports'
+import { Route as AppRefillRecoveryRouteImport } from './routes/app.refill.recovery'
+import { Route as AppRefillPromosRouteImport } from './routes/app.refill.promos'
+import { Route as AppRefillPatientsRouteImport } from './routes/app.refill.patients'
+import { Route as AppRefillInboxRouteImport } from './routes/app.refill.inbox'
+import { Route as AppRefillHealthRouteImport } from './routes/app.refill.health'
+import { Route as AppRefillCampaignsRouteImport } from './routes/app.refill.campaigns'
+import { Route as AppRefillBillingRouteImport } from './routes/app.refill.billing'
+import { Route as AppRefillAppointmentsRouteImport } from './routes/app.refill.appointments'
+import { Route as AppRefillPatientsIndexRouteImport } from './routes/app.refill.patients.index'
+import { Route as AppRefillCampaignsIndexRouteImport } from './routes/app.refill.campaigns.index'
+import { Route as AppRefillWaitlistSeedRouteImport } from './routes/app.refill.waitlist.seed'
+import { Route as AppRefillWaitlistBulkRouteImport } from './routes/app.refill.waitlist.bulk'
+import { Route as AppRefillSettingsSenderRouteImport } from './routes/app.refill.settings.sender'
+import { Route as AppRefillSettingsSchedulerRouteImport } from './routes/app.refill.settings.scheduler'
+import { Route as AppRefillSettingsNoshowRouteImport } from './routes/app.refill.settings.noshow'
+import { Route as AppRefillPatientsImportRouteImport } from './routes/app.refill.patients.import'
+import { Route as AppRefillPatientsContactsRouteImport } from './routes/app.refill.patients.contacts'
+import { Route as AppRefillPatientsPatientIdRouteImport } from './routes/app.refill.patients.$patientId'
+import { Route as AppRefillCampaignsNewRouteImport } from './routes/app.refill.campaigns.new'
+import { Route as AppRefillCampaignsCampaignIdRouteImport } from './routes/app.refill.campaigns.$campaignId'
+import { Route as AppRefillCampaignsCampaignIdIndexRouteImport } from './routes/app.refill.campaigns.$campaignId.index'
+import { Route as AppRefillCampaignsCampaignIdBlastRouteImport } from './routes/app.refill.campaigns.$campaignId.blast'
 
 const UnsubscribeRoute = UnsubscribeRouteImport.update({
   id: '/unsubscribe',
@@ -49,6 +77,11 @@ const BookRoute = BookRouteImport.update({
   path: '/book',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppRoute = AppRouteImport.update({
+  id: '/app',
+  path: '/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -59,25 +92,195 @@ const RSlugRoute = RSlugRouteImport.update({
   path: '/r/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppRefillRoute = AppRefillRouteImport.update({
+  id: '/refill',
+  path: '/refill',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppRefillIndexRoute = AppRefillIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRefillRoute,
+} as any)
 const RescueClaimTokenRoute = RescueClaimTokenRouteImport.update({
   id: '/rescue/claim/$token',
   path: '/rescue/claim/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppRefillSharingRoute = AppRefillSharingRouteImport.update({
+  id: '/sharing',
+  path: '/sharing',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillRescueRoute = AppRefillRescueRouteImport.update({
+  id: '/rescue',
+  path: '/rescue',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillReportsRoute = AppRefillReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillRecoveryRoute = AppRefillRecoveryRouteImport.update({
+  id: '/recovery',
+  path: '/recovery',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillPromosRoute = AppRefillPromosRouteImport.update({
+  id: '/promos',
+  path: '/promos',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillPatientsRoute = AppRefillPatientsRouteImport.update({
+  id: '/patients',
+  path: '/patients',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillInboxRoute = AppRefillInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillHealthRoute = AppRefillHealthRouteImport.update({
+  id: '/health',
+  path: '/health',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillCampaignsRoute = AppRefillCampaignsRouteImport.update({
+  id: '/campaigns',
+  path: '/campaigns',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillBillingRoute = AppRefillBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillAppointmentsRoute = AppRefillAppointmentsRouteImport.update({
+  id: '/appointments',
+  path: '/appointments',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillPatientsIndexRoute = AppRefillPatientsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRefillPatientsRoute,
+} as any)
+const AppRefillCampaignsIndexRoute = AppRefillCampaignsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRefillCampaignsRoute,
+} as any)
+const AppRefillWaitlistSeedRoute = AppRefillWaitlistSeedRouteImport.update({
+  id: '/waitlist/seed',
+  path: '/waitlist/seed',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillWaitlistBulkRoute = AppRefillWaitlistBulkRouteImport.update({
+  id: '/waitlist/bulk',
+  path: '/waitlist/bulk',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillSettingsSenderRoute = AppRefillSettingsSenderRouteImport.update({
+  id: '/settings/sender',
+  path: '/settings/sender',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillSettingsSchedulerRoute =
+  AppRefillSettingsSchedulerRouteImport.update({
+    id: '/settings/scheduler',
+    path: '/settings/scheduler',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
+const AppRefillSettingsNoshowRoute = AppRefillSettingsNoshowRouteImport.update({
+  id: '/settings/noshow',
+  path: '/settings/noshow',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillPatientsImportRoute = AppRefillPatientsImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => AppRefillPatientsRoute,
+} as any)
+const AppRefillPatientsContactsRoute =
+  AppRefillPatientsContactsRouteImport.update({
+    id: '/contacts',
+    path: '/contacts',
+    getParentRoute: () => AppRefillPatientsRoute,
+  } as any)
+const AppRefillPatientsPatientIdRoute =
+  AppRefillPatientsPatientIdRouteImport.update({
+    id: '/$patientId',
+    path: '/$patientId',
+    getParentRoute: () => AppRefillPatientsRoute,
+  } as any)
+const AppRefillCampaignsNewRoute = AppRefillCampaignsNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AppRefillCampaignsRoute,
+} as any)
+const AppRefillCampaignsCampaignIdRoute =
+  AppRefillCampaignsCampaignIdRouteImport.update({
+    id: '/$campaignId',
+    path: '/$campaignId',
+    getParentRoute: () => AppRefillCampaignsRoute,
+  } as any)
+const AppRefillCampaignsCampaignIdIndexRoute =
+  AppRefillCampaignsCampaignIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AppRefillCampaignsCampaignIdRoute,
+  } as any)
+const AppRefillCampaignsCampaignIdBlastRoute =
+  AppRefillCampaignsCampaignIdBlastRouteImport.update({
+    id: '/blast',
+    path: '/blast',
+    getParentRoute: () => AppRefillCampaignsCampaignIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/app': typeof AppRouteWithChildren
   '/book': typeof BookRoute
   '/onboard': typeof OnboardRoute
   '/personas': typeof PersonasRoute
   '/pricing': typeof PricingRoute
   '/scan': typeof ScanRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/app/refill': typeof AppRefillRouteWithChildren
   '/r/$slug': typeof RSlugRoute
+  '/app/refill/appointments': typeof AppRefillAppointmentsRoute
+  '/app/refill/billing': typeof AppRefillBillingRoute
+  '/app/refill/campaigns': typeof AppRefillCampaignsRouteWithChildren
+  '/app/refill/health': typeof AppRefillHealthRoute
+  '/app/refill/inbox': typeof AppRefillInboxRoute
+  '/app/refill/patients': typeof AppRefillPatientsRouteWithChildren
+  '/app/refill/promos': typeof AppRefillPromosRoute
+  '/app/refill/recovery': typeof AppRefillRecoveryRoute
+  '/app/refill/reports': typeof AppRefillReportsRoute
+  '/app/refill/rescue': typeof AppRefillRescueRoute
+  '/app/refill/sharing': typeof AppRefillSharingRoute
   '/rescue/claim/$token': typeof RescueClaimTokenRoute
+  '/app/refill/': typeof AppRefillIndexRoute
+  '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
+  '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
+  '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
+  '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
+  '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
+  '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
+  '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
+  '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
+  '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
+  '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
+  '/app/refill/campaigns/': typeof AppRefillCampaignsIndexRoute
+  '/app/refill/patients/': typeof AppRefillPatientsIndexRoute
+  '/app/refill/campaigns/$campaignId/blast': typeof AppRefillCampaignsCampaignIdBlastRoute
+  '/app/refill/campaigns/$campaignId/': typeof AppRefillCampaignsCampaignIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/app': typeof AppRouteWithChildren
   '/book': typeof BookRoute
   '/onboard': typeof OnboardRoute
   '/personas': typeof PersonasRoute
@@ -85,35 +288,115 @@ export interface FileRoutesByTo {
   '/scan': typeof ScanRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/r/$slug': typeof RSlugRoute
+  '/app/refill/appointments': typeof AppRefillAppointmentsRoute
+  '/app/refill/billing': typeof AppRefillBillingRoute
+  '/app/refill/health': typeof AppRefillHealthRoute
+  '/app/refill/inbox': typeof AppRefillInboxRoute
+  '/app/refill/promos': typeof AppRefillPromosRoute
+  '/app/refill/recovery': typeof AppRefillRecoveryRoute
+  '/app/refill/reports': typeof AppRefillReportsRoute
+  '/app/refill/rescue': typeof AppRefillRescueRoute
+  '/app/refill/sharing': typeof AppRefillSharingRoute
   '/rescue/claim/$token': typeof RescueClaimTokenRoute
+  '/app/refill': typeof AppRefillIndexRoute
+  '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
+  '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
+  '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
+  '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
+  '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
+  '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
+  '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
+  '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
+  '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
+  '/app/refill/campaigns': typeof AppRefillCampaignsIndexRoute
+  '/app/refill/patients': typeof AppRefillPatientsIndexRoute
+  '/app/refill/campaigns/$campaignId/blast': typeof AppRefillCampaignsCampaignIdBlastRoute
+  '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/app': typeof AppRouteWithChildren
   '/book': typeof BookRoute
   '/onboard': typeof OnboardRoute
   '/personas': typeof PersonasRoute
   '/pricing': typeof PricingRoute
   '/scan': typeof ScanRoute
   '/unsubscribe': typeof UnsubscribeRoute
+  '/app/refill': typeof AppRefillRouteWithChildren
   '/r/$slug': typeof RSlugRoute
+  '/app/refill/appointments': typeof AppRefillAppointmentsRoute
+  '/app/refill/billing': typeof AppRefillBillingRoute
+  '/app/refill/campaigns': typeof AppRefillCampaignsRouteWithChildren
+  '/app/refill/health': typeof AppRefillHealthRoute
+  '/app/refill/inbox': typeof AppRefillInboxRoute
+  '/app/refill/patients': typeof AppRefillPatientsRouteWithChildren
+  '/app/refill/promos': typeof AppRefillPromosRoute
+  '/app/refill/recovery': typeof AppRefillRecoveryRoute
+  '/app/refill/reports': typeof AppRefillReportsRoute
+  '/app/refill/rescue': typeof AppRefillRescueRoute
+  '/app/refill/sharing': typeof AppRefillSharingRoute
   '/rescue/claim/$token': typeof RescueClaimTokenRoute
+  '/app/refill/': typeof AppRefillIndexRoute
+  '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
+  '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
+  '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
+  '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
+  '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
+  '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
+  '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
+  '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
+  '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
+  '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
+  '/app/refill/campaigns/': typeof AppRefillCampaignsIndexRoute
+  '/app/refill/patients/': typeof AppRefillPatientsIndexRoute
+  '/app/refill/campaigns/$campaignId/blast': typeof AppRefillCampaignsCampaignIdBlastRoute
+  '/app/refill/campaigns/$campaignId/': typeof AppRefillCampaignsCampaignIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/app'
     | '/book'
     | '/onboard'
     | '/personas'
     | '/pricing'
     | '/scan'
     | '/unsubscribe'
+    | '/app/refill'
     | '/r/$slug'
+    | '/app/refill/appointments'
+    | '/app/refill/billing'
+    | '/app/refill/campaigns'
+    | '/app/refill/health'
+    | '/app/refill/inbox'
+    | '/app/refill/patients'
+    | '/app/refill/promos'
+    | '/app/refill/recovery'
+    | '/app/refill/reports'
+    | '/app/refill/rescue'
+    | '/app/refill/sharing'
     | '/rescue/claim/$token'
+    | '/app/refill/'
+    | '/app/refill/campaigns/$campaignId'
+    | '/app/refill/campaigns/new'
+    | '/app/refill/patients/$patientId'
+    | '/app/refill/patients/contacts'
+    | '/app/refill/patients/import'
+    | '/app/refill/settings/noshow'
+    | '/app/refill/settings/scheduler'
+    | '/app/refill/settings/sender'
+    | '/app/refill/waitlist/bulk'
+    | '/app/refill/waitlist/seed'
+    | '/app/refill/campaigns/'
+    | '/app/refill/patients/'
+    | '/app/refill/campaigns/$campaignId/blast'
+    | '/app/refill/campaigns/$campaignId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/app'
     | '/book'
     | '/onboard'
     | '/personas'
@@ -121,22 +404,74 @@ export interface FileRouteTypes {
     | '/scan'
     | '/unsubscribe'
     | '/r/$slug'
+    | '/app/refill/appointments'
+    | '/app/refill/billing'
+    | '/app/refill/health'
+    | '/app/refill/inbox'
+    | '/app/refill/promos'
+    | '/app/refill/recovery'
+    | '/app/refill/reports'
+    | '/app/refill/rescue'
+    | '/app/refill/sharing'
     | '/rescue/claim/$token'
+    | '/app/refill'
+    | '/app/refill/campaigns/new'
+    | '/app/refill/patients/$patientId'
+    | '/app/refill/patients/contacts'
+    | '/app/refill/patients/import'
+    | '/app/refill/settings/noshow'
+    | '/app/refill/settings/scheduler'
+    | '/app/refill/settings/sender'
+    | '/app/refill/waitlist/bulk'
+    | '/app/refill/waitlist/seed'
+    | '/app/refill/campaigns'
+    | '/app/refill/patients'
+    | '/app/refill/campaigns/$campaignId/blast'
+    | '/app/refill/campaigns/$campaignId'
   id:
     | '__root__'
     | '/'
+    | '/app'
     | '/book'
     | '/onboard'
     | '/personas'
     | '/pricing'
     | '/scan'
     | '/unsubscribe'
+    | '/app/refill'
     | '/r/$slug'
+    | '/app/refill/appointments'
+    | '/app/refill/billing'
+    | '/app/refill/campaigns'
+    | '/app/refill/health'
+    | '/app/refill/inbox'
+    | '/app/refill/patients'
+    | '/app/refill/promos'
+    | '/app/refill/recovery'
+    | '/app/refill/reports'
+    | '/app/refill/rescue'
+    | '/app/refill/sharing'
     | '/rescue/claim/$token'
+    | '/app/refill/'
+    | '/app/refill/campaigns/$campaignId'
+    | '/app/refill/campaigns/new'
+    | '/app/refill/patients/$patientId'
+    | '/app/refill/patients/contacts'
+    | '/app/refill/patients/import'
+    | '/app/refill/settings/noshow'
+    | '/app/refill/settings/scheduler'
+    | '/app/refill/settings/sender'
+    | '/app/refill/waitlist/bulk'
+    | '/app/refill/waitlist/seed'
+    | '/app/refill/campaigns/'
+    | '/app/refill/patients/'
+    | '/app/refill/campaigns/$campaignId/blast'
+    | '/app/refill/campaigns/$campaignId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
   BookRoute: typeof BookRoute
   OnboardRoute: typeof OnboardRoute
   PersonasRoute: typeof PersonasRoute
@@ -191,6 +526,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BookRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app': {
+      id: '/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -205,6 +547,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/refill': {
+      id: '/app/refill'
+      path: '/refill'
+      fullPath: '/app/refill'
+      preLoaderRoute: typeof AppRefillRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/refill/': {
+      id: '/app/refill/'
+      path: '/'
+      fullPath: '/app/refill/'
+      preLoaderRoute: typeof AppRefillIndexRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/rescue/claim/$token': {
       id: '/rescue/claim/$token'
       path: '/rescue/claim/$token'
@@ -212,11 +568,292 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RescueClaimTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/refill/sharing': {
+      id: '/app/refill/sharing'
+      path: '/sharing'
+      fullPath: '/app/refill/sharing'
+      preLoaderRoute: typeof AppRefillSharingRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/rescue': {
+      id: '/app/refill/rescue'
+      path: '/rescue'
+      fullPath: '/app/refill/rescue'
+      preLoaderRoute: typeof AppRefillRescueRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/reports': {
+      id: '/app/refill/reports'
+      path: '/reports'
+      fullPath: '/app/refill/reports'
+      preLoaderRoute: typeof AppRefillReportsRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/recovery': {
+      id: '/app/refill/recovery'
+      path: '/recovery'
+      fullPath: '/app/refill/recovery'
+      preLoaderRoute: typeof AppRefillRecoveryRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/promos': {
+      id: '/app/refill/promos'
+      path: '/promos'
+      fullPath: '/app/refill/promos'
+      preLoaderRoute: typeof AppRefillPromosRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/patients': {
+      id: '/app/refill/patients'
+      path: '/patients'
+      fullPath: '/app/refill/patients'
+      preLoaderRoute: typeof AppRefillPatientsRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/inbox': {
+      id: '/app/refill/inbox'
+      path: '/inbox'
+      fullPath: '/app/refill/inbox'
+      preLoaderRoute: typeof AppRefillInboxRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/health': {
+      id: '/app/refill/health'
+      path: '/health'
+      fullPath: '/app/refill/health'
+      preLoaderRoute: typeof AppRefillHealthRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/campaigns': {
+      id: '/app/refill/campaigns'
+      path: '/campaigns'
+      fullPath: '/app/refill/campaigns'
+      preLoaderRoute: typeof AppRefillCampaignsRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/billing': {
+      id: '/app/refill/billing'
+      path: '/billing'
+      fullPath: '/app/refill/billing'
+      preLoaderRoute: typeof AppRefillBillingRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/appointments': {
+      id: '/app/refill/appointments'
+      path: '/appointments'
+      fullPath: '/app/refill/appointments'
+      preLoaderRoute: typeof AppRefillAppointmentsRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/patients/': {
+      id: '/app/refill/patients/'
+      path: '/'
+      fullPath: '/app/refill/patients/'
+      preLoaderRoute: typeof AppRefillPatientsIndexRouteImport
+      parentRoute: typeof AppRefillPatientsRoute
+    }
+    '/app/refill/campaigns/': {
+      id: '/app/refill/campaigns/'
+      path: '/'
+      fullPath: '/app/refill/campaigns/'
+      preLoaderRoute: typeof AppRefillCampaignsIndexRouteImport
+      parentRoute: typeof AppRefillCampaignsRoute
+    }
+    '/app/refill/waitlist/seed': {
+      id: '/app/refill/waitlist/seed'
+      path: '/waitlist/seed'
+      fullPath: '/app/refill/waitlist/seed'
+      preLoaderRoute: typeof AppRefillWaitlistSeedRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/waitlist/bulk': {
+      id: '/app/refill/waitlist/bulk'
+      path: '/waitlist/bulk'
+      fullPath: '/app/refill/waitlist/bulk'
+      preLoaderRoute: typeof AppRefillWaitlistBulkRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/settings/sender': {
+      id: '/app/refill/settings/sender'
+      path: '/settings/sender'
+      fullPath: '/app/refill/settings/sender'
+      preLoaderRoute: typeof AppRefillSettingsSenderRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/settings/scheduler': {
+      id: '/app/refill/settings/scheduler'
+      path: '/settings/scheduler'
+      fullPath: '/app/refill/settings/scheduler'
+      preLoaderRoute: typeof AppRefillSettingsSchedulerRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/settings/noshow': {
+      id: '/app/refill/settings/noshow'
+      path: '/settings/noshow'
+      fullPath: '/app/refill/settings/noshow'
+      preLoaderRoute: typeof AppRefillSettingsNoshowRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/patients/import': {
+      id: '/app/refill/patients/import'
+      path: '/import'
+      fullPath: '/app/refill/patients/import'
+      preLoaderRoute: typeof AppRefillPatientsImportRouteImport
+      parentRoute: typeof AppRefillPatientsRoute
+    }
+    '/app/refill/patients/contacts': {
+      id: '/app/refill/patients/contacts'
+      path: '/contacts'
+      fullPath: '/app/refill/patients/contacts'
+      preLoaderRoute: typeof AppRefillPatientsContactsRouteImport
+      parentRoute: typeof AppRefillPatientsRoute
+    }
+    '/app/refill/patients/$patientId': {
+      id: '/app/refill/patients/$patientId'
+      path: '/$patientId'
+      fullPath: '/app/refill/patients/$patientId'
+      preLoaderRoute: typeof AppRefillPatientsPatientIdRouteImport
+      parentRoute: typeof AppRefillPatientsRoute
+    }
+    '/app/refill/campaigns/new': {
+      id: '/app/refill/campaigns/new'
+      path: '/new'
+      fullPath: '/app/refill/campaigns/new'
+      preLoaderRoute: typeof AppRefillCampaignsNewRouteImport
+      parentRoute: typeof AppRefillCampaignsRoute
+    }
+    '/app/refill/campaigns/$campaignId': {
+      id: '/app/refill/campaigns/$campaignId'
+      path: '/$campaignId'
+      fullPath: '/app/refill/campaigns/$campaignId'
+      preLoaderRoute: typeof AppRefillCampaignsCampaignIdRouteImport
+      parentRoute: typeof AppRefillCampaignsRoute
+    }
+    '/app/refill/campaigns/$campaignId/': {
+      id: '/app/refill/campaigns/$campaignId/'
+      path: '/'
+      fullPath: '/app/refill/campaigns/$campaignId/'
+      preLoaderRoute: typeof AppRefillCampaignsCampaignIdIndexRouteImport
+      parentRoute: typeof AppRefillCampaignsCampaignIdRoute
+    }
+    '/app/refill/campaigns/$campaignId/blast': {
+      id: '/app/refill/campaigns/$campaignId/blast'
+      path: '/blast'
+      fullPath: '/app/refill/campaigns/$campaignId/blast'
+      preLoaderRoute: typeof AppRefillCampaignsCampaignIdBlastRouteImport
+      parentRoute: typeof AppRefillCampaignsCampaignIdRoute
+    }
   }
 }
 
+interface AppRefillCampaignsCampaignIdRouteChildren {
+  AppRefillCampaignsCampaignIdBlastRoute: typeof AppRefillCampaignsCampaignIdBlastRoute
+  AppRefillCampaignsCampaignIdIndexRoute: typeof AppRefillCampaignsCampaignIdIndexRoute
+}
+
+const AppRefillCampaignsCampaignIdRouteChildren: AppRefillCampaignsCampaignIdRouteChildren =
+  {
+    AppRefillCampaignsCampaignIdBlastRoute:
+      AppRefillCampaignsCampaignIdBlastRoute,
+    AppRefillCampaignsCampaignIdIndexRoute:
+      AppRefillCampaignsCampaignIdIndexRoute,
+  }
+
+const AppRefillCampaignsCampaignIdRouteWithChildren =
+  AppRefillCampaignsCampaignIdRoute._addFileChildren(
+    AppRefillCampaignsCampaignIdRouteChildren,
+  )
+
+interface AppRefillCampaignsRouteChildren {
+  AppRefillCampaignsCampaignIdRoute: typeof AppRefillCampaignsCampaignIdRouteWithChildren
+  AppRefillCampaignsNewRoute: typeof AppRefillCampaignsNewRoute
+  AppRefillCampaignsIndexRoute: typeof AppRefillCampaignsIndexRoute
+}
+
+const AppRefillCampaignsRouteChildren: AppRefillCampaignsRouteChildren = {
+  AppRefillCampaignsCampaignIdRoute:
+    AppRefillCampaignsCampaignIdRouteWithChildren,
+  AppRefillCampaignsNewRoute: AppRefillCampaignsNewRoute,
+  AppRefillCampaignsIndexRoute: AppRefillCampaignsIndexRoute,
+}
+
+const AppRefillCampaignsRouteWithChildren =
+  AppRefillCampaignsRoute._addFileChildren(AppRefillCampaignsRouteChildren)
+
+interface AppRefillPatientsRouteChildren {
+  AppRefillPatientsPatientIdRoute: typeof AppRefillPatientsPatientIdRoute
+  AppRefillPatientsContactsRoute: typeof AppRefillPatientsContactsRoute
+  AppRefillPatientsImportRoute: typeof AppRefillPatientsImportRoute
+  AppRefillPatientsIndexRoute: typeof AppRefillPatientsIndexRoute
+}
+
+const AppRefillPatientsRouteChildren: AppRefillPatientsRouteChildren = {
+  AppRefillPatientsPatientIdRoute: AppRefillPatientsPatientIdRoute,
+  AppRefillPatientsContactsRoute: AppRefillPatientsContactsRoute,
+  AppRefillPatientsImportRoute: AppRefillPatientsImportRoute,
+  AppRefillPatientsIndexRoute: AppRefillPatientsIndexRoute,
+}
+
+const AppRefillPatientsRouteWithChildren =
+  AppRefillPatientsRoute._addFileChildren(AppRefillPatientsRouteChildren)
+
+interface AppRefillRouteChildren {
+  AppRefillAppointmentsRoute: typeof AppRefillAppointmentsRoute
+  AppRefillBillingRoute: typeof AppRefillBillingRoute
+  AppRefillCampaignsRoute: typeof AppRefillCampaignsRouteWithChildren
+  AppRefillHealthRoute: typeof AppRefillHealthRoute
+  AppRefillInboxRoute: typeof AppRefillInboxRoute
+  AppRefillPatientsRoute: typeof AppRefillPatientsRouteWithChildren
+  AppRefillPromosRoute: typeof AppRefillPromosRoute
+  AppRefillRecoveryRoute: typeof AppRefillRecoveryRoute
+  AppRefillReportsRoute: typeof AppRefillReportsRoute
+  AppRefillRescueRoute: typeof AppRefillRescueRoute
+  AppRefillSharingRoute: typeof AppRefillSharingRoute
+  AppRefillIndexRoute: typeof AppRefillIndexRoute
+  AppRefillSettingsNoshowRoute: typeof AppRefillSettingsNoshowRoute
+  AppRefillSettingsSchedulerRoute: typeof AppRefillSettingsSchedulerRoute
+  AppRefillSettingsSenderRoute: typeof AppRefillSettingsSenderRoute
+  AppRefillWaitlistBulkRoute: typeof AppRefillWaitlistBulkRoute
+  AppRefillWaitlistSeedRoute: typeof AppRefillWaitlistSeedRoute
+}
+
+const AppRefillRouteChildren: AppRefillRouteChildren = {
+  AppRefillAppointmentsRoute: AppRefillAppointmentsRoute,
+  AppRefillBillingRoute: AppRefillBillingRoute,
+  AppRefillCampaignsRoute: AppRefillCampaignsRouteWithChildren,
+  AppRefillHealthRoute: AppRefillHealthRoute,
+  AppRefillInboxRoute: AppRefillInboxRoute,
+  AppRefillPatientsRoute: AppRefillPatientsRouteWithChildren,
+  AppRefillPromosRoute: AppRefillPromosRoute,
+  AppRefillRecoveryRoute: AppRefillRecoveryRoute,
+  AppRefillReportsRoute: AppRefillReportsRoute,
+  AppRefillRescueRoute: AppRefillRescueRoute,
+  AppRefillSharingRoute: AppRefillSharingRoute,
+  AppRefillIndexRoute: AppRefillIndexRoute,
+  AppRefillSettingsNoshowRoute: AppRefillSettingsNoshowRoute,
+  AppRefillSettingsSchedulerRoute: AppRefillSettingsSchedulerRoute,
+  AppRefillSettingsSenderRoute: AppRefillSettingsSenderRoute,
+  AppRefillWaitlistBulkRoute: AppRefillWaitlistBulkRoute,
+  AppRefillWaitlistSeedRoute: AppRefillWaitlistSeedRoute,
+}
+
+const AppRefillRouteWithChildren = AppRefillRoute._addFileChildren(
+  AppRefillRouteChildren,
+)
+
+interface AppRouteChildren {
+  AppRefillRoute: typeof AppRefillRouteWithChildren
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppRefillRoute: AppRefillRouteWithChildren,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
   BookRoute: BookRoute,
   OnboardRoute: OnboardRoute,
   PersonasRoute: PersonasRoute,

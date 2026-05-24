@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",
+    "@radix-ui/react-popover": "^1.1.15",
     "@supabase/supabase-js": "^2.103.3",
     "@tailwindcss/vite": "^4.2.1",
     "@tanstack/react-router": "^1.168.0",
@@ -19,6 +20,7 @@
     "@tanstack/zod-adapter": "^1.166.9",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "framer-motion": "^12.38.0",
     "lucide-react": "^0.575.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
