@@ -70,8 +70,11 @@ async function runHealthCheck() {
   }
 
   try {
-    // Lightest possible read: single row, no joins.
-    const { error } = await supabase.from("agents").select("id").limit(1);
+    // Lightest possible read: single row, no joins. Refill cleave 2026-05-25:
+    // was 'agents' (Agentiport-only, dropped during cleave); swapped to 'tenants'
+    // which is load-bearing in refill-prod. RLS filters to the caller's rows so
+    // even an empty result is a healthy probe.
+    const { error } = await supabase.from("tenants").select("id").limit(1);
     if (error) throw error;
     consecutiveFailures = 0;
     emit("online");

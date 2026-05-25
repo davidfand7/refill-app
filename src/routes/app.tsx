@@ -99,10 +99,30 @@ function AppLayout() {
 
   if (!user) return null;
 
-  // Reps get RepShell — even if they happen to also own a tenant. Role
-  // wins; they can browse to /app/refill via direct link if needed and
-  // RefillShell will pick it up via its own gate.
-  if (primaryRole === "rep" || repProfile.profile) {
+  // Path-priority shell selection. Fixes the rep-AND-tenant collision: a
+  // rep who also owns a spa lands on /app/refill via OAuth onboard and
+  // needs spa-owner chrome (Recovery/Inbox/Settings/Billing chips), not
+  // rep chrome (Outreach/Recruit/Network/...). Path wins when explicit;
+  // role-based fallback handles bare /app + ambiguous routes.
+  const pathname = location.pathname;
+  const isRefillPath = pathname.startsWith("/app/refill");
+  const isRepPath = pathname.startsWith("/app/rep");
+  const isRep = primaryRole === "rep" || !!repProfile.profile;
+
+  if (isRefillPath && tenantMembership.tenant) {
+    return (
+      <DemoModeProvider>
+        <ErrorBoundary>
+          <OfflineBanner />
+          <RefillShell>
+            <Outlet />
+          </RefillShell>
+        </ErrorBoundary>
+      </DemoModeProvider>
+    );
+  }
+
+  if (isRepPath && isRep) {
     return (
       <DemoModeProvider>
         <ErrorBoundary>
@@ -115,7 +135,20 @@ function AppLayout() {
     );
   }
 
-  // Spa-owner with claimed tenant → RefillShell.
+  // Role-based fallback for non-explicit paths (bare /app, /app/admin, etc.)
+  if (isRep) {
+    return (
+      <DemoModeProvider>
+        <ErrorBoundary>
+          <OfflineBanner />
+          <RepShell>
+            <Outlet />
+          </RepShell>
+        </ErrorBoundary>
+      </DemoModeProvider>
+    );
+  }
+
   if (tenantMembership.tenant) {
     return (
       <DemoModeProvider>

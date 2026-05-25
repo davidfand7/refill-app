@@ -67,7 +67,7 @@ const KAREN_FROM =
   process.env.REFILL_DRIP_FROM ?? "Karen Anderson <karen@getrefill.app>";
 
 const REPLY_DOMAIN =
-  process.env.REFILL_DRIP_REPLY_DOMAIN ?? "reply.openagentic.site";
+  process.env.REFILL_DRIP_REPLY_DOMAIN ?? "reply.getrefill.app";
 
 function buildReplyTo(eventId: string): string {
   return `Karen Anderson <reply+${eventId}@${REPLY_DOMAIN}>`;

@@ -77,7 +77,7 @@ const KAREN_FROM =
 // can look the original drip up and stamp response_text on the same row.
 // Domain matches the REPLY_DOMAIN constant in src/server/resend-gateway.ts.
 const REPLY_DOMAIN =
-  process.env.REFILL_DRIP_REPLY_DOMAIN ?? "reply.openagentic.site";
+  process.env.REFILL_DRIP_REPLY_DOMAIN ?? "reply.getrefill.app";
 
 function buildReplyTo(eventId: string): string {
   return `Karen Anderson <reply+${eventId}@${REPLY_DOMAIN}>`;

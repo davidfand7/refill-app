@@ -29,12 +29,15 @@ import crypto from "node:crypto";
 export const RESEND_API_BASE = "https://api.resend.com";
 
 /**
- * The receiving subdomain. Sibling of the sending subdomain
- * (notify.openagentic.site) to preserve SPF/DKIM/DMARC alignment.
- * If we ever move sending to agentiport.com we should move receiving
- * along with it — keep the root-domain match in both directions.
+ * The receiving subdomain. Refill cleave 2026-05-25: was reply.openagentic.site,
+ * now refill-pure. Inbound MX + Resend inbound forwarding for reply.getrefill.app
+ * still need to be configured before any LIVE outreach send — until then,
+ * Reply-To displays correctly but actual replies will bounce. Tracked separately.
+ * Env override (REFILL_DRIP_REPLY_DOMAIN) is honored so the rest of the codebase
+ * uses one source of truth.
  */
-export const REPLY_DOMAIN = "reply.openagentic.site";
+export const REPLY_DOMAIN =
+  process.env.REFILL_DRIP_REPLY_DOMAIN ?? "reply.getrefill.app";
 
 /**
  * Plus-address prefix. The full Reply-To looks like

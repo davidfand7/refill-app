@@ -79,7 +79,7 @@ function admin(): SbClient {
 const KAREN_FROM =
   process.env.REFILL_OUTREACH_FROM ?? "Karen Anderson <karen@getrefill.app>";
 const REPLY_DOMAIN =
-  process.env.REFILL_DRIP_REPLY_DOMAIN ?? "reply.openagentic.site";
+  process.env.REFILL_DRIP_REPLY_DOMAIN ?? "reply.getrefill.app";
 const KAREN_LOCAL_PART =
   process.env.REFILL_OUTREACH_LOCAL_PART ?? "karen";
 // v408: getrefill.app is verified in Resend for any local part. Recruit
