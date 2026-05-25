@@ -16,7 +16,7 @@
  */
 
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Loader2, Mail, X } from "lucide-react";
+import { Eye, EyeOff, Loader2, Mail, X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -37,6 +37,7 @@ function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
@@ -178,17 +179,29 @@ function LoginPage() {
                     Forgot password?
                   </button>
                 </div>
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-md border bg-white px-3 py-2.5 text-[15px] outline-none focus:ring-2"
-                  style={{ borderColor: "#e6e2d6", color: "#1c2024" }}
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    required
+                    minLength={6}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full rounded-md border bg-white px-3 py-2.5 pr-10 text-[15px] outline-none focus:ring-2"
+                    style={{ borderColor: "#e6e2d6", color: "#1c2024" }}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    className="absolute inset-y-0 right-0 flex items-center px-3 transition hover:opacity-70"
+                    style={{ color: "#8a9098" }}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               {error && (
                 <div
