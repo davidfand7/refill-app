@@ -23,8 +23,10 @@ import {
   CheckCircle2,
   CreditCard,
   DollarSign,
+  ExternalLink,
   FileText,
   Loader2,
+  Plus,
   RefreshCw,
   Sparkles,
   Zap,
@@ -40,6 +42,10 @@ import {
   type Invoice,
   type PricingPlan,
 } from "@/server/emma-billing.functions";
+import {
+  getPaymentMethodStatus,
+  type RefillPaymentMethodStatus,
+} from "@/server/refill-billing";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/billing")({
@@ -73,9 +79,11 @@ const PLAN_META: Record<
 function BillingPage() {
   const [active, setActive] = useState<ActivePlan>(null);
   const [invoices, setInvoices] = useState<Invoice[] | null>(null);
+  const [pm, setPm] = useState<RefillPaymentMethodStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [applyingPlan, setApplyingPlan] = useState<PricingPlan | null>(null);
+  const [redirecting, setRedirecting] = useState<"add" | "manage" | null>(null);
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -86,12 +94,18 @@ function BillingPage() {
         setLoadError("Please sign in.");
         return;
       }
-      const [a, inv] = await Promise.all([
+      const [a, inv, pmStatus] = await Promise.all([
         getActivePlan({ data: { accessToken: token } }),
         listInvoices({ data: { accessToken: token } }),
+        // Card lookup hits Stripe — keep it best-effort so a Stripe outage
+        // doesn't take down the rest of the billing page.
+        getPaymentMethodStatus({ data: { accessToken: token } }).catch(
+          () => null,
+        ),
       ]);
       setActive(a);
       setInvoices(inv);
+      setPm(pmStatus);
       setLoadError(null);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Couldn't load.");
@@ -103,6 +117,86 @@ function BillingPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Handle return from Stripe Checkout setup-mode flow. The success_url in
+  // api.refill-checkout.ts pins ?upgrade=success&plan=… on the URL; we
+  // toast + reload to pick up the freshly-attached payment method, then
+  // strip the search params so a refresh doesn't re-trigger the toast.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const upgrade = params.get("upgrade");
+    if (upgrade === "success") {
+      toast.success("Card on file. You're all set.");
+      window.history.replaceState({}, "", window.location.pathname);
+      void load();
+    } else if (upgrade === "cancelled") {
+      toast.info("No card added. You can do it whenever you're ready.");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, [load]);
+
+  // Add-card always uses Checkout setup mode (plan="starter") — captures
+  // the card with no charge regardless of which plan the spa is on. Per
+  // [[project-trial-first-no-money-asks]], we never charge upfront; the
+  // card just sits on file until the first verified-recovery invoice runs.
+  async function handleAddCard() {
+    setRedirecting("add");
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        toast.error("Please sign in again.");
+        setRedirecting(null);
+        return;
+      }
+      const res = await fetch("/api/refill-checkout", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ plan: "starter" }),
+      });
+      const body = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !body.url) {
+        toast.error(body.error ?? "Couldn't start card capture.");
+        setRedirecting(null);
+        return;
+      }
+      window.location.href = body.url;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't start card capture.");
+      setRedirecting(null);
+    }
+  }
+
+  async function handleManageCard() {
+    setRedirecting("manage");
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        toast.error("Please sign in again.");
+        setRedirecting(null);
+        return;
+      }
+      const res = await fetch("/api/refill-portal", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const body = (await res.json()) as { url?: string; error?: string };
+      if (!res.ok || !body.url) {
+        toast.error(body.error ?? "Couldn't open the Stripe portal.");
+        setRedirecting(null);
+        return;
+      }
+      window.location.href = body.url;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't open the Stripe portal.");
+      setRedirecting(null);
+    }
+  }
 
   async function pickPlan(plan: PricingPlan) {
     if (active?.plan === plan) {
@@ -203,6 +297,14 @@ function BillingPage() {
           </div>
         )}
 
+        {/* Card on file (v1.6) */}
+        <CardOnFileSection
+          pm={pm}
+          onAdd={handleAddCard}
+          onManage={handleManageCard}
+          redirecting={redirecting}
+        />
+
         {/* Plan selector */}
         <section>
           <h2 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wider">
@@ -271,11 +373,10 @@ function BillingPage() {
         <div className="rounded-xl bg-muted/30 border border-border p-4 flex items-start gap-3">
           <CreditCard className="h-4 w-4 text-ink-soft mt-0.5 shrink-0" />
           <p className="text-xs text-ink-soft leading-relaxed">
-            v366 ships invoices in draft status — no payment method capture yet.
-            v366.x adds the Stripe customer + auto-pay flow when you're ready
-            to flip from auditing the math to actually paying it. Until then,
-            consider every invoice a receipt — Refill is showing you what it
-            would have charged.
+            Card capture is via Stripe — same hosted checkout you've seen
+            anywhere reputable on the web. We never see your card number.
+            Invoices charge automatically when you confirm a verified
+            recovery; you can manage or remove the card anytime via Manage.
           </p>
         </div>
       </div>
@@ -381,6 +482,116 @@ function Line({ label, value }: { label: string; value: string }) {
       <span className="font-medium text-foreground">{value}</span>
     </div>
   );
+}
+
+// ─── Card on file (v1.6) ─────────────────────────────────────────────────
+
+function CardOnFileSection({
+  pm,
+  onAdd,
+  onManage,
+  redirecting,
+}: {
+  pm: RefillPaymentMethodStatus | null;
+  onAdd: () => void;
+  onManage: () => void;
+  redirecting: "add" | "manage" | null;
+}) {
+  // Loading state — keep the row compact so the page doesn't jump on hydrate.
+  if (!pm) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-5 flex items-center gap-3 text-sm text-ink-soft">
+        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+        Checking card on file…
+      </div>
+    );
+  }
+
+  if (pm.hasCardOnFile) {
+    return (
+      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5 flex items-center gap-3">
+        <div className="h-10 w-10 rounded-full bg-emerald-500/15 text-emerald-700 flex items-center justify-center shrink-0">
+          <CreditCard className="h-5 w-5" />
+        </div>
+        <div className="flex-1">
+          <div className="text-xs font-medium tracking-wider text-emerald-700 uppercase mb-0.5">
+            Card on file
+          </div>
+          <div className="text-base font-semibold text-foreground">
+            {formatBrand(pm.brand)} &middot;&middot; {pm.last4}
+            {pm.expMonth && pm.expYear && (
+              <span className="text-ink-soft font-normal text-sm">
+                {" "}&middot; expires {String(pm.expMonth).padStart(2, "0")}/
+                {String(pm.expYear).slice(-2)}
+              </span>
+            )}
+          </div>
+          {pm.stripeMode === "test" && (
+            <div className="text-[11px] text-amber-700 mt-1">
+              Stripe test mode — no real charges
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onManage}
+          disabled={redirecting !== null}
+          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/40 transition disabled:opacity-50"
+        >
+          {redirecting === "manage" ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <ExternalLink className="h-4 w-4" />
+          )}
+          Manage
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-5 flex items-center gap-3">
+      <div className="h-10 w-10 rounded-full bg-muted/40 text-ink-soft flex items-center justify-center shrink-0">
+        <CreditCard className="h-5 w-5" />
+      </div>
+      <div className="flex-1">
+        <div className="text-base font-semibold text-foreground">
+          No card on file yet
+        </div>
+        <div className="text-xs text-ink-soft mt-0.5">
+          Add one whenever you'd like — Refill never charges until a verified
+          recovery lands AND you confirm it on the Recovery tab.
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onAdd}
+        disabled={redirecting !== null}
+        className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3.5 py-2 text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
+      >
+        {redirecting === "add" ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Plus className="h-4 w-4" />
+        )}
+        Add payment method
+      </button>
+    </div>
+  );
+}
+
+function formatBrand(b: string | null): string {
+  if (!b) return "Card";
+  const map: Record<string, string> = {
+    visa: "Visa",
+    mastercard: "Mastercard",
+    amex: "Amex",
+    discover: "Discover",
+    diners: "Diners",
+    jcb: "JCB",
+    unionpay: "UnionPay",
+  };
+  return map[b.toLowerCase()] ?? b.charAt(0).toUpperCase() + b.slice(1);
 }
 
 // ─── Invoice row ──────────────────────────────────────────────────────────

@@ -29,6 +29,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
+import Stripe from "stripe";
 import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
@@ -40,6 +41,11 @@ import {
   REFILL_PLAN_STARTER_MONTHLY_USD,
   REFILL_PLAN_STARTER_REV_SHARE,
 } from "@/lib/rep-economics";
+import {
+  detectStripeMode,
+  readTenantStripeCustomerId,
+  type StripeMode,
+} from "@/lib/stripe-mode";
 import { verifyAuth } from "@/server/auth-helpers";
 
 // ─── Public types ─────────────────────────────────────────────────────────
@@ -263,6 +269,94 @@ export const listInvoices = createServerFn({ method: "POST" })
       generatedAt: r.generated_at,
       paidAt: r.paid_at,
     }));
+  });
+
+// ─── getPaymentMethodStatus (v1.6) ────────────────────────────────────────
+
+export type RefillPaymentMethodStatus = {
+  hasCardOnFile: boolean;
+  brand: string | null;
+  last4: string | null;
+  expMonth: number | null;
+  expYear: number | null;
+  stripeMode: StripeMode;
+};
+
+/**
+ * Resolve whether this spa has a Stripe card on file in the CURRENT
+ * Stripe mode. Reads the mode-aware stripe_customer_id column off tenants,
+ * then asks Stripe for the customer's payment methods.
+ *
+ * Returns the first card we find (most spas will only ever attach one).
+ * If the tenant has no customer id yet OR Stripe returns zero cards,
+ * hasCardOnFile=false — the UI uses that to show the "Add payment method"
+ * CTA instead of the "Card on file" affordance.
+ *
+ * Failure modes are surfaced as thrown errors so the UI's catch block can
+ * render a useful toast instead of silently treating "Stripe down" as
+ * "no card on file."
+ */
+export const getPaymentMethodStatus = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => accessTokenOnly.parse(input))
+  .handler(async ({ data }): Promise<RefillPaymentMethodStatus> => {
+    const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+    if (!STRIPE_SECRET_KEY) {
+      throw new Error("Stripe not configured on server.");
+    }
+    const mode = detectStripeMode(STRIPE_SECRET_KEY);
+
+    const userId = await verifyAuth(data.accessToken);
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, userId);
+
+    const { data: tenant } = await sb
+      .from("tenants")
+      .select("stripe_customer_id_test, stripe_customer_id_live")
+      .eq("id", tenantId)
+      .maybeSingle();
+    const customerId = tenant
+      ? readTenantStripeCustomerId(tenant, mode)
+      : null;
+
+    if (!customerId) {
+      return {
+        hasCardOnFile: false,
+        brand: null,
+        last4: null,
+        expMonth: null,
+        expYear: null,
+        stripeMode: mode,
+      };
+    }
+
+    const stripe = new Stripe(STRIPE_SECRET_KEY, {
+      apiVersion: "2026-04-22.dahlia",
+    });
+
+    const pms = await stripe.customers.listPaymentMethods(customerId, {
+      type: "card",
+      limit: 1,
+    });
+    const pm = pms.data[0];
+    if (!pm || !pm.card) {
+      return {
+        hasCardOnFile: false,
+        brand: null,
+        last4: null,
+        expMonth: null,
+        expYear: null,
+        stripeMode: mode,
+      };
+    }
+
+    return {
+      hasCardOnFile: true,
+      brand: pm.card.brand,
+      last4: pm.card.last4,
+      expMonth: pm.card.exp_month,
+      expYear: pm.card.exp_year,
+      stripeMode: mode,
+    };
   });
 
 // ─── generateMonthlyInvoiceForTenant (cron helper, exported) ─────────────
