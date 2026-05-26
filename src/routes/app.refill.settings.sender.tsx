@@ -192,7 +192,7 @@ function SenderSettingsPage() {
         ]}
       />
 
-      <div className="px-6 lg:px-10 py-8 max-w-3xl space-y-6">
+      <div className="px-6 lg:px-10 py-8 max-w-3xl w-full mx-auto space-y-6">
         {loadError && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />

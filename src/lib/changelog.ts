@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.4.2",
+    date: "May 2026",
+    items: [
+      "<strong>v1.4.2 &mdash; Centering sweep (the bug v1.4.1 exposed).</strong> Karen-walk on the v1.4.1 re-skin caught Recovery + Billing rendering their headers and body content left-anchored under the centered chip nav &mdash; a jarring visual inconsistency. Root cause: a pre-existing pattern across 7 refill routes where the page body wrapper used <code>max-w-Xxl px-6 lg:px-10</code> without <code>mx-auto</code>, so the content left-anchored to the screen edge while the chrome (chip nav, top-right strip) centered. The old sticky/backdrop chrome bar masked this; the v1.4.1 re-skin removed the bar and surfaced it. Class-of-bug audit + sweep: added <code>w-full mx-auto</code> to 7 routes (recovery, billing, appointments, reports, rescue, settings/noshow, settings/sender). Inbox + settings/scheduler already had it &mdash; pattern was inconsistent across the codebase, now uniformly centered to match RefillHome + /scan + /onboard.",
+    ],
+  },
+  {
     version: "v1.4.1",
     date: "May 2026",
     items: [

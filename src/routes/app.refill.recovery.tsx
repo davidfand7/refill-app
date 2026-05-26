@@ -220,7 +220,7 @@ function RecoveryDashboard() {
         }
       />
 
-      <div className="px-6 lg:px-10 py-8 max-w-5xl space-y-6">
+      <div className="px-6 lg:px-10 py-8 max-w-5xl w-full mx-auto space-y-6">
         {loadError && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
             {loadError}
