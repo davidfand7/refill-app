@@ -1005,6 +1005,10 @@ function formatDate(iso: string): string {
   // ISO date "2024-05-07" → "May 7, 2024"
   const [y, m, d] = iso.split("-").map(Number);
   if (!y || !m || !d) return iso;
+  // This one stays "UTC" — `date` is constructed from Date.UTC(y, m-1, d)
+  // which is a date-only value (no time component). Rendering it with a
+  // local timezone would shift the calendar day across midnight boundaries.
+  // The intent is "show the calendar date as-stored." Keep UTC.
   const date = new Date(Date.UTC(y, m - 1, d));
   return date.toLocaleDateString("en-US", {
     month: "short",

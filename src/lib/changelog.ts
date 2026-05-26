@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.4.6",
+    date: "May 2026",
+    items: [
+      "<strong>v1.4.6 &mdash; TZ display sweep (renderers compensate for v1.4.3 true-UTC storage).</strong> Karen's successful end-to-end rescue test 2026-05-26 1:18 PM MT exposed the elegant flip-side of v1.4.3: the patient claim page + proxy email rendered the slot as &ldquo;Fri, May 29 at 10:45 PM&rdquo; while Acuity's confirmation said &ldquo;4:45 PM MDT&rdquo; (the real time). A patient would show up 6 hours late or dismiss the offer as a late-night spam. Root cause: 8 renderers across 5 files pinned <code>timeZone: &quot;UTC&quot;</code> per the v379.2 architecture where storage was deliberately TZ-naive (spa-local clock packed into a UTC string &mdash; display was correct by accident because storage was deliberately wrong). v1.4.3 fixed storage to true UTC; renderers were never updated. Sweep: changed all 8 callsites from <code>&quot;UTC&quot;</code> &rarr; <code>&quot;America/Denver&quot;</code> (matches existing pattern in <code>emma-blast.functions.ts:635</code> which already does this for Rejuv). Touched: <code>emma-rescue.functions.ts</code> (composeRescueSms + formatRescueWhen), <code>rescue.claim.$token.tsx</code> (claim page), <code>app.refill.recovery.tsx</code> (Karen's recovery dashboard, 2 callsites), <code>app.refill.patients.$patientId.tsx</code> (patient detail), <code>app.refill.appointments.tsx</code> (appointments view, 2 callsites), <code>app.rep.ledger.tsx</code> (rep ledger). One callsite preserved as UTC: <code>app.refill.patients.index.tsx:1013</code> renders a date-only value constructed from <code>Date.UTC(y, m-1, d)</code>; rendering in local TZ would shift days across midnight. Per-spa TZ schema (lift the hardcoded Rejuv TZ to a per-tenant column) is a Lane 2 backlog item, queued for when spa #2 onboards.",
+    ],
+  },
+  {
     version: "v1.4.5",
     date: "May 2026",
     items: [

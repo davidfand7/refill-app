@@ -560,10 +560,10 @@ function AppointmentRow({
               import packed into scheduled_at (TZ-naive storage). Same render-side
               pattern as v377.1 / v379.2 — see [[project-acuity-tz-naive-storage]].
               Without it, browsers west of UTC display the wrong clock. (v379.3.) */}
-          {when.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}
+          {when.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "America/Denver" })}
         </div>
         <div>
-          {when.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZone: "UTC" })}
+          {when.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZone: "America/Denver" })}
         </div>
       </div>
       <div className="flex-1 min-w-0">

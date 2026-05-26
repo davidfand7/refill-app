@@ -347,7 +347,7 @@ function formatPeriod(yyyymmdd: string): string {
   return d.toLocaleDateString("en-US", {
     month: "long",
     year: "numeric",
-    timeZone: "UTC",
+    timeZone: "America/Denver",
   });
 }
 

@@ -85,7 +85,7 @@ function RescueClaimPage() {
   const when = (() => {
     const iso = claimedScheduledAt ?? (payload && payload !== "loading" ? payload.scheduledAt : null);
     if (!iso) return null;
-    // timeZone: "UTC" so this matches the spa-intended clock the SMS/email
+    // timeZone: "America/Denver" so this matches the spa-intended clock the SMS/email
     // composer (server) already renders. The DB stores appointments TZ-naive
     // (Acuity import packs spa-local clock into UTC), so rendering everywhere
     // as UTC produces a consistent spa-local clock for every patient on every
@@ -99,7 +99,7 @@ function RescueClaimPage() {
       day: "numeric",
       hour: "numeric",
       minute: "2-digit",
-      timeZone: "UTC",
+      timeZone: "America/Denver",
     });
   })();
 

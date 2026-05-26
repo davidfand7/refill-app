@@ -269,7 +269,7 @@ function composeRescueSms(args: {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "UTC",
+    timeZone: "America/Denver",
   });
   const treatment = args.treatmentType ? ` for ${args.treatmentType}` : "";
   const provider = providerClause(args.spaName, args.providerName, " with ");
@@ -304,7 +304,7 @@ function formatRescueWhen(scheduledAt: string): string {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "UTC",
+    timeZone: "America/Denver",
   });
 }
 

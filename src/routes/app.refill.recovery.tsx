@@ -660,7 +660,7 @@ function InvoicePreviewCard({
   const periodEnd = new Date(invoice.periodEnd);
   const monthLabel = new Date(invoice.periodStart).toLocaleDateString(
     undefined,
-    { month: "long", year: "numeric", timeZone: "UTC" },
+    { month: "long", year: "numeric", timeZone: "America/Denver" },
   );
 
   // No plan selected → friendlier prompt, no math shown.
@@ -709,7 +709,7 @@ function InvoicePreviewCard({
             If this month closed today
           </span>
           <span className="text-[11px] text-ink-soft">
-            · {monthLabel} · closes {periodEnd.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })}
+            · {monthLabel} · closes {periodEnd.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "America/Denver" })}
           </span>
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-700/10 text-emerald-800 px-2.5 py-0.5 text-[11px] font-medium">
