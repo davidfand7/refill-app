@@ -425,8 +425,11 @@ export async function generateMonthlyInvoiceForTenant(args: {
   const shareDueUsd = +(recoveredRevenueUsd * sharePct).toFixed(2);
   const totalDueUsd = +(shareDueUsd + flat).toFixed(2);
 
-  // Idempotent upsert (tenant_id, period_start) — Stripe push is v391.x.
-  const { error } = await sb
+  // Idempotent upsert on (tenant_id, period_start). Status starts at "draft"
+  // and gets bumped to "sent" below if the Stripe push succeeds. The select
+  // returns the resulting row so we can read stripe_invoice_id (already-pushed
+  // periods skip the Stripe call below).
+  const { data: invRow, error } = await sb
     .from("refill_invoices")
     .upsert(
       {
@@ -444,10 +447,136 @@ export async function generateMonthlyInvoiceForTenant(args: {
         generated_at: new Date().toISOString(),
       },
       { onConflict: "tenant_id,period_start" },
-    );
-  if (error) {
-    throw new Error(`Couldn't write invoice: ${error.message}`);
+    )
+    .select("id, stripe_invoice_id, status")
+    .single();
+  if (error || !invRow) {
+    throw new Error(`Couldn't write invoice: ${error?.message ?? "no row"}`);
   }
+
+  // v1.7 Phase B-lite: push to Stripe + finalize → Stripe auto-charges the
+  // saved card. Skip when:
+  //   - total is $0 (nothing to charge)
+  //   - already pushed (idempotent on stripe_invoice_id)
+  //   - Stripe not configured at all on this server
+  //   - tenant has no customer in the current Stripe mode
+  //   - customer has no card on file (graceful — drafts pile up until card added)
+  // Any push failure is non-fatal: the DB row stays at "draft" and the next
+  // cron run (or manual retry) tries again.
+  const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY;
+  if (
+    totalDueUsd > 0 &&
+    !invRow.stripe_invoice_id &&
+    STRIPE_SECRET_KEY
+  ) {
+    const mode = detectStripeMode(STRIPE_SECRET_KEY);
+    const { data: tenant } = await sb
+      .from("tenants")
+      .select(
+        "name, stripe_customer_id_test, stripe_customer_id_live",
+      )
+      .eq("id", tenantId)
+      .maybeSingle();
+    const customerId = tenant
+      ? readTenantStripeCustomerId(tenant, mode)
+      : null;
+
+    if (customerId) {
+      try {
+        const stripe = new Stripe(STRIPE_SECRET_KEY, {
+          apiVersion: "2026-04-22.dahlia",
+        });
+
+        const pms = await stripe.customers.listPaymentMethods(customerId, {
+          type: "card",
+          limit: 1,
+        });
+        const paymentMethodId = pms.data[0]?.id;
+
+        if (paymentMethodId) {
+          const periodLabel = periodStart.toLocaleString("en-US", {
+            month: "long",
+            year: "numeric",
+            timeZone: "UTC",
+          });
+          const description =
+            plan.plan === "starter"
+              ? `Refill recovery share — ${periodLabel} (${(sharePct * 100).toFixed(0)}% of $${recoveredRevenueUsd.toLocaleString()} recovered)`
+              : `Refill ${plan.plan} plan — ${periodLabel}`;
+
+          // 1. Pending InvoiceItem on the customer for the total amount.
+          //    InvoiceItems get pulled into the next invoice we create.
+          //    Idempotency key prevents double-creating on cron retry within
+          //    24h (Stripe's window) even if we hit this branch twice.
+          const idempotencyKey = `refill_inv_${tenantId}_${periodStart.toISOString().slice(0, 10)}`;
+          await stripe.invoiceItems.create(
+            {
+              customer: customerId,
+              amount: Math.round(totalDueUsd * 100),
+              currency: "usd",
+              description,
+              metadata: {
+                product: "refill",
+                tenant_id: tenantId,
+                period_start: periodStart.toISOString(),
+              },
+            },
+            { idempotencyKey: `${idempotencyKey}_item` },
+          );
+
+          // 2. Create the invoice and finalize it. auto_advance:true tells
+          //    Stripe to attempt the charge automatically after finalize.
+          //    collection_method:"charge_automatically" + default_payment_method
+          //    means Stripe pulls from the saved card immediately.
+          const stripeInvoice = await stripe.invoices.create(
+            {
+              customer: customerId,
+              auto_advance: true,
+              collection_method: "charge_automatically",
+              default_payment_method: paymentMethodId,
+              description: `Refill — ${periodLabel}`,
+              metadata: {
+                product: "refill",
+                tenant_id: tenantId,
+                period_start: periodStart.toISOString(),
+              },
+            },
+            { idempotencyKey: `${idempotencyKey}_invoice` },
+          );
+
+          // 3. Finalize triggers the charge attempt synchronously. The
+          //    returned invoice carries the final status — "paid" if the
+          //    card went through on the first attempt, "open" if Stripe is
+          //    still working on it, "uncollectible" / "void" on hard failure.
+          const finalized = await stripe.invoices.finalizeInvoice(
+            stripeInvoice.id,
+          );
+
+          // 4. Stamp back on the DB row. Status "sent" reflects "we pushed
+          //    to Stripe" — webhook-driven "paid"/"failed" flips come in a
+          //    later ship; for now Karen can verify final status via Manage
+          //    (Stripe Customer Portal) which shows the truthful state.
+          await sb
+            .from("refill_invoices")
+            .update({
+              stripe_invoice_id: finalized.id,
+              status: finalized.status === "paid" ? "paid" : "sent",
+              sent_at: new Date().toISOString(),
+              paid_at:
+                finalized.status === "paid" ? new Date().toISOString() : null,
+            })
+            .eq("id", invRow.id);
+        }
+      } catch (e) {
+        // Non-fatal. Leave DB at "draft" so the next run retries.
+        console.error(
+          `[refill-billing] Stripe push failed for tenant ${tenantId}:`,
+          e instanceof Error ? e.message : e,
+        );
+      }
+    }
+  }
+
   return { created: true };
 }
 
@@ -455,16 +584,44 @@ export async function generateMonthlyInvoiceForTenant(args: {
 
 export async function generateMonthlyInvoicesForAll(args: {
   sb: SupabaseAdmin;
-}): Promise<{ tenants: number; invoiced: number; errors: string[] }> {
-  const { sb } = args;
+  /**
+   * Optional period override (YYYY-MM). When omitted, computes for the PRIOR
+   * calendar month (production cron behavior on the 1st of each month).
+   * Used by the manual-trigger path with ?period=YYYY-MM for testing Stripe
+   * push against the current month's verified events.
+   */
+  periodMonth?: string;
+}): Promise<{
+  tenants: number;
+  invoiced: number;
+  errors: string[];
+  periodStart: string;
+  periodEnd: string;
+}> {
+  const { sb, periodMonth } = args;
 
-  const now = new Date();
-  const periodEnd = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
-  );
-  const periodStart = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1),
-  );
+  let periodStart: Date;
+  let periodEnd: Date;
+  if (periodMonth) {
+    const m = /^(\d{4})-(\d{2})$/.exec(periodMonth);
+    if (!m) {
+      throw new Error(
+        `periodMonth must be YYYY-MM (got "${periodMonth}").`,
+      );
+    }
+    const y = parseInt(m[1], 10);
+    const mo = parseInt(m[2], 10);
+    periodStart = new Date(Date.UTC(y, mo - 1, 1));
+    periodEnd = new Date(Date.UTC(y, mo, 1));
+  } else {
+    const now = new Date();
+    periodEnd = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
+    );
+    periodStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1),
+    );
+  }
 
   const { data: plans } = await sb
     .from("refill_pricing_plans")
@@ -488,7 +645,13 @@ export async function generateMonthlyInvoicesForAll(args: {
     }
   }
 
-  return { tenants: tenantIds.length, invoiced, errors };
+  return {
+    tenants: tenantIds.length,
+    invoiced,
+    errors,
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
+  };
 }
 
 // ─── getPlanEconomics (UI helper) ────────────────────────────────────────

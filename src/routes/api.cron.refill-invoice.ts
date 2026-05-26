@@ -25,10 +25,18 @@
  * enforces this at the DB level — upsert with onConflict matches the
  * existing row.
  *
- * What is NOT in this route: Stripe push for draft invoices (deferred
- * to a later ship — flip draft → sent + finalize Stripe invoice once
- * the spa has stripe_customer_id_live populated). For now the cron
- * fills the table; spa owners see invoices in /app/billing history.
+ * Stripe push (v1.7 Phase B-lite): when a draft row lands AND the tenant
+ * has a Stripe customer + card on file AND the total is > $0, the cron
+ * also creates a Stripe Invoice with auto_advance=true and finalizes it.
+ * Stripe pulls from the saved card automatically; the DB row's status
+ * flips draft → "sent" (or "paid" if the charge cleared synchronously)
+ * and stripe_invoice_id stamps. Webhook-driven sent→paid flips are
+ * Phase B-full's job.
+ *
+ * Manual trigger / testing: POST with ?period=YYYY-MM (e.g. ?period=2026-05)
+ * overrides the prior-month default. Useful for verifying the Stripe push
+ * path against the current month's verified events without waiting for
+ * the cron's natural fire on the 1st of next month.
  */
 
 import { createFileRoute } from "@tanstack/react-router";
@@ -65,8 +73,16 @@ export const Route = createFileRoute("/api/cron/refill-invoice")({
           { auth: { persistSession: false, autoRefreshToken: false } },
         );
 
+        // Optional ?period=YYYY-MM override (manual-trigger / testing path).
+        // Production cron leaves this off and gets the prior-month default.
+        const url = new URL(request.url);
+        const periodMonth = url.searchParams.get("period") ?? undefined;
+
         try {
-          const result = await generateMonthlyInvoicesForAll({ sb });
+          const result = await generateMonthlyInvoicesForAll({
+            sb,
+            periodMonth,
+          });
           return jsonResp(200, {
             ok: true,
             ...result,
