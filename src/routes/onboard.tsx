@@ -60,6 +60,8 @@ import {
   type ImportAcuityClientsResult,
   type SchedulerConnection,
 } from "@/server/emma-scheduler.functions";
+import { ingestClientListCsv } from "@/server/patient-ingest.functions";
+import { Upload } from "lucide-react";
 
 type StepNum = 1 | 2 | 3 | 4 | 5;
 
@@ -103,6 +105,14 @@ interface WizardSearch {
    * a friendly error and keeps the user on Step 2 so they can retry.
    */
   scheduler_error: string | undefined;
+  /**
+   * v1.3 — patient-import source on Step 3. "acuity" (default) auto-pulls
+   * from the connection Step 2 just made; "csv" gates a client-list-CSV
+   * drop zone for spas not on a supported OAuth scheduler. Selected on
+   * Step 2 via the secondary "Upload a CSV instead" link, which navigates
+   * to /onboard?step=3&source=csv and skips Acuity OAuth entirely.
+   */
+  source: "acuity" | "csv" | undefined;
 }
 
 const REFERRAL_COOKIE_KEY = "refill_ref";
@@ -232,7 +242,18 @@ export const Route = createFileRoute("/onboard")({
       typeof raw.scheduler_error === "string" && raw.scheduler_error.length > 0 && raw.scheduler_error.length <= 200
         ? raw.scheduler_error
         : undefined;
-    return { step, lead, token, ref, e, scheduler_connected, scheduler_error };
+    const source =
+      raw.source === "acuity" || raw.source === "csv" ? raw.source : undefined;
+    return {
+      step,
+      lead,
+      token,
+      ref,
+      e,
+      scheduler_connected,
+      scheduler_error,
+      source,
+    };
   },
   component: OnboardPage,
 });
@@ -1266,9 +1287,27 @@ function Step2Scheduler({ onConnected }: { onConnected: () => void }) {
       </button>
 
       <p className="text-[12px] mt-4" style={{ color: "#8a9098" }}>
-        Coming soon: Mindbody, JaneApp, Square, Boulevard. Until then, ask us to
-        enable your platform manually after you finish setup.
+        Coming soon: Mindbody, JaneApp, Square, Boulevard. On one of those? You
+        can still onboard today &mdash; just upload your client list as a CSV.
       </p>
+
+      <button
+        type="button"
+        onClick={() =>
+          void navigate({
+            search: (prev) => ({
+              ...prev,
+              step: 3,
+              source: "csv",
+            }),
+            replace: false,
+          })
+        }
+        className="mt-2 inline-flex items-center gap-1.5 text-[13px] font-medium underline-offset-4 hover:underline"
+        style={{ color: "#056048" }}
+      >
+        Upload a client list CSV instead <ArrowRight className="h-3 w-3" />
+      </button>
     </>
   );
 }
@@ -1298,7 +1337,16 @@ type Step3State =
   | { kind: "no-connection" }
   | { kind: "error"; message: string };
 
+// v1.3 — Step 3 dispatcher. Branches on the `source` search param (set by
+// Step 2's "Upload a CSV instead" link). Thin and hook-stable so the
+// rules-of-hooks contract isn't violated by the conditional path.
 function Step3Patients() {
+  const { source } = useSearch({ from: "/onboard" });
+  if (source === "csv") return <Step3PatientsCsv />;
+  return <Step3PatientsAcuity />;
+}
+
+function Step3PatientsAcuity() {
   const { session } = useAuth();
   const [state, setState] = useState<Step3State>(() => ({
     kind: "importing",
@@ -1457,6 +1505,190 @@ function Step3Patients() {
       <p className="text-[12px] mt-3" style={{ color: "#8a9098" }}>
         Or hit Continue to skip for now — Refill will catch patient names from
         the first appointment instead.
+      </p>
+    </>
+  );
+}
+
+// v1.3: Step 3 CSV fallback for spas not on Acuity (or on a supported OAuth
+// scheduler the user opted to skip from Step 2). Drop a client-list CSV →
+// client-side reads text → POST raw CSV string to ingestClientListCsv (server)
+// which parses + upserts patient knowledge_nodes via the same pipeline
+// app.refill.patients.contacts.tsx uses. Continue advances to Step 4 same as
+// the Acuity branch — the wizard doesn't care which path got us patients.
+type Step3CsvState =
+  | { kind: "awaiting" }
+  | { kind: "ingesting"; fileName: string }
+  | { kind: "imported"; patientsEnriched: number; fileName: string }
+  | { kind: "error"; message: string };
+
+function Step3PatientsCsv() {
+  const { session } = useAuth();
+  const [state, setState] = useState<Step3CsvState>({ kind: "awaiting" });
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function handleFile(f: File) {
+    if (!/\.csv$/i.test(f.name)) {
+      setState({
+        kind: "error",
+        message: "That doesn't look like a CSV file. Try again with a .csv export.",
+      });
+      return;
+    }
+    const accessToken = session?.access_token;
+    if (!accessToken) {
+      setState({
+        kind: "error",
+        message: "Sign-in lost — refresh and try again.",
+      });
+      return;
+    }
+    setState({ kind: "ingesting", fileName: f.name });
+    try {
+      const text = await f.text();
+      const r = await ingestClientListCsv({
+        data: { accessToken, csv: text, sourceFilename: f.name },
+      });
+      setState({
+        kind: "imported",
+        patientsEnriched: r.patientsEnriched,
+        fileName: f.name,
+      });
+    } catch (err) {
+      setState({
+        kind: "error",
+        message:
+          err instanceof Error
+            ? err.message
+            : "Couldn't read that file. Make sure it's a client list export from your scheduler.",
+      });
+    }
+  }
+
+  // ── Render branches ──────────────────────────────────────────────────────
+
+  if (state.kind === "ingesting") {
+    return (
+      <>
+        <StepHeading>Reading your client list…</StepHeading>
+        <StepLede>
+          Parsing <strong style={{ color: "#1c2024" }}>{state.fileName}</strong>{" "}
+          and upserting your patient roster. Usually 5-15 seconds.
+        </StepLede>
+        <div
+          className="mt-4 flex items-center gap-3 text-[14px]"
+          style={{ color: "#5a6068" }}
+        >
+          <div
+            className="h-3 w-3 rounded-full animate-pulse"
+            style={{ background: "#056048" }}
+            aria-hidden
+          />
+          <span>Importing…</span>
+        </div>
+      </>
+    );
+  }
+
+  if (state.kind === "imported") {
+    return (
+      <>
+        <StepHeading>
+          Imported {state.patientsEnriched.toLocaleString()} patient
+          {state.patientsEnriched === 1 ? "" : "s"}.
+        </StepHeading>
+        <StepLede>
+          Your roster is loaded from{" "}
+          <strong style={{ color: "#1c2024" }}>{state.fileName}</strong>. Every
+          cancellation Refill catches will land with the right patient name
+          attached — never <em>(no name)</em>.
+        </StepLede>
+        <div
+          className="mt-3 flex items-center gap-2 text-[14px]"
+          style={{ color: "#056048" }}
+        >
+          <Check className="h-4 w-4" aria-hidden />
+          <span>Ready for delivery setup.</span>
+        </div>
+      </>
+    );
+  }
+
+  if (state.kind === "error") {
+    return (
+      <>
+        <StepHeading>Hmm — couldn't read that file.</StepHeading>
+        <StepLede>{state.message}</StepLede>
+        <button
+          type="button"
+          onClick={() => setState({ kind: "awaiting" })}
+          className="mt-4 inline-flex items-center gap-2 rounded-md px-4 py-2 text-[13px] font-semibold transition hover:opacity-95"
+          style={{ background: "#056048", color: "#fbfaf7" }}
+        >
+          Try again
+          <ArrowRight className="h-4 w-4" aria-hidden />
+        </button>
+      </>
+    );
+  }
+
+  // awaiting
+  return (
+    <>
+      <StepHeading>Upload your client list.</StepHeading>
+      <StepLede>
+        Export a client list CSV from your scheduler (most have it under
+        Reports → Clients). First name, last name, email, and phone are
+        all we need.
+      </StepLede>
+
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const f = e.dataTransfer.files?.[0];
+          if (f) void handleFile(f);
+        }}
+        onClick={() => fileInputRef.current?.click()}
+        className="mt-4 rounded-2xl border-2 border-dashed px-6 py-10 text-center cursor-pointer transition"
+        style={{
+          borderColor: dragOver ? "#056048" : "#d6d2c6",
+          background: dragOver ? "#f0f9f4" : "#fbfaf7",
+        }}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv,text/csv"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void handleFile(f);
+          }}
+        />
+        <div
+          className="mx-auto mb-3 h-12 w-12 rounded-full flex items-center justify-center"
+          style={{ background: "#e8f3ed" }}
+        >
+          <Upload className="h-5 w-5" style={{ color: "#056048" }} />
+        </div>
+        <div className="text-[15px] font-semibold" style={{ color: "#1c2024" }}>
+          Drop your client list CSV
+        </div>
+        <div className="text-[12px] mt-1" style={{ color: "#8a9098" }}>
+          or click to browse
+        </div>
+      </div>
+
+      <p className="text-[12px] mt-4" style={{ color: "#8a9098" }}>
+        Don't have a client list export handy? Hit Continue to skip — Refill
+        will catch patient names from the first appointment instead.
       </p>
     </>
   );

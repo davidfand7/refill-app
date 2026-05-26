@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.3",
+    date: "May 2026",
+    items: [
+      "<strong>v1.3 &mdash; /onboard CSV-drop fallback for non-Acuity spas.</strong> Until tonight, Step 2 of the onboard wizard had a hard dead-end for any spa not on Acuity &mdash; the only escape was &lsquo;ask us to enable your platform manually after you finish setup.&rsquo; Added a secondary &lsquo;Upload a client list CSV instead&rsquo; link on Step 2&rsquo;s needs-connect state that navigates to /onboard?step=3&amp;source=csv and skips OAuth entirely. Step 3 reads the source param, dispatches to a new <code>Step3PatientsCsv</code> branch with a drop zone (parsing client-side, posting to existing <code>ingestClientListCsv</code> server fn so we&rsquo;re reusing the battle-tested ingest pipeline behind app.refill.patients.contacts.tsx). State machine: awaiting / ingesting / imported / error. Refactored <code>Step3Patients</code> into a hook-stable dispatcher (renamed the old logic to <code>Step3PatientsAcuity</code>; thin Step3Patients now branches on source). After CSV import, the wizard Continue button advances to Step 4 same as the Acuity path &mdash; the rest of onboarding is source-agnostic. Closes Task #4.",
+    ],
+  },
+  {
     version: "v1.2",
     date: "May 2026",
     items: [
