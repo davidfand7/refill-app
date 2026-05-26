@@ -356,6 +356,12 @@ function composeProxyEmail(args: {
     .join("\n\n");
 
   const text = [
+    "═══ AUTO-SEND ═══",
+    "Paste this whole email into Claude Desktop with the iMessage MCP installed.",
+    "Claude will call draft_imessage(recipient_phone, body) for each patient below —",
+    "one Messages.app conversation per draft. Review each and tap Send.",
+    "═════════════════",
+    "",
     `${args.offers.length} ${args.offers.length === 1 ? "patient" : "patients"} on your waitlist match this opening. First-tap-wins — once one claims, the others see "slot taken."`,
     "",
     "═══ READY-TO-SEND DRAFTS ═══",
@@ -364,7 +370,7 @@ function composeProxyEmail(args: {
     "",
     "═══ END DRAFTS ═══",
     "",
-    "Forward whichever URLs you want via iMessage — or paste this email into a Claude Desktop chat with the iMessage MCP integration set up to auto-draft them.",
+    "Prefer manual? Just forward whichever claim URLs above to those patients yourself.",
   ].join("\n");
 
   // Polished HTML version — same content, light bg, dark ink, monospace
@@ -384,10 +390,14 @@ function composeProxyEmail(args: {
 
   const html = `<!doctype html><html><body style="margin:0;padding:32px;background:#fafaf7;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Inter,sans-serif;color:#1a1a1a;">
   <div style="max-width:640px;margin:0 auto;">
-    <div style="font-size:14px;color:#374151;line-height:1.55;margin-bottom:18px;">${args.offers.length} ${args.offers.length === 1 ? "patient" : "patients"} on your waitlist match this opening. <strong>First-tap-wins</strong> — once one claims, the others see &quot;slot taken.&quot;</div>
+    <div style="margin-bottom:20px;padding:14px 16px;background:#ecfdf5;border-left:3px solid #047857;border-radius:6px;font-size:13px;color:#064e3b;line-height:1.55;">
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#047857;margin-bottom:6px;">Auto-send</div>
+      Paste this whole email into Claude Desktop with the iMessage MCP installed. Claude will call <code style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:#d1fae5;padding:1px 5px;border-radius:3px;">draft_imessage(recipient_phone, body)</code> for each patient below &mdash; one Messages.app conversation per draft. Review each and tap Send.
+    </div>
+    <div style="font-size:14px;color:#374151;line-height:1.55;margin-bottom:18px;">${args.offers.length} ${args.offers.length === 1 ? "patient" : "patients"} on your waitlist match this opening. <strong>First-tap-wins</strong> &mdash; once one claims, the others see &quot;slot taken.&quot;</div>
     <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#047857;margin:24px 0 8px;">Ready-to-send drafts</div>
     ${draftBlocks}
-    <div style="font-size:12px;color:#6b7280;line-height:1.55;margin-top:20px;border-top:1px solid #e5e7eb;padding-top:14px;">Forward whichever URLs you want via iMessage — or paste this email into a Claude Desktop chat with the iMessage MCP integration to auto-draft them.</div>
+    <div style="font-size:12px;color:#6b7280;line-height:1.55;margin-top:20px;border-top:1px solid #e5e7eb;padding-top:14px;">Prefer manual? Just forward whichever claim URLs above to those patients yourself.</div>
   </div>
 </body></html>`;
 

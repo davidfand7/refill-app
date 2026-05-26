@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.5",
+    date: "May 2026",
+    items: [
+      "<strong>v1.5 &mdash; Auto-send directive at top of proxy email (Claude Desktop + iMessage MCP).</strong> Karen&rsquo;s &lsquo;Refill rescue drafter&rsquo; Claude Desktop routine runs hourly, watching Gmail for new Refill proxy emails and firing one <code>draft_imessage(recipient_phone, body)</code> call per patient draft block via the iMessage MCP server. Worked end-to-end in v379 (2026-05-18, David Anderson test patient) when Karen typed an explicit prompt; the missing piece for the routine path was an unambiguous directive in the email itself so the routine&rsquo;s prompt parses deterministically without per-fire human intervention. Fix: <code>composeProxyEmail</code> now leads with an AUTO-SEND header (text version: <code>═══ AUTO-SEND ═══</code> block; HTML version: emerald-tinted callout card above the &ldquo;N patients on your waitlist&hellip;&rdquo; summary) naming the MCP tool by name and describing the per-patient call pattern. Bottom-of-email instruction relaxed to the human-only path (&lsquo;Prefer manual? Just forward whichever claim URLs above to those patients yourself.&rsquo;). Touched <code>src/server/emma-rescue.functions.ts</code> (composeProxyEmail text + html bodies). No schema change, no behavioral change to the dispatcher &mdash; pure email-body content tightening. Lane 1 polish item now load-bearing for the hourly automation path.",
+    ],
+  },
+  {
     version: "v1.4.6",
     date: "May 2026",
     items: [
