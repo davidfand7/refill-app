@@ -50,6 +50,11 @@ import {
   type ParsedAppointmentFile,
   type ColAliases,
 } from "@/lib/appointment-csv";
+import {
+  guideFor,
+  EXPORT_GUIDES,
+  type ExportGuide,
+} from "@/lib/scan-export-guides";
 import { parseCsvGrid } from "@/lib/csv-grid";
 import {
   analyzeScannedAppointments,
@@ -339,26 +344,7 @@ function ScanPage() {
             </div>
           )}
 
-          <div className="mt-8 text-center">
-            <details className="inline-block text-sm text-slate-500">
-              <summary className="cursor-pointer hover:text-slate-700">
-                See the {SUPPORTED_PLATFORMS.length}+ platforms we auto-recognize
-              </summary>
-              <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-left max-w-2xl mx-auto">
-                {SUPPORTED_PLATFORMS.map((p) => (
-                  <span key={p.dialect} className="text-slate-600">
-                    · {p.label}
-                  </span>
-                ))}
-              </div>
-              <p className="mt-3 text-xs text-slate-500 max-w-xl mx-auto">
-                Unrecognized export? Our AI maps it automatically the first
-                time it sees a new column shape, then caches the mapping
-                forever — so every future scan from that platform is
-                instant + free.
-              </p>
-            </details>
-          </div>
+          <ExportGuidePanel />
         </section>
       )}
 
@@ -738,50 +724,102 @@ function ScanPage() {
               </div>
             )}
 
-          {/* CTA */}
+          {/* CTA — Acuity users see the live-mode upgrade framing; everyone
+              else sees the standard signup framing with a heads-up that
+              live-mode for their platform is on the roadmap. Detection
+              checks both deterministic dialect and AI-mapped platform name
+              so v371 AI-mapped Acuity CSVs also flip the variant. */}
           {state.receipt.hasUsableStatusData &&
-            state.receipt.monthlyLeakUsd !== null && (
-              <div className="mt-6 bg-slate-900 text-white rounded-3xl px-6 py-7">
-                <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">
-                  Ready to actually recover this revenue?
+            state.receipt.monthlyLeakUsd !== null &&
+            (() => {
+              const isAcuity =
+                state.parsed.dialect === "csv-acuity" ||
+                state.aiMapping?.platform?.toLowerCase() === "acuity";
+              const detectedPlatform =
+                state.aiMapping?.platform ??
+                dialectLabel(state.parsed.dialect);
+              const ctaHref = isAcuity
+                ? `${brand.ctaHref}?detected=acuity`
+                : brand.ctaHref;
+
+              return (
+                <div className="mt-6 bg-slate-900 text-white rounded-3xl px-6 py-7">
+                  {isAcuity ? (
+                    <>
+                      <div className="text-xs uppercase tracking-wider text-emerald-300 mb-2">
+                        One-click live mode · for Acuity
+                      </div>
+                      <div className="text-2xl font-semibold mb-1">
+                        Connect Acuity. Refill catches every cancellation
+                        automatically.
+                      </div>
+                      <div className="text-sm text-slate-300 mb-5 max-w-xl">
+                        What you just saw is a snapshot. Connect Acuity and
+                        Refill watches your calendar in real time — every
+                        no-show and cancel gets caught the moment it happens.
+                        No more exports.{" "}
+                        <span className="text-white">
+                          {brand.ctaLabel.toLowerCase()}
+                        </span>
+                        , only pay {formatRate(TOTAL_TAKE_RATE)} of what we
+                        recover.
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-xs uppercase tracking-wider text-slate-400 mb-2">
+                        Ready to actually recover this revenue?
+                      </div>
+                      <div className="text-2xl font-semibold mb-1">
+                        {brand.ctaLabel}. Only pay{" "}
+                        {formatRate(TOTAL_TAKE_RATE)} of what we recover.
+                      </div>
+                      <div className="text-sm text-slate-300 mb-5 max-w-xl">
+                        Month-to-month, cancel anytime. No card to start. We
+                        generate draft invoices from{" "}
+                        <span className="text-white">verified</span> recovery
+                        events; you turn on Stripe only when you trust the
+                        math.{" "}
+                        {detectedPlatform &&
+                          detectedPlatform !== "csv-generic" && (
+                            <span className="text-slate-400">
+                              One-click live mode for {detectedPlatform} is on
+                              the roadmap.
+                            </span>
+                          )}
+                      </div>
+                    </>
+                  )}
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <a
+                      href={ctaHref}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-white text-slate-900 text-sm font-medium px-5 py-2.5 hover:bg-slate-100 transition"
+                    >
+                      {isAcuity
+                        ? "Connect Acuity (30 sec)"
+                        : `Set up ${brand.name} for my spa`}
+                      <ArrowRight className="h-4 w-4" />
+                    </a>
+                    <button
+                      onClick={copyShareLink}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 text-white text-sm font-medium px-5 py-2.5 hover:bg-slate-700 transition"
+                    >
+                      {copied ? (
+                        <>
+                          <ClipboardCheck className="h-4 w-4" />
+                          Link copied
+                        </>
+                      ) : (
+                        <>
+                          <Clipboard className="h-4 w-4" />
+                          Send this to another spa owner
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
-                <div className="text-2xl font-semibold mb-1">
-                  {brand.ctaLabel}. Only pay {formatRate(TOTAL_TAKE_RATE)} of
-                  what we recover.
-                </div>
-                <div className="text-sm text-slate-300 mb-5 max-w-xl">
-                  Month-to-month, cancel anytime. No card to start. We
-                  generate draft invoices from{" "}
-                  <span className="text-white">verified</span> recovery
-                  events; you turn on Stripe only when you trust the math.
-                </div>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <a
-                    href={brand.ctaHref}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-white text-slate-900 text-sm font-medium px-5 py-2.5 hover:bg-slate-100 transition"
-                  >
-                    Set up {brand.name} for my spa
-                    <ArrowRight className="h-4 w-4" />
-                  </a>
-                  <button
-                    onClick={copyShareLink}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 text-white text-sm font-medium px-5 py-2.5 hover:bg-slate-700 transition"
-                  >
-                    {copied ? (
-                      <>
-                        <ClipboardCheck className="h-4 w-4" />
-                        Link copied
-                      </>
-                    ) : (
-                      <>
-                        <Clipboard className="h-4 w-4" />
-                        Send this to another spa owner
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
+              );
+            })()}
         </section>
       )}
 
@@ -792,6 +830,109 @@ function ScanPage() {
         {AVG_TICKET_USD} average ticket. Adjust to your actual ARV for your
         own math. {brand.footerLine}
       </footer>
+    </div>
+  );
+}
+
+function ExportGuidePanel() {
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<AppointmentDialect | null>(null);
+  const guide: ExportGuide | null = picked ? guideFor(picked) : null;
+  const pickedLabel = picked
+    ? (SUPPORTED_PLATFORMS.find((p) => p.dialect === picked)?.label ?? null)
+    : null;
+
+  return (
+    <div className="mt-8 max-w-2xl mx-auto">
+      {!open ? (
+        <div className="text-center">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 underline-offset-4 hover:underline"
+          >
+            How do I export from my scheduler?
+          </button>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
+          <div className="flex items-baseline justify-between gap-3 mb-3">
+            <div className="text-sm font-semibold text-slate-900">
+              {picked ? `Export from ${pickedLabel}` : "Pick your scheduler"}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (picked) {
+                  setPicked(null);
+                } else {
+                  setOpen(false);
+                }
+              }}
+              className="text-xs text-slate-500 hover:text-slate-900"
+            >
+              {picked ? "← pick another" : "close"}
+            </button>
+          </div>
+
+          {!picked ? (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                {SUPPORTED_PLATFORMS.map((p) => {
+                  const verified = EXPORT_GUIDES[p.dialect] !== undefined;
+                  return (
+                    <button
+                      key={p.dialect}
+                      type="button"
+                      onClick={() => setPicked(p.dialect)}
+                      className="text-left text-sm rounded-lg px-3 py-2 border border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition"
+                    >
+                      {p.label}
+                      {verified && (
+                        <span className="ml-1.5 inline-block text-[10px] uppercase tracking-wider text-emerald-700">
+                          guide
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-3 text-[11px] text-slate-500 leading-relaxed">
+                Don't see yours? Pick the closest match — our AI maps unknown
+                column shapes automatically the first time it sees them, and
+                caches the mapping for everyone after. So an unrecognized
+                export still works on the first try.
+              </p>
+            </>
+          ) : (
+            <>
+              <ol className="space-y-2 text-sm text-slate-700 list-decimal list-inside marker:text-slate-400 marker:font-mono">
+                {guide!.steps.map((s, i) => (
+                  <li key={i} className="leading-relaxed">
+                    {s}
+                  </li>
+                ))}
+              </ol>
+              {guide!.exportUrl && (
+                <a
+                  href={guide!.exportUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 hover:text-emerald-800"
+                >
+                  Open {pickedLabel} export <ArrowRight className="h-3 w-3" />
+                </a>
+              )}
+              {guide!.oauthLiveNote && (
+                <div className="mt-4 rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 text-[12px] text-emerald-900 leading-relaxed">
+                  <Sparkles className="inline h-3 w-3 mr-1 -mt-0.5" />
+                  {guide!.oauthLiveNote}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
