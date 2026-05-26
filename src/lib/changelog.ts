@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.5.2",
+    date: "May 2026",
+    items: [
+      "<strong>v1.5.2 &mdash; Patient-context OG card for rescue claim link previews.</strong> v1.5.1 wired up <code>og:image</code> with the spa-owner marketing card (&ldquo;Free for 30 days. 12% of what we recover&rdquo;) &mdash; great fix for the OpenAgentic-homepage bug, but tone-mismatched for the patient receiving a Tox / filler rescue link. A patient seeing pricing copy on a preview card breaks the &ldquo;your slot just opened up&rdquo; framing. This ship swaps to a patient-receiver-tone card. New asset: <code>public/brand/refill-og-patient.svg</code> (canonical) + <code>refill-og-patient.png</code> (rendered 1200&times;630). Same paper-tone aesthetic + emerald Georgia wordmark per Refill-Standalone-Architecture.html &sect;11.1; copy swaps to &ldquo;Your appointment slot just opened up&rdquo; / &ldquo;Tap to claim &mdash; first-tap-wins.&rdquo; / getrefill.app. <code>__root.tsx</code> keeps the marketing variant (correct for home-page shares + outreach link previews to spa owners); <code>rescue.claim.$token.tsx</code> points at the patient variant. og:image:alt updated to match. Touched: <code>public/brand/refill-og-patient.{svg,png}</code> (new files), <code>src/routes/rescue.claim.$token.tsx</code>.",
+    ],
+  },
+  {
     version: "v1.5.1",
     date: "May 2026",
     items: [

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="Refill — your appointment slot just opened up">
+  <title>Refill — your appointment slot just opened up</title>
+  <!--
+    Patient-context OpenGraph card (1200×630) for /rescue/claim/<token>
+    link previews in iMessage / iOS Mail / SMS clients.
+
+    Identical aesthetic to refill-og.svg (paper-tone bg, deep-emerald
+    accent rule, Georgia wordmark) but copy is patient-receiver tone:
+    no pricing, no spa-owner framing, no "12% of recovered revenue."
+    The patient is looking at a Tox / filler / laser appointment offer
+    — the preview card should reinforce "your slot is waiting" not
+    "here's how we bill the spa."
+
+    Locked aesthetic per Refill-Standalone-Architecture.html §11.1.
+    SVG is the canonical source; refill-og-patient.png is rendered
+    from this via @resvg/resvg-js-cli.
+  -->
+  <rect width="1200" height="630" fill="#fbfaf7" />
+  <!-- Subtle paper-tone rule along the top edge -->
+  <rect x="0" y="0" width="1200" height="6" fill="#056048" />
+
+  <!-- Wordmark -->
+  <text
+    x="80"
+    y="200"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-weight="600"
+    font-size="120"
+    letter-spacing="-1"
+    fill="#056048"
+  >Refill</text>
+
+  <!-- Primary headline -->
+  <text
+    x="80"
+    y="340"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-weight="600"
+    font-size="58"
+    fill="#1c2024"
+  >Your appointment slot</text>
+  <text
+    x="80"
+    y="410"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-weight="600"
+    font-size="58"
+    fill="#1c2024"
+  >just opened up.</text>
+
+  <!-- Subline -->
+  <text
+    x="80"
+    y="490"
+    font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', system-ui, sans-serif"
+    font-weight="400"
+    font-size="32"
+    fill="#5a6068"
+  >Tap to claim — first-tap-wins.</text>
+
+  <!-- Footer URL -->
+  <text
+    x="80"
+    y="570"
+    font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace"
+    font-weight="500"
+    font-size="26"
+    fill="#056048"
+  >getrefill.app</text>
+</svg>
