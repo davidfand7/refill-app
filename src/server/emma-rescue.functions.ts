@@ -104,7 +104,15 @@ type SupabaseAdmin = ReturnType<typeof admin>;
 // ─── URL builder ──────────────────────────────────────────────────────────
 
 function buildRescueClaimUrl(token: string): string {
-  return `https://emma.agentiport.com/rescue/claim/${token}`;
+  // v1.4.5: was hardcoded to https://emma.agentiport.com — the legacy
+  // openagenticv4 host. After the Refill cleave, patient claim URLs must
+  // resolve on getrefill.app where the /rescue/claim/$token route lives
+  // (src/routes/rescue.claim.$token.tsx). Caught during Karen's first
+  // successful end-to-end live cancel 2026-05-26 1:02 PM MT — the rescue
+  // email landed correctly but the embedded URL pointed at a dead host.
+  // Pattern matches src/server/rep-platform.ts.
+  const base = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://getrefill.app").replace(/\/+$/, "");
+  return `${base}/rescue/claim/${token}`;
 }
 
 // ─── Spa name + from-number helpers ───────────────────────────────────────

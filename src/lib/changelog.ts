@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.4.5",
+    date: "May 2026",
+    items: [
+      "<strong>v1.4.5 &mdash; Patient rescue-claim URL points at getrefill.app (not stale emma.agentiport.com).</strong> The FIRST successful end-to-end Karen Acuity cancel 2026-05-26 1:02 PM MT (the [[project-rejuv-proof-or-nothing]] moment) landed the Resend email correctly in davidfand303@gmail.com — but the embedded patient claim URL hardcoded <code>https://emma.agentiport.com/rescue/claim/&lt;token&gt;</code>, the legacy openagenticv4 host. The actual /rescue/claim/$token route lives on getrefill.app (src/routes/rescue.claim.$token.tsx) post-Refill-cleave. Fix: <code>buildRescueClaimUrl</code> now reads <code>process.env.REFILL_PUBLIC_ORIGIN</code> with a getrefill.app fallback, matching the established pattern in src/server/rep-platform.ts.",
+    ],
+  },
+  {
     version: "v1.4.4",
     date: "May 2026",
     items: [
