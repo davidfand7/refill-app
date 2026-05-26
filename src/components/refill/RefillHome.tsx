@@ -64,7 +64,7 @@ const ACTIONS: QuickAction[] = [
   },
   {
     key: "billing",
-    to: "/app/refill/billing",
+    to: "/app/billing",
     label: "Billing",
     subtitle: "Invoices and plan",
     icon: CreditCard,

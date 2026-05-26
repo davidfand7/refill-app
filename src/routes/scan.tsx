@@ -247,7 +247,7 @@ function ScanPage() {
           </span>
         </div>
         <a
-          href={brand.ctaHref}
+          href={brand.loginHref}
           className="text-sm text-slate-600 hover:text-slate-900 transition"
         >
           Already a customer? Sign in →

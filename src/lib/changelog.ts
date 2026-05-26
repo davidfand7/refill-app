@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.4",
+    date: "May 2026",
+    items: [
+      "<strong>v1.4 &mdash; Billing-route + brand-CTA cleanup (Karen-walk pinches).</strong> The Karen live walk surfaced three destination-never-built bugs from features that shipped half-wired: (1) Billing chip routed to <code>/app/refill/billing</code> which redirected to <code>/app/billing</code> &mdash; a route speced as the canonical Refill billing surface in v391 but the frontend was never created (only backend + Stripe API routes shipped); (2) the &lsquo;Connect Acuity (30 sec)&rsquo; post-receipt CTA on /scan pointed at <code>/start</code>, also never built; (3) the header &lsquo;Already a customer? Sign in &rarr;&rsquo; link on /scan ALSO pointed at <code>/start</code> &mdash; a hidden third bug exposed by the brand.ctaHref being overloaded across login + signup intents. Fix: built <code>/app/billing</code> proper (lifted the working BillingPage from app.refill.billing.tsx, swapped 5 Emma&rarr;Refill copy leaks, removed the unreachable useShell-gated redirect wrapper); stripped app.refill.billing.tsx to a 5-line back-compat <code>&lt;Navigate to=&quot;/app/billing&quot; replace /&gt;</code> shim for stale email links; rewired 4 internal references (RefillNav chip, RefillHome ActionCard, RefillShellChrome active-chip derive, the &lsquo;Choose a plan&rsquo; CTA on Recovery); split <code>brand.ctaHref</code> into <code>ctaHref</code> (now <code>/onboard</code>) and new <code>loginHref</code> (<code>/login</code>) so signup and signin links route correctly. Same pre-flight gap that hid these bugs from earlier walks: HTTP 200 &ne; destination-route-exists; click-through pre-flight is now the rule.",
+    ],
+  },
+  {
     version: "v1.3",
     date: "May 2026",
     items: [

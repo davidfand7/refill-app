@@ -21,6 +21,7 @@ import { Route as RSlugRouteImport } from './routes/r.$slug'
 import { Route as DevPersonaRouteImport } from './routes/dev.$persona'
 import { Route as AppRepRouteImport } from './routes/app.rep'
 import { Route as AppRefillRouteImport } from './routes/app.refill'
+import { Route as AppBillingRouteImport } from './routes/app.billing'
 import { Route as ApiRefillPortalRouteImport } from './routes/api.refill-portal'
 import { Route as ApiRefillCheckoutRouteImport } from './routes/api.refill-checkout'
 import { Route as AppRepIndexRouteImport } from './routes/app.rep.index'
@@ -130,6 +131,11 @@ const AppRepRoute = AppRepRouteImport.update({
 const AppRefillRoute = AppRefillRouteImport.update({
   id: '/refill',
   path: '/refill',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppBillingRoute = AppBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
   getParentRoute: () => AppRoute,
 } as any)
 const ApiRefillPortalRoute = ApiRefillPortalRouteImport.update({
@@ -404,6 +410,7 @@ export interface FileRoutesByFullPath {
   '/unsubscribe': typeof UnsubscribeRoute
   '/api/refill-checkout': typeof ApiRefillCheckoutRoute
   '/api/refill-portal': typeof ApiRefillPortalRoute
+  '/app/billing': typeof AppBillingRoute
   '/app/refill': typeof AppRefillRouteWithChildren
   '/app/rep': typeof AppRepRouteWithChildren
   '/dev/$persona': typeof DevPersonaRoute
@@ -468,6 +475,7 @@ export interface FileRoutesByTo {
   '/unsubscribe': typeof UnsubscribeRoute
   '/api/refill-checkout': typeof ApiRefillCheckoutRoute
   '/api/refill-portal': typeof ApiRefillPortalRoute
+  '/app/billing': typeof AppBillingRoute
   '/dev/$persona': typeof DevPersonaRoute
   '/r/$slug': typeof RSlugRoute
   '/api/cron/emma-invoice': typeof ApiCronEmmaInvoiceRoute
@@ -528,6 +536,7 @@ export interface FileRoutesById {
   '/unsubscribe': typeof UnsubscribeRoute
   '/api/refill-checkout': typeof ApiRefillCheckoutRoute
   '/api/refill-portal': typeof ApiRefillPortalRoute
+  '/app/billing': typeof AppBillingRoute
   '/app/refill': typeof AppRefillRouteWithChildren
   '/app/rep': typeof AppRepRouteWithChildren
   '/dev/$persona': typeof DevPersonaRoute
@@ -594,6 +603,7 @@ export interface FileRouteTypes {
     | '/unsubscribe'
     | '/api/refill-checkout'
     | '/api/refill-portal'
+    | '/app/billing'
     | '/app/refill'
     | '/app/rep'
     | '/dev/$persona'
@@ -658,6 +668,7 @@ export interface FileRouteTypes {
     | '/unsubscribe'
     | '/api/refill-checkout'
     | '/api/refill-portal'
+    | '/app/billing'
     | '/dev/$persona'
     | '/r/$slug'
     | '/api/cron/emma-invoice'
@@ -717,6 +728,7 @@ export interface FileRouteTypes {
     | '/unsubscribe'
     | '/api/refill-checkout'
     | '/api/refill-portal'
+    | '/app/billing'
     | '/app/refill'
     | '/app/rep'
     | '/dev/$persona'
@@ -882,6 +894,13 @@ declare module '@tanstack/react-router' {
       path: '/refill'
       fullPath: '/app/refill'
       preLoaderRoute: typeof AppRefillRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/billing': {
+      id: '/app/billing'
+      path: '/billing'
+      fullPath: '/app/billing'
+      preLoaderRoute: typeof AppBillingRouteImport
       parentRoute: typeof AppRoute
     }
     '/api/refill-portal': {
@@ -1356,6 +1375,7 @@ const AppRepRouteWithChildren =
   AppRepRoute._addFileChildren(AppRepRouteChildren)
 
 interface AppRouteChildren {
+  AppBillingRoute: typeof AppBillingRoute
   AppRefillRoute: typeof AppRefillRouteWithChildren
   AppRepRoute: typeof AppRepRouteWithChildren
   AppAdminOutreachRoute: typeof AppAdminOutreachRoute
@@ -1364,6 +1384,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppBillingRoute: AppBillingRoute,
   AppRefillRoute: AppRefillRouteWithChildren,
   AppRepRoute: AppRepRouteWithChildren,
   AppAdminOutreachRoute: AppAdminOutreachRoute,

@@ -26,7 +26,7 @@ function deriveActiveKey(pathname: string): RefillNavKey | undefined {
   if (pathname.startsWith("/app/refill/recovery")) return "recovery";
   if (pathname.startsWith("/app/refill/inbox")) return "inbox";
   if (pathname.startsWith("/app/refill/settings")) return "settings";
-  if (pathname.startsWith("/app/refill/billing")) return "billing";
+  if (pathname.startsWith("/app/billing") || pathname.startsWith("/app/refill/billing")) return "billing";
   // /app/refill (Refill home) and any unrecognized path: no chip active.
   return undefined;
 }

@@ -684,7 +684,7 @@ function InvoicePreviewCard({
             </div>
           </div>
           <Link
-            to="/app/refill/billing"
+            to="/app/billing"
             className="inline-flex items-center gap-1.5 text-xs font-medium rounded-full border border-border bg-background px-3 py-1.5 hover:bg-muted/30 transition shrink-0"
           >
             Choose a plan

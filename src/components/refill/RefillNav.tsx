@@ -27,7 +27,7 @@ const ITEMS: RefillNavItem[] = [
   { key: "recovery", to: "/app/refill/recovery",           label: "Recovery", shortLabel: "Recovery" },
   { key: "inbox",    to: "/app/refill/inbox",              label: "Inbox",    shortLabel: "Inbox" },
   { key: "settings", to: "/app/refill/settings/scheduler", label: "Settings", shortLabel: "Settings" },
-  { key: "billing",  to: "/app/refill/billing",          label: "Billing",  shortLabel: "Billing" },
+  { key: "billing",  to: "/app/billing",                 label: "Billing",  shortLabel: "Billing" },
 ];
 
 export function RefillNav({ active }: { active?: RefillNavKey }) {

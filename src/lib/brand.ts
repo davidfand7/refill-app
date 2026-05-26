@@ -23,8 +23,10 @@ export type BrandConfig = {
   emailFromName: string;
   /** From-mailbox in transactional emails. */
   emailFromMailbox: string;
-  /** Where the "Set up X for my spa" CTA routes (path only). */
+  /** Where the "Set up X for my spa" / signup CTA routes (path only). */
   ctaHref: string;
+  /** Where the "Already a customer? Sign in" link routes (path only). */
+  loginHref: string;
   /** Absolute origin for server-side links (emails, reports). */
   ctaOrigin: string;
   /** Label on the trial CTA button. */
@@ -63,7 +65,8 @@ export const REFILL_BRAND: BrandConfig = {
   tagline: "/ refill your schedule, recover your revenue",
   emailFromName: "Refill",
   emailFromMailbox: "hello@getrefill.app",
-  ctaHref: "/start",
+  ctaHref: "/onboard",
+  loginHref: "/login",
   ctaOrigin: "https://getrefill.app",
   ctaLabel: "Start Refill free",
   footerLine:
