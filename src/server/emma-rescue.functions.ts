@@ -559,16 +559,37 @@ export async function dispatchRescueAttempt(args: {
     throw new Error(`Couldn't create attempt: ${attemptErr?.message ?? "no row"}`);
   }
 
-  // 6) For each fit-patient: create an offer row, send SMS
+  // 6) Resolve spa identity. fromNumber is only required for paths that
+  //    actually send SMS — proxy-email-only mode skips it entirely.
+  //
+  //    v1.4.4 (2026-05-26): the upfront bail used to fire on null
+  //    fromNumber regardless of delivery path. That gated proxy-email-only
+  //    mode out of working at all — exactly Karen's setup post
+  //    [[project-carriers-mothballed]] where Twilio is off and patient
+  //    outreach is iMessage-MCP-via-Claude-Desktop from Karen's machine.
+  //    Caught during the first real Karen Acuity cancel test 2026-05-26
+  //    after the v1.4.3 TZ fix.
   const spaName = await resolveSpaName(sb, userId);
   const fromNumber = await resolveSpaFromNumber(sb, userId);
-  if (!fromNumber) {
+
+  // Read proxy config early so we know which delivery path(s) will fire.
+  const proxyPhone = policy.rescue_proxy_phone;
+  const proxyEmail = policy.rescue_proxy_email;
+  const isProxyMode = !!(proxyPhone || proxyEmail);
+
+  // Need fromNumber when: direct mode (sends to each patient) OR proxy
+  // mode with proxyPhone set (sends consolidated SMS to spa owner).
+  // Pure proxy-email-only mode doesn't need it.
+  const willNeedFromNumber = !isProxyMode || !!proxyPhone;
+  if (willNeedFromNumber && !fromNumber) {
     await sb
       .from("emma_rescue_attempts")
       .update({
         status: "closed_unfilled",
         closed_at: new Date().toISOString(),
-        notes: "Spa has no provisioned SMS number.",
+        notes: isProxyMode
+          ? "Proxy SMS configured but spa has no provisioned SMS number — set rescue_proxy_email to skip Twilio entirely."
+          : "Spa has no provisioned SMS number and no proxy email configured.",
       })
       .eq("id", attempt.id);
     return {
@@ -619,9 +640,8 @@ export async function dispatchRescueAttempt(args: {
   // 6b) Branch: proxy mode (Karen-in-the-loop) vs direct mode (per-patient).
   //     Proxy mode activates when EITHER rescue_proxy_phone OR
   //     rescue_proxy_email is set on the policy — both can be set together.
-  const proxyPhone = policy.rescue_proxy_phone;
-  const proxyEmail = policy.rescue_proxy_email;
-  const isProxyMode = !!(proxyPhone || proxyEmail);
+  //     (Declared at top of step 6 in v1.4.4 so the upfront fromNumber
+  //     check could be path-aware. Re-used here for readability.)
 
   let offersSent = 0;
 

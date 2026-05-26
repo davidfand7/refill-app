@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.4.4",
+    date: "May 2026",
+    items: [
+      "<strong>v1.4.4 &mdash; Lazy fromNumber check (unblock proxy-email-only rescue mode).</strong> Karen's second live cancel after v1.4.3 surfaced one more chain break: the rescue dispatcher's upfront <code>if (!fromNumber)</code> bail fired regardless of delivery path, marking the rescue attempt closed_unfilled with notes 'Spa has no provisioned SMS number.' But per [[project-carriers-mothballed]] Twilio is OFF — patient outreach happens via iMessage MCP through Karen's machine, with the spa-owner getting a consolidated proxy email from Resend (the email carries patient claim URLs Karen forwards). Karen's setup is proxy-email-only (rescue_proxy_email set, rescue_proxy_phone null) — which doesn't need a fromNumber at all. The fix makes the check path-aware: <code>willNeedFromNumber = !isProxyMode || !!proxyPhone</code>. Pure proxy-email-only spas (= Karen, = every Refill spa post-carrier-mothball) now flow through cleanly; spas configured for proxy-SMS or direct-mode still get the structural guard. Net: the dispatcher's THIRD pre-INSERT early-return path needed a fix to match the post-mothball architecture.",
+    ],
+  },
+  {
     version: "v1.4.3",
     date: "May 2026",
     items: [
