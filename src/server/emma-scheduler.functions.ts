@@ -508,7 +508,15 @@ function acuityAppointmentToRow(
   userId: string,
   patientNodeId: string | null,
 ): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
-  const scheduledAt = (apt.datetime ?? "").replace(/[+-]\d{4}$/, "Z");
+  // v1.4.3: parse Acuity's timezone-aware datetime properly. The old
+  // regex .replace(/[+-]\d{4}$/, "Z") STRIPPED the offset without
+  // applying it — so "2026-05-26T16:00:00-0600" (4 PM MT) became
+  // "2026-05-26T16:00:00Z" (4 PM UTC = 10 AM MT), shifting every Karen
+  // appointment 6 hours too early. Caught 2026-05-26 during Karen's live
+  // Acuity cancel test: she booked for 4 PM MT, dispatcher saw it as
+  // already 2.5h in the past, skipped rescue. new Date().toISOString()
+  // handles all Acuity formats (with or without colon in offset, Z, etc.).
+  const scheduledAt = new Date(apt.datetime ?? "").toISOString();
   const status: Database["public"]["Tables"]["emma_appointments"]["Insert"]["status"] = apt.canceled
     ? "cancelled"
     : apt.noShow

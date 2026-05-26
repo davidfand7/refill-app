@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.4.3",
+    date: "May 2026",
+    items: [
+      "<strong>v1.4.3 &mdash; Acuity timezone-parsing fix (caught by Karen's first live cancel).</strong> The Acuity &rarr; emma_appointments ingest path had a long-latent timezone bug: both <code>acuityAppointmentToRow</code> (server fn) and <code>acuityAppointmentToInsert</code> (webhook receiver) parsed Acuity&rsquo;s timezone-aware datetime with <code>.replace(/[+-]\\d{4}$/, &quot;Z&quot;)</code> &mdash; a regex that stripped the TZ offset WITHOUT applying it. So &ldquo;2026-05-26T16:00:00-0600&rdquo; (4 PM MT, the spa's local) became &ldquo;2026-05-26T16:00:00Z&rdquo; (4 PM UTC = 10 AM MT), shifting every appointment time 6 hours too early for an MT spa. Karen's first live cancel exposed it: she booked the test for 4 PM MT, cancelled at 12:18 PM MT &mdash; the dispatcher correctly skipped because the (corrupted) scheduled_at said the slot was already 2.5 hours past, when it was actually still 3.5 hours future. Fix: replaced regex with <code>new Date(apt.datetime).toISOString()</code>, which JavaScript's Date constructor handles correctly for every Acuity datetime shape (with or without colon in offset, Z-suffix, etc.). Implications well beyond the dispatcher: Karen&rsquo;s 61-appointment backfill ALL had wrong scheduled_at values; every recovery dashboard time, every preshow reminder, every QBO reconciliation window calculation was 6 hours off. Backfill remediation: Karen clicks &ldquo;Re-sync now&rdquo; on Settings/Scheduler post-deploy &mdash; the upsert overwrites every existing row with corrected UTC. Pinning the lesson per [[feedback-no-blame-no-glide]]: I missed the regex during the original scout because &ldquo;.replace timezone with Z&rdquo; LOOKED correct without thinking through that it's a string-substitution, not a time-zone math operation. Real-data testing > extensive code review; this is exactly what [[project-rejuv-proof-or-nothing]] was designed to surface.",
+    ],
+  },
+  {
     version: "v1.4.2",
     date: "May 2026",
     items: [

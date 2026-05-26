@@ -361,7 +361,9 @@ function acuityAppointmentToInsert(
   userId: string,
   patientNodeId: string | null,
 ): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
-  const scheduledAt = (apt.datetime ?? "").replace(/[+-]\d{4}$/, "Z");
+  // v1.4.3: parse Acuity's timezone-aware datetime properly. See twin
+  // helper in src/server/emma-scheduler.functions.ts for the war story.
+  const scheduledAt = new Date(apt.datetime ?? "").toISOString();
   const status: Database["public"]["Tables"]["emma_appointments"]["Insert"]["status"] = apt.canceled
     ? "cancelled"
     : apt.noShow
