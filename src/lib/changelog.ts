@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.4.1",
+    date: "May 2026",
+    items: [
+      "<strong>v1.4.1 &mdash; PageHeader re-skin (Refill house style).</strong> The Karen walk + v1.4 Billing fix surfaced a deeper design mismatch: the authed sub-pages (Recovery, Inbox, Settings, Billing, plus 14 other refill.* routes) all wore platform-y chrome &mdash; sticky header bar with backdrop blur, all-caps &lsquo;REFILL&rsquo; eyebrow, sans-serif title + amber version pill, breadcrumbs &mdash; while the rest of getrefill (/scan, /onboard, /login, RefillHome) used the warm brand-forward Refill aesthetic: Georgia serif h1, light paper bg, soft ink-soft lede, sage accents, no eyebrows, no breadcrumbs, no in-body version pill. The handoff between public and authed surfaces was jarring. Rewrote <code>PageHeader.tsx</code> in-place to the Refill house style: Georgia serif h1 (matches RefillHome&rsquo;s &lsquo;Hey {spa}.&rsquo; greeting), soft ink-soft description, kept the actions slot (Refresh buttons etc.) on the right of title, dropped sticky/backdrop chrome and breadcrumb rendering. The <code>eyebrow</code> and <code>breadcrumbs</code> props are kept on the interface as silent back-compat no-ops so the 25 callers don&rsquo;t need touching. Relocated the version-pill + changelog Popover into <code>RefillShellChrome</code>&rsquo;s top-right strip so there&rsquo;s a single v-pill per session rather than one duplicated on every page; restyled in soft sage (#e8f3ed background, #056048 ink) to match brand. Net: 3 files touched (PageHeader.tsx, RefillShellChrome.tsx, changelog.ts), 25 routes inherit the new look automatically.",
+    ],
+  },
+  {
     version: "v1.4",
     date: "May 2026",
     items: [

@@ -12,13 +12,19 @@
  * prop, the shell always knows which route is mounted.
  */
 import { Link, useLocation } from "@tanstack/react-router";
-import { LogOut, Moon, Settings, Sun } from "lucide-react";
+import { LogOut, Moon, Settings, Sparkles, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { DemoBanner } from "@/components/DemoBanner";
 import { NotificationCenter } from "@/components/NotificationCenter";
 import { RefillNav, type RefillNavKey } from "@/components/refill/RefillNav";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { useAuth } from "@/lib/auth";
+import { CHANGELOG, currentVersion } from "@/lib/changelog";
 import { applyTheme, getStoredTheme, type Theme } from "@/lib/theme";
 import type { MyTenant } from "@/server/refill-tenants";
 
@@ -79,6 +85,7 @@ export function RefillShellChrome({ tenant }: { tenant: MyTenant }) {
 
           <div className="ml-auto flex items-center gap-1">
             <NotificationCenter />
+            <VersionPill />
             <button
               onClick={toggleTheme}
               title={theme === "dark" ? "Light mode" : "Dark mode"}
@@ -112,5 +119,62 @@ export function RefillShellChrome({ tenant }: { tenant: MyTenant }) {
         <RefillNav active={activeKey} />
       </div>
     </>
+  );
+}
+
+// ─── VersionPill ─────────────────────────────────────────────────────────
+//
+// Single v-pill per session, sitting in the chrome top-right strip. Click
+// → Popover with the full changelog. Relocated here from PageHeader in
+// v1.4.1 so the v-pill doesn't duplicate on every authed page (which
+// pulled focus away from the page's actual headline).
+
+function VersionPill() {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="What's new"
+          title="What's new"
+          className="inline-flex h-7 items-center rounded-full px-2.5 text-[11px] font-semibold tracking-wide transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          style={{
+            background: "#e8f3ed",
+            color: "#056048",
+          }}
+        >
+          {currentVersion()}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-0">
+        <div className="border-b border-border px-4 py-3 flex items-center gap-2">
+          <Sparkles className="h-3.5 w-3.5" style={{ color: "#056048" }} />
+          <div className="text-sm font-semibold">What's new</div>
+        </div>
+        <div className="max-h-80 overflow-y-auto divide-y divide-border">
+          {CHANGELOG.map((entry) => (
+            <div key={entry.version} className="px-4 py-3">
+              <div className="flex items-baseline justify-between gap-2 mb-1.5">
+                <div className="text-xs font-semibold text-foreground">
+                  {entry.version}
+                </div>
+                <div className="text-[10px] uppercase tracking-wide text-ink-soft">
+                  {entry.date}
+                </div>
+              </div>
+              <ul className="space-y-1">
+                {entry.items.map((item, i) => (
+                  <li
+                    key={i}
+                    className="text-xs leading-relaxed text-ink-soft pl-3 relative before:content-['•'] before:absolute before:left-0 before:text-[#056048]"
+                    dangerouslySetInnerHTML={{ __html: item }}
+                  />
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
