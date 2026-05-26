@@ -26,7 +26,7 @@ function deriveActiveKey(pathname: string): RefillNavKey | undefined {
   if (pathname.startsWith("/app/refill/recovery")) return "recovery";
   if (pathname.startsWith("/app/refill/inbox")) return "inbox";
   if (pathname.startsWith("/app/refill/settings")) return "settings";
-  if (pathname.startsWith("/app/billing")) return "billing";
+  if (pathname.startsWith("/app/refill/billing")) return "billing";
   // /app/refill (Refill home) and any unrecognized path: no chip active.
   return undefined;
 }
@@ -88,7 +88,7 @@ export function RefillShellChrome({ tenant }: { tenant: MyTenant }) {
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
             <Link
-              to="/app/settings"
+              to="/app/refill/settings/scheduler"
               className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs text-ink-soft hover:bg-sidebar-accent/60 hover:text-foreground transition-colors"
               title="Settings"
             >
