@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" role="img" aria-label="Refill">
+  <title>Refill</title>
+  <!--
+    Refill wordmark — Georgia serif, emerald accent, paper-tone background.
+    Locked in Refill-Standalone-Architecture.html §11.1 (default aesthetic).
+    Single-color SVG so it inverts cleanly on dark surfaces if currentColor
+    is later swapped in; today the fill is the literal hex per the brief.
+  -->
+  <text
+    x="0"
+    y="46"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-weight="600"
+    font-size="44"
+    letter-spacing="-0.5"
+    fill="#056048"
+  >Refill</text>
+  <!--
+    Trailing emerald square — the "filled slot" mnemonic. Subtle visual
+    callback to the product idea (an empty slot getting filled) without
+    overloading the text glyph itself.
+  -->
+  <rect x="160" y="20" width="14" height="28" rx="2" fill="#056048" />
+</svg>

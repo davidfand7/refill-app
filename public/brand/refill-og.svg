@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="Refill — no-show recovery for med-spas">
+  <title>Refill — no-show recovery for med-spas</title>
+  <!--
+    OpenGraph card (1200×630) for getrefill.app shares.
+    Locked aesthetic per Refill-Standalone-Architecture.html §11.1.
+    SVG version lives in the repo so the messaging stays editable; a
+    pre-rendered PNG can be exported alongside for chat platforms that
+    don't accept SVG OG cards (Slack, Twitter). The src/lib/brand.ts
+    ogImage path points at the PNG when it's exported.
+  -->
+  <rect width="1200" height="630" fill="#fbfaf7" />
+  <!-- Subtle paper-tone rule along the top edge -->
+  <rect x="0" y="0" width="1200" height="6" fill="#056048" />
+
+  <!-- Wordmark -->
+  <text
+    x="80"
+    y="200"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-weight="600"
+    font-size="120"
+    letter-spacing="-1"
+    fill="#056048"
+  >Refill</text>
+
+  <!-- Primary headline -->
+  <text
+    x="80"
+    y="340"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-weight="600"
+    font-size="58"
+    fill="#1c2024"
+  >No-show recovery that pays</text>
+  <text
+    x="80"
+    y="410"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-weight="600"
+    font-size="58"
+    fill="#1c2024"
+  >for itself out of recovered revenue.</text>
+
+  <!-- Subline -->
+  <text
+    x="80"
+    y="490"
+    font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', system-ui, sans-serif"
+    font-weight="400"
+    font-size="32"
+    fill="#5a6068"
+  >Free for 30 days. 12% of what we recover — that's it.</text>
+
+  <!-- Footer URL -->
+  <text
+    x="80"
+    y="570"
+    font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace"
+    font-weight="500"
+    font-size="26"
+    fill="#056048"
+  >getrefill.app</text>
+</svg>

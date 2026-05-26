@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.5.1",
+    date: "May 2026",
+    items: [
+      "<strong>v1.5.1 &mdash; Refill OG image + brand asset migration (kills the OpenAgentic preview in iMessage).</strong> The first end-to-end iMessage-MCP-routine smoke test 2026-05-26 2:11 PM MT surfaced a queue item from v379.1 that had never been worked: rescue claim iMessages were rendering with the generic OpenAgentic homepage preview card (&ldquo;Describe what you want. Deploy with confidence.&rdquo;) because the rescue.claim.$token route's <code>head()</code> set og:title / og:description / og:site_name but never an <code>og:image</code>, and the link-preview scraper fell back to whatever it could find on-page. Sub-issue surfaced: <code>public/brand/</code> didn't exist in this repo at all &mdash; the Refill cleave from openagenticv4 left the brand SVGs behind, so <code>refill-favicon.svg</code> referenced from <code>__root.tsx</code> was silently 404ing on every page (confirmed via curl HEAD against production). Fix: <strong>(1)</strong> Migrated the 3 Refill brand SVGs (<code>refill-favicon.svg</code>, <code>refill-og.svg</code>, <code>refill-wordmark.svg</code>) from <code>openagenticv4/public/brand/</code> &rarr; <code>refill-app/public/brand/</code>. <strong>(2)</strong> Rendered <code>refill-og.png</code> (1200&times;630) from the SVG via <code>@resvg/resvg-js-cli</code> &mdash; iMessage's link-preview scraper requires raster (PNG/JPG); SVG og:image renders inconsistently across iOS / Slack / Twitter. <strong>(3)</strong> Added <code>og:image</code> + <code>og:image:width</code> + <code>og:image:height</code> + <code>og:image:alt</code> + <code>twitter:image</code> meta tags to both <code>rescue.claim.$token.tsx</code> (patient-facing rescue link preview) and <code>__root.tsx</code> (default for all other routes &mdash; home page shares, etc.). <strong>(4)</strong> Upgraded <code>twitter:card</code> from <code>summary</code> &rarr; <code>summary_large_image</code> for the richer hero-image preview. Tone note: the current OG card is the spa-owner marketing variant (&ldquo;Free for 30 days. 12% of what we recover&rdquo;), which is pricing-forward for a patient receiving a Tox rescue link. v1.5.2 will swap to a patient-context variant (&ldquo;Refill &mdash; your appointment slot is waiting&rdquo;). Touched: <code>public/brand/*</code> (3 SVGs + 1 generated PNG), <code>src/routes/rescue.claim.$token.tsx</code>, <code>src/routes/__root.tsx</code>. v1.5.1 is the cosmetic-but-load-bearing finish line on the iMessage MCP workflow.",
+    ],
+  },
+  {
     version: "v1.5",
     date: "May 2026",
     items: [

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Refill">
+  <title>Refill</title>
+  <!--
+    Favicon v414.3 — emerald rounded-squircle with the paper-white "R"
+    centered. Matches the hero chip in RefillHome / RefillLanding /
+    onboard so the favicon, in-app logomark, and marketing wordmark
+    chip all share one visual identity (no inversion-mismatch where
+    the tab badge reads opposite the page hero).
+
+    Palette anchored to brand.ts visual tokens:
+      bg #056048 = REFILL_BRAND.visual.accent (emerald)
+      R  #fbfaf7 = REFILL_BRAND.visual.paper  (paper)
+
+    Corner radius rx=16 (25% of side) — squircle-shaped per
+    Grasshopper's pick 2026-05-23. SVG so Retina + dark-mode browsers
+    get a crisp render without needing a sprite of PNGs.
+  -->
+  <rect width="64" height="64" rx="16" fill="#056048" />
+  <text
+    x="32"
+    y="46"
+    text-anchor="middle"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-weight="600"
+    font-size="40"
+    fill="#fbfaf7"
+  >R</text>
+</svg>
