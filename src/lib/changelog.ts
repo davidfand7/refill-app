@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.5.3",
+    date: "May 2026",
+    items: [
+      "<strong>v1.5.3 &mdash; Build Log regenerator ported from openagenticv4 (no more hand-rolled doc).</strong> The <code>Refill-Build-Log.html</code> on Desktop had been hand-maintained since the Refill cleave because the regen script never came across &mdash; minor friction per ship, but the rot was compounding: by v1.5.2 the hand-rolled doc was a 14-version essay-write each time. Ported <code>openagenticv4/scripts/build-history.ts</code> &rarr; <code>refill-app/scripts/build-history.ts</code> with four adaptations: <strong>(1)</strong> Refill&rsquo;s <code>CHANGELOG</code> items are already HTML-formatted (the PageHeader v-pill renders them via raw-HTML), so build-log items pass through verbatim instead of going through the source script&rsquo;s markdown&rarr;HTML escape pipeline that would have double-escaped every <code>&lt;strong&gt;</code> tag. <strong>(2)</strong> Refill uses semver-ish versions (v1.5.2, v1.4.6, v1.5, v1.4) so the sort comparator walks all three numeric segments instead of just the leading int &mdash; the source&rsquo;s <code>parseInt(v[1])</code> would have collapsed every Refill version to <code>1</code> and sorted them in undefined order. <strong>(3)</strong> Replaced the Agentiport-era strategic milestones with 9 Refill-era ones (spinout 5/16 &rarr; pricing killshot 5/16 &rarr; trial-first 5/20 &rarr; single-feature positioning 5/22 &rarr; rejuv-proof-or-nothing 5/26 &rarr; engine proven 5/26 &rarr; iMessage MCP polish 5/26 &rarr; autonomous cron + step 6 proven 5/26). <strong>(4)</strong> Accent palette shifts from Agentiport amber/gold to Refill emerald (#056048) / pale sage (#e8f3ed); Georgia serif headings match RefillHome&rsquo;s &lsquo;Hey {spa}.&rsquo; greeting; paper-tone bg (#faf8f3) preserved. Dropped the Patents section &mdash; not load-bearing for Refill at this stage. New <code>package.json</code> script alias: <code>bun run build-log</code> regenerates the doc after every ship. Touched: <code>scripts/build-history.ts</code> (new), <code>package.json</code> (one-line alias), <code>src/lib/changelog.ts</code> (this entry).",
+    ],
+  },
+  {
     version: "v1.5.2",
     date: "May 2026",
     items: [
