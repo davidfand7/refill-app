@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.7.1",
+    date: "May 2026",
+    items: [
+      "<strong>v1.7.1 &mdash; Stripe push line-items bug fix.</strong> v1.7&rsquo;s end-to-end walk surfaced that the Stripe Invoice created by the cron came out with <code>$0.00</code> total / zero line items &mdash; the <code>InvoiceItem</code> with the $421.80 share amount got orphaned on the customer instead of being pulled into the Invoice. Stripe auto-marked the empty $0 invoice as paid (the &lsquo;paid&rsquo; status in the DB row was technically true but misleading &mdash; no actual charge happened). <strong>Root cause</strong>: v1.7 used the &lsquo;pending pool&rsquo; pattern (create <code>InvoiceItem</code> without specifying an invoice &rarr; expect Stripe to auto-pull it into the next <code>Invoice</code>). That pattern&rsquo;s default <code>pending_invoice_items_behavior</code> isn&rsquo;t reliable on the <code>2026-04-22.dahlia</code> API version we&rsquo;re on. <strong>Fix &mdash; approach 2 (invoice-scoped items):</strong> (1) create the <code>Invoice</code> as a draft with <code>auto_advance:false</code> and <code>pending_invoice_items_behavior:&quot;exclude&quot;</code> (the &lsquo;exclude&rsquo; also prevents v1.7&rsquo;s orphaned pending item, still sitting on the customer in test mode, from being double-pulled into future invoices); (2) create the <code>InvoiceItem</code> with <code>invoice: stripeInvoice.id</code> so it&rsquo;s scoped specifically to that invoice rather than going to the pending pool; (3) <code>finalizeInvoice</code> triggers the charge attempt synchronously as before. Idempotency key suffix bumped from no-version to <code>_v2</code> so retries don&rsquo;t hit v1.7&rsquo;s cached (bad) responses within Stripe&rsquo;s 24h idempotency window. <strong>Recovery for previously-failed periods</strong>: the cron skips the Stripe push when the DB row already has <code>stripe_invoice_id IS NOT NULL</code> (idempotency guard). For v1.7&rsquo;s bad-state row, clear it via a one-shot SQL update (<code>set stripe_invoice_id = null, status = &#39;draft&#39;, sent_at = null, paid_at = null</code>) and re-trigger the cron &mdash; v1.7.1&rsquo;s new code path with fresh idempotency keys will produce a proper-amount invoice. Touched: <code>src/server/refill-billing.ts</code> (Stripe push branch refactor).",
+    ],
+  },
+  {
     version: "v1.7",
     date: "May 2026",
     items: [

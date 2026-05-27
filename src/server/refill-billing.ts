@@ -504,14 +504,46 @@ export async function generateMonthlyInvoiceForTenant(args: {
               ? `Refill recovery share — ${periodLabel} (${(sharePct * 100).toFixed(0)}% of $${recoveredRevenueUsd.toLocaleString()} recovered)`
               : `Refill ${plan.plan} plan — ${periodLabel}`;
 
-          // 1. Pending InvoiceItem on the customer for the total amount.
-          //    InvoiceItems get pulled into the next invoice we create.
-          //    Idempotency key prevents double-creating on cron retry within
-          //    24h (Stripe's window) even if we hit this branch twice.
-          const idempotencyKey = `refill_inv_${tenantId}_${periodStart.toISOString().slice(0, 10)}`;
+          // v1.7.1 — switched to invoice-scoped-items pattern. v1.7 used
+          // the "pending pool" pattern (create InvoiceItem with no invoice,
+          // then create Invoice expecting it to auto-pull pending items),
+          // but the Invoice was created empty ($0 total, immediately
+          // auto-marked paid). Diagnosis: pending pool semantics aren't
+          // reliable on the apiVersion in use here. Approach 2 fix:
+          //   (1) create Invoice as DRAFT (auto_advance:false)
+          //   (2) create InvoiceItem with `invoice: invoice.id` so it's
+          //       scoped to that specific invoice
+          //   (3) finalize → triggers charge synchronously
+          // pending_invoice_items_behavior:"exclude" prevents v1.7's
+          // orphaned pending item (still on the customer in test mode)
+          // from being double-pulled into new invoices. The _v2 suffix
+          // on idempotency keys ensures Stripe doesn't replay v1.7's
+          // cached (bad) responses within the 24h idempotency window.
+          const idempotencyKey = `refill_inv_${tenantId}_${periodStart.toISOString().slice(0, 10)}_v2`;
+
+          // 1. Create the invoice as a draft, scoped to no items yet.
+          const stripeInvoice = await stripe.invoices.create(
+            {
+              customer: customerId,
+              auto_advance: false,
+              collection_method: "charge_automatically",
+              default_payment_method: paymentMethodId,
+              description: `Refill — ${periodLabel}`,
+              pending_invoice_items_behavior: "exclude",
+              metadata: {
+                product: "refill",
+                tenant_id: tenantId,
+                period_start: periodStart.toISOString(),
+              },
+            },
+            { idempotencyKey: `${idempotencyKey}_invoice` },
+          );
+
+          // 2. Attach the InvoiceItem to that specific invoice.
           await stripe.invoiceItems.create(
             {
               customer: customerId,
+              invoice: stripeInvoice.id,
               amount: Math.round(totalDueUsd * 100),
               currency: "usd",
               description,
@@ -522,26 +554,6 @@ export async function generateMonthlyInvoiceForTenant(args: {
               },
             },
             { idempotencyKey: `${idempotencyKey}_item` },
-          );
-
-          // 2. Create the invoice and finalize it. auto_advance:true tells
-          //    Stripe to attempt the charge automatically after finalize.
-          //    collection_method:"charge_automatically" + default_payment_method
-          //    means Stripe pulls from the saved card immediately.
-          const stripeInvoice = await stripe.invoices.create(
-            {
-              customer: customerId,
-              auto_advance: true,
-              collection_method: "charge_automatically",
-              default_payment_method: paymentMethodId,
-              description: `Refill — ${periodLabel}`,
-              metadata: {
-                product: "refill",
-                tenant_id: tenantId,
-                period_start: periodStart.toISOString(),
-              },
-            },
-            { idempotencyKey: `${idempotencyKey}_invoice` },
           );
 
           // 3. Finalize triggers the charge attempt synchronously. The
