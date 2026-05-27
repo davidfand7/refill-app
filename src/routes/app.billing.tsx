@@ -36,15 +36,13 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   applyPricingPlan,
   getActivePlan,
-  getPlanEconomics,
-  type ActivePlan,
-  type PricingPlan,
-} from "@/server/emma-billing.functions";
-import {
   getPaymentMethodStatus,
+  getPlanEconomics,
   listInvoices,
+  type RefillActivePlan,
   type RefillInvoice,
   type RefillPaymentMethodStatus,
+  type RefillPricingPlan,
 } from "@/server/refill-billing";
 import { cn } from "@/lib/utils";
 
@@ -52,11 +50,16 @@ export const Route = createFileRoute("/app/billing")({
   component: BillingPage,
 });
 
+// PLAN_META is keyed on RefillPricingPlan (starter/predictable/pro), the
+// canonical internal name. Visible labels keep the emma-era brand language
+// (Performance/Predictable/Hybrid) so Karen's mental model isn't disturbed
+// by an internal cleanup. A future copy-refresh ship can rename labels if
+// the marketing story shifts.
 const PLAN_META: Record<
-  PricingPlan,
+  RefillPricingPlan,
   { label: string; tagline: string; icon: typeof Zap; tone: "primary" | "neutral" | "amber" }
 > = {
-  performance: {
+  starter: {
     label: "Performance",
     tagline: "Free. You only pay when Refill recovers revenue.",
     icon: Zap,
@@ -68,7 +71,7 @@ const PLAN_META: Record<
     icon: FileText,
     tone: "neutral",
   },
-  hybrid: {
+  pro: {
     label: "Hybrid",
     tagline: "Lower monthly. Smaller share. Best of both.",
     icon: Sparkles,
@@ -77,12 +80,12 @@ const PLAN_META: Record<
 };
 
 function BillingPage() {
-  const [active, setActive] = useState<ActivePlan>(null);
+  const [active, setActive] = useState<RefillActivePlan>(null);
   const [invoices, setInvoices] = useState<RefillInvoice[] | null>(null);
   const [pm, setPm] = useState<RefillPaymentMethodStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [applyingPlan, setApplyingPlan] = useState<PricingPlan | null>(null);
+  const [applyingPlan, setApplyingPlan] = useState<RefillPricingPlan | null>(null);
   const [redirecting, setRedirecting] = useState<"add" | "manage" | null>(null);
 
   const load = useCallback(async () => {
@@ -198,7 +201,7 @@ function BillingPage() {
     }
   }
 
-  async function pickPlan(plan: PricingPlan) {
+  async function pickPlan(plan: RefillPricingPlan) {
     if (active?.plan === plan) {
       toast.info(`You're already on the ${PLAN_META[plan].label} plan.`);
       return;
@@ -276,9 +279,9 @@ function BillingPage() {
               </div>
               <div className="text-[11px] text-ink-soft mt-1">
                 Since {new Date(active.planStartedAt).toLocaleDateString()}
-                {active.stripeCustomerId
-                  ? " · Stripe customer linked"
-                  : " · Stripe linkage in v366.x · invoices stay in draft until then"}
+                {pm?.hasCardOnFile
+                  ? " · Card on file · invoices charge automatically"
+                  : " · No card on file yet · invoices stay in draft until added"}
               </div>
             </div>
           </div>
@@ -311,7 +314,7 @@ function BillingPage() {
             Pick your plan
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {(["performance", "predictable", "hybrid"] as PricingPlan[]).map((p) => (
+            {(["starter", "predictable", "pro"] as RefillPricingPlan[]).map((p) => (
               <PlanCard
                 key={p}
                 plan={p}
@@ -393,7 +396,7 @@ function PlanCard({
   disabled,
   onPick,
 }: {
-  plan: PricingPlan;
+  plan: RefillPricingPlan;
   isActive: boolean;
   applying: boolean;
   disabled: boolean;
@@ -596,24 +599,17 @@ function formatBrand(b: string | null): string {
 
 // ─── Invoice row ──────────────────────────────────────────────────────────
 
-// v1.7.2: refill-billing's RefillInvoice.planAtInvoice is
-// "starter" | "predictable" | "pro" while the UI's PLAN_META keys on the
-// emma-era names "performance" | "predictable" | "hybrid". Map at render
-// time so the table cell renders the right label. Proper unification lives
-// in a future ship that migrates app.billing.tsx fully off emma-billing.
-function refillPlanToUiPlan(
-  p: RefillInvoice["planAtInvoice"],
-): PricingPlan {
-  if (p === "starter") return "performance";
-  if (p === "pro") return "hybrid";
-  return "predictable";
-}
-
 function InvoiceRow({ invoice }: { invoice: RefillInvoice }) {
+  // periodStart is the UTC month boundary (e.g. 2026-05-01T00:00:00Z).
+  // Without timeZone:"UTC" toLocaleString shifts it back one day in any
+  // negative-offset locale (May 1 UTC → April 30 in MT), and the rendered
+  // month-and-year flips to "April 2026". Pin to UTC so the period label
+  // matches the period the row actually covers.
   const start = new Date(invoice.periodStart);
   const periodLabel = start.toLocaleString("en-US", {
     month: "long",
     year: "numeric",
+    timeZone: "UTC",
   });
   return (
     <tr className="border-t border-border">
@@ -624,7 +620,7 @@ function InvoiceRow({ invoice }: { invoice: RefillInvoice }) {
         </div>
       </td>
       <td className="px-3 py-3 text-left text-xs text-ink-soft">
-        {PLAN_META[refillPlanToUiPlan(invoice.planAtInvoice)].label}
+        {PLAN_META[invoice.planAtInvoice].label}
       </td>
       <td className="px-3 py-3 text-right tabular-nums">
         <div>${invoice.recoveredRevenueUsd.toLocaleString()}</div>
@@ -683,7 +679,7 @@ function InvoiceStatusPill({ status }: { status: RefillInvoice["status"] }) {
 }
 
 function planSummary(
-  plan: PricingPlan,
+  plan: RefillPricingPlan,
   revenueSharePct: number,
   monthlyFlatUsd: number,
 ): string {
