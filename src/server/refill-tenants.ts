@@ -318,6 +318,67 @@ export const getMyTenant = createServerFn({ method: "POST" })
     };
   });
 
+// ─── getFirstTenantForAdmin (v1.19) ──────────────────────────────────────
+//
+// Admin-only fallback for useTenantMembership: when an authed user has NO
+// tenant_memberships row but IS flagged as admin (public.user_roles.role =
+// 'admin'), this returns the first tenant in the system so RefillShell can
+// render in "viewing as" mode. Pure read; no inserts, no membership grant.
+//
+// Data layer caveat documented: the rest of the spa-owner server fns still
+// filter by user_id (from verifyAuth) when fetching patient/recovery/etc.
+// data, so an admin viewing-as a tenant still sees their OWN data shape
+// inside the rendered chrome, not the target tenant's. This is intentional
+// minimum-viable scope per v1.19 — the chrome unblock alone has value
+// (admin can walk the surfaces + confirm UI behaves) without the cross-
+// tenant data-read layer that's a much bigger ship.
+
+const adminFallbackInput = z.object({
+  accessToken: z.string().min(1),
+});
+
+export const getFirstTenantForAdmin = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => adminFallbackInput.parse(raw))
+  .handler(async ({ data }): Promise<{ tenant: MyTenant | null }> => {
+    const userId = await verifyAuth(data.accessToken);
+    const sb = admin();
+    // Gate: caller must be admin. We don't trust the client-side primaryRole
+    // signal here — re-verify against user_roles server-side.
+    const { data: roles, error: roleErr } = await sb
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "admin")
+      .maybeSingle();
+    if (roleErr) {
+      throw new Error(`Couldn't verify admin: ${roleErr.message}`);
+    }
+    if (!roles) {
+      throw new Error("Admin only.");
+    }
+    // Return first tenant (oldest by created_at for stable selection).
+    const { data: row, error: tenErr } = await sb
+      .from("tenants")
+      .select("id, slug, name, trial_ends_at, plan, is_demo")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (tenErr) {
+      throw new Error(`Couldn't load tenants: ${tenErr.message}`);
+    }
+    if (!row) return { tenant: null };
+    return {
+      tenant: {
+        id: row.id,
+        slug: row.slug,
+        name: row.name,
+        trialEndsAt: row.trial_ends_at,
+        plan: row.plan,
+        isDemo: row.is_demo ?? false,
+      },
+    };
+  });
+
 // ─── getMyTenantRecoveryFeed (v410.4) ────────────────────────────────────
 //
 // Tenant-scoped mirror of getMyLiveEarnings (which is rep-scoped). Drives

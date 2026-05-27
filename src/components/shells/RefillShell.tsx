@@ -24,9 +24,12 @@ import { useTenantMembership } from "@/lib/use-tenant-membership";
 export function RefillShell({ children }: { children: React.ReactNode }) {
   const membership = useTenantMembership();
   if (membership.status !== "tenant") return null;
+  // v1.19: thread viewAs through so chrome can show the admin "viewing as"
+  // banner when the membership is the admin-fallback rather than a real
+  // tenant_memberships row.
   return (
     <div className="min-h-screen" style={{ background: "#fbfaf7" }}>
-      <RefillShellChrome tenant={membership.tenant} />
+      <RefillShellChrome tenant={membership.tenant} viewAs={membership.viewAs} />
       <main className="flex-1 min-w-0 pb-16 md:pb-0">{children}</main>
     </div>
   );

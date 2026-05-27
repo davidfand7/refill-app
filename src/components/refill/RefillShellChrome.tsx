@@ -37,7 +37,18 @@ function deriveActiveKey(pathname: string): RefillNavKey | undefined {
   return undefined;
 }
 
-export function RefillShellChrome({ tenant }: { tenant: MyTenant }) {
+export function RefillShellChrome({
+  tenant,
+  viewAs,
+}: {
+  tenant: MyTenant;
+  /**
+   * v1.19 — when the parent shell rendered via the admin-fallback path
+   * (admin user with no tenant_memberships row), we get viewAs="admin"
+   * and show a banner so the admin knows they're not on their own data.
+   */
+  viewAs?: "admin";
+}) {
   const location = useLocation();
   const { user, signOut } = useAuth();
   const [theme, setTheme] = useState<Theme>("system");
@@ -116,6 +127,24 @@ export function RefillShellChrome({ tenant }: { tenant: MyTenant }) {
 
       <div className="mx-auto max-w-6xl px-4 pt-4">
         <DemoBanner />
+        {viewAs === "admin" && (
+          <div
+            className="mb-3 rounded-lg border px-3 py-2 text-[12px] flex items-center gap-2"
+            style={{
+              background: "#fdf6dc",
+              borderColor: "rgba(138, 109, 12, 0.3)",
+              color: "#8a6d0c",
+            }}
+          >
+            <Sparkles className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              Viewing as <strong>{tenant.name}</strong> (admin fallback).
+              Data fetchers still filter by your own user_id, so patient /
+              recovery surfaces may read empty until cross-tenant data-view
+              is wired (queued v1.20+).
+            </span>
+          </div>
+        )}
         <RefillNav active={activeKey} />
       </div>
     </>

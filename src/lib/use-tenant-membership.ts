@@ -12,17 +12,29 @@
  * → RefillShell. Non-tenant users on getrefill.app fall through to the
  * default branch (which today is AppSidebar — eventually a marketing-shell
  * fallback when we want one).
+ *
+ * v1.19 — admin fallback path:
+ *   When the authed user has NO tenant_memberships row BUT has the admin
+ *   role (per public.user_roles), we fall back to viewing the first tenant
+ *   in the system (via getFirstTenantForAdmin). The returned state still
+ *   reads as `status: "tenant"` so RefillShell renders normally, but
+ *   carries `viewAs: "admin"` so chrome can show a "Viewing as X" banner
+ *   and consumers can know the membership isn't real.
+ *
+ *   Why this is admin-only and not e.g. rep-viewing-tenant: admins are
+ *   the platform operators who legitimately need cross-tenant chrome
+ *   access for support/walkthroughs/debugging. Reps and spa-owners don't.
  */
 
 import { useEffect, useState } from "react";
 
 import { useAuth } from "@/lib/auth";
-import { getMyTenant, type MyTenant } from "@/server/refill-tenants";
+import { getFirstTenantForAdmin, getMyTenant, type MyTenant } from "@/server/refill-tenants";
 
 export type TenantMembershipState =
-  | { status: "loading"; tenant: null }
-  | { status: "not-a-tenant"; tenant: null }
-  | { status: "tenant"; tenant: MyTenant };
+  | { status: "loading"; tenant: null; viewAs?: never }
+  | { status: "not-a-tenant"; tenant: null; viewAs?: never }
+  | { status: "tenant"; tenant: MyTenant; viewAs?: "admin" };
 
 const LOADING: TenantMembershipState = { status: "loading", tenant: null };
 const NOT_A_TENANT: TenantMembershipState = {
@@ -65,9 +77,13 @@ export function prefetchTenantMembership(
 /**
  * Subscribe hook. Returns LOADING until auth + tenant lookup resolves.
  * Sign-out returns NOT_A_TENANT immediately. Token rotation refetches.
+ *
+ * v1.19: when the lookup returns NOT_A_TENANT and the user is admin,
+ * fall back to getFirstTenantForAdmin so RefillShell can render in
+ * "viewing as" mode.
  */
 export function useTenantMembership(): TenantMembershipState {
-  const { session, loading: authLoading } = useAuth();
+  const { session, loading: authLoading, primaryRole } = useAuth();
   const accessToken = session?.access_token;
   const [state, setState] = useState<TenantMembershipState>(LOADING);
 
@@ -83,8 +99,32 @@ export function useTenantMembership(): TenantMembershipState {
     let cancelled = false;
     setState(LOADING);
     fetchTenantMembership(accessToken)
-      .then((result) => {
-        if (!cancelled) setState(result);
+      .then(async (result) => {
+        if (cancelled) return;
+        // Real membership wins.
+        if (result.status === "tenant") {
+          setState(result);
+          return;
+        }
+        // v1.19 admin fallback. If user has no membership BUT is admin,
+        // try the system-first-tenant route. On failure (not admin
+        // server-side, or no tenants exist) we cleanly fall back to
+        // NOT_A_TENANT — no infinite loop, no thrown error to caller.
+        if (primaryRole === "admin") {
+          try {
+            const { tenant } = await getFirstTenantForAdmin({
+              data: { accessToken },
+            });
+            if (cancelled) return;
+            if (tenant) {
+              setState({ status: "tenant", tenant, viewAs: "admin" });
+              return;
+            }
+          } catch {
+            // fall through to NOT_A_TENANT
+          }
+        }
+        setState(NOT_A_TENANT);
       })
       .catch(() => {
         // Fail-closed: a transient DB error shouldn't leave the user
@@ -95,7 +135,7 @@ export function useTenantMembership(): TenantMembershipState {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, authLoading]);
+  }, [accessToken, authLoading, primaryRole]);
 
   return state;
 }
