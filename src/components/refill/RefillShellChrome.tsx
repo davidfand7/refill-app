@@ -140,9 +140,9 @@ export function RefillShellChrome({
             <Sparkles className="h-3.5 w-3.5 shrink-0" />
             <span>
               Viewing as <strong>{tenant.name}</strong> (admin fallback).
-              Read fetchers on patients, waitlist, recovery, and billing
-              return this tenant&rsquo;s data (v1.20). Writes still scope
-              to your own user_id.
+              Read fetchers return this tenant&rsquo;s data (v1.20). CSV
+              ingest writes into this tenant (v1.20.5). Stripe and plan
+              writes still scope to your own user_id.
             </span>
           </div>
         )}

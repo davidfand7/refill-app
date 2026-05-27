@@ -29,6 +29,7 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/integrations/supabase/client";
 import { parsePatientDetailCsv, type ParsedPatientFile } from "@/lib/patient-csv";
+import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { ingestPatientCsv, type IngestReceipt } from "@/server/patient-ingest.functions";
 
 export const Route = createFileRoute("/app/refill/patients/import")({
@@ -52,6 +53,14 @@ function ImportPatientsPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // v1.20.5: when admin is observing a tenant via the admin-bypass shell,
+  // route the ingest under that tenant's owner user_id instead of the
+  // admin's own bucket. Plumbed through to ingestPatientCsv, which uses
+  // resolveEffectiveUserId for the server-side admin re-verification.
+  const membership = useTenantMembership();
+  const viewAsUserId =
+    membership.status === "tenant" ? membership.viewAsUserId : undefined;
 
   function reset() {
     setStage("idle");
@@ -104,6 +113,7 @@ function ImportPatientsPage() {
           accessToken: token,
           csv: file.text,
           sourceFilename: file.name,
+          viewAsUserId,
         },
       });
       setReceipt(r);
@@ -122,11 +132,11 @@ function ImportPatientsPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Emma(OS) · Patients"
+        eyebrow="Refill · Patients"
         title="Import patient data"
-        description="Drop a QuickBooks ‘Sales by Patient Detail’ export. Emma turns it into a queryable patient book."
+        description="Drop a QuickBooks ‘Sales by Patient Detail’ export. Refill turns it into a queryable patient book."
         breadcrumbs={[
-          { label: "Emma", to: "/app/refill" },
+          { label: "Refill", to: "/app/refill" },
           { label: "Patients", to: "/app/refill/patients" },
           { label: "Import" },
         ]}
@@ -142,6 +152,26 @@ function ImportPatientsPage() {
       />
 
       <div className="px-6 lg:px-10 py-8 max-w-4xl mx-auto space-y-6">
+        {viewAsUserId && membership.status === "tenant" && (
+          <div
+            className="rounded-lg border px-3 py-2 text-[12px] flex items-center gap-2"
+            style={{
+              background: "#fdf6dc",
+              borderColor: "rgba(138, 109, 12, 0.3)",
+              color: "#8a6d0c",
+            }}
+            role="status"
+            aria-label="Upload destination notice"
+          >
+            <Upload className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              Uploading into <strong>{membership.tenant.name}</strong>.
+              Patients and transactions will land in this tenant&rsquo;s
+              bucket (v1.20.5), not yours.
+            </span>
+          </div>
+        )}
+
         {stage === "idle" || stage === "previewing" ? (
           <Dropzone
             isDragging={isDragging}

@@ -171,6 +171,12 @@ const ingestInput = z.object({
   accessToken: z.string().min(1),
   csv: z.string().min(1).max(20 * 1024 * 1024), // 20MB headroom; Rejuv is ~1.4MB
   sourceFilename: z.string().max(500).optional(),
+  /** v1.20.5: admin-only write-path opt-in. When set + caller is admin,
+   *  the ingest writes under this user_id (typically the impersonated
+   *  tenant owner) instead of the caller's. Same gate as read-path
+   *  viewAsUserId — see [[resolveEffectiveUserId]]. Closes the
+   *  admin-uploads-land-in-wrong-bucket footgun that bit us 2026-05-27. */
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const listInput = z.object({
@@ -274,9 +280,28 @@ function hydrateTransactionRow(t: PatientTransactionDbRow): PatientTransactionRo
 export const ingestPatientCsv = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => ingestInput.parse(input))
   .handler(async ({ data }): Promise<IngestReceipt> => {
-    const userId = await verifyAuth(data.accessToken);
+    // v1.20.5: opted into the admin viewing-as write path. When admin is
+    // observing tenant X via useTenantMembership.viewAsUserId, an /import
+    // upload now writes patient_nodes + patient_transactions under tenant
+    // X's owner user_id instead of the admin's own bucket.
+    //
+    // Background: pre-v1.20.5 this called verifyAuth(accessToken) directly,
+    // so admin uploads landed under the admin's user_id — invisible to the
+    // target spa, requiring a manual SQL re-assignment (the 2026-05-27
+    // Patient-Data-Move-To-Karen.sql detour for the Rejuv pilot CSV). The
+    // v1.20 docblock had explicitly excluded write paths from viewAs for
+    // safety; v1.20.5 narrows that policy: ingest IS safe to viewAs because
+    // (a) the use case is explicit (admin pasting CSV on behalf of a
+    // tenant during pilot setup), (b) resolveEffectiveUserId re-verifies
+    // admin role server-side, (c) bad ingests are reversible via the same
+    // CSV-upload UI. Stripe-mutating writes and plan changes are still
+    // intentionally NOT viewAs-aware.
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
-    return doIngest(sb, userId, data.csv, data.sourceFilename ?? null);
+    return doIngest(sb, effectiveUserId, data.csv, data.sourceFilename ?? null);
   });
 
 export async function doIngest(
