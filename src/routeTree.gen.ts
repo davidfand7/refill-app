@@ -47,6 +47,7 @@ import { Route as AppRefillBillingRouteImport } from './routes/app.refill.billin
 import { Route as AppRefillAppointmentsRouteImport } from './routes/app.refill.appointments'
 import { Route as AppAdminRefillTrialsRouteImport } from './routes/app.admin.refill-trials'
 import { Route as AppAdminOutreachRouteImport } from './routes/app.admin.outreach'
+import { Route as ApiWebhooksStripeRouteImport } from './routes/api.webhooks.stripe'
 import { Route as ApiTwilioInboundRouteImport } from './routes/api.twilio.inbound'
 import { Route as ApiCronRefillTrialDripRouteImport } from './routes/api.cron.refill-trial-drip'
 import { Route as ApiCronRefillInvoiceRouteImport } from './routes/api.cron.refill-invoice'
@@ -263,6 +264,11 @@ const AppAdminOutreachRoute = AppAdminOutreachRouteImport.update({
   path: '/admin/outreach',
   getParentRoute: () => AppRoute,
 } as any)
+const ApiWebhooksStripeRoute = ApiWebhooksStripeRouteImport.update({
+  id: '/api/webhooks/stripe',
+  path: '/api/webhooks/stripe',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiTwilioInboundRoute = ApiTwilioInboundRouteImport.update({
   id: '/api/twilio/inbound',
   path: '/api/twilio/inbound',
@@ -424,6 +430,7 @@ export interface FileRoutesByFullPath {
   '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
+  '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/admin/outreach': typeof AppAdminOutreachRoute
   '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
   '/app/refill/appointments': typeof AppRefillAppointmentsRoute
@@ -487,6 +494,7 @@ export interface FileRoutesByTo {
   '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
+  '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/admin/outreach': typeof AppAdminOutreachRoute
   '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
   '/app/refill/appointments': typeof AppRefillAppointmentsRoute
@@ -550,6 +558,7 @@ export interface FileRoutesById {
   '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
+  '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/admin/outreach': typeof AppAdminOutreachRoute
   '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
   '/app/refill/appointments': typeof AppRefillAppointmentsRoute
@@ -617,6 +626,7 @@ export interface FileRouteTypes {
     | '/api/cron/refill-invoice'
     | '/api/cron/refill-trial-drip'
     | '/api/twilio/inbound'
+    | '/api/webhooks/stripe'
     | '/app/admin/outreach'
     | '/app/admin/refill-trials'
     | '/app/refill/appointments'
@@ -680,6 +690,7 @@ export interface FileRouteTypes {
     | '/api/cron/refill-invoice'
     | '/api/cron/refill-trial-drip'
     | '/api/twilio/inbound'
+    | '/api/webhooks/stripe'
     | '/app/admin/outreach'
     | '/app/admin/refill-trials'
     | '/app/refill/appointments'
@@ -742,6 +753,7 @@ export interface FileRouteTypes {
     | '/api/cron/refill-invoice'
     | '/api/cron/refill-trial-drip'
     | '/api/twilio/inbound'
+    | '/api/webhooks/stripe'
     | '/app/admin/outreach'
     | '/app/admin/refill-trials'
     | '/app/refill/appointments'
@@ -805,6 +817,7 @@ export interface RootRouteChildren {
   ApiCronRefillInvoiceRoute: typeof ApiCronRefillInvoiceRoute
   ApiCronRefillTrialDripRoute: typeof ApiCronRefillTrialDripRoute
   ApiTwilioInboundRoute: typeof ApiTwilioInboundRoute
+  ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
   RescueClaimTokenRoute: typeof RescueClaimTokenRoute
   ApiIntegrationsAcuityOauthCallbackRoute: typeof ApiIntegrationsAcuityOauthCallbackRoute
   ApiWebhooksSchedulerAcuitySecretRoute: typeof ApiWebhooksSchedulerAcuitySecretRoute
@@ -1077,6 +1090,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/admin/outreach'
       preLoaderRoute: typeof AppAdminOutreachRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/api/webhooks/stripe': {
+      id: '/api/webhooks/stripe'
+      path: '/api/webhooks/stripe'
+      fullPath: '/api/webhooks/stripe'
+      preLoaderRoute: typeof ApiWebhooksStripeRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/twilio/inbound': {
       id: '/api/twilio/inbound'
@@ -1416,6 +1436,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronRefillInvoiceRoute: ApiCronRefillInvoiceRoute,
   ApiCronRefillTrialDripRoute: ApiCronRefillTrialDripRoute,
   ApiTwilioInboundRoute: ApiTwilioInboundRoute,
+  ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
   RescueClaimTokenRoute: RescueClaimTokenRoute,
   ApiIntegrationsAcuityOauthCallbackRoute:
     ApiIntegrationsAcuityOauthCallbackRoute,
