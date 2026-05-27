@@ -13,6 +13,7 @@ import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as StoryRouteImport } from './routes/story'
 import { Route as StartRouteImport } from './routes/start'
 import { Route as ScanRouteImport } from './routes/scan'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as OnboardRouteImport } from './routes/onboard'
 import { Route as LoginRouteImport } from './routes/login'
@@ -68,6 +69,7 @@ import { Route as AppRefillWaitlistBulkRouteImport } from './routes/app.refill.w
 import { Route as AppRefillSettingsSenderRouteImport } from './routes/app.refill.settings.sender'
 import { Route as AppRefillSettingsSchedulerRouteImport } from './routes/app.refill.settings.scheduler'
 import { Route as AppRefillSettingsNoshowRouteImport } from './routes/app.refill.settings.noshow'
+import { Route as AppRefillSettingsAccountRouteImport } from './routes/app.refill.settings.account'
 import { Route as AppRefillPatientsImportRouteImport } from './routes/app.refill.patients.import'
 import { Route as AppRefillPatientsContactsRouteImport } from './routes/app.refill.patients.contacts'
 import { Route as AppRefillPatientsPatientIdRouteImport } from './routes/app.refill.patients.$patientId'
@@ -96,6 +98,11 @@ const StartRoute = StartRouteImport.update({
 const ScanRoute = ScanRouteImport.update({
   id: '/scan',
   path: '/scan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PricingRoute = PricingRouteImport.update({
@@ -376,6 +383,12 @@ const AppRefillSettingsNoshowRoute = AppRefillSettingsNoshowRouteImport.update({
   path: '/settings/noshow',
   getParentRoute: () => AppRefillRoute,
 } as any)
+const AppRefillSettingsAccountRoute =
+  AppRefillSettingsAccountRouteImport.update({
+    id: '/settings/account',
+    path: '/settings/account',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
 const AppRefillPatientsImportRoute = AppRefillPatientsImportRouteImport.update({
   id: '/import',
   path: '/import',
@@ -436,6 +449,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
   '/pricing': typeof PricingRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/scan': typeof ScanRoute
   '/start': typeof StartRoute
   '/story': typeof StoryRoute
@@ -488,6 +502,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
   '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
+  '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
@@ -506,6 +521,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
   '/pricing': typeof PricingRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/scan': typeof ScanRoute
   '/start': typeof StartRoute
   '/story': typeof StoryRoute
@@ -553,6 +569,7 @@ export interface FileRoutesByTo {
   '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
   '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
+  '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
@@ -572,6 +589,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
   '/pricing': typeof PricingRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/scan': typeof ScanRoute
   '/start': typeof StartRoute
   '/story': typeof StoryRoute
@@ -624,6 +642,7 @@ export interface FileRoutesById {
   '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
   '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
+  '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
@@ -644,6 +663,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboard'
     | '/pricing'
+    | '/reset-password'
     | '/scan'
     | '/start'
     | '/story'
@@ -696,6 +716,7 @@ export interface FileRouteTypes {
     | '/app/refill/patients/$patientId'
     | '/app/refill/patients/contacts'
     | '/app/refill/patients/import'
+    | '/app/refill/settings/account'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
     | '/app/refill/settings/sender'
@@ -714,6 +735,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboard'
     | '/pricing'
+    | '/reset-password'
     | '/scan'
     | '/start'
     | '/story'
@@ -761,6 +783,7 @@ export interface FileRouteTypes {
     | '/app/refill/patients/$patientId'
     | '/app/refill/patients/contacts'
     | '/app/refill/patients/import'
+    | '/app/refill/settings/account'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
     | '/app/refill/settings/sender'
@@ -779,6 +802,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboard'
     | '/pricing'
+    | '/reset-password'
     | '/scan'
     | '/start'
     | '/story'
@@ -831,6 +855,7 @@ export interface FileRouteTypes {
     | '/app/refill/patients/$patientId'
     | '/app/refill/patients/contacts'
     | '/app/refill/patients/import'
+    | '/app/refill/settings/account'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
     | '/app/refill/settings/sender'
@@ -850,6 +875,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   OnboardRoute: typeof OnboardRoute
   PricingRoute: typeof PricingRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   ScanRoute: typeof ScanRoute
   StartRoute: typeof StartRoute
   StoryRoute: typeof StoryRoute
@@ -902,6 +928,13 @@ declare module '@tanstack/react-router' {
       path: '/scan'
       fullPath: '/scan'
       preLoaderRoute: typeof ScanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pricing': {
@@ -1289,6 +1322,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillSettingsNoshowRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/refill/settings/account': {
+      id: '/app/refill/settings/account'
+      path: '/settings/account'
+      fullPath: '/app/refill/settings/account'
+      preLoaderRoute: typeof AppRefillSettingsAccountRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/patients/import': {
       id: '/app/refill/patients/import'
       path: '/import'
@@ -1419,6 +1459,7 @@ interface AppRefillRouteChildren {
   AppRefillRescueRoute: typeof AppRefillRescueRoute
   AppRefillSharingRoute: typeof AppRefillSharingRoute
   AppRefillIndexRoute: typeof AppRefillIndexRoute
+  AppRefillSettingsAccountRoute: typeof AppRefillSettingsAccountRoute
   AppRefillSettingsNoshowRoute: typeof AppRefillSettingsNoshowRoute
   AppRefillSettingsSchedulerRoute: typeof AppRefillSettingsSchedulerRoute
   AppRefillSettingsSenderRoute: typeof AppRefillSettingsSenderRoute
@@ -1439,6 +1480,7 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillRescueRoute: AppRefillRescueRoute,
   AppRefillSharingRoute: AppRefillSharingRoute,
   AppRefillIndexRoute: AppRefillIndexRoute,
+  AppRefillSettingsAccountRoute: AppRefillSettingsAccountRoute,
   AppRefillSettingsNoshowRoute: AppRefillSettingsNoshowRoute,
   AppRefillSettingsSchedulerRoute: AppRefillSettingsSchedulerRoute,
   AppRefillSettingsSenderRoute: AppRefillSettingsSenderRoute,
@@ -1502,6 +1544,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   OnboardRoute: OnboardRoute,
   PricingRoute: PricingRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   ScanRoute: ScanRoute,
   StartRoute: StartRoute,
   StoryRoute: StoryRoute,
