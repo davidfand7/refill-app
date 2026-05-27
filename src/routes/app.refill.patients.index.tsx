@@ -784,7 +784,7 @@ function PatientRow({
           <Star
             className={cn(
               "h-4 w-4 transition",
-              row.vip ? "fill-primary" : "fill-none",
+              row.vip ? "fill-emerald" : "fill-none",
             )}
           />
         </button>
@@ -808,7 +808,7 @@ function PatientRow({
             onClick={onToggleWaitlist}
             className={cn(
               "relative inline-flex h-5 w-9 items-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald",
-              active ? "bg-emerald" : "bg-rule",
+              active ? "bg-emerald" : "bg-track",
               pending ? "opacity-60 cursor-wait" : "cursor-pointer",
             )}
           >
