@@ -17,6 +17,7 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as OnboardRouteImport } from './routes/onboard'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ClaimYourBusinessRouteImport } from './routes/claim-your-business'
 import { Route as BookRouteImport } from './routes/book'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
@@ -118,6 +119,11 @@ const OnboardRoute = OnboardRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ClaimYourBusinessRoute = ClaimYourBusinessRouteImport.update({
+  id: '/claim-your-business',
+  path: '/claim-your-business',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookRoute = BookRouteImport.update({
@@ -446,6 +452,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/book': typeof BookRoute
+  '/claim-your-business': typeof ClaimYourBusinessRoute
   '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
   '/pricing': typeof PricingRoute
@@ -518,6 +525,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/book': typeof BookRoute
+  '/claim-your-business': typeof ClaimYourBusinessRoute
   '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
   '/pricing': typeof PricingRoute
@@ -586,6 +594,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/book': typeof BookRoute
+  '/claim-your-business': typeof ClaimYourBusinessRoute
   '/login': typeof LoginRoute
   '/onboard': typeof OnboardRoute
   '/pricing': typeof PricingRoute
@@ -660,6 +669,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/book'
+    | '/claim-your-business'
     | '/login'
     | '/onboard'
     | '/pricing'
@@ -732,6 +742,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/book'
+    | '/claim-your-business'
     | '/login'
     | '/onboard'
     | '/pricing'
@@ -799,6 +810,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/book'
+    | '/claim-your-business'
     | '/login'
     | '/onboard'
     | '/pricing'
@@ -872,6 +884,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   BookRoute: typeof BookRoute
+  ClaimYourBusinessRoute: typeof ClaimYourBusinessRoute
   LoginRoute: typeof LoginRoute
   OnboardRoute: typeof OnboardRoute
   PricingRoute: typeof PricingRoute
@@ -956,6 +969,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/claim-your-business': {
+      id: '/claim-your-business'
+      path: '/claim-your-business'
+      fullPath: '/claim-your-business'
+      preLoaderRoute: typeof ClaimYourBusinessRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/book': {
@@ -1541,6 +1561,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   BookRoute: BookRoute,
+  ClaimYourBusinessRoute: ClaimYourBusinessRoute,
   LoginRoute: LoginRoute,
   OnboardRoute: OnboardRoute,
   PricingRoute: PricingRoute,
