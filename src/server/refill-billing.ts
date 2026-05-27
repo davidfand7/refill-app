@@ -46,7 +46,7 @@ import {
   readTenantStripeCustomerId,
   type StripeMode,
 } from "@/lib/stripe-mode";
-import { verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -149,6 +149,17 @@ const accessTokenOnly = z.object({
   accessToken: z.string().min(1),
 });
 
+// v1.20 admin viewing-as variant. Distinct from accessTokenOnly because
+// not every fn that uses accessTokenOnly opts in to viewAs-userId — only
+// the read paths surfaced on /app/billing for now (getActivePlan +
+// listInvoices). Write paths and Stripe-mutating fns are intentionally
+// not viewable-as for safety; admin shouldn't be inadvertently mutating
+// the impersonated tenant's plan or payment method.
+const readWithViewAsInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+});
+
 const applyPlanInput = z.object({
   accessToken: z.string().min(1),
   plan: z.enum(["starter", "predictable", "pro"]),
@@ -208,11 +219,14 @@ export const applyPricingPlan = createServerFn({ method: "POST" })
 // ─── getActivePlan ────────────────────────────────────────────────────────
 
 export const getActivePlan = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => accessTokenOnly.parse(input))
+  .inputValidator((input: unknown) => readWithViewAsInput.parse(input))
   .handler(async ({ data }): Promise<RefillActivePlan> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, userId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
 
     const { data: row } = await sb
       .from("refill_pricing_plans")
@@ -238,11 +252,14 @@ export const getActivePlan = createServerFn({ method: "POST" })
 // ─── listInvoices ─────────────────────────────────────────────────────────
 
 export const listInvoices = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => accessTokenOnly.parse(input))
+  .inputValidator((input: unknown) => readWithViewAsInput.parse(input))
   .handler(async ({ data }): Promise<RefillInvoice[]> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, userId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
 
     const { data: rows, error } = await sb
       .from("refill_invoices")

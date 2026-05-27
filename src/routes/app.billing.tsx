@@ -44,6 +44,7 @@ import {
   type RefillPaymentMethodStatus,
   type RefillPricingPlan,
 } from "@/server/refill-billing";
+import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/billing")({
@@ -88,6 +89,14 @@ function BillingPage() {
   const [applyingPlan, setApplyingPlan] = useState<RefillPricingPlan | null>(null);
   const [redirecting, setRedirecting] = useState<"add" | "manage" | null>(null);
 
+  // v1.20: admin viewing-as plumbing — getActivePlan + listInvoices accept
+  // viewAsUserId. getPaymentMethodStatus is intentionally NOT opted-in;
+  // it touches Stripe and admin shouldn't be inadvertently observing the
+  // tenant's PM unless we explicitly choose to.
+  const membership = useTenantMembership();
+  const viewAsUserId =
+    membership.status === "tenant" ? membership.viewAsUserId : undefined;
+
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -98,8 +107,8 @@ function BillingPage() {
         return;
       }
       const [a, inv, pmStatus] = await Promise.all([
-        getActivePlan({ data: { accessToken: token } }),
-        listInvoices({ data: { accessToken: token } }),
+        getActivePlan({ data: { accessToken: token, viewAsUserId } }),
+        listInvoices({ data: { accessToken: token, viewAsUserId } }),
         // Card lookup hits Stripe — keep it best-effort so a Stripe outage
         // doesn't take down the rest of the billing page.
         getPaymentMethodStatus({ data: { accessToken: token } }).catch(
@@ -115,7 +124,7 @@ function BillingPage() {
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [viewAsUserId]);
 
   useEffect(() => {
     void load();

@@ -52,6 +52,7 @@ import {
   listRecommendations,
   type Recommendation,
 } from "@/server/emma-intelligence.functions";
+import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/refill/rescue")({
@@ -75,6 +76,16 @@ function RescuePage() {
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [recBusyId, setRecBusyId] = useState<string | null>(null);
 
+  // v1.20: admin viewing-as plumbing — listWaitlist accepts viewAsUserId.
+  // The other three fns in the parallel batch (listRescueActivity,
+  // listPatternAlerts, listRecommendations) are scoped to user_id today
+  // but not in the v1.20 priority-5 opt-in surface; they'll see the
+  // admin's own (empty) rows. Acceptable for this ship — the waitlist
+  // table is the load-bearing surface on this page.
+  const membership = useTenantMembership();
+  const viewAsUserId =
+    membership.status === "tenant" ? membership.viewAsUserId : undefined;
+
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -86,7 +97,7 @@ function RescuePage() {
       }
       const [act, wait, pat, recs] = await Promise.all([
         listRescueActivity({ data: { accessToken: token } }),
-        listWaitlist({ data: { accessToken: token } }),
+        listWaitlist({ data: { accessToken: token, viewAsUserId } }),
         listPatternAlerts({ data: { accessToken: token } }),
         listRecommendations({ data: { accessToken: token } }),
       ]);
@@ -100,7 +111,7 @@ function RescuePage() {
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [viewAsUserId]);
 
   async function applyRec(rec: Recommendation) {
     setRecBusyId(rec.id);

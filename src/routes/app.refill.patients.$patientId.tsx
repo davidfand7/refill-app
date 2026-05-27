@@ -47,6 +47,7 @@ import type {
   ProductKind,
   ProductManufacturer,
 } from "@/lib/product-manufacturer-map";
+import { useTenantMembership } from "@/lib/use-tenant-membership";
 
 export const Route = createFileRoute("/app/refill/patients/$patientId")({
   component: PatientDetailPage,
@@ -61,7 +62,13 @@ function PatientDetailPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [windowMode, setWindowMode] = useState<Window>("12mo");
 
+  // v1.20 admin viewing-as: see app.refill.patients.index.tsx for pattern.
+  const membership = useTenantMembership();
+  const viewAsUserId =
+    membership.status === "tenant" ? membership.viewAsUserId : undefined;
+
   useEffect(() => {
+    if (membership.status === "loading") return;
     let cancelled = false;
     void (async () => {
       try {
@@ -75,7 +82,7 @@ function PatientDetailPage() {
           return;
         }
         const detail = await getPatientById({
-          data: { accessToken: token, patientId },
+          data: { accessToken: token, patientId, viewAsUserId },
         });
         if (!cancelled) {
           setData(detail);
@@ -92,7 +99,7 @@ function PatientDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [patientId]);
+  }, [patientId, membership.status, viewAsUserId]);
 
   return (
     <div className="flex flex-col min-h-screen bg-white">

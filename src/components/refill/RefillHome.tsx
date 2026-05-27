@@ -98,7 +98,10 @@ export function RefillHome() {
         </div>
 
         <SectionLabel>Live</SectionLabel>
-        <LiveRecoveryFeed accessToken={session.access_token} />
+        <LiveRecoveryFeed
+          accessToken={session.access_token}
+          viewAsUserId={membership.viewAsUserId}
+        />
       </div>
     </div>
   );

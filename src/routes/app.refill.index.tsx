@@ -251,7 +251,15 @@ function OverdueTodayCard() {
   const [preview, setPreview] = useState<OverduePatient[] | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // v1.20: admin viewing-as plumbing. summarizeOverdueCohort is not in
+  // the priority-5 opt-in surface so it still shows the admin's empty
+  // cohort; listOverduePatients (the surfaced list) is correct.
+  const membership = useTenantMembership();
+  const viewAsUserId =
+    membership.status === "tenant" ? membership.viewAsUserId : undefined;
+
   useEffect(() => {
+    if (membership.status === "loading") return;
     let cancelled = false;
     void (async () => {
       try {
@@ -263,7 +271,9 @@ function OverdueTodayCard() {
         }
         const [s, list] = await Promise.all([
           summarizeOverdueCohort({ data: { accessToken: token } }),
-          listOverduePatients({ data: { accessToken: token, limit: 5 } }),
+          listOverduePatients({
+            data: { accessToken: token, limit: 5, viewAsUserId },
+          }),
         ]);
         if (!cancelled) {
           setSummary(s);
@@ -277,7 +287,7 @@ function OverdueTodayCard() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [membership.status, viewAsUserId]);
 
   if (loading) {
     return (

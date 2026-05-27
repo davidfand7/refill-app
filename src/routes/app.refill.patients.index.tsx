@@ -46,6 +46,7 @@ import {
   type WaitlistEntry,
 } from "@/server/emma-waitlist.functions";
 import type { ProductManufacturer } from "@/lib/product-manufacturer-map";
+import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { cn } from "@/lib/utils";
 
 const patientsSearchSchema = z.object({
@@ -123,7 +124,19 @@ function PatientsPage() {
     });
   }
 
+  // v1.20: admin viewing-as plumbing. When the membership hook returns
+  // viewAs="admin", carry the impersonated tenant-owner's user_id through
+  // to every spa-owner server fn so they filter that tenant's rows
+  // instead of the admin's empty set.
+  const membership = useTenantMembership();
+  const viewAsUserId =
+    membership.status === "tenant" ? membership.viewAsUserId : undefined;
+
   useEffect(() => {
+    // Wait for membership resolution before firing the data fetch — we
+    // need viewAsUserId for the admin-bypass case, and firing too early
+    // would lock in the wrong user scope until a refresh.
+    if (membership.status === "loading") return;
     let cancelled = false;
     void (async () => {
       try {
@@ -138,9 +151,11 @@ function PatientsPage() {
         // a map keyed by patient_node_id so the row can read both in O(1).
         // v385: waitlist join is what powers the per-row waitlist toggle.
         const [list, overdue, waitlist] = await Promise.all([
-          listPatients({ data: { accessToken: token } }),
-          listOverduePatients({ data: { accessToken: token, limit: 5000 } }),
-          listWaitlist({ data: { accessToken: token } }),
+          listPatients({ data: { accessToken: token, viewAsUserId } }),
+          listOverduePatients({
+            data: { accessToken: token, limit: 5000, viewAsUserId },
+          }),
+          listWaitlist({ data: { accessToken: token, viewAsUserId } }),
         ]);
         if (!cancelled) {
           setRows(list);
@@ -156,7 +171,7 @@ function PatientsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [membership.status, viewAsUserId]);
 
   // v385: toggle a patient's waitlist membership. Optimistic UI — the
   // toggle flips immediately, the server fn fires in the background, and

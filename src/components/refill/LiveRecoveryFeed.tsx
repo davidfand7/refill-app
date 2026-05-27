@@ -30,6 +30,10 @@ import {
 
 type Props = {
   accessToken: string;
+  /** v1.20: when set + caller is admin, fetch the impersonated tenant's
+   *  recovery feed instead of the admin's empty set. Pass through from
+   *  useTenantMembership.viewAsUserId. */
+  viewAsUserId?: string;
 };
 
 const ZERO: TenantRecoveryTotals = {
@@ -40,7 +44,7 @@ const ZERO: TenantRecoveryTotals = {
   eventCountLifetime: 0,
 };
 
-export function LiveRecoveryFeed({ accessToken }: Props) {
+export function LiveRecoveryFeed({ accessToken, viewAsUserId }: Props) {
   const [totals, setTotals] = useState<TenantRecoveryTotals>(ZERO);
   const [recent, setRecent] = useState<TenantRecoveryEvent[]>([]);
   const [tenantUserIds, setTenantUserIds] = useState<string[]>([]);
@@ -54,7 +58,9 @@ export function LiveRecoveryFeed({ accessToken }: Props) {
 
     const load = async () => {
       try {
-        const r = await getMyTenantRecoveryFeed({ data: { accessToken } });
+        const r = await getMyTenantRecoveryFeed({
+          data: { accessToken, viewAsUserId },
+        });
         if (cancelled) return;
         setTotals(r.totals);
         setRecent(r.recent);
@@ -69,7 +75,7 @@ export function LiveRecoveryFeed({ accessToken }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [accessToken]);
+  }, [accessToken, viewAsUserId]);
 
   // Stage 2: subscribe to emma_recovery_events for each user_id on this
   // tenant. Realtime postgres_changes doesn't take an array filter directly,
@@ -83,7 +89,9 @@ export function LiveRecoveryFeed({ accessToken }: Props) {
 
     const refetch = async () => {
       try {
-        const r = await getMyTenantRecoveryFeed({ data: { accessToken } });
+        const r = await getMyTenantRecoveryFeed({
+          data: { accessToken, viewAsUserId },
+        });
         setTotals(r.totals);
         setRecent(r.recent);
       } catch {
@@ -120,7 +128,7 @@ export function LiveRecoveryFeed({ accessToken }: Props) {
         void supabase.removeChannel(ch);
       }
     };
-  }, [accessToken, tenantUserIds]);
+  }, [accessToken, tenantUserIds, viewAsUserId]);
 
   return (
     <div

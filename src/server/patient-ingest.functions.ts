@@ -26,7 +26,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import type { Database, Json } from "@/integrations/supabase/types";
-import { verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 import {
   parsePatientDetailCsv,
   rollupPatientSummary,
@@ -176,16 +176,21 @@ const ingestInput = z.object({
 const listInput = z.object({
   accessToken: z.string().min(1),
   limit: z.number().int().min(1).max(2000).optional(),
+  /** v1.20 admin viewing-as: when set + caller is admin, fetch this
+   *  user's patients instead of the caller's. See resolveEffectiveUserId. */
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const getInput = z.object({
   accessToken: z.string().min(1),
   normalizedName: z.string().min(1).max(240),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const getByIdInput = z.object({
   accessToken: z.string().min(1),
   patientId: z.string().uuid(),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const overdueInput = z.object({
@@ -198,6 +203,7 @@ const overdueInput = z.object({
   limit: z.number().int().min(1).max(10000).optional(),
   /** Filter by kind — null/undefined returns all kinds. */
   kind: z.enum(["toxin", "filler", "biostimulator"]).optional(),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 // ─── Hydration helpers ─────────────────────────────────────────────────────
@@ -617,13 +623,16 @@ export const setPatientVip = createServerFn({ method: "POST" })
 export const listPatients = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => listInput.parse(input))
   .handler(async ({ data }): Promise<PatientListRow[]> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
     const limit = data.limit ?? 2000;
     const { data: rows, error } = await sb
       .from("knowledge_nodes")
       .select("*")
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .eq("node_type", "patient")
       .eq("context", "patients")
       .order("updated_at", { ascending: false })
@@ -637,12 +646,15 @@ export const listPatients = createServerFn({ method: "POST" })
 export const getPatientByKey = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => getInput.parse(input))
   .handler(async ({ data }): Promise<PatientDetail | null> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
     const { data: node, error: nodeErr } = await sb
       .from("knowledge_nodes")
       .select("*")
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .eq("node_type", "patient")
       .eq("context", "patients")
       .eq("lookup_key", data.normalizedName)
@@ -653,7 +665,7 @@ export const getPatientByKey = createServerFn({ method: "POST" })
     const { data: txns, error: txnErr } = await sb
       .from("patient_transactions")
       .select("*")
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .eq("patient_node_id", node.id)
       .order("transaction_date", { ascending: false })
       .order("line_index", { ascending: true });
@@ -670,12 +682,15 @@ export const getPatientByKey = createServerFn({ method: "POST" })
 export const getPatientById = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => getByIdInput.parse(input))
   .handler(async ({ data }): Promise<PatientDetail | null> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
     const { data: node, error: nodeErr } = await sb
       .from("knowledge_nodes")
       .select("*")
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .eq("id", data.patientId)
       .eq("node_type", "patient")
       .eq("context", "patients")
@@ -693,7 +708,7 @@ export const getPatientById = createServerFn({ method: "POST" })
       const { data: chunk, error: txnErr } = await sb
         .from("patient_transactions")
         .select("*")
-        .eq("user_id", userId)
+        .eq("user_id", effectiveUserId)
         .eq("patient_node_id", node.id)
         .order("transaction_date", { ascending: false })
         .order("line_index", { ascending: true })
@@ -728,9 +743,12 @@ export const getPatientById = createServerFn({ method: "POST" })
 export const listOverduePatients = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => overdueInput.parse(input))
   .handler(async ({ data }): Promise<OverduePatient[]> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
-    return doListOverdue(sb, userId, data.limit ?? 100, data.kind ?? null);
+    return doListOverdue(sb, effectiveUserId, data.limit ?? 100, data.kind ?? null);
   });
 
 export const summarizeOverdueCohort = createServerFn({ method: "POST" })

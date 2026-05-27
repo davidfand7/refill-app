@@ -27,7 +27,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
-import { verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -151,6 +151,8 @@ const revokeInput = z.object({
 
 const listInput = z.object({
   accessToken: z.string().min(1),
+  /** v1.20 admin viewing-as. See [[resolveEffectiveUserId]]. */
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const markPatientInput = z.object({
@@ -337,7 +339,10 @@ export const revokeWaitlistOptIn = createServerFn({ method: "POST" })
 export const listWaitlist = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => listInput.parse(input))
   .handler(async ({ data }): Promise<WaitlistEntry[]> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     const { data: rows, error } = await sb
@@ -345,7 +350,7 @@ export const listWaitlist = createServerFn({ method: "POST" })
       .select(
         "id, patient_node_id, treatment_types, preferred_providers, status, opt_in_source, opted_in_at, revoked_at",
       )
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .order("opted_in_at", { ascending: false })
       .limit(500);
     if (error) throw new Error(`Couldn't load waitlist: ${error.message}`);

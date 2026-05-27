@@ -32,9 +32,21 @@ import { useAuth } from "@/lib/auth";
 import { getFirstTenantForAdmin, getMyTenant, type MyTenant } from "@/server/refill-tenants";
 
 export type TenantMembershipState =
-  | { status: "loading"; tenant: null; viewAs?: never }
-  | { status: "not-a-tenant"; tenant: null; viewAs?: never }
-  | { status: "tenant"; tenant: MyTenant; viewAs?: "admin" };
+  | { status: "loading"; tenant: null; viewAs?: never; viewAsUserId?: never }
+  | { status: "not-a-tenant"; tenant: null; viewAs?: never; viewAsUserId?: never }
+  | {
+      status: "tenant";
+      tenant: MyTenant;
+      viewAs?: "admin";
+      /**
+       * v1.20: when viewAs === "admin", this carries the impersonated
+       * tenant-owner's user_id. Pages plumb this through to server fns as
+       * the optional `viewAsUserId` parameter so spa-owner data fetchers
+       * filter the target tenant's rows instead of the admin's empty set.
+       * Undefined when viewAs is not set (the membership is real).
+       */
+      viewAsUserId?: string;
+    };
 
 const LOADING: TenantMembershipState = { status: "loading", tenant: null };
 const NOT_A_TENANT: TenantMembershipState = {
@@ -112,12 +124,17 @@ export function useTenantMembership(): TenantMembershipState {
         // NOT_A_TENANT — no infinite loop, no thrown error to caller.
         if (primaryRole === "admin") {
           try {
-            const { tenant } = await getFirstTenantForAdmin({
+            const { tenant, ownerUserId } = await getFirstTenantForAdmin({
               data: { accessToken },
             });
             if (cancelled) return;
             if (tenant) {
-              setState({ status: "tenant", tenant, viewAs: "admin" });
+              setState({
+                status: "tenant",
+                tenant,
+                viewAs: "admin",
+                viewAsUserId: ownerUserId ?? undefined,
+              });
               return;
             }
           } catch {

@@ -30,7 +30,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
-import { verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 import { validateReferralToken } from "@/server/referral-tokens";
 
 // ─── reserved slugs ──────────────────────────────────────────────────────
@@ -270,6 +270,13 @@ const myTenantInput = z.object({
   accessToken: z.string().min(1),
 });
 
+// v1.20 admin viewing-as variant for read fns that need to fan-out across
+// the impersonated tenant. Used by getMyTenantRecoveryFeed.
+const myTenantWithViewAsInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+});
+
 export type MyTenant = {
   id: string;
   slug: string;
@@ -339,45 +346,62 @@ const adminFallbackInput = z.object({
 
 export const getFirstTenantForAdmin = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => adminFallbackInput.parse(raw))
-  .handler(async ({ data }): Promise<{ tenant: MyTenant | null }> => {
-    const userId = await verifyAuth(data.accessToken);
-    const sb = admin();
-    // Gate: caller must be admin. We don't trust the client-side primaryRole
-    // signal here — re-verify against user_roles server-side.
-    const { data: roles, error: roleErr } = await sb
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .eq("role", "admin")
-      .maybeSingle();
-    if (roleErr) {
-      throw new Error(`Couldn't verify admin: ${roleErr.message}`);
-    }
-    if (!roles) {
-      throw new Error("Admin only.");
-    }
-    // Return first tenant (oldest by created_at for stable selection).
-    const { data: row, error: tenErr } = await sb
-      .from("tenants")
-      .select("id, slug, name, trial_ends_at, plan, is_demo")
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (tenErr) {
-      throw new Error(`Couldn't load tenants: ${tenErr.message}`);
-    }
-    if (!row) return { tenant: null };
-    return {
-      tenant: {
-        id: row.id,
-        slug: row.slug,
-        name: row.name,
-        trialEndsAt: row.trial_ends_at,
-        plan: row.plan,
-        isDemo: row.is_demo ?? false,
-      },
-    };
-  });
+  .handler(
+    async ({
+      data,
+    }): Promise<{ tenant: MyTenant | null; ownerUserId: string | null }> => {
+      const userId = await verifyAuth(data.accessToken);
+      const sb = admin();
+      // Gate: caller must be admin. We don't trust the client-side primaryRole
+      // signal here — re-verify against user_roles server-side.
+      const { data: roles, error: roleErr } = await sb
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "admin")
+        .maybeSingle();
+      if (roleErr) {
+        throw new Error(`Couldn't verify admin: ${roleErr.message}`);
+      }
+      if (!roles) {
+        throw new Error("Admin only.");
+      }
+      // Return first tenant (oldest by created_at for stable selection).
+      const { data: row, error: tenErr } = await sb
+        .from("tenants")
+        .select("id, slug, name, trial_ends_at, plan, is_demo")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (tenErr) {
+        throw new Error(`Couldn't load tenants: ${tenErr.message}`);
+      }
+      if (!row) return { tenant: null, ownerUserId: null };
+      // v1.20: also return the owner user_id so the client can plumb
+      // viewAsUserId through to spa-owner server fns. Prefer the 'owner'
+      // role row; fall back to any membership row if the role enum hasn't
+      // been populated (early-migration safety).
+      const { data: ownerRow } = await sb
+        .from("tenant_memberships")
+        .select("user_id, role")
+        .eq("tenant_id", row.id)
+        .order("created_at", { ascending: true })
+        .limit(50);
+      const owner =
+        (ownerRow ?? []).find((r) => r.role === "owner") ?? (ownerRow ?? [])[0];
+      return {
+        tenant: {
+          id: row.id,
+          slug: row.slug,
+          name: row.name,
+          trialEndsAt: row.trial_ends_at,
+          plan: row.plan,
+          isDemo: row.is_demo ?? false,
+        },
+        ownerUserId: owner?.user_id ?? null,
+      };
+    },
+  );
 
 // ─── getMyTenantRecoveryFeed (v410.4) ────────────────────────────────────
 //
@@ -410,7 +434,7 @@ export type TenantRecoveryTotals = {
 };
 
 export const getMyTenantRecoveryFeed = createServerFn({ method: "POST" })
-  .inputValidator((raw: unknown) => myTenantInput.parse(raw))
+  .inputValidator((raw: unknown) => myTenantWithViewAsInput.parse(raw))
   .handler(
     async ({
       data,
@@ -419,7 +443,10 @@ export const getMyTenantRecoveryFeed = createServerFn({ method: "POST" })
       totals: TenantRecoveryTotals;
       recent: TenantRecoveryEvent[];
     }> => {
-      const userId = await verifyAuth(data.accessToken);
+      const { effectiveUserId } = await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
       const sb = admin();
 
       // Resolve the user's tenant + fan-out to all user_ids on that tenant.
@@ -428,7 +455,7 @@ export const getMyTenantRecoveryFeed = createServerFn({ method: "POST" })
       const { data: myMembership, error: memErr } = await sb
         .from("tenant_memberships")
         .select("tenant_id")
-        .eq("user_id", userId)
+        .eq("user_id", effectiveUserId)
         .maybeSingle();
       if (memErr) {
         throw new Error(`Couldn't load tenant membership: ${memErr.message}`);
