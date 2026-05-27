@@ -37,13 +37,13 @@ import {
   applyPricingPlan,
   getActivePlan,
   getPlanEconomics,
-  listInvoices,
   type ActivePlan,
-  type Invoice,
   type PricingPlan,
 } from "@/server/emma-billing.functions";
 import {
   getPaymentMethodStatus,
+  listInvoices,
+  type RefillInvoice,
   type RefillPaymentMethodStatus,
 } from "@/server/refill-billing";
 import { cn } from "@/lib/utils";
@@ -78,7 +78,7 @@ const PLAN_META: Record<
 
 function BillingPage() {
   const [active, setActive] = useState<ActivePlan>(null);
-  const [invoices, setInvoices] = useState<Invoice[] | null>(null);
+  const [invoices, setInvoices] = useState<RefillInvoice[] | null>(null);
   const [pm, setPm] = useState<RefillPaymentMethodStatus | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -596,7 +596,20 @@ function formatBrand(b: string | null): string {
 
 // ─── Invoice row ──────────────────────────────────────────────────────────
 
-function InvoiceRow({ invoice }: { invoice: Invoice }) {
+// v1.7.2: refill-billing's RefillInvoice.planAtInvoice is
+// "starter" | "predictable" | "pro" while the UI's PLAN_META keys on the
+// emma-era names "performance" | "predictable" | "hybrid". Map at render
+// time so the table cell renders the right label. Proper unification lives
+// in a future ship that migrates app.billing.tsx fully off emma-billing.
+function refillPlanToUiPlan(
+  p: RefillInvoice["planAtInvoice"],
+): PricingPlan {
+  if (p === "starter") return "performance";
+  if (p === "pro") return "hybrid";
+  return "predictable";
+}
+
+function InvoiceRow({ invoice }: { invoice: RefillInvoice }) {
   const start = new Date(invoice.periodStart);
   const periodLabel = start.toLocaleString("en-US", {
     month: "long",
@@ -611,7 +624,7 @@ function InvoiceRow({ invoice }: { invoice: Invoice }) {
         </div>
       </td>
       <td className="px-3 py-3 text-left text-xs text-ink-soft">
-        {PLAN_META[invoice.planAtInvoice].label}
+        {PLAN_META[refillPlanToUiPlan(invoice.planAtInvoice)].label}
       </td>
       <td className="px-3 py-3 text-right tabular-nums">
         <div>${invoice.recoveredRevenueUsd.toLocaleString()}</div>
@@ -644,9 +657,9 @@ function InvoiceRow({ invoice }: { invoice: Invoice }) {
   );
 }
 
-function InvoiceStatusPill({ status }: { status: Invoice["status"] }) {
+function InvoiceStatusPill({ status }: { status: RefillInvoice["status"] }) {
   const cfg: Record<
-    Invoice["status"],
+    RefillInvoice["status"],
     { bg: string; fg: string; label: string }
   > = {
     draft: { bg: "bg-muted/40", fg: "text-ink-soft", label: "Draft" },

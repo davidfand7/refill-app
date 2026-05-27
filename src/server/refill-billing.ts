@@ -519,7 +519,7 @@ export async function generateMonthlyInvoiceForTenant(args: {
           // from being double-pulled into new invoices. The _v2 suffix
           // on idempotency keys ensures Stripe doesn't replay v1.7's
           // cached (bad) responses within the 24h idempotency window.
-          const idempotencyKey = `refill_inv_${tenantId}_${periodStart.toISOString().slice(0, 10)}_v2`;
+          const idempotencyKey = `refill_inv_${tenantId}_${periodStart.toISOString().slice(0, 10)}_v3`;
 
           // 1. Create the invoice as a draft, scoped to no items yet.
           const stripeInvoice = await stripe.invoices.create(
@@ -556,26 +556,35 @@ export async function generateMonthlyInvoiceForTenant(args: {
             { idempotencyKey: `${idempotencyKey}_item` },
           );
 
-          // 3. Finalize triggers the charge attempt synchronously. The
-          //    returned invoice carries the final status — "paid" if the
-          //    card went through on the first attempt, "open" if Stripe is
-          //    still working on it, "uncollectible" / "void" on hard failure.
-          const finalized = await stripe.invoices.finalizeInvoice(
-            stripeInvoice.id,
-          );
+          // 3. Finalize → "open" status. Does NOT auto-charge on its own
+          //    because we created the invoice with auto_advance:false (so
+          //    we could control item-add timing without Stripe racing us
+          //    on an empty $0 invoice). The actual charge attempt is the
+          //    explicit pay() call below.
+          await stripe.invoices.finalizeInvoice(stripeInvoice.id);
 
-          // 4. Stamp back on the DB row. Status "sent" reflects "we pushed
-          //    to Stripe" — webhook-driven "paid"/"failed" flips come in a
-          //    later ship; for now Karen can verify final status via Manage
-          //    (Stripe Customer Portal) which shows the truthful state.
+          // 4. v1.7.2 fix: explicitly attempt the charge. Without this,
+          //    the invoice sits at "open" + "past due" because
+          //    auto_advance:false told Stripe NOT to advance automatically.
+          //    pay() pulls from default_payment_method synchronously and
+          //    returns the resulting invoice — "paid" on success, throws
+          //    on hard card decline (caught by outer try/catch; DB stays
+          //    at draft, next cron retries).
+          const paid = await stripe.invoices.pay(stripeInvoice.id);
+
+          // 5. Stamp back on the DB row using paid.status, the truthful
+          //    result of the charge attempt. Webhook-driven flips for any
+          //    edge case (e.g. delayed-confirmation payment methods) are
+          //    Phase B-full's job; for card-on-file flow, pay() returns
+          //    "paid" synchronously when the charge clears.
           await sb
             .from("refill_invoices")
             .update({
-              stripe_invoice_id: finalized.id,
-              status: finalized.status === "paid" ? "paid" : "sent",
+              stripe_invoice_id: paid.id,
+              status: paid.status === "paid" ? "paid" : "sent",
               sent_at: new Date().toISOString(),
               paid_at:
-                finalized.status === "paid" ? new Date().toISOString() : null,
+                paid.status === "paid" ? new Date().toISOString() : null,
             })
             .eq("id", invRow.id);
         }

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.7.2",
+    date: "May 2026",
+    items: [
+      "<strong>v1.7.2 &mdash; auto-charge + Invoice History UI fix (closes the Phase B-lite loop).</strong> The v1.7.1 walk surfaced two remaining gaps that v1.7.2 closes in one ship. <strong>(1) Engine gap &mdash; auto-charge:</strong> v1.7.1 created the Stripe Invoice with the correct $421.80 line item and called <code>finalizeInvoice</code>, but the invoice landed at <code>open</code> + <code>past_due</code> instead of <code>paid</code>. Diagnosis: I set <code>auto_advance:false</code> at invoice creation (correct &mdash; so I could add the InvoiceItem before Stripe raced me on a $0 empty invoice) but never flipped it back, so <code>finalizeInvoice</code> moved status to <code>open</code> without attempting the charge. Fix: explicit <code>stripe.invoices.pay(stripeInvoice.id)</code> call after finalize, returns the invoice with the charge attempted synchronously. The DB stamp now uses <code>paid.status</code> (the truthful post-charge result) instead of <code>finalized.status</code> (which was always non-paid because of the auto_advance flag). Idempotency key suffix bumped to <code>_v3</code> so v1.7.1&rsquo;s cached non-pay responses in Stripe&rsquo;s 24h idempotency window don&rsquo;t replay. <strong>(2) UX gap &mdash; Invoice History visibility:</strong> <code>/app/billing</code>&rsquo;s Invoice History table was empty even after v1.7.1 successfully wrote a <code>refill_invoices</code> row, because <code>app.billing.tsx</code> imported <code>listInvoices</code> from <code>emma-billing.functions.ts</code> (legacy user-scoped, reads <code>emma_invoices</code>) while the cron writes to <code>refill_invoices</code> (newer tenant-scoped). Same emma&harr;refill fork that bit the plans path. Fix: switched <code>listInvoices</code> + the related <code>Invoice</code>/<code>RefillInvoice</code> type usages to import from <code>refill-billing.ts</code>; added <code>refillPlanToUiPlan</code> mapper (<code>starter</code>&rarr;<code>performance</code>, <code>pro</code>&rarr;<code>hybrid</code>, <code>predictable</code> passthrough) at <code>InvoiceRow</code> render time so the plan-label cell uses the existing <code>PLAN_META</code> keyed on the emma-era names. The deeper emma&harr;refill unification (plans + active-plan banner + getActivePlan) stays on the backlog &mdash; not load-bearing for this ship. Touched: <code>src/server/refill-billing.ts</code> (pay() call + key suffix bump), <code>src/routes/app.billing.tsx</code> (imports + type aliases + plan-name mapper).",
+    ],
+  },
+  {
     version: "v1.7.1",
     date: "May 2026",
     items: [
