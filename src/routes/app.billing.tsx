@@ -246,7 +246,12 @@ function BillingPage() {
             type="button"
             onClick={() => void load()}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 text-xs text-ink-soft hover:text-foreground rounded-full border border-border px-3 py-1.5 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 text-[12px] font-semibold rounded-full px-3 py-1.5 transition disabled:opacity-50"
+            style={{
+              background: "transparent",
+              color: "#5a6068",
+              border: "1px solid #e6e2d6",
+            }}
           >
             <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
             Refresh
@@ -263,12 +268,12 @@ function BillingPage() {
 
         {/* Active plan banner */}
         {active && (
-          <div className="rounded-2xl border border-primary/30 bg-primary/5 p-5 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center shrink-0">
+          <div className="rounded-xl border border-emerald/30 bg-emerald-soft p-5 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-full bg-emerald text-paper flex items-center justify-center shrink-0">
               <CheckCircle2 className="h-5 w-5" />
             </div>
             <div className="flex-1">
-              <div className="text-xs font-medium tracking-wider text-primary uppercase mb-0.5">
+              <div className="text-[11px] font-semibold text-emerald mb-0.5">
                 Active plan
               </div>
               <div className="text-base font-semibold text-foreground">
@@ -288,7 +293,7 @@ function BillingPage() {
         )}
 
         {!active && !loadError && (
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
+          <div className="rounded-xl border border-amber/30 bg-amber-soft p-5">
             <h2 className="text-base font-semibold text-foreground mb-1">
               No active plan yet
             </h2>
@@ -310,7 +315,7 @@ function BillingPage() {
 
         {/* Plan selector */}
         <section>
-          <h2 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wider">
+          <h2 className="text-[15px] font-semibold text-foreground mb-3">
             Pick your plan
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -329,7 +334,7 @@ function BillingPage() {
 
         {/* Invoice history */}
         <section>
-          <h2 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wider">
+          <h2 className="text-[15px] font-semibold text-foreground mb-3">
             Invoice history
           </h2>
           {invoices === null ? (
@@ -338,7 +343,7 @@ function BillingPage() {
               Loading…
             </div>
           ) : invoices.length === 0 ? (
-            <div className="rounded-2xl border border-border bg-card p-8 text-center">
+            <div className="rounded-xl border border-border bg-card p-8 text-center">
               <div className="mx-auto h-12 w-12 rounded-full bg-muted/40 flex items-center justify-center mb-3">
                 <FileText className="h-6 w-6 text-ink-soft" />
               </div>
@@ -349,7 +354,7 @@ function BillingPage() {
               </p>
             </div>
           ) : (
-            <div className="rounded-2xl border border-border bg-card overflow-hidden">
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-muted/30 text-[11px] font-medium tracking-wider text-ink-soft uppercase">
                   <tr>
@@ -409,9 +414,9 @@ function PlanCard({
   return (
     <div
       className={cn(
-        "rounded-2xl border bg-card p-5 flex flex-col gap-3 transition",
+        "rounded-xl border bg-card p-5 flex flex-col gap-3 transition",
         isActive
-          ? "border-primary bg-primary/5 shadow-sm"
+          ? "border-emerald bg-emerald-soft shadow-sm"
           : "border-border hover:border-foreground/30",
       )}
     >
@@ -419,16 +424,16 @@ function PlanCard({
         <div
           className={cn(
             "h-9 w-9 rounded-full flex items-center justify-center shrink-0",
-            meta.tone === "primary" && "bg-primary/15 text-primary",
+            meta.tone === "primary" && "bg-emerald-soft text-emerald",
             meta.tone === "neutral" && "bg-muted/40 text-foreground",
-            meta.tone === "amber" && "bg-amber-500/15 text-amber-700",
+            meta.tone === "amber" && "bg-amber-soft text-amber",
           )}
         >
           <Icon className="h-4 w-4" />
         </div>
         <h3 className="text-base font-semibold text-foreground">{meta.label}</h3>
         {isActive && (
-          <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[10px] font-semibold uppercase tracking-wider">
+          <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-soft text-emerald text-[10px] font-semibold uppercase tracking-wider">
             Active
           </span>
         )}
@@ -462,7 +467,7 @@ function PlanCard({
           "mt-auto inline-flex items-center justify-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold transition",
           isActive
             ? "bg-muted/40 text-ink-soft cursor-not-allowed"
-            : "bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50",
+            : "bg-emerald text-paper hover:opacity-90 disabled:opacity-50",
         )}
       >
         {applying ? (
@@ -503,7 +508,7 @@ function CardOnFileSection({
   // Loading state — keep the row compact so the page doesn't jump on hydrate.
   if (!pm) {
     return (
-      <div className="rounded-2xl border border-border bg-card p-5 flex items-center gap-3 text-sm text-ink-soft">
+      <div className="rounded-xl border border-border bg-card p-5 flex items-center gap-3 text-sm text-ink-soft">
         <Loader2 className="h-4 w-4 animate-spin shrink-0" />
         Checking card on file…
       </div>
@@ -512,12 +517,12 @@ function CardOnFileSection({
 
   if (pm.hasCardOnFile) {
     return (
-      <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5 flex items-center gap-3">
-        <div className="h-10 w-10 rounded-full bg-emerald-500/15 text-emerald-700 flex items-center justify-center shrink-0">
+      <div className="rounded-xl border border-emerald/30 bg-emerald-soft p-5 flex items-center gap-3">
+        <div className="h-10 w-10 rounded-full bg-emerald text-paper flex items-center justify-center shrink-0">
           <CreditCard className="h-5 w-5" />
         </div>
         <div className="flex-1">
-          <div className="text-xs font-medium tracking-wider text-emerald-700 uppercase mb-0.5">
+          <div className="text-[11px] font-semibold text-emerald mb-0.5">
             Card on file
           </div>
           <div className="text-base font-semibold text-foreground">
@@ -530,7 +535,7 @@ function CardOnFileSection({
             )}
           </div>
           {pm.stripeMode === "test" && (
-            <div className="text-[11px] text-amber-700 mt-1">
+            <div className="text-[11px] text-amber mt-1">
               Stripe test mode — no real charges
             </div>
           )}
@@ -553,7 +558,7 @@ function CardOnFileSection({
   }
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5 flex items-center gap-3">
+    <div className="rounded-xl border border-border bg-card p-5 flex items-center gap-3">
       <div className="h-10 w-10 rounded-full bg-muted/40 text-ink-soft flex items-center justify-center shrink-0">
         <CreditCard className="h-5 w-5" />
       </div>
@@ -570,7 +575,7 @@ function CardOnFileSection({
         type="button"
         onClick={onAdd}
         disabled={redirecting !== null}
-        className="inline-flex items-center gap-1.5 rounded-md bg-primary text-primary-foreground px-3.5 py-2 text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 rounded-md bg-emerald text-paper px-3.5 py-2 text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
       >
         {redirecting === "add" ? (
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -659,8 +664,8 @@ function InvoiceStatusPill({ status }: { status: RefillInvoice["status"] }) {
     { bg: string; fg: string; label: string }
   > = {
     draft: { bg: "bg-muted/40", fg: "text-ink-soft", label: "Draft" },
-    sent: { bg: "bg-amber-500/10", fg: "text-amber-700", label: "Sent" },
-    paid: { bg: "bg-emerald-500/10", fg: "text-emerald-700", label: "Paid" },
+    sent: { bg: "bg-amber-soft", fg: "text-amber", label: "Sent" },
+    paid: { bg: "bg-emerald-soft", fg: "text-emerald", label: "Paid" },
     failed: { bg: "bg-destructive/10", fg: "text-destructive", label: "Failed" },
     void: { bg: "bg-muted/40", fg: "text-ink-soft", label: "Void" },
   };
