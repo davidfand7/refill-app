@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.20.2",
+    date: "May 2026",
+    items: [
+      "<strong>v1.20.2 &mdash; Patients lifted into the chip nav as the first chip, mirroring the RefillHome quick-actions ordering.</strong> Grasshopper&rsquo;s consistency call: if Patients leads the home grid, it should lead the chip nav too. Chip bar grows from 4 to 5 (Patients / Recovery / Inbox / Settings / Billing). Trojan-horse rule narrative updated &mdash; the bar is still tight and still anchored to the no-show-recovery loop; patients are the underlying data anchor that everything else operates on, so it earns the chip. New chips beyond these 5 still signal platform ambition. <strong>Active-chip detection</strong>: <code>deriveActiveKey</code> in RefillShellChrome.tsx extended to map any path starting with <code>/app/refill/patients</code> &rarr; <code>patients</code> key (covers /patients, /patients/$patientId, /patients/import, /patients/contacts). <code>RefillNavKey</code> union extended to include &lsquo;patients&rsquo;. Touched: <code>src/components/refill/RefillNav.tsx</code> (Patients ITEM + RefillNavKey union + docblock), <code>src/components/refill/RefillShellChrome.tsx</code> (deriveActiveKey patients branch), <code>src/lib/changelog.ts</code> (this entry).",
+    ],
+  },
+  {
     version: "v1.20.1",
     date: "May 2026",
     items: [

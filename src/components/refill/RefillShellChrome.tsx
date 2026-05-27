@@ -29,6 +29,7 @@ import { applyTheme, getStoredTheme, type Theme } from "@/lib/theme";
 import type { MyTenant } from "@/server/refill-tenants";
 
 function deriveActiveKey(pathname: string): RefillNavKey | undefined {
+  if (pathname.startsWith("/app/refill/patients")) return "patients";
   if (pathname.startsWith("/app/refill/recovery")) return "recovery";
   if (pathname.startsWith("/app/refill/inbox")) return "inbox";
   if (pathname.startsWith("/app/refill/settings")) return "settings";

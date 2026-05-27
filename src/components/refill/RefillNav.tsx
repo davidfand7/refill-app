@@ -1,11 +1,13 @@
 /**
  * RefillNav — horizontal chip nav for the Refill standalone shell (v410).
  *
- * Per [[project-refill-trojan-horse-thesis]]: this stays narrow forever.
- * 4 chips, no more. Refill is a single-feature widget — recovery, replies
- * to recovery, settings for recovery, and the bill. Adding more chips
- * would signal platform ambition and break the stealth positioning that
- * keeps incumbent PMS players from waking up to us.
+ * Per [[project-refill-trojan-horse-thesis]]: stays narrow. v1.20.2 lifted
+ * Patients into the chip bar as the first chip to match the RefillHome
+ * quick-actions ordering (Patients leads). The chip bar is still tight
+ * (5 chips) and stays anchored to the no-show-recovery loop — patients
+ * are the underlying data anchor that everything else operates on, so
+ * it earns its place. New chips beyond these 5 still signal platform
+ * ambition and would break the stealth positioning.
  *
  * Same component shape as RepNav so the visual identity reads "sibling
  * product" — Refill chrome is family with the Rep platform chrome, not
@@ -14,7 +16,12 @@
 
 import { Link } from "@tanstack/react-router";
 
-export type RefillNavKey = "recovery" | "inbox" | "settings" | "billing";
+export type RefillNavKey =
+  | "patients"
+  | "recovery"
+  | "inbox"
+  | "settings"
+  | "billing";
 
 type RefillNavItem = {
   key: RefillNavKey;
@@ -24,6 +31,7 @@ type RefillNavItem = {
 };
 
 const ITEMS: RefillNavItem[] = [
+  { key: "patients", to: "/app/refill/patients",          label: "Patients", shortLabel: "Patients" },
   { key: "recovery", to: "/app/refill/recovery",           label: "Recovery", shortLabel: "Recovery" },
   { key: "inbox",    to: "/app/refill/inbox",              label: "Inbox",    shortLabel: "Inbox" },
   { key: "settings", to: "/app/refill/settings/scheduler", label: "Settings", shortLabel: "Settings" },
