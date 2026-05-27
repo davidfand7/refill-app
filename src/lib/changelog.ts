@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.20.1",
+    date: "May 2026",
+    items: [
+      "<strong>v1.20.1 &mdash; Patients surfaced as the lead quick-action card on RefillHome.</strong> Pack v1 outreach templates imported (12 spa templates live in <code>/app/admin/outreach</code>). Next sweep: /app/refill/patients had ZERO discoverability from the rest of the app &mdash; only reachable via direct URL or breadcrumb back-links from /patients/$patientId and /patients/import. Now it leads the RefillHome quick-actions grid (above Recovery / Inbox / Settings / Billing) using the lucide Users icon, subtitle &lsquo;Your roster, cadence, and waitlist&rsquo;. <strong>Why first, not last</strong>: patients are the underlying data anchor &mdash; everything Refill does (recovery, replies, billing splits) flows from the patient roster. Karen&rsquo;s mental model is &lsquo;here are my people, here&rsquo;s what&rsquo;s being done with their cadence.&rsquo; Patients-first ordering matches that. <strong>Trojan-horse rule preserved</strong>: chip nav stays 4-locked (Recovery / Inbox / Settings / Billing). The quick-actions grid is explicitly the soft discoverability surface for routes that exist behind narrow chrome but shouldn&rsquo;t bloat the chip bar. Grid bumped from <code>lg:grid-cols-4</code> to <code>lg:grid-cols-5</code> so 5 cards render symmetrically at desktop; sm:grid-cols-2 stays (5 cards = 2+2+1 with last card wrapping &mdash; acceptable on tablet). <strong>Banner copy refresh</strong>: <code>RefillShellChrome</code>&rsquo;s admin viewing-as banner copy still said &lsquo;Cross-tenant data-view is queued v1.20+.&rsquo; That line shipped 8 hours ago in v1.20 &mdash; updated to reflect what actually works now (read fetchers on patients/waitlist/recovery/billing return the impersonated tenant&rsquo;s data; writes still scope to caller&rsquo;s user_id). Touched: <code>src/components/refill/RefillHome.tsx</code> (Users icon import, Patients QuickAction added as first entry, docblock updated, grid-cols bumped), <code>src/components/refill/RefillShellChrome.tsx</code> (banner copy refresh), <code>src/lib/changelog.ts</code> (this entry).",
+    ],
+  },
+  {
     version: "v1.20",
     date: "May 2026",
     items: [

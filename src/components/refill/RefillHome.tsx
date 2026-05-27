@@ -12,7 +12,11 @@
  *
  * Three regions:
  *   1. Hero — "Hey {firstName}." + short tagline
- *   2. Quick actions grid — 4 cards: Recovery / Inbox / Settings / Billing
+ *   2. Quick actions grid — 5 cards: Patients / Recovery / Inbox / Settings /
+ *      Billing. Patients leads (the underlying data anchor), followed by the
+ *      4 chip-nav surfaces. v1.20.1 added the Patients card — chip nav
+ *      stays 4-locked per trojan-horse thesis; the grid is the soft
+ *      discoverability surface for /app/refill/patients.
  *   3. LiveRecoveryFeed slot — v410 placeholder; v410.1 wires the realtime
  *      ticker against emma_recovery_events for this tenant
  */
@@ -24,6 +28,7 @@ import {
   DollarSign,
   Inbox,
   Plug,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -41,6 +46,13 @@ type QuickAction = {
 };
 
 const ACTIONS: QuickAction[] = [
+  {
+    key: "patients",
+    to: "/app/refill/patients",
+    label: "Patients",
+    subtitle: "Your roster, cadence, and waitlist",
+    icon: Users,
+  },
   {
     key: "recovery",
     to: "/app/refill/recovery",
@@ -91,7 +103,7 @@ export function RefillHome() {
         <Hero name={greetingName} />
 
         <SectionLabel>Quick actions</SectionLabel>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-10">
           {ACTIONS.map((a) => (
             <ActionCard key={a.key} action={a} />
           ))}

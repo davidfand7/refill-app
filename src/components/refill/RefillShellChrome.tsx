@@ -139,9 +139,9 @@ export function RefillShellChrome({
             <Sparkles className="h-3.5 w-3.5 shrink-0" />
             <span>
               Viewing as <strong>{tenant.name}</strong> (admin fallback).
-              Data fetchers still filter by your own user_id, so patient /
-              recovery surfaces may read empty until cross-tenant data-view
-              is wired (queued v1.20+).
+              Read fetchers on patients, waitlist, recovery, and billing
+              return this tenant&rsquo;s data (v1.20). Writes still scope
+              to your own user_id.
             </span>
           </div>
         )}
