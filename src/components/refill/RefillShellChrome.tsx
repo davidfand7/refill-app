@@ -26,7 +26,13 @@ import {
 import { useAuth } from "@/lib/auth";
 import { CHANGELOG, currentVersion } from "@/lib/changelog";
 import { applyTheme, getStoredTheme, type Theme } from "@/lib/theme";
-import type { MyTenant } from "@/server/refill-tenants";
+import { setAdminViewAsTenantId } from "@/lib/use-tenant-membership";
+import {
+  listTenantsForAdmin,
+  type AdminTenantOption,
+  type MyTenant,
+} from "@/server/refill-tenants";
+import { supabase } from "@/integrations/supabase/client";
 
 function deriveActiveKey(pathname: string): RefillNavKey | undefined {
   if (pathname.startsWith("/app/refill/patients")) return "patients";
@@ -63,6 +69,30 @@ export function RefillShellChrome({
   };
 
   const activeKey = deriveActiveKey(location.pathname);
+
+  // v1.20.6: tenant switcher state. Fetched only when viewing-as. Hidden
+  // when there's only one tenant in the system (no choice to make).
+  const [tenantOptions, setTenantOptions] = useState<AdminTenantOption[]>([]);
+  useEffect(() => {
+    if (viewAs !== "admin") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess.session?.access_token;
+        if (!token) return;
+        const { tenants } = await listTenantsForAdmin({
+          data: { accessToken: token },
+        });
+        if (!cancelled) setTenantOptions(tenants);
+      } catch {
+        /* non-admin or transient — banner falls back to static name */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [viewAs]);
 
   return (
     <>
@@ -139,10 +169,28 @@ export function RefillShellChrome({
           >
             <Sparkles className="h-3.5 w-3.5 shrink-0" />
             <span>
-              Viewing as <strong>{tenant.name}</strong> (admin fallback).
-              Read fetchers return this tenant&rsquo;s data (v1.20). CSV
-              ingest writes into this tenant (v1.20.5). Stripe and plan
-              writes still scope to your own user_id.
+              Viewing as{" "}
+              {tenantOptions.length > 1 ? (
+                <select
+                  value={tenant.id}
+                  onChange={(e) => setAdminViewAsTenantId(e.target.value)}
+                  className="font-semibold bg-transparent border-b border-current cursor-pointer focus:outline-none"
+                  style={{ color: "#8a6d0c" }}
+                  aria-label="Switch tenant"
+                >
+                  {tenantOptions.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                      {t.isDemo ? " (demo)" : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <strong>{tenant.name}</strong>
+              )}{" "}
+              (admin fallback). Read fetchers return this tenant&rsquo;s
+              data (v1.20). CSV ingest writes into this tenant (v1.20.5).
+              Stripe and plan writes still scope to your own user_id.
             </span>
           </div>
         )}

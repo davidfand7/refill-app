@@ -342,6 +342,11 @@ export const getMyTenant = createServerFn({ method: "POST" })
 
 const adminFallbackInput = z.object({
   accessToken: z.string().min(1),
+  /** v1.20.6: when set + the tenant exists, return that tenant + its
+   *  owner instead of the default first-by-ordering choice. Falls through
+   *  to the default ordering when the preferred tenant doesn't exist
+   *  (defensive against stale localStorage from deleted tenants). */
+  preferredTenantId: z.string().uuid().optional(),
 });
 
 export const getFirstTenantForAdmin = createServerFn({ method: "POST" })
@@ -366,23 +371,45 @@ export const getFirstTenantForAdmin = createServerFn({ method: "POST" })
       if (!roles) {
         throw new Error("Admin only.");
       }
-      // v1.20.3: prefer real tenants over demo seeds. Order by is_demo ASC
-      // first (false/null before true) so seeded demo tenants like
-      // rejuv-demo land last; ties broken by created_at ASC for stability.
-      // Pre-v1.20.3 this returned the oldest tenant overall, which was
-      // typically the rejuv-demo seed — so admin viewing-as resolved to
-      // demo data even when real production tenants existed. Real Karen's
-      // Rejuv data is the load-bearing case (per project_rejuv_proof_or_nothing
-      // + project_karen_identity).
-      const { data: row, error: tenErr } = await sb
-        .from("tenants")
-        .select("id, slug, name, trial_ends_at, plan, is_demo")
-        .order("is_demo", { ascending: true, nullsFirst: true })
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (tenErr) {
-        throw new Error(`Couldn't load tenants: ${tenErr.message}`);
+      // v1.20.6: honor preferredTenantId when provided + tenant exists.
+      // Lets admin's banner-dropdown choice (persisted in localStorage)
+      // override the v1.20.3 first-by-ordering default. Falls through to
+      // the default ordering if preferred tenant doesn't exist (defensive).
+      let row: {
+        id: string;
+        slug: string;
+        name: string;
+        trial_ends_at: string;
+        plan: string;
+        is_demo: boolean | null;
+      } | null = null;
+      if (data.preferredTenantId) {
+        const { data: preferred } = await sb
+          .from("tenants")
+          .select("id, slug, name, trial_ends_at, plan, is_demo")
+          .eq("id", data.preferredTenantId)
+          .maybeSingle();
+        if (preferred) row = preferred;
+      }
+      if (!row) {
+        // v1.20.3 fallback ordering: prefer real tenants over demo seeds.
+        // is_demo ASC NULLS FIRST → null/false before true; ties by
+        // created_at ASC. Pre-v1.20.3 returned oldest overall, which was
+        // typically the rejuv-demo seed — admin viewing-as resolved to
+        // demo data even when real production tenants existed. Real
+        // Karen's Rejuv data is the load-bearing case (per
+        // project_rejuv_proof_or_nothing + project_karen_identity).
+        const { data: orderedRow, error: tenErr } = await sb
+          .from("tenants")
+          .select("id, slug, name, trial_ends_at, plan, is_demo")
+          .order("is_demo", { ascending: true, nullsFirst: true })
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (tenErr) {
+          throw new Error(`Couldn't load tenants: ${tenErr.message}`);
+        }
+        row = orderedRow;
       }
       if (!row) return { tenant: null, ownerUserId: null };
       // v1.20: also return the owner user_id so the client can plumb
@@ -410,6 +437,77 @@ export const getFirstTenantForAdmin = createServerFn({ method: "POST" })
       };
     },
   );
+
+// ─── listTenantsForAdmin (v1.20.6 — tenant switcher dropdown) ────────────
+//
+// Returns every tenant in the system with its owner user_id so the admin
+// banner can render a switcher dropdown. Same admin role re-verification
+// as getFirstTenantForAdmin — non-admins get a hard 403.
+//
+// Sorted: real (is_demo=false/null) first, then demo, then created_at ASC
+// within each group. Matches the default ordering admin will see when no
+// preference is set, so the dropdown is predictable.
+
+export type AdminTenantOption = {
+  id: string;
+  slug: string;
+  name: string;
+  isDemo: boolean;
+  ownerUserId: string | null;
+};
+
+export const listTenantsForAdmin = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => adminFallbackInput.parse(raw))
+  .handler(async ({ data }): Promise<{ tenants: AdminTenantOption[] }> => {
+    const userId = await verifyAuth(data.accessToken);
+    const sb = admin();
+    const { data: roles, error: roleErr } = await sb
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "admin")
+      .maybeSingle();
+    if (roleErr) throw new Error(`Couldn't verify admin: ${roleErr.message}`);
+    if (!roles) throw new Error("Admin only.");
+
+    const { data: rows, error: tenErr } = await sb
+      .from("tenants")
+      .select("id, slug, name, is_demo")
+      .order("is_demo", { ascending: true, nullsFirst: true })
+      .order("created_at", { ascending: true });
+    if (tenErr) throw new Error(`Couldn't load tenants: ${tenErr.message}`);
+    const tenants = rows ?? [];
+    if (tenants.length === 0) return { tenants: [] };
+
+    // Bulk-fetch owners for all tenants in one round-trip. Prefer 'owner'
+    // role row per tenant; fall back to first membership when role enum
+    // is unpopulated.
+    const tenantIds = tenants.map((t) => t.id);
+    const { data: memberships } = await sb
+      .from("tenant_memberships")
+      .select("tenant_id, user_id, role, created_at")
+      .in("tenant_id", tenantIds)
+      .order("created_at", { ascending: true });
+    const ownerByTenant = new Map<string, string>();
+    for (const m of memberships ?? []) {
+      const current = ownerByTenant.get(m.tenant_id);
+      if (m.role === "owner") {
+        ownerByTenant.set(m.tenant_id, m.user_id);
+      } else if (!current) {
+        ownerByTenant.set(m.tenant_id, m.user_id);
+      }
+    }
+
+    return {
+      tenants: tenants.map((t) => ({
+        id: t.id,
+        slug: t.slug,
+        name: t.name,
+        isDemo: t.is_demo ?? false,
+        ownerUserId: ownerByTenant.get(t.id) ?? null,
+      })),
+    };
+  });
 
 // ─── getMyTenantRecoveryFeed (v410.4) ────────────────────────────────────
 //

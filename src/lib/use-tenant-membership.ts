@@ -38,6 +38,40 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { getFirstTenantForAdmin, getMyTenant, type MyTenant } from "@/server/refill-tenants";
 
+// v1.20.6: localStorage key for the admin tenant switcher choice.
+// Exported so the RefillShellChrome switcher can read/write the same key.
+export const ADMIN_VIEW_AS_TENANT_ID_KEY = "refill-admin-view-as-tenant-id";
+
+function readPreferredTenantId(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    return window.localStorage.getItem(ADMIN_VIEW_AS_TENANT_ID_KEY) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Write the admin's chosen view-as tenant id and reload so all components
+ * re-fetch with the new context. Reload is the simple, correct choice
+ * here — a SPA-style re-render would require invalidating the
+ * use-tenant-membership cache + every page-side data fetcher that has
+ * already plumbed viewAsUserId. Reload is one line and unambiguous.
+ */
+export function setAdminViewAsTenantId(tenantId: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (tenantId) {
+      window.localStorage.setItem(ADMIN_VIEW_AS_TENANT_ID_KEY, tenantId);
+    } else {
+      window.localStorage.removeItem(ADMIN_VIEW_AS_TENANT_ID_KEY);
+    }
+  } catch {
+    /* localStorage disabled (private mode etc.) — fall through */
+  }
+  window.location.reload();
+}
+
 export type TenantMembershipState =
   | { status: "loading"; tenant: null; viewAs?: never; viewAsUserId?: never }
   | { status: "not-a-tenant"; tenant: null; viewAs?: never; viewAsUserId?: never }
@@ -143,8 +177,12 @@ export function useTenantMembership(): TenantMembershipState {
         // Non-tenant users are rare (typically mid-onboarding)
         // so the bandwidth is negligible.
         try {
+          // v1.20.6: honor admin's banner-dropdown choice (persisted in
+          // localStorage). Falls through to server-side default ordering
+          // when the preferred tenant doesn't exist (handled server-side).
+          const preferredTenantId = readPreferredTenantId();
           const { tenant, ownerUserId } = await getFirstTenantForAdmin({
-            data: { accessToken },
+            data: { accessToken, preferredTenantId },
           });
           if (cancelled) return;
           if (tenant) {
