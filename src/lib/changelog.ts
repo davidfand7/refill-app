@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.20.3",
+    date: "May 2026",
+    items: [
+      "<strong>v1.20.3 &mdash; <code>getFirstTenantForAdmin</code> prefers real tenants over demo seeds.</strong> Surfaced during the post-v1.20 admin-upload diagnostic: there are two Rejuv tenants in production &mdash; the synthetic <code>rejuv-demo</code> seed (owner karen@rejuv-demo.test) and the REAL <code>rejuv</code> production tenant (owner karen.aslak@gmail.com, the real Karen Aslakson per <em>project-karen-identity</em>). Pre-v1.20.3, <code>getFirstTenantForAdmin</code> ordered tenants by <code>created_at</code> ASC and returned the oldest &mdash; which is the demo seed because it was migrated in earlier. So when admin viewing-as via the v1.19 admin-bypass shell + v1.20 cross-tenant data-view, the resolved tenant was the demo, not the real one &mdash; and any real production data uploaded against the admin user_id stayed invisible even after v1.20 plumbing was correct. <strong>Fix</strong>: add a leading <code>ORDER BY is_demo ASC NULLS FIRST</code> clause before the existing <code>created_at ASC</code> tiebreaker, so any real tenant (where <code>is_demo</code> is false or null) lands ahead of any demo tenant (<code>is_demo = true</code>). Stable selection within the real-tenant cohort. Single-line server change, no API contract change, no migration. Future v1.20.4+ work: add an explicit tenant switcher in the admin-bypass banner so admin can pick which tenant to view-as (the deterministic-first-tenant rule is a stopgap, not a final answer). Touched: <code>src/server/refill-tenants.ts</code> (single ORDER BY addition), <code>src/lib/changelog.ts</code> (this entry).",
+    ],
+  },
+  {
     version: "v1.20.2",
     date: "May 2026",
     items: [

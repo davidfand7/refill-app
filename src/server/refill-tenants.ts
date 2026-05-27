@@ -366,10 +366,18 @@ export const getFirstTenantForAdmin = createServerFn({ method: "POST" })
       if (!roles) {
         throw new Error("Admin only.");
       }
-      // Return first tenant (oldest by created_at for stable selection).
+      // v1.20.3: prefer real tenants over demo seeds. Order by is_demo ASC
+      // first (false/null before true) so seeded demo tenants like
+      // rejuv-demo land last; ties broken by created_at ASC for stability.
+      // Pre-v1.20.3 this returned the oldest tenant overall, which was
+      // typically the rejuv-demo seed — so admin viewing-as resolved to
+      // demo data even when real production tenants existed. Real Karen's
+      // Rejuv data is the load-bearing case (per project_rejuv_proof_or_nothing
+      // + project_karen_identity).
       const { data: row, error: tenErr } = await sb
         .from("tenants")
         .select("id, slug, name, trial_ends_at, plan, is_demo")
+        .order("is_demo", { ascending: true, nullsFirst: true })
         .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle();
