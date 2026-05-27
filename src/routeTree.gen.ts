@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UnsubscribeRouteImport } from './routes/unsubscribe'
 import { Route as StoryRouteImport } from './routes/story'
+import { Route as StartRouteImport } from './routes/start'
 import { Route as ScanRouteImport } from './routes/scan'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as OnboardRouteImport } from './routes/onboard'
@@ -83,6 +84,11 @@ const UnsubscribeRoute = UnsubscribeRouteImport.update({
 const StoryRoute = StoryRouteImport.update({
   id: '/story',
   path: '/story',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StartRoute = StartRouteImport.update({
+  id: '/start',
+  path: '/start',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ScanRoute = ScanRouteImport.update({
@@ -419,6 +425,7 @@ export interface FileRoutesByFullPath {
   '/onboard': typeof OnboardRoute
   '/pricing': typeof PricingRoute
   '/scan': typeof ScanRoute
+  '/start': typeof StartRoute
   '/story': typeof StoryRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/api/refill-checkout': typeof ApiRefillCheckoutRoute
@@ -486,6 +493,7 @@ export interface FileRoutesByTo {
   '/onboard': typeof OnboardRoute
   '/pricing': typeof PricingRoute
   '/scan': typeof ScanRoute
+  '/start': typeof StartRoute
   '/story': typeof StoryRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/api/refill-checkout': typeof ApiRefillCheckoutRoute
@@ -549,6 +557,7 @@ export interface FileRoutesById {
   '/onboard': typeof OnboardRoute
   '/pricing': typeof PricingRoute
   '/scan': typeof ScanRoute
+  '/start': typeof StartRoute
   '/story': typeof StoryRoute
   '/unsubscribe': typeof UnsubscribeRoute
   '/api/refill-checkout': typeof ApiRefillCheckoutRoute
@@ -618,6 +627,7 @@ export interface FileRouteTypes {
     | '/onboard'
     | '/pricing'
     | '/scan'
+    | '/start'
     | '/story'
     | '/unsubscribe'
     | '/api/refill-checkout'
@@ -685,6 +695,7 @@ export interface FileRouteTypes {
     | '/onboard'
     | '/pricing'
     | '/scan'
+    | '/start'
     | '/story'
     | '/unsubscribe'
     | '/api/refill-checkout'
@@ -747,6 +758,7 @@ export interface FileRouteTypes {
     | '/onboard'
     | '/pricing'
     | '/scan'
+    | '/start'
     | '/story'
     | '/unsubscribe'
     | '/api/refill-checkout'
@@ -815,6 +827,7 @@ export interface RootRouteChildren {
   OnboardRoute: typeof OnboardRoute
   PricingRoute: typeof PricingRoute
   ScanRoute: typeof ScanRoute
+  StartRoute: typeof StartRoute
   StoryRoute: typeof StoryRoute
   UnsubscribeRoute: typeof UnsubscribeRoute
   ApiRefillCheckoutRoute: typeof ApiRefillCheckoutRoute
@@ -850,6 +863,13 @@ declare module '@tanstack/react-router' {
       path: '/story'
       fullPath: '/story'
       preLoaderRoute: typeof StoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/start': {
+      id: '/start'
+      path: '/start'
+      fullPath: '/start'
+      preLoaderRoute: typeof StartRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/scan': {
@@ -1442,6 +1462,7 @@ const rootRouteChildren: RootRouteChildren = {
   OnboardRoute: OnboardRoute,
   PricingRoute: PricingRoute,
   ScanRoute: ScanRoute,
+  StartRoute: StartRoute,
   StoryRoute: StoryRoute,
   UnsubscribeRoute: UnsubscribeRoute,
   ApiRefillCheckoutRoute: ApiRefillCheckoutRoute,
