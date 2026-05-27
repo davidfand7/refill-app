@@ -21,6 +21,13 @@
  *   carries `viewAs: "admin"` so chrome can show a "Viewing as X" banner
  *   and consumers can know the membership isn't real.
  *
+ *   v1.20.4 fix: the original gate `primaryRole === "admin"` was wrong —
+ *   useAuth().primaryRole reads user_preferences.primary_role, which is
+ *   the shell-selection signal ("spa-owner" / "rep" / "developer"), and
+ *   NEVER returns "admin". So the gate was dead and the admin-bypass
+ *   path never fired. v1.20.4 removes the gate; getFirstTenantForAdmin
+ *   server-side admin check is the authoritative gate.
+ *
  *   Why this is admin-only and not e.g. rep-viewing-tenant: admins are
  *   the platform operators who legitimately need cross-tenant chrome
  *   access for support/walkthroughs/debugging. Reps and spa-owners don't.
@@ -95,7 +102,7 @@ export function prefetchTenantMembership(
  * "viewing as" mode.
  */
 export function useTenantMembership(): TenantMembershipState {
-  const { session, loading: authLoading, primaryRole } = useAuth();
+  const { session, loading: authLoading } = useAuth();
   const accessToken = session?.access_token;
   const [state, setState] = useState<TenantMembershipState>(LOADING);
 
@@ -118,28 +125,40 @@ export function useTenantMembership(): TenantMembershipState {
           setState(result);
           return;
         }
-        // v1.19 admin fallback. If user has no membership BUT is admin,
-        // try the system-first-tenant route. On failure (not admin
-        // server-side, or no tenants exist) we cleanly fall back to
-        // NOT_A_TENANT — no infinite loop, no thrown error to caller.
-        if (primaryRole === "admin") {
-          try {
-            const { tenant, ownerUserId } = await getFirstTenantForAdmin({
-              data: { accessToken },
+        // v1.19 + v1.20.4 admin fallback. If the user has no
+        // tenant_memberships row, try the admin-fallback route. The
+        // server fn (getFirstTenantForAdmin) re-verifies admin role
+        // against public.user_roles and throws "Admin only." for
+        // non-admins — we catch that and treat it identically to
+        // "not a tenant," which is the correct end state for a
+        // non-admin without a membership.
+        //
+        // Pre-v1.20.4 this was gated client-side on
+        // `primaryRole === "admin"`, but useAuth().primaryRole reads
+        // user_preferences.primary_role (shell-selection signal —
+        // "spa-owner" / "rep" / "developer"). It NEVER returns
+        // "admin", so the gate was dead and the admin-bypass path
+        // never fired. Cost of the un-gated version: one extra
+        // POST per non-tenant non-admin sign-in, returning a 401.
+        // Non-tenant users are rare (typically mid-onboarding)
+        // so the bandwidth is negligible.
+        try {
+          const { tenant, ownerUserId } = await getFirstTenantForAdmin({
+            data: { accessToken },
+          });
+          if (cancelled) return;
+          if (tenant) {
+            setState({
+              status: "tenant",
+              tenant,
+              viewAs: "admin",
+              viewAsUserId: ownerUserId ?? undefined,
             });
-            if (cancelled) return;
-            if (tenant) {
-              setState({
-                status: "tenant",
-                tenant,
-                viewAs: "admin",
-                viewAsUserId: ownerUserId ?? undefined,
-              });
-              return;
-            }
-          } catch {
-            // fall through to NOT_A_TENANT
+            return;
           }
+        } catch {
+          // Non-admin → server threw "Admin only." Expected.
+          // Or admin but no tenants exist (rare).
         }
         setState(NOT_A_TENANT);
       })
@@ -152,7 +171,7 @@ export function useTenantMembership(): TenantMembershipState {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, authLoading, primaryRole]);
+  }, [accessToken, authLoading]);
 
   return state;
 }
