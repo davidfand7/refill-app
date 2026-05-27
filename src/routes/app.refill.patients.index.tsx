@@ -348,7 +348,6 @@ function PatientsPage() {
     return (
       <div>
         <PageHeader
-          eyebrow="Emma(OS) · Patients"
           title="Patients"
           description="Everyone who's walked through your doors."
         />
@@ -364,7 +363,6 @@ function PatientsPage() {
     return (
       <div>
         <PageHeader
-          eyebrow="Emma(OS) · Patients"
           title="Patients"
           description="Everyone who's walked through your doors."
         />
@@ -383,12 +381,11 @@ function PatientsPage() {
     return (
       <div>
         <PageHeader
-          eyebrow="Emma(OS) · Patients"
           title="Patients"
           description="Everyone who's walked through your doors."
         />
         <div className="px-6 lg:px-10 py-10">
-          <div className="max-w-xl mx-auto rounded-2xl border border-border bg-card p-10 text-center space-y-5">
+          <div className="max-w-xl mx-auto rounded-2xl border border-rule bg-white p-10 text-center space-y-5">
             <div className="mx-auto h-12 w-12 rounded-2xl bg-emerald/10 flex items-center justify-center">
               <Users className="h-5 w-5 text-emerald" />
             </div>
@@ -415,7 +412,6 @@ function PatientsPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Emma(OS) · Patients"
         title="Patients"
         description={
           rows ? `${rows.length.toLocaleString()} in your patient book.` : undefined
@@ -424,14 +420,14 @@ function PatientsPage() {
           <div className="flex items-center gap-2">
             <Link
               to="/app/refill/patients/contacts"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted transition"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-xs font-medium hover:bg-rule-soft transition"
             >
               <Sparkles className="h-3.5 w-3.5" />
               Contacts
             </Link>
             <Link
               to="/app/refill/patients/import"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium hover:bg-muted transition"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-xs font-medium hover:bg-rule-soft transition"
             >
               <Upload className="h-3.5 w-3.5" />
               Import CSV
@@ -450,7 +446,7 @@ function PatientsPage() {
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               placeholder="Search by name…"
-              className="w-full rounded-lg border border-input bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="w-full rounded-lg border border-input bg-white pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
@@ -461,8 +457,8 @@ function PatientsPage() {
               className={
                 "inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition " +
                 (overdueOnly
-                  ? "bg-amber-500 text-white hover:bg-amber-500/90"
-                  : "border border-border bg-card text-ink-soft hover:bg-muted hover:text-foreground")
+                  ? "bg-amber text-paper hover:opacity-90"
+                  : "border border-rule bg-white text-ink-soft hover:bg-rule-soft hover:text-ink")
               }
               title={
                 overdueOnly
@@ -494,7 +490,7 @@ function PatientsPage() {
             <select
               value={sortKey}
               onChange={(e) => setSortKey(e.target.value as SortKey)}
-              className="rounded-lg border border-input bg-card px-2.5 py-1.5 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              className="rounded-lg border border-input bg-white px-2.5 py-1.5 text-xs font-medium text-ink focus:outline-none focus:ring-2 focus:ring-ring"
               aria-label="Sort patients by"
             >
               {(Object.keys(SORT_LABELS) as SortKey[]).map((k) => (
@@ -599,14 +595,14 @@ function PatientsPage() {
 
         {/* Result table */}
         {filtered && filtered.length === 0 ? (
-          <div className="rounded-2xl border border-border bg-card p-10 text-center text-sm text-ink-soft">
+          <div className="rounded-2xl border border-rule bg-white p-10 text-center text-sm text-ink-soft">
             No patients match those filters.
           </div>
         ) : (
-          <div className="rounded-2xl border border-border bg-card overflow-hidden">
+          <div className="rounded-2xl border border-rule bg-white overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-muted/50">
+                <thead className="bg-rule/50">
                   <tr className="text-left text-[10px] uppercase tracking-wider text-ink-soft">
                     <th className="px-4 py-3 font-semibold">Patient</th>
                     <th className="px-4 py-3 font-semibold">Contact</th>
@@ -620,7 +616,7 @@ function PatientsPage() {
                     <th className="px-4 py-3 font-semibold text-center">Waitlist</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border">
+                <tbody className="divide-y divide-rule">
                   {filtered?.map((r) => {
                     const wl = waitlistIndex?.get(r.id) ?? null;
                     return (
@@ -641,7 +637,7 @@ function PatientsPage() {
                 </tbody>
               </table>
             </div>
-            <div className="px-4 py-3 border-t border-border text-[11px] text-ink-soft flex items-center justify-between">
+            <div className="px-4 py-3 border-t border-rule text-[11px] text-ink-soft flex items-center justify-between">
               <span>
                 Showing {filtered?.length.toLocaleString() ?? 0} of{" "}
                 {rows?.length.toLocaleString() ?? 0}
@@ -695,7 +691,7 @@ function PatientRow({
       : "user";
 
   return (
-    <tr className="hover:bg-muted/40 transition cursor-pointer">
+    <tr className="hover:bg-rule-soft/40 transition cursor-pointer">
       <td className="px-4 py-3">
         <Link
           to="/app/refill/patients/$patientId"
@@ -703,7 +699,7 @@ function PatientRow({
           className="block"
         >
           <div className="flex items-center gap-2">
-            <span className="font-medium text-foreground hover:text-emerald transition">
+            <span className="font-medium text-ink hover:text-emerald transition">
               {row.displayName}
             </span>
             {overdue && (
@@ -711,8 +707,8 @@ function PatientRow({
                 className={cn(
                   "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
                   overdue.isLapsed
-                    ? "bg-destructive/15 text-destructive"
-                    : "bg-amber-200/70 text-amber-900 dark:bg-amber-500/30 dark:text-amber-200",
+                    ? "bg-rose-soft text-rose"
+                    : "bg-amber-soft text-amber",
                 )}
                 title={`Last ${overdue.kind} ${overdue.lastVisitOfKind} — ${overdue.daysOverdue}d past window`}
               >
@@ -723,7 +719,7 @@ function PatientRow({
               </span>
             )}
             {row.banned && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 text-destructive px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
+              <span className="inline-flex items-center gap-1 rounded-full bg-rose-soft text-rose px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
                 <Ban className="h-2.5 w-2.5" />
                 Banned
               </span>
@@ -739,7 +735,7 @@ function PatientRow({
       <td className="px-4 py-3">
         <ContactCell phone={row.phone} email={row.email} />
       </td>
-      <td className="px-4 py-3 text-sm text-foreground">
+      <td className="px-4 py-3 text-sm text-ink">
         {row.lastVisit ? formatDate(row.lastVisit) : "—"}
       </td>
       <td className="px-4 py-3">
@@ -778,10 +774,10 @@ function PatientRow({
           disabled={vipPending}
           onClick={onToggleVip}
           className={cn(
-            "inline-flex items-center justify-center h-7 w-7 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            "inline-flex items-center justify-center h-7 w-7 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald",
             row.vip
               ? "text-emerald hover:bg-emerald/10"
-              : "text-ink-faint hover:text-foreground hover:bg-muted",
+              : "text-ink-faint hover:text-ink hover:bg-rule-soft",
             vipPending ? "opacity-60 cursor-wait" : "cursor-pointer",
           )}
         >
@@ -811,14 +807,14 @@ function PatientRow({
             disabled={pending}
             onClick={onToggleWaitlist}
             className={cn(
-              "relative inline-flex h-5 w-9 items-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              active ? "bg-emerald" : "bg-muted",
+              "relative inline-flex h-5 w-9 items-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald",
+              active ? "bg-emerald" : "bg-rule",
               pending ? "opacity-60 cursor-wait" : "cursor-pointer",
             )}
           >
             <span
               className={cn(
-                "inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow transition",
+                "inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition",
                 active ? "translate-x-[18px]" : "translate-x-[3px]",
               )}
             />
@@ -847,7 +843,7 @@ function ContactCell({
   return (
     <div className="flex flex-col gap-0.5 text-[11px]">
       {phone && (
-        <span className="inline-flex items-center gap-1 text-foreground">
+        <span className="inline-flex items-center gap-1 text-ink">
           <Phone className="h-3 w-3 text-ink-faint" />
           {formatPhone(phone)}
         </span>
@@ -876,7 +872,7 @@ function WindowToggle({
   onChange: (w: Window) => void;
 }) {
   return (
-    <div className="inline-flex items-center rounded-lg border border-border bg-card p-0.5 text-xs">
+    <div className="inline-flex items-center rounded-lg border border-rule bg-white p-0.5 text-xs">
       <button
         type="button"
         onClick={() => onChange("12mo")}
@@ -884,7 +880,7 @@ function WindowToggle({
           "px-3 py-1.5 rounded-md font-medium transition " +
           (value === "12mo"
             ? "bg-emerald text-paper"
-            : "text-ink-soft hover:text-foreground")
+            : "text-ink-soft hover:text-ink")
         }
       >
         Last 12mo
@@ -896,7 +892,7 @@ function WindowToggle({
           "px-3 py-1.5 rounded-md font-medium transition " +
           (value === "all"
             ? "bg-emerald text-paper"
-            : "text-ink-soft hover:text-foreground")
+            : "text-ink-soft hover:text-ink")
         }
       >
         All time
@@ -926,7 +922,7 @@ function Chip({
         "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium border transition " +
         (active
           ? "bg-emerald text-paper border-emerald"
-          : "bg-card text-ink-soft border-border hover:bg-muted")
+          : "bg-white text-ink-soft border-rule hover:bg-rule-soft")
       }
     >
       {label}
@@ -945,7 +941,7 @@ function Chip({
 }
 
 function ManufacturerChip({ mfr }: { mfr: ProductManufacturer }) {
-  const palette = MANUFACTURER_COLORS[mfr] ?? "bg-muted text-foreground";
+  const palette = MANUFACTURER_COLORS[mfr] ?? "bg-rule text-ink";
   return (
     <span
       className={
@@ -962,7 +958,7 @@ const MANUFACTURER_COLORS: Partial<Record<ProductManufacturer, string>> = {
   evolus: "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-200",
   abbvie: "bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-200",
   merz: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200",
-  galderma: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200",
+  galderma: "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200",
   "abbvie-coolsculpting": "bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-200",
   skinceuticals: "bg-stone-100 text-stone-800 dark:bg-stone-500/20 dark:text-stone-200",
   eltamd: "bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-200",

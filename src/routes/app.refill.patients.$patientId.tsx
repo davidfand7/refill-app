@@ -95,9 +95,8 @@ function PatientDetailPage() {
   }, [patientId]);
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
+    <div className="flex flex-col min-h-screen bg-white">
       <PageHeader
-        eyebrow="Emma(OS) · Patient"
         title={data?.patient.displayName ?? (loading ? "Loading…" : "Patient")}
         description={
           data?.patient.firstVisit
@@ -105,14 +104,14 @@ function PatientDetailPage() {
             : undefined
         }
         breadcrumbs={[
-          { label: "Emma", to: "/app/refill" },
+          { label: "Refill", to: "/app/refill" },
           { label: "Patients", to: "/app/refill/patients" },
           { label: data?.patient.displayName ?? "Patient" },
         ]}
         actions={
           <Link
             to="/app/refill/patients"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-xs font-medium text-ink hover:bg-rule-soft transition"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             All patients
@@ -127,14 +126,14 @@ function PatientDetailPage() {
             Loading patient…
           </div>
         ) : loadError ? (
-          <div className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 text-sm">
-            <div className="font-semibold text-destructive">
+          <div className="rounded-2xl border border-rose/30 bg-rose-soft p-5 text-sm">
+            <div className="font-semibold text-rose">
               Couldn't load this patient
             </div>
             <p className="text-xs text-ink-soft mt-1">{loadError}</p>
             <Link
               to="/app/refill/patients"
-              className="inline-flex items-center gap-1.5 mt-3 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition"
+              className="inline-flex items-center gap-1.5 mt-3 rounded-lg border border-rule bg-white px-3 py-1.5 text-xs font-medium hover:bg-rule-soft transition"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               Back to patient list
@@ -164,13 +163,13 @@ function ContactCard({ patient }: { patient: PatientListRow }) {
   const hasAny = patient.phone || patient.email || patient.banned;
   if (!hasAny) {
     return (
-      <section className="rounded-xl border border-dashed border-border bg-card/50 px-5 py-4 text-xs text-ink-soft flex items-center justify-between gap-3">
+      <section className="rounded-xl border border-dashed border-rule bg-white/50 px-5 py-4 text-xs text-ink-soft flex items-center justify-between gap-3">
         <span>
           No contact info on file for this patient.
         </span>
         <Link
           to="/app/refill/patients/contacts"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-xs font-medium hover:bg-rule-soft transition"
         >
           <Sparkles className="h-3.5 w-3.5" />
           Find a match
@@ -179,7 +178,7 @@ function ContactCard({ patient }: { patient: PatientListRow }) {
     );
   }
   return (
-    <section className="rounded-xl border border-border bg-card px-5 py-4">
+    <section className="rounded-xl border border-rule bg-white px-5 py-4">
       <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
         {patient.phone && (
           <Pair
@@ -217,7 +216,7 @@ function ContactCard({ patient }: { patient: PatientListRow }) {
           />
         )}
         {patient.banned && (
-          <div className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-destructive/10 text-destructive px-3 py-1 text-[11px] font-semibold uppercase tracking-wider">
+          <div className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-rose-soft text-rose px-3 py-1 text-[11px] font-semibold uppercase tracking-wider">
             <Ban className="h-3 w-3" />
             Banned — no outbound
           </div>
@@ -231,13 +230,13 @@ function ContactCard({ patient }: { patient: PatientListRow }) {
 
 function SummaryCard({ patient }: { patient: PatientListRow }) {
   return (
-    <section className="rounded-xl border border-border bg-card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border bg-muted/30">
+    <section className="rounded-xl border border-rule bg-white overflow-hidden">
+      <div className="px-5 py-3 border-b border-rule bg-rule-soft/60">
         <div className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
           Lifetime
         </div>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-border">
+      <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-rule">
         <Stat
           icon={<Users className="h-3.5 w-3.5" />}
           label="Total visits"
@@ -281,8 +280,8 @@ function ManufacturerMixCard({ patient }: { patient: PatientListRow }) {
   if (entries.length === 0) return null;
   const total = entries.reduce((sum, [, n]) => sum + n, 0);
   return (
-    <section className="rounded-xl border border-border bg-card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center justify-between">
+    <section className="rounded-xl border border-rule bg-white overflow-hidden">
+      <div className="px-5 py-3 border-b border-rule bg-rule-soft/60 flex items-center justify-between">
         <div className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
           Brand mix
         </div>
@@ -317,7 +316,7 @@ function ManufacturerCount({
   share: number;
 }) {
   return (
-    <div className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs">
+    <div className="inline-flex items-center gap-2 rounded-full border border-rule bg-white px-3 py-1.5 text-xs">
       <ManufacturerChip mfr={mfr} compact />
       <span className="font-medium tabular-nums">{count.toLocaleString()}</span>
       <span className="text-ink-faint tabular-nums">
@@ -339,8 +338,8 @@ function LoyaltyCard({ patient }: { patient: PatientListRow }) {
   );
   if (entries.length === 0) return null;
   return (
-    <section className="rounded-xl border border-border bg-card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center gap-2">
+    <section className="rounded-xl border border-rule bg-white overflow-hidden">
+      <div className="px-5 py-3 border-b border-rule bg-rule-soft/60 flex items-center gap-2">
         <Gift className="h-3.5 w-3.5 text-ink-soft" />
         <div className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
           Loyalty redemptions
@@ -350,7 +349,7 @@ function LoyaltyCard({ patient }: { patient: PatientListRow }) {
         {entries.map(([mfr, count]) => (
           <div
             key={mfr}
-            className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2"
+            className="inline-flex items-center gap-2 rounded-lg border border-rule bg-white px-3 py-2"
           >
             <ManufacturerChip mfr={mfr} compact />
             <div>
@@ -397,8 +396,8 @@ function TransactionsSection({
   const grouped = useMemo(() => groupByDateInvoice(filtered), [filtered]);
 
   return (
-    <section className="rounded-xl border border-border bg-card overflow-hidden">
-      <div className="px-5 py-3 border-b border-border bg-muted/30 flex items-center justify-between gap-3">
+    <section className="rounded-xl border border-rule bg-white overflow-hidden">
+      <div className="px-5 py-3 border-b border-rule bg-rule-soft/60 flex items-center justify-between gap-3">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
             Transactions
@@ -420,7 +419,7 @@ function TransactionsSection({
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-muted/30">
+            <thead className="bg-rule-soft/60">
               <tr className="text-left text-[10px] uppercase tracking-wider text-ink-soft">
                 <th className="px-4 py-3 font-semibold">Date</th>
                 <th className="px-4 py-3 font-semibold">Product</th>
@@ -429,7 +428,7 @@ function TransactionsSection({
                 <th className="px-4 py-3 font-semibold text-right">Amount</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-rule">
               {grouped.map((group) => (
                 <InvoiceGroup key={group.key} group={group} />
               ))}
@@ -480,8 +479,8 @@ function InvoiceGroup({ group }: { group: InvoiceGroupData }) {
         <tr
           key={line.id}
           className={
-            "hover:bg-muted/40 transition " +
-            (idx === 0 ? "border-t-2 border-border" : "")
+            "hover:bg-rule-soft/40 transition " +
+            (idx === 0 ? "border-t-2 border-rule" : "")
           }
         >
           <td className="px-4 py-3 align-top">
@@ -534,7 +533,7 @@ function InvoiceGroup({ group }: { group: InvoiceGroupData }) {
         </tr>
       ))}
       {group.lines.length > 1 && (
-        <tr className="bg-muted/20 text-[11px] text-ink-soft">
+        <tr className="bg-rule/20 text-[11px] text-ink-soft">
           <td className="px-4 py-2" colSpan={4}>
             Invoice total
           </td>
@@ -602,7 +601,7 @@ function WindowToggle({
   onChange: (w: Window) => void;
 }) {
   return (
-    <div className="inline-flex items-center rounded-lg border border-border bg-card p-0.5 text-xs">
+    <div className="inline-flex items-center rounded-lg border border-rule bg-white p-0.5 text-xs">
       <button
         type="button"
         onClick={() => onChange("12mo")}
@@ -610,7 +609,7 @@ function WindowToggle({
           "px-3 py-1 rounded-md font-medium transition " +
           (value === "12mo"
             ? "bg-emerald text-paper"
-            : "text-ink-soft hover:text-foreground")
+            : "text-ink-soft hover:text-ink")
         }
       >
         Last 12mo
@@ -622,7 +621,7 @@ function WindowToggle({
           "px-3 py-1 rounded-md font-medium transition " +
           (value === "all"
             ? "bg-emerald text-paper"
-            : "text-ink-soft hover:text-foreground")
+            : "text-ink-soft hover:text-ink")
         }
       >
         All time
@@ -639,7 +638,7 @@ function ManufacturerChip({
   compact?: boolean;
 }) {
   const palette =
-    MANUFACTURER_COLORS[mfr] ?? "bg-muted text-foreground";
+    MANUFACTURER_COLORS[mfr] ?? "bg-rule text-ink";
   return (
     <span
       className={
@@ -656,7 +655,7 @@ function ManufacturerChip({
 }
 
 function KindChip({ kind }: { kind: ProductKind }) {
-  const cls = KIND_COLORS[kind] ?? "bg-muted text-foreground";
+  const cls = KIND_COLORS[kind] ?? "bg-rule text-ink";
   return (
     <span
       className={
@@ -673,7 +672,7 @@ const MANUFACTURER_COLORS: Partial<Record<ProductManufacturer, string>> = {
   evolus: "bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-200",
   abbvie: "bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-200",
   merz: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200",
-  galderma: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200",
+  galderma: "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200",
   "abbvie-coolsculpting":
     "bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-200",
   skinceuticals:
@@ -693,9 +692,9 @@ const KIND_COLORS: Partial<Record<ProductKind, string>> = {
   retail: "bg-stone-100 text-stone-800 dark:bg-stone-500/20 dark:text-stone-200",
   reward: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200",
   payment: "bg-slate-100 text-slate-700 dark:bg-slate-500/20 dark:text-slate-300",
-  discount: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200",
+  discount: "bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200",
   service: "bg-sky-100 text-sky-800 dark:bg-sky-500/20 dark:text-sky-200",
-  note: "bg-muted text-foreground",
+  note: "bg-rule text-ink",
 };
 
 function manufacturerLabel(mfr: ProductManufacturer): string {
