@@ -41,6 +41,7 @@ import { Route as AppRefillSharingRouteImport } from './routes/app.refill.sharin
 import { Route as AppRefillRescueRouteImport } from './routes/app.refill.rescue'
 import { Route as AppRefillReportsRouteImport } from './routes/app.refill.reports'
 import { Route as AppRefillRecoveryRouteImport } from './routes/app.refill.recovery'
+import { Route as AppRefillPromosRouteImport } from './routes/app.refill.promos'
 import { Route as AppRefillPatientsRouteImport } from './routes/app.refill.patients'
 import { Route as AppRefillInboxRouteImport } from './routes/app.refill.inbox'
 import { Route as AppRefillHealthRouteImport } from './routes/app.refill.health'
@@ -234,6 +235,11 @@ const AppRefillReportsRoute = AppRefillReportsRouteImport.update({
 const AppRefillRecoveryRoute = AppRefillRecoveryRouteImport.update({
   id: '/recovery',
   path: '/recovery',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillPromosRoute = AppRefillPromosRouteImport.update({
+  id: '/promos',
+  path: '/promos',
   getParentRoute: () => AppRefillRoute,
 } as any)
 const AppRefillPatientsRoute = AppRefillPatientsRouteImport.update({
@@ -453,6 +459,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/health': typeof AppRefillHealthRoute
   '/app/refill/inbox': typeof AppRefillInboxRoute
   '/app/refill/patients': typeof AppRefillPatientsRouteWithChildren
+  '/app/refill/promos': typeof AppRefillPromosRoute
   '/app/refill/recovery': typeof AppRefillRecoveryRoute
   '/app/refill/reports': typeof AppRefillReportsRoute
   '/app/refill/rescue': typeof AppRefillRescueRoute
@@ -517,6 +524,7 @@ export interface FileRoutesByTo {
   '/app/refill/billing': typeof AppRefillBillingRoute
   '/app/refill/health': typeof AppRefillHealthRoute
   '/app/refill/inbox': typeof AppRefillInboxRoute
+  '/app/refill/promos': typeof AppRefillPromosRoute
   '/app/refill/recovery': typeof AppRefillRecoveryRoute
   '/app/refill/reports': typeof AppRefillReportsRoute
   '/app/refill/rescue': typeof AppRefillRescueRoute
@@ -585,6 +593,7 @@ export interface FileRoutesById {
   '/app/refill/health': typeof AppRefillHealthRoute
   '/app/refill/inbox': typeof AppRefillInboxRoute
   '/app/refill/patients': typeof AppRefillPatientsRouteWithChildren
+  '/app/refill/promos': typeof AppRefillPromosRoute
   '/app/refill/recovery': typeof AppRefillRecoveryRoute
   '/app/refill/reports': typeof AppRefillReportsRoute
   '/app/refill/rescue': typeof AppRefillRescueRoute
@@ -655,6 +664,7 @@ export interface FileRouteTypes {
     | '/app/refill/health'
     | '/app/refill/inbox'
     | '/app/refill/patients'
+    | '/app/refill/promos'
     | '/app/refill/recovery'
     | '/app/refill/reports'
     | '/app/refill/rescue'
@@ -719,6 +729,7 @@ export interface FileRouteTypes {
     | '/app/refill/billing'
     | '/app/refill/health'
     | '/app/refill/inbox'
+    | '/app/refill/promos'
     | '/app/refill/recovery'
     | '/app/refill/reports'
     | '/app/refill/rescue'
@@ -786,6 +797,7 @@ export interface FileRouteTypes {
     | '/app/refill/health'
     | '/app/refill/inbox'
     | '/app/refill/patients'
+    | '/app/refill/promos'
     | '/app/refill/recovery'
     | '/app/refill/reports'
     | '/app/refill/rescue'
@@ -1073,6 +1085,13 @@ declare module '@tanstack/react-router' {
       path: '/recovery'
       fullPath: '/app/refill/recovery'
       preLoaderRoute: typeof AppRefillRecoveryRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/promos': {
+      id: '/app/refill/promos'
+      path: '/promos'
+      fullPath: '/app/refill/promos'
+      preLoaderRoute: typeof AppRefillPromosRouteImport
       parentRoute: typeof AppRefillRoute
     }
     '/app/refill/patients': {
@@ -1374,6 +1393,7 @@ interface AppRefillRouteChildren {
   AppRefillHealthRoute: typeof AppRefillHealthRoute
   AppRefillInboxRoute: typeof AppRefillInboxRoute
   AppRefillPatientsRoute: typeof AppRefillPatientsRouteWithChildren
+  AppRefillPromosRoute: typeof AppRefillPromosRoute
   AppRefillRecoveryRoute: typeof AppRefillRecoveryRoute
   AppRefillReportsRoute: typeof AppRefillReportsRoute
   AppRefillRescueRoute: typeof AppRefillRescueRoute
@@ -1393,6 +1413,7 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillHealthRoute: AppRefillHealthRoute,
   AppRefillInboxRoute: AppRefillInboxRoute,
   AppRefillPatientsRoute: AppRefillPatientsRouteWithChildren,
+  AppRefillPromosRoute: AppRefillPromosRoute,
   AppRefillRecoveryRoute: AppRefillRecoveryRoute,
   AppRefillReportsRoute: AppRefillReportsRoute,
   AppRefillRescueRoute: AppRefillRescueRoute,
