@@ -255,7 +255,7 @@ function FilterChip({
         "inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-medium transition",
         active
           ? accent === "primary"
-            ? "bg-primary text-primary-foreground border-primary"
+            ? "bg-emerald text-paper border-emerald"
             : "bg-foreground text-background border-foreground"
           : "bg-card text-ink-soft border-border hover:text-foreground",
       )}
@@ -302,7 +302,7 @@ function InboxItem({
       >
         <div className="pt-1">
           {isUnread ? (
-            <Mail className="h-4 w-4 text-primary" />
+            <Mail className="h-4 w-4 text-emerald" />
           ) : (
             <MailOpen className="h-4 w-4 text-ink-soft/60" />
           )}
@@ -426,7 +426,7 @@ function MessageBubble({ message }: { message: InboxThreadMessage }) {
         className={cn(
           "max-w-[80%] rounded-2xl px-3.5 py-2 text-sm",
           isOutbound
-            ? "bg-primary text-primary-foreground rounded-br-sm"
+            ? "bg-emerald text-paper rounded-br-sm"
             : "bg-card border border-border rounded-bl-sm",
         )}
       >
@@ -434,7 +434,7 @@ function MessageBubble({ message }: { message: InboxThreadMessage }) {
           <div
             className={cn(
               "text-[11px] font-medium mb-1",
-              isOutbound ? "text-primary-foreground/80" : "text-ink-soft",
+              isOutbound ? "text-paper/80" : "text-ink-soft",
             )}
           >
             {message.subject}
@@ -446,7 +446,7 @@ function MessageBubble({ message }: { message: InboxThreadMessage }) {
         <div
           className={cn(
             "text-[10px] mt-1 flex items-center gap-1.5",
-            isOutbound ? "text-primary-foreground/70" : "text-ink-soft",
+            isOutbound ? "text-paper/70" : "text-ink-soft",
           )}
         >
           <ChannelChip channel={message.channel} mini />
@@ -525,7 +525,7 @@ function EmptyInbox({
           </p>
           <Link
             to={backRoute}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:opacity-90 transition"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-4 py-2 text-sm font-medium hover:opacity-90 transition"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             {backLabel}

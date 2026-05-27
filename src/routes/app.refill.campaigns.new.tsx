@@ -139,13 +139,13 @@ function TemplateCard({
       type="button"
       onClick={onPick}
       disabled={busy}
-      className="text-left rounded-xl border border-border bg-card hover:border-primary/40 hover:bg-muted/30 transition px-4 py-4 disabled:opacity-60 disabled:cursor-wait flex gap-3"
+      className="text-left rounded-xl border border-border bg-card hover:border-emerald/40 hover:bg-muted/30 transition px-4 py-4 disabled:opacity-60 disabled:cursor-wait flex gap-3"
     >
-      <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+      <div className="h-9 w-9 rounded-lg bg-emerald/10 flex items-center justify-center shrink-0">
         {busy ? (
-          <Loader2 className="h-4 w-4 text-primary animate-spin" />
+          <Loader2 className="h-4 w-4 text-emerald animate-spin" />
         ) : (
-          <Icon className="h-4 w-4 text-primary" />
+          <Icon className="h-4 w-4 text-emerald" />
         )}
       </div>
       <div className="flex-1 min-w-0">

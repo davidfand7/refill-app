@@ -390,7 +390,7 @@ function TabBtn({
       className={cn(
         "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition",
         active
-          ? "border-primary text-foreground"
+          ? "border-emerald text-foreground"
           : "border-transparent text-ink-soft hover:text-foreground",
       )}
     >
@@ -400,7 +400,7 @@ function TabBtn({
           className={cn(
             "ml-1.5 inline-flex items-center justify-center min-w-[1.25rem] px-1 rounded-full text-[10px] font-semibold tabular-nums",
             highlight
-              ? "bg-primary text-primary-foreground"
+              ? "bg-emerald text-paper"
               : "bg-muted/40 text-ink-soft",
           )}
         >
@@ -607,9 +607,9 @@ function RecommendationsCard({
   onDismiss: (rec: Recommendation) => void;
 }) {
   return (
-    <section className="rounded-2xl border border-primary/30 bg-primary/5 p-5">
+    <section className="rounded-2xl border border-emerald/30 bg-emerald/5 p-5">
       <div className="flex items-center gap-2 mb-3">
-        <Lightbulb className="h-4 w-4 text-primary" />
+        <Lightbulb className="h-4 w-4 text-emerald" />
         <h3 className="text-sm font-semibold text-foreground">
           Emma recommends
         </h3>
@@ -675,7 +675,7 @@ function RecommendationRow({
           type="button"
           onClick={onApply}
           disabled={busy}
-          className="inline-flex items-center gap-1 rounded-md bg-primary text-primary-foreground px-2.5 py-1 text-xs font-semibold hover:opacity-90 transition disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-md bg-emerald text-paper px-2.5 py-1 text-xs font-semibold hover:opacity-90 transition disabled:opacity-50"
         >
           {busy ? (
             <Loader2 className="h-3 w-3 animate-spin" />
@@ -881,7 +881,7 @@ function EmptyCard({
       {cta && (
         <Link
           to={cta.to}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:opacity-90 transition"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-4 py-2 text-sm font-medium hover:opacity-90 transition"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           {cta.label}

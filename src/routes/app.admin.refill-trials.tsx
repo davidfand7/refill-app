@@ -236,7 +236,7 @@ function AdminRefillTrialsPage() {
           </p>
           <Link
             to="/app"
-            className="inline-block text-sm text-primary underline"
+            className="inline-block text-sm text-emerald underline"
           >
             Back to workspace
           </Link>
@@ -508,7 +508,7 @@ function OfferModal({
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md bg-emerald px-4 py-2 text-sm font-semibold text-paper disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             Save draft
@@ -670,7 +670,7 @@ function FilterStrip({
           onClick={() => onChange(o.id)}
           className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition ${
             value === o.id
-              ? "bg-primary text-primary-foreground border-primary"
+              ? "bg-emerald text-paper border-emerald"
               : "bg-background text-muted-foreground border-border hover:text-foreground"
           }`}
         >
@@ -729,7 +729,7 @@ function TrialRow({
           className={`inline-block text-xs rounded-full px-2 py-0.5 ${
             row.plan === "trial"
               ? "bg-muted text-muted-foreground"
-              : "bg-primary/10 text-primary"
+              : "bg-emerald/10 text-emerald"
           }`}
         >
           {row.plan}
@@ -806,7 +806,7 @@ function TrialRow({
           <button
             type="button"
             onClick={onOpenOfferModal}
-            className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground hover:border-primary hover:text-primary transition"
+            className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground hover:border-emerald hover:text-emerald transition"
           >
             <Plus className="h-3 w-3" />
             Add offer

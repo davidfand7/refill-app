@@ -389,8 +389,8 @@ function PatientsPage() {
         />
         <div className="px-6 lg:px-10 py-10">
           <div className="max-w-xl mx-auto rounded-2xl border border-border bg-card p-10 text-center space-y-5">
-            <div className="mx-auto h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <Users className="h-5 w-5 text-primary" />
+            <div className="mx-auto h-12 w-12 rounded-2xl bg-emerald/10 flex items-center justify-center">
+              <Users className="h-5 w-5 text-emerald" />
             </div>
             <div className="space-y-1.5">
               <h2 className="text-lg font-semibold">No patients yet</h2>
@@ -401,7 +401,7 @@ function PatientsPage() {
             </div>
             <Link
               to="/app/refill/patients/import"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-5 py-2.5 text-sm font-semibold hover:opacity-90 transition"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-5 py-2.5 text-sm font-semibold hover:opacity-90 transition"
             >
               <Upload className="h-4 w-4" />
               Import a CSV
@@ -703,7 +703,7 @@ function PatientRow({
           className="block"
         >
           <div className="flex items-center gap-2">
-            <span className="font-medium text-foreground hover:text-primary transition">
+            <span className="font-medium text-foreground hover:text-emerald transition">
               {row.displayName}
             </span>
             {overdue && (
@@ -780,7 +780,7 @@ function PatientRow({
           className={cn(
             "inline-flex items-center justify-center h-7 w-7 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             row.vip
-              ? "text-primary hover:bg-primary/10"
+              ? "text-emerald hover:bg-emerald/10"
               : "text-ink-faint hover:text-foreground hover:bg-muted",
             vipPending ? "opacity-60 cursor-wait" : "cursor-pointer",
           )}
@@ -812,7 +812,7 @@ function PatientRow({
             onClick={onToggleWaitlist}
             className={cn(
               "relative inline-flex h-5 w-9 items-center rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              active ? "bg-primary" : "bg-muted",
+              active ? "bg-emerald" : "bg-muted",
               pending ? "opacity-60 cursor-wait" : "cursor-pointer",
             )}
           >
@@ -883,7 +883,7 @@ function WindowToggle({
         className={
           "px-3 py-1.5 rounded-md font-medium transition " +
           (value === "12mo"
-            ? "bg-primary text-primary-foreground"
+            ? "bg-emerald text-paper"
             : "text-ink-soft hover:text-foreground")
         }
       >
@@ -895,7 +895,7 @@ function WindowToggle({
         className={
           "px-3 py-1.5 rounded-md font-medium transition " +
           (value === "all"
-            ? "bg-primary text-primary-foreground"
+            ? "bg-emerald text-paper"
             : "text-ink-soft hover:text-foreground")
         }
       >
@@ -925,7 +925,7 @@ function Chip({
       className={
         "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium border transition " +
         (active
-          ? "bg-primary text-primary-foreground border-primary"
+          ? "bg-emerald text-paper border-emerald"
           : "bg-card text-ink-soft border-border hover:bg-muted")
       }
     >

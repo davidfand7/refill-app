@@ -334,7 +334,7 @@ function AddDomainForm({
           onChange={(e) => setDomain(e.target.value)}
           placeholder="rejuvmedical.com"
           required
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald/30"
         />
         <p className="mt-1 text-[11px] text-ink-soft">
           The domain you own — we'll ask you to publish a few DNS records to prove it.
@@ -351,7 +351,7 @@ function AddDomainForm({
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder={brandName}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald/30"
           />
         </div>
         <div>
@@ -363,7 +363,7 @@ function AddDomainForm({
             value={localPart}
             onChange={(e) => setLocalPart(e.target.value)}
             placeholder="hello"
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald/30"
           />
         </div>
       </div>
@@ -379,7 +379,7 @@ function AddDomainForm({
         <button
           type="submit"
           disabled={adding || !domain.trim()}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-emerald text-paper text-sm font-medium hover:bg-emerald/90 disabled:opacity-50"
         >
           {adding ? (
             <Loader2 className="h-4 w-4 animate-spin" />

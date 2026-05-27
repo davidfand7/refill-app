@@ -334,7 +334,7 @@ function WaitlistSeedPage() {
                 (intentType === "earlier_appointment" &&
                   !treatmentsInput.trim())
               }
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-5 py-2.5 text-sm font-medium hover:opacity-90 transition disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald text-paper px-5 py-2.5 text-sm font-medium hover:opacity-90 transition disabled:opacity-50"
             >
               {seeding ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

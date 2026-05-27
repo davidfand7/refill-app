@@ -116,8 +116,8 @@ export function ServicesEditCard({
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
-            <Sparkles className="h-3.5 w-3.5 text-primary" />
+          <div className="h-7 w-7 rounded-lg bg-emerald/10 flex items-center justify-center">
+            <Sparkles className="h-3.5 w-3.5 text-emerald" />
           </div>
           <div className="text-sm font-semibold">Services</div>
         </div>
@@ -140,7 +140,7 @@ export function ServicesEditCard({
                   : undefined
               }
             >
-              {s.matchedProduct && <BadgeCheck className="h-3 w-3 text-primary" />}
+              {s.matchedProduct && <BadgeCheck className="h-3 w-3 text-emerald" />}
               {s.name}
               {s.price && (
                 <span className="text-ink-soft font-medium">· {s.price}</span>
@@ -159,8 +159,8 @@ export function ServicesEditCard({
       )}
 
       {categoryGroups.length > 0 && (
-        <div className="rounded-xl border border-dashed border-primary/30 bg-primary/5 p-3 space-y-3">
-          <div className="text-[11px] font-semibold text-primary uppercase tracking-wider">
+        <div className="rounded-xl border border-dashed border-emerald/30 bg-emerald/5 p-3 space-y-3">
+          <div className="text-[11px] font-semibold text-emerald uppercase tracking-wider">
             Quick-add specifics
           </div>
           {categoryGroups.map((group) => (
@@ -183,7 +183,7 @@ export function ServicesEditCard({
                       className={cn(
                         "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition",
                         checked
-                          ? "bg-primary text-primary-foreground hover:opacity-90"
+                          ? "bg-emerald text-paper hover:opacity-90"
                           : "bg-card border border-border text-foreground hover:bg-muted",
                       )}
                       title={c.manufacturer}
@@ -232,7 +232,7 @@ export function ServicesEditCard({
         </button>
       </div>
       <p className="text-[11px] text-ink-soft">
-        <BadgeCheck className="inline h-3 w-3 text-primary mr-0.5" />
+        <BadgeCheck className="inline h-3 w-3 text-emerald mr-0.5" />
         markers indicate services Emma recognizes from her product database.
       </p>
     </div>

@@ -64,7 +64,7 @@ function VerticalLanding({
       <header className="border-b border-border bg-background/80 backdrop-blur-sm">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center font-bold text-primary-foreground">
+            <div className="h-8 w-8 rounded-lg bg-emerald flex items-center justify-center font-bold text-paper">
               {brand.charAt(0)}
             </div>
             <span className="font-semibold tracking-tight">{brand}</span>
@@ -77,7 +77,7 @@ function VerticalLanding({
 
       <main className="flex-1 flex items-center justify-center px-4 py-20">
         <div className="max-w-xl text-center space-y-6">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald/10 text-emerald">
             <Icon className="h-6 w-6" aria-hidden="true" />
           </div>
           <h1 className="text-4xl sm:text-5xl font-black tracking-tight leading-[1.05]">
@@ -87,7 +87,7 @@ function VerticalLanding({
           <div className="flex justify-center pt-2">
             <Link
               to={ctaTo}
-              className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:opacity-90 transition"
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald px-5 py-3 text-sm font-semibold text-paper hover:opacity-90 transition"
             >
               {ctaLabel} <ArrowRight className="h-4 w-4" />
             </Link>
@@ -385,12 +385,12 @@ function EmailForm({ source, dark }: { source: string; dark?: boolean }) {
         type="email" value={email} onChange={e => setEmail(e.target.value)}
         placeholder="your@email.com" required
         className={cn(
-          "flex-1 rounded-xl border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary transition",
+          "flex-1 rounded-xl border px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald transition",
           dark ? "bg-white/10 border-white/20 text-white placeholder:text-white/40" : "bg-background border-border text-foreground placeholder:text-ink-soft/50",
         )}
       />
       <button type="submit" disabled={state === "loading"}
-        className="flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground font-semibold px-5 py-3 text-sm hover:opacity-90 transition disabled:opacity-60 whitespace-nowrap"
+        className="flex items-center justify-center gap-2 rounded-xl bg-emerald text-paper font-semibold px-5 py-3 text-sm hover:opacity-90 transition disabled:opacity-60 whitespace-nowrap"
       >
         {state === "loading" ? "Joining…" : <><Sparkles className="h-4 w-4" />Get early access</>}
       </button>
@@ -428,7 +428,7 @@ function RepoCard({ name, description, status, href, license }: {
       {...wrapperProps}
       className={cn(
         "block rounded-2xl border border-border bg-card p-5 space-y-3 transition",
-        href ? "hover:border-primary/40 hover:shadow-sm cursor-pointer" : "opacity-70",
+        href ? "hover:border-emerald/40 hover:shadow-sm cursor-pointer" : "opacity-70",
       )}
     >
       <div className="flex items-start justify-between gap-3">
@@ -449,7 +449,7 @@ function RepoCard({ name, description, status, href, license }: {
       <div className="flex items-center justify-between pt-1">
         <span className="text-[10px] font-mono text-ink-soft uppercase tracking-wide">{license}</span>
         {href && (
-          <span className="flex items-center gap-1 text-xs font-semibold text-primary">
+          <span className="flex items-center gap-1 text-xs font-semibold text-emerald">
             <Github className="h-3 w-3" /> View
           </span>
         )}
@@ -466,7 +466,7 @@ function StarterCard({ name, slug, description, runtime }: {
   return (
     <a
       href="/login"
-      className="group rounded-2xl border border-border bg-card p-5 flex flex-col gap-3 hover:border-primary/40 hover:shadow-sm transition cursor-pointer"
+      className="group rounded-2xl border border-border bg-card p-5 flex flex-col gap-3 hover:border-emerald/40 hover:shadow-sm transition cursor-pointer"
     >
       <div className="flex items-center justify-between gap-2">
         <code className="text-[11px] text-ink-soft font-mono">{slug}</code>
@@ -478,7 +478,7 @@ function StarterCard({ name, slug, description, runtime }: {
         <div className="font-semibold text-sm text-foreground">{name}</div>
         <p className="text-xs text-ink-soft leading-relaxed mt-1">{description}</p>
       </div>
-      <div className="flex items-center gap-1 text-xs font-semibold text-primary group-hover:gap-2 transition-all pt-1">
+      <div className="flex items-center gap-1 text-xs font-semibold text-emerald group-hover:gap-2 transition-all pt-1">
         Sign in to import <ArrowRight className="h-3 w-3" />
       </div>
     </a>
@@ -520,7 +520,7 @@ function LandingPage() {
       <nav className="sticky top-0 z-20 border-b border-border bg-background/80 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center font-bold text-primary-foreground text-xs">
+            <div className="h-7 w-7 rounded-lg bg-emerald flex items-center justify-center font-bold text-paper text-xs">
               AP
             </div>
             <span className="font-bold text-foreground">Agentiport</span>
@@ -528,7 +528,7 @@ function LandingPage() {
           </div>
           <div className="flex items-center gap-3">
             <a href="https://github.com/agentiport" target="_blank" rel="noopener noreferrer"
-              className="hidden sm:flex items-center gap-1.5 rounded-lg border border-border bg-card text-foreground text-sm font-semibold px-3 py-1.5 hover:border-primary/40 transition">
+              className="hidden sm:flex items-center gap-1.5 rounded-lg border border-border bg-card text-foreground text-sm font-semibold px-3 py-1.5 hover:border-emerald/40 transition">
               <Star className="h-3.5 w-3.5" /> Star on GitHub
             </a>
             <a href="/login" className="text-sm text-ink-soft hover:text-foreground transition">Sign in</a>
@@ -630,8 +630,8 @@ function LandingPage() {
 
       {/* "Don't get deleted" — moved up for emotional anchor */}
       <section className="max-w-4xl mx-auto px-4 py-20 text-center space-y-6">
-        <span className="inline-block rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold px-3 py-1.5">For developers</span>
-        <h2 className="text-3xl sm:text-4xl font-black">Don't get deleted.<br /><span className="text-primary">Get paid.</span></h2>
+        <span className="inline-block rounded-full border border-emerald/30 bg-emerald/10 text-emerald text-xs font-semibold px-3 py-1.5">For developers</span>
+        <h2 className="text-3xl sm:text-4xl font-black">Don't get deleted.<br /><span className="text-emerald">Get paid.</span></h2>
         <p className="text-ink-soft max-w-lg mx-auto leading-relaxed">
           Your institutional knowledge built the AI that's about to replace you. Most platforms extract it and send you a layoff email. Agentiport routes the revenue back to you — your expertise lives in agents you own, fork lineage tracked, payouts automatic.
         </p>
@@ -651,7 +651,7 @@ function LandingPage() {
             <span className="inline-block rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-xs font-semibold px-3 py-1">Importable now</span>
             <h2 className="text-2xl font-black">Five starter agents you can import in one click.</h2>
             <p className="text-ink-soft text-sm max-w-lg mx-auto">
-              Open source on <a href="https://github.com/agentiport/oa-agent-starters" target="_blank" rel="noopener noreferrer" className="underline text-foreground hover:text-primary transition">github.com/agentiport/oa-agent-starters</a>. Sign in to import any of them as a draft in your workspace, CLARS-scored and ready.
+              Open source on <a href="https://github.com/agentiport/oa-agent-starters" target="_blank" rel="noopener noreferrer" className="underline text-foreground hover:text-emerald transition">github.com/agentiport/oa-agent-starters</a>. Sign in to import any of them as a draft in your workspace, CLARS-scored and ready.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -666,7 +666,7 @@ function LandingPage() {
       {/* OSS constellation */}
       <section className="max-w-6xl mx-auto px-4 py-20 space-y-10">
         <div className="text-center space-y-3">
-          <span className="inline-block rounded-full border border-primary/30 bg-primary/10 text-primary text-xs font-semibold px-3 py-1">
+          <span className="inline-block rounded-full border border-emerald/30 bg-emerald/10 text-emerald text-xs font-semibold px-3 py-1">
             <Boxes className="h-3 w-3 inline mr-1" /> The constellation
           </span>
           <h2 className="text-3xl font-black">Four sister repos, three Show-HN moments.</h2>
@@ -705,7 +705,7 @@ function LandingPage() {
       <footer className="border-t border-border bg-background">
         <div className="max-w-6xl mx-auto px-4 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-ink-soft">
           <div className="flex items-center gap-2">
-            <div className="h-5 w-5 rounded bg-primary flex items-center justify-center font-bold text-primary-foreground text-[9px]">
+            <div className="h-5 w-5 rounded bg-emerald flex items-center justify-center font-bold text-paper text-[9px]">
               AP
             </div>
             <span>Agentiport · The port where agents dock.</span>

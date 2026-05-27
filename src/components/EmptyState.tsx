@@ -47,7 +47,7 @@ export function EmptyState({
         )}
       >
         {/* soft halo */}
-        <span className="absolute inset-0 rounded-full bg-primary/5 animate-pulse" aria-hidden />
+        <span className="absolute inset-0 rounded-full bg-emerald/5 animate-pulse" aria-hidden />
         <Icon className={cn("relative text-ink-soft", iconSize)} aria-hidden />
       </div>
       <div className="text-base font-semibold tracking-tight">{title}</div>

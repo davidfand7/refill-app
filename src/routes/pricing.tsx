@@ -86,11 +86,11 @@ function PlanCard({ plan, onUpgrade, upgrading }: {
     <div className={cn(
       "relative flex flex-col rounded-3xl border p-8 transition",
       plan.highlight
-        ? "border-primary bg-primary/5 shadow-xl shadow-primary/10"
+        ? "border-emerald bg-emerald/5 shadow-xl shadow-primary/10"
         : "border-border bg-card",
     )}>
       {plan.highlight && (
-        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-primary px-4 py-1 text-xs font-bold text-primary-foreground">
+        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-emerald px-4 py-1 text-xs font-bold text-paper">
           Most popular
         </div>
       )}
@@ -123,7 +123,7 @@ function PlanCard({ plan, onUpgrade, upgrading }: {
           <li key={f} className="flex items-start gap-2.5 text-sm">
             <Check className={cn(
               "h-4 w-4 shrink-0 mt-0.5",
-              plan.highlight ? "text-primary" : "text-sage",
+              plan.highlight ? "text-emerald" : "text-sage",
             )} />
             <span className={f.includes("coming soon") ? "text-ink-soft" : "text-foreground"}>
               {f}
@@ -139,7 +139,7 @@ function PlanCard({ plan, onUpgrade, upgrading }: {
           className={cn(
             "inline-flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold transition",
             plan.highlight
-              ? "bg-primary text-primary-foreground hover:opacity-90"
+              ? "bg-emerald text-paper hover:opacity-90"
               : "bg-muted text-foreground hover:bg-muted/80",
           )}
         >
@@ -152,7 +152,7 @@ function PlanCard({ plan, onUpgrade, upgrading }: {
           className={cn(
             "inline-flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold transition disabled:opacity-60",
             plan.highlight
-              ? "bg-primary text-primary-foreground hover:opacity-90"
+              ? "bg-emerald text-paper hover:opacity-90"
               : "bg-muted text-foreground hover:bg-muted/80",
           )}
         >
@@ -199,7 +199,7 @@ function PricingPage() {
       <header className="border-b border-border bg-card/80 backdrop-blur sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <Link to="/" className="flex items-center gap-2 text-sm font-bold">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground text-xs font-bold">OA</div>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald text-paper text-xs font-bold">OA</div>
             Agentiport
           </Link>
           <div className="flex items-center gap-3">
@@ -208,7 +208,7 @@ function PricingPage() {
             </Link>
             <Link
               to="/login"
-              className="rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground hover:opacity-90 transition"
+              className="rounded-lg bg-emerald px-3 py-1.5 text-sm font-semibold text-paper hover:opacity-90 transition"
             >
               Get started free
             </Link>
@@ -220,13 +220,13 @@ function PricingPage() {
 
         {/* Hero */}
         <div className="text-center space-y-4 max-w-2xl mx-auto">
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 border border-primary/20 px-3 py-1 text-xs font-semibold text-primary">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald/10 border border-emerald/20 px-3 py-1 text-xs font-semibold text-emerald">
             <Sparkles className="h-3 w-3" /> Simple, transparent pricing
           </div>
           <h1 className="text-4xl sm:text-5xl font-black tracking-tight">
             Host your agents.
             <br />
-            <span className="text-primary">Pay for the platform, not Claude.</span>
+            <span className="text-emerald">Pay for the platform, not Claude.</span>
           </h1>
           <p className="text-lg text-ink-soft leading-relaxed">
             On Free, you bring your own Anthropic key — we run the orchestration.
@@ -254,7 +254,7 @@ function PricingPage() {
             { icon: Users, title: "Built for builders", body: "Every plan includes the full API, webhooks, and event triggers." },
           ].map((item) => (
             <div key={item.title} className="rounded-2xl border border-border bg-card p-6 space-y-2">
-              <item.icon className="h-6 w-6 text-primary mx-auto" />
+              <item.icon className="h-6 w-6 text-emerald mx-auto" />
               <p className="font-semibold text-sm">{item.title}</p>
               <p className="text-xs text-ink-soft leading-relaxed">{item.body}</p>
             </div>
@@ -290,12 +290,12 @@ function PricingPage() {
         </div>
 
         {/* Bottom CTA */}
-        <div className="rounded-3xl bg-gradient-to-br from-primary/10 to-primary/5 border border-primary/20 p-10 text-center space-y-4">
+        <div className="rounded-3xl bg-gradient-to-br from-primary/10 to-primary/5 border border-emerald/20 p-10 text-center space-y-4">
           <h2 className="text-2xl font-black">Ready to host your first agent?</h2>
           <p className="text-ink-soft text-sm">Free forever. No credit card required.</p>
           <Link
             to="/login"
-            className="inline-flex items-center gap-2 rounded-2xl bg-primary text-primary-foreground px-8 py-3 text-sm font-bold hover:opacity-90 transition"
+            className="inline-flex items-center gap-2 rounded-2xl bg-emerald text-paper px-8 py-3 text-sm font-bold hover:opacity-90 transition"
           >
             <Zap className="h-4 w-4" /> Start building free
           </Link>

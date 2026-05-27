@@ -256,7 +256,7 @@ export function CohortEditor({ value, onSave, readOnly }: CohortEditorProps) {
               type="button"
               onClick={() => void handleSave()}
               disabled={saving}
-              className="inline-flex items-center gap-1 rounded-lg bg-primary text-primary-foreground px-2.5 py-1 text-[11px] font-semibold hover:opacity-90 transition disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-lg bg-emerald text-paper px-2.5 py-1 text-[11px] font-semibold hover:opacity-90 transition disabled:opacity-50"
             >
               {saving ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
@@ -532,7 +532,7 @@ function CohortPreviewPane({
                 ? "bg-destructive/10"
                 : preview.totalMatched === 0
                   ? "bg-muted"
-                  : "bg-primary/5",
+                  : "bg-emerald/5",
             )}
           >
             <span className="text-2xl font-semibold tabular-nums">

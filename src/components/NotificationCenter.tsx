@@ -246,7 +246,7 @@ export function NotificationCenter({
             <Link
               to="/app/operations"
               onClick={() => setOpen(false)}
-              className="block text-center text-[11px] font-medium text-primary hover:underline"
+              className="block text-center text-[11px] font-medium text-emerald hover:underline"
             >
               View all activity →
             </Link>

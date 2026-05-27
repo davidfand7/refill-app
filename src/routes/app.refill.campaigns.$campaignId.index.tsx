@@ -130,7 +130,7 @@ function CampaignDetailPage() {
                 <Link
                   to="/app/refill/campaigns/$campaignId/blast"
                   params={{ campaignId }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
                   Compose blast
@@ -291,30 +291,30 @@ function OfferCard({ offer }: { offer: CampaignOffer }) {
 
 function NextStepsCard({ templateKind }: { templateKind: TemplateKind }) {
   return (
-    <section className="rounded-xl border border-dashed border-primary/30 bg-primary/5 overflow-hidden">
-      <div className="px-5 py-3 border-b border-primary/20 flex items-center gap-2">
-        <Sparkles className="h-3.5 w-3.5 text-primary" />
-        <div className="text-xs font-semibold uppercase tracking-wider text-primary">
+    <section className="rounded-xl border border-dashed border-emerald/30 bg-emerald/5 overflow-hidden">
+      <div className="px-5 py-3 border-b border-emerald/20 flex items-center gap-2">
+        <Sparkles className="h-3.5 w-3.5 text-emerald" />
+        <div className="text-xs font-semibold uppercase tracking-wider text-emerald">
           What's coming next
         </div>
       </div>
       <ul className="px-5 py-3 text-xs space-y-1.5 text-ink-soft">
         <li className="flex items-start gap-2">
-          <CheckCircle2 className="h-3 w-3 mt-0.5 text-primary shrink-0" />
+          <CheckCircle2 className="h-3 w-3 mt-0.5 text-emerald shrink-0" />
           <span>
             <strong>Phase 2 — Cohort editor</strong>: edit filters visually,
             preview matched count + sample patients.
           </span>
         </li>
         <li className="flex items-start gap-2">
-          <Users className="h-3 w-3 mt-0.5 text-primary shrink-0" />
+          <Users className="h-3 w-3 mt-0.5 text-emerald shrink-0" />
           <span>
             <strong>Phase 3 — Blast composer</strong>: per-patient Emma drafts,
             review, send via SMS + email.
           </span>
         </li>
         <li className="flex items-start gap-2">
-          <Mail className="h-3 w-3 mt-0.5 text-primary shrink-0" />
+          <Mail className="h-3 w-3 mt-0.5 text-emerald shrink-0" />
           <span>
             <strong>Phase 4-9</strong>: public booking page, AI Q&amp;A, inbox,
             auto-drafts, cadence digest, campaign reporting.

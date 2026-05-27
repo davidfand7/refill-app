@@ -127,11 +127,11 @@ function SurfaceCard({ surface }: { surface: AdminSurface }) {
   return (
     <Link
       to={surface.path}
-      className="group rounded-2xl border border-border bg-card p-5 transition hover:shadow-sm hover:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group rounded-2xl border border-border bg-card p-5 transition hover:shadow-sm hover:border-emerald/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="flex items-start gap-3 mb-3">
-        <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-          <Icon className="h-4 w-4 text-primary" />
+        <div className="h-9 w-9 rounded-lg bg-emerald/10 flex items-center justify-center shrink-0">
+          <Icon className="h-4 w-4 text-emerald" />
         </div>
       </div>
       <div className="text-[15px] font-semibold tracking-tight mb-1 text-foreground">

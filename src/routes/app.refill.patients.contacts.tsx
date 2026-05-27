@@ -306,7 +306,7 @@ function CoverageCard({ overview }: { overview: ContactsOverview }) {
       <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3">
         <div>
           <div className="text-sm font-semibold flex items-center gap-2">
-            <Users className="h-4 w-4 text-primary" />
+            <Users className="h-4 w-4 text-emerald" />
             Contact coverage
           </div>
           <div className="text-[11px] text-ink-soft mt-0.5">
@@ -424,12 +424,12 @@ function UploadCard({
       className={
         "rounded-2xl border-2 border-dashed p-10 text-center transition " +
         (isDragging
-          ? "border-primary bg-primary/5"
+          ? "border-emerald bg-emerald/5"
           : "border-border bg-card hover:bg-muted/50")
       }
     >
-      <div className="mx-auto h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
-        <Upload className="h-6 w-6 text-primary" />
+      <div className="mx-auto h-14 w-14 rounded-2xl bg-emerald/10 flex items-center justify-center mb-4">
+        <Upload className="h-6 w-6 text-emerald" />
       </div>
       <div className="text-base font-semibold mb-1">
         Drop your client list CSV
@@ -453,7 +453,7 @@ function UploadCard({
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-semibold hover:opacity-90 transition"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-4 py-2 text-sm font-semibold hover:opacity-90 transition"
         >
           <FileText className="h-4 w-4" />
           Choose a CSV
@@ -477,7 +477,7 @@ function ConfirmUploadCard({
       <div className="px-5 py-4 border-b border-border flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold flex items-center gap-2">
-            <FileText className="h-4 w-4 text-primary" />
+            <FileText className="h-4 w-4 text-emerald" />
             {file.name}
           </div>
           <div className="text-[11px] text-ink-soft mt-0.5">
@@ -509,7 +509,7 @@ function ConfirmUploadCard({
         <button
           type="button"
           onClick={onCommit}
-          className="rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition"
+          className="rounded-lg bg-emerald text-paper px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition"
         >
           Match contacts
         </button>
@@ -611,7 +611,7 @@ function SuggestionsSection({
       <div>
         <div className="flex items-baseline justify-between mb-3">
           <h2 className="text-base font-semibold flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
+            <Sparkles className="h-4 w-4 text-emerald" />
             Suggested matches
           </h2>
           <div className="text-[11px] text-ink-soft">
@@ -773,7 +773,7 @@ function GapRow({
               <button
                 type="button"
                 onClick={() => onConfirm(gap.id, s.candidate.id)}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition"
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
                 Confirm match

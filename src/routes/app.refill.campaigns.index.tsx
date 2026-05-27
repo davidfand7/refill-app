@@ -127,7 +127,7 @@ function CampaignsPage() {
           actions={
             <Link
               to="/app/refill/campaigns/new"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition"
             >
               <Plus className="h-3.5 w-3.5" />
               New campaign
@@ -136,8 +136,8 @@ function CampaignsPage() {
         />
         <div className="px-6 lg:px-10 py-10">
           <div className="max-w-xl mx-auto rounded-2xl border border-border bg-card p-10 text-center space-y-5">
-            <div className="mx-auto h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <Megaphone className="h-5 w-5 text-primary" />
+            <div className="mx-auto h-12 w-12 rounded-2xl bg-emerald/10 flex items-center justify-center">
+              <Megaphone className="h-5 w-5 text-emerald" />
             </div>
             <div className="space-y-1.5">
               <h2 className="text-lg font-semibold">No campaigns yet</h2>
@@ -149,7 +149,7 @@ function CampaignsPage() {
             </div>
             <Link
               to="/app/refill/campaigns/new"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-5 py-2.5 text-sm font-semibold hover:opacity-90 transition"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-5 py-2.5 text-sm font-semibold hover:opacity-90 transition"
             >
               <Sparkles className="h-4 w-4" />
               Browse templates
@@ -171,7 +171,7 @@ function CampaignsPage() {
         actions={
           <Link
             to="/app/refill/campaigns/new"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition"
           >
             <Plus className="h-3.5 w-3.5" />
             New campaign
@@ -224,7 +224,7 @@ function CampaignCard({ campaign }: { campaign: SpaCampaign }) {
     <Link
       to="/app/refill/campaigns/$campaignId"
       params={{ campaignId: campaign.id }}
-      className="block rounded-xl border border-border bg-card hover:border-primary/30 hover:bg-muted/30 transition px-4 py-3.5"
+      className="block rounded-xl border border-border bg-card hover:border-emerald/30 hover:bg-muted/30 transition px-4 py-3.5"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">

@@ -344,7 +344,7 @@ function BlastComposerPage() {
                 (counts?.total ?? 0) === 0
               }
               onClick={() => setConfirmOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {sending ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -556,7 +556,7 @@ function ScheduleModal({
           <X className="h-4 w-4" />
         </button>
         <div className="px-6 pt-6 pb-4">
-          <div className="flex items-center gap-2 text-xs font-medium tracking-wider text-primary uppercase mb-1">
+          <div className="flex items-center gap-2 text-xs font-medium tracking-wider text-emerald uppercase mb-1">
             <CalendarClock className="h-3.5 w-3.5" />
             Schedule send
           </div>
@@ -578,7 +578,7 @@ function ScheduleModal({
               value={localValue}
               min={minLocal}
               onChange={(e) => setLocalValue(e.target.value)}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald/30"
             />
           </label>
           {valid && (
@@ -613,7 +613,7 @@ function ScheduleModal({
             type="button"
             onClick={() => valid && onConfirm(parsed.toISOString())}
             disabled={scheduling || !valid}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-emerald text-paper text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
           >
             {scheduling ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -704,7 +704,7 @@ function SendConfirmModal({
           <button
             type="button"
             onClick={onConfirm}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition"
           >
             <Send className="h-3.5 w-3.5" />
             Send {counts.total.toLocaleString()} now
@@ -1074,7 +1074,7 @@ function TargetRow({
           type="button"
           onClick={() => void save()}
           disabled={!draft || saving || generating || locked}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition disabled:opacity-50"
         >
           {saving ? (
             <Loader2 className="h-3 w-3 animate-spin" />
@@ -1214,7 +1214,7 @@ function ChannelToggle({
           className={cn(
             "px-2.5 py-1 rounded-md font-medium transition inline-flex items-center gap-1",
             value === key
-              ? "bg-primary text-primary-foreground"
+              ? "bg-emerald text-paper"
               : "text-ink-soft hover:text-foreground",
             disabled && "opacity-40 cursor-not-allowed",
           )}

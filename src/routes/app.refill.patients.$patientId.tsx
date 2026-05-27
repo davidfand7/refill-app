@@ -188,7 +188,7 @@ function ContactCard({ patient }: { patient: PatientListRow }) {
             value={
               <a
                 href={`tel:${patient.phone}`}
-                className="text-primary hover:underline"
+                className="text-emerald hover:underline"
               >
                 {formatPhone(patient.phone)}
               </a>
@@ -202,7 +202,7 @@ function ContactCard({ patient }: { patient: PatientListRow }) {
             value={
               <a
                 href={`mailto:${patient.email}`}
-                className="text-primary hover:underline"
+                className="text-emerald hover:underline"
               >
                 {patient.email}
               </a>
@@ -609,7 +609,7 @@ function WindowToggle({
         className={
           "px-3 py-1 rounded-md font-medium transition " +
           (value === "12mo"
-            ? "bg-primary text-primary-foreground"
+            ? "bg-emerald text-paper"
             : "text-ink-soft hover:text-foreground")
         }
       >
@@ -621,7 +621,7 @@ function WindowToggle({
         className={
           "px-3 py-1 rounded-md font-medium transition " +
           (value === "all"
-            ? "bg-primary text-primary-foreground"
+            ? "bg-emerald text-paper"
             : "text-ink-soft hover:text-foreground")
         }
       >

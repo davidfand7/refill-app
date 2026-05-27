@@ -475,7 +475,7 @@ function UnverifiedRow({
           value={amountInput}
           onChange={(e) => setAmountInput(e.target.value)}
           placeholder="0.00"
-          className="w-28 rounded-md border border-border bg-background px-2 py-1 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-28 rounded-md border border-border bg-background px-2 py-1 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald/30"
         />
         <button
           type="button"
@@ -562,7 +562,7 @@ function VerifiedRow({
 
 function AgentPill({ agent }: { agent: string }) {
   const cfg: Record<string, { bg: string; fg: string; label: string }> = {
-    rescue: { bg: "bg-primary/10", fg: "text-primary", label: "Rescue" },
+    rescue: { bg: "bg-emerald/10", fg: "text-emerald", label: "Rescue" },
     post_recovery: { bg: "bg-amber-500/10", fg: "text-amber-700", label: "Post-show" },
     preshow: { bg: "bg-emerald-500/10", fg: "text-emerald-700", label: "Pre-show" },
   };
@@ -874,7 +874,7 @@ function TabBtn({
       className={cn(
         "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition",
         active
-          ? "border-primary text-foreground"
+          ? "border-emerald text-foreground"
           : "border-transparent text-ink-soft hover:text-foreground",
       )}
     >
@@ -930,7 +930,7 @@ function DepositsTab({
             Most spas leave this OFF. Configure on{" "}
             <Link
               to="/app/refill/settings/noshow"
-              className="text-primary hover:underline"
+              className="text-emerald hover:underline"
             >
               Settings · No-show recovery
             </Link>
@@ -1036,7 +1036,7 @@ function DepositStatusPill({ status }: { status: DepositHold["status"] }) {
       fg: "text-amber-700",
       label: "Intent",
     },
-    held: { bg: "bg-primary/10", fg: "text-primary", label: "Held" },
+    held: { bg: "bg-emerald/10", fg: "text-emerald", label: "Held" },
     applied: {
       bg: "bg-emerald-500/10",
       fg: "text-emerald-700",

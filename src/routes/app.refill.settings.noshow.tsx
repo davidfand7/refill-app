@@ -121,7 +121,7 @@ function NoShowSettingsPage() {
             className={cn(
               "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition",
               isDirty
-                ? "bg-primary text-primary-foreground hover:opacity-90"
+                ? "bg-emerald text-paper hover:opacity-90"
                 : "bg-muted text-ink-soft cursor-not-allowed",
             )}
           >
@@ -474,7 +474,7 @@ function NumberField({
           min={min}
           max={max}
           disabled={disabled}
-          className="w-24 rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          className="w-24 rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald/30"
         />
         {suffix && <span className="text-xs text-ink-soft">{suffix}</span>}
       </div>
@@ -507,7 +507,7 @@ function TextField({
         placeholder={placeholder}
         disabled={disabled}
         maxLength={maxLength}
-        className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+        className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald/30"
       />
     </label>
   );
@@ -533,7 +533,7 @@ function Select({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+        className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald/30"
       >
         {options.map((o) => (
           <option key={o.v} value={o.v}>
@@ -605,12 +605,12 @@ function CadenceEditor({
               placeholder="48"
               min={1}
               max={168}
-              className="w-16 rounded-md border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-16 rounded-md border border-border bg-background px-2 py-0.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald/30"
             />
             <button
               type="button"
               onClick={addHour}
-              className="text-xs text-primary hover:underline"
+              className="text-xs text-emerald hover:underline"
             >
               Add
             </button>

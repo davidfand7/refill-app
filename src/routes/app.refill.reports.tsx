@@ -126,7 +126,7 @@ function EmptyReports() {
       </p>
       <Link
         to="/app/refill/campaigns"
-        className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:opacity-90 transition"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-4 py-2 text-sm font-medium hover:opacity-90 transition"
       >
         <Megaphone className="h-4 w-4" />
         Go to Campaigns
@@ -231,7 +231,7 @@ function FunnelChart({ totals }: { totals: EmmaReports["totals"] }) {
                 className={cn(
                   "h-full transition-all duration-500 ease-out",
                   s.tone === "neutral" && "bg-foreground/80",
-                  s.tone === "engagement" && "bg-primary/80",
+                  s.tone === "engagement" && "bg-emerald/80",
                   s.tone === "conversion" && "bg-amber-500/80",
                   s.tone === "won" && "bg-emerald-500/80",
                 )}
@@ -310,7 +310,7 @@ function CampaignTable({ campaigns }: { campaigns: CampaignFunnel[] }) {
                     <Link
                       to="/app/refill/campaigns/$campaignId"
                       params={{ campaignId: c.campaignId }}
-                      className="font-medium text-foreground hover:text-primary"
+                      className="font-medium text-foreground hover:text-emerald"
                     >
                       {c.title}
                     </Link>

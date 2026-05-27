@@ -175,8 +175,8 @@ function KarenDashboard() {
         />
         <div className="px-6 lg:px-10 py-10">
           <div className="max-w-xl mx-auto rounded-2xl border border-border bg-card p-8 text-center space-y-4">
-            <div className="mx-auto h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <Sprout className="h-5 w-5 text-primary" />
+            <div className="mx-auto h-12 w-12 rounded-2xl bg-emerald/10 flex items-center justify-center">
+              <Sprout className="h-5 w-5 text-emerald" />
             </div>
             <div className="space-y-1">
               <h2 className="text-lg font-semibold">No spa claimed yet</h2>
@@ -186,7 +186,7 @@ function KarenDashboard() {
             </div>
             <Link
               to="/claim-your-business"
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground px-5 py-2.5 text-sm font-semibold hover:opacity-90 transition"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald text-paper px-5 py-2.5 text-sm font-semibold hover:opacity-90 transition"
             >
               Claim your spa
               <ArrowRight className="h-4 w-4" />
@@ -314,7 +314,7 @@ function OverdueTodayCard() {
         <Link
           to="/app/refill/patients"
           search={{ overdue: "1" } as never}
-          className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition"
+          className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-3 py-1.5 text-xs font-semibold hover:opacity-90 transition"
         >
           <Users className="h-3.5 w-3.5" />
           See all
@@ -702,7 +702,7 @@ function SaveBar({
           type="button"
           onClick={onSave}
           disabled={saving}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-primary-foreground px-4 py-1.5 text-xs font-semibold hover:opacity-90 disabled:opacity-60 transition"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-4 py-1.5 text-xs font-semibold hover:opacity-90 disabled:opacity-60 transition"
         >
           {saving ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -751,8 +751,8 @@ function EditCard({
   return (
     <div className="rounded-2xl border border-border bg-card p-5 space-y-3">
       <div className="flex items-center gap-2">
-        <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
-          <Icon className="h-3.5 w-3.5 text-primary" />
+        <div className="h-7 w-7 rounded-lg bg-emerald/10 flex items-center justify-center">
+          <Icon className="h-3.5 w-3.5 text-emerald" />
         </div>
         <div className="text-sm font-semibold">{title}</div>
       </div>

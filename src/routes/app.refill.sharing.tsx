@@ -126,14 +126,14 @@ function SharingPage() {
         )}
         {reps !== null && reps.length === 0 && (
           <div className="rounded-2xl border border-border bg-card p-10 text-center space-y-3">
-            <div className="mx-auto h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center">
-              <Users className="h-5 w-5 text-primary" />
+            <div className="mx-auto h-12 w-12 rounded-2xl bg-emerald/10 flex items-center justify-center">
+              <Users className="h-5 w-5 text-emerald" />
             </div>
             <div className="space-y-1">
               <h2 className="text-lg font-semibold">No rep relationships yet</h2>
               <p className="text-sm text-ink-soft max-w-md mx-auto leading-relaxed">
                 Once you tap "I'm interested" on a promo from your{" "}
-                <Link to="/app/refill/promos" className="text-primary hover:underline">
+                <Link to="/app/refill/promos" className="text-emerald hover:underline">
                   eligible promos
                 </Link>{" "}
                 page, that rep will show up here. You can then choose what — if
@@ -238,7 +238,7 @@ function RepRow({
             "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 " +
             (rep.isSharing
               ? "border border-border bg-background text-ink-soft hover:bg-muted hover:text-foreground"
-              : "bg-primary text-primary-foreground hover:opacity-90")
+              : "bg-emerald text-paper hover:opacity-90")
           }
         >
           {busy ? (

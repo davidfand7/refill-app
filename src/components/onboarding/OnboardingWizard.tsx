@@ -261,7 +261,7 @@ function PlatformWizard({ userId, displayName }: Props) {
         {/* Progress strip */}
         <div className="flex h-1 w-full bg-muted">
           {[0, 1, 2].map((i) => (
-            <div key={i} className={cn("flex-1 transition-colors", i <= step ? "bg-primary" : "")} />
+            <div key={i} className={cn("flex-1 transition-colors", i <= step ? "bg-emerald" : "")} />
           ))}
         </div>
 
@@ -273,7 +273,7 @@ function PlatformWizard({ userId, displayName }: Props) {
           {/* Step 0: Welcome + role selection */}
           {step === 0 && (
             <div>
-              <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald/10 text-emerald">
                 <Sparkles className="h-5 w-5" />
               </div>
               <h2 id="onboarding-title" className="text-2xl font-semibold tracking-tight">
@@ -287,10 +287,10 @@ function PlatformWizard({ userId, displayName }: Props) {
               <button
                 type="button"
                 onClick={startImport}
-                className="mt-5 w-full flex items-center justify-between gap-4 rounded-xl border border-primary/40 bg-primary/5 px-4 py-3 text-left hover:bg-primary/10 transition group"
+                className="mt-5 w-full flex items-center justify-between gap-4 rounded-xl border border-emerald/40 bg-emerald/5 px-4 py-3 text-left hover:bg-emerald/10 transition group"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald text-paper">
                     <Code2 className="h-4 w-4" />
                   </div>
                   <div className="min-w-0">
@@ -298,7 +298,7 @@ function PlatformWizard({ userId, displayName }: Props) {
                     <div className="text-[11px] text-ink-soft mt-0.5 font-mono">→ /app/import · pick from agentiport/oa-agent-starters or paste your own</div>
                   </div>
                 </div>
-                <ArrowRight className="h-4 w-4 text-primary shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                <ArrowRight className="h-4 w-4 text-emerald shrink-0 group-hover:translate-x-0.5 transition-transform" />
               </button>
 
               <div className="mt-5 text-[11px] text-ink-soft uppercase tracking-wider font-medium">
@@ -316,13 +316,13 @@ function PlatformWizard({ userId, displayName }: Props) {
                       className={cn(
                         "flex items-start gap-3 rounded-xl border p-4 text-left transition",
                         active
-                          ? "border-primary bg-primary/5 ring-2 ring-primary/30"
-                          : "border-border hover:border-primary/50 hover:bg-muted/40",
+                          ? "border-emerald bg-emerald/5 ring-2 ring-emerald/30"
+                          : "border-border hover:border-emerald/50 hover:bg-muted/40",
                       )}
                     >
                       <div className={cn(
                         "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
-                        active ? "bg-primary text-primary-foreground" : "bg-muted text-foreground",
+                        active ? "bg-emerald text-paper" : "bg-muted text-foreground",
                       )}>
                         <r.Icon className="h-4 w-4" />
                       </div>
@@ -330,7 +330,7 @@ function PlatformWizard({ userId, displayName }: Props) {
                         <div className="text-sm font-medium">{r.label}</div>
                         <div className="mt-0.5 text-xs text-ink-soft leading-snug">{r.sub}</div>
                       </div>
-                      {active && <Check className="ml-auto shrink-0 h-4 w-4 text-primary mt-0.5" />}
+                      {active && <Check className="ml-auto shrink-0 h-4 w-4 text-emerald mt-0.5" />}
                     </button>
                   );
                 })}
@@ -356,13 +356,13 @@ function PlatformWizard({ userId, displayName }: Props) {
                       className={cn(
                         "group flex items-start gap-3 rounded-xl border p-4 text-left transition",
                         active
-                          ? "border-primary bg-primary/5 ring-2 ring-primary/30"
-                          : "border-border hover:border-primary/50 hover:bg-muted/40",
+                          ? "border-emerald bg-emerald/5 ring-2 ring-emerald/30"
+                          : "border-border hover:border-emerald/50 hover:bg-muted/40",
                       )}
                     >
                       <div className={cn(
                         "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-                        active ? "bg-primary text-primary-foreground" : "bg-muted text-foreground",
+                        active ? "bg-emerald text-paper" : "bg-muted text-foreground",
                       )}>
                         <s.Icon className="h-4 w-4" />
                       </div>
@@ -370,7 +370,7 @@ function PlatformWizard({ userId, displayName }: Props) {
                         <div className="flex items-center gap-2">
                           <div className="font-medium text-sm">{s.name}</div>
                           {active && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[10px] font-medium text-primary-foreground">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald px-2 py-0.5 text-[10px] font-medium text-paper">
                               <Check className="h-3 w-3" /> Selected
                             </span>
                           )}
@@ -399,7 +399,7 @@ function PlatformWizard({ userId, displayName }: Props) {
           {/* Step 2: Done (role-specific next steps) */}
           {step === 2 && (
             <div>
-              <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-emerald/10 text-emerald">
                 <Rocket className="h-5 w-5" />
               </div>
               <h2 className="text-2xl font-semibold tracking-tight">You're set.</h2>
@@ -407,7 +407,7 @@ function PlatformWizard({ userId, displayName }: Props) {
               <ol className="mt-5 space-y-3">
                 {nextSteps.map((row) => (
                   <li key={row.n} className="flex gap-3">
-                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-semibold">
+                    <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald text-paper text-xs font-semibold">
                       {row.n}
                     </div>
                     <div>
@@ -452,7 +452,7 @@ function PlatformWizard({ userId, displayName }: Props) {
                   if (role) saveRole(userId, role);
                   setStep(1);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald px-4 py-1.5 text-sm font-medium text-paper hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Continue
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -466,7 +466,7 @@ function PlatformWizard({ userId, displayName }: Props) {
                   const s = STARTERS.find((x) => x.id === pickedStarter);
                   if (s) createFromStarter(s);
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald px-4 py-1.5 text-sm font-medium text-paper hover:opacity-90 transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {creating ? "Creating…" : "Create my agent"}
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -481,7 +481,7 @@ function PlatformWizard({ userId, displayName }: Props) {
                     navigate({ to: "/app/agents/$id", params: { id: createdAgentId } });
                   }
                 }}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 transition"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald px-4 py-1.5 text-sm font-medium text-paper hover:opacity-90 transition"
               >
                 {createdAgentId ? "Open my agent" : "Done"}
                 <ArrowRight className="h-3.5 w-3.5" />
