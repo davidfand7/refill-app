@@ -26,7 +26,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
-import { verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId } from "@/server/auth-helpers";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -200,11 +200,13 @@ export async function logDepositIntent(args: {
 
 const listInput = z.object({
   accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const voidInput = z.object({
   accessToken: z.string().min(1),
   depositHoldId: z.string().uuid(),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 // ─── listDepositIntents ───────────────────────────────────────────────────
@@ -212,7 +214,10 @@ const voidInput = z.object({
 export const listDepositIntents = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => listInput.parse(input))
   .handler(async ({ data }): Promise<DepositHold[]> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     const { data: rows, error } = await sb
@@ -220,7 +225,7 @@ export const listDepositIntents = createServerFn({ method: "POST" })
       .select(
         "id, appointment_id, patient_node_id, trigger_reason, amount_usd, status, intent_logged_at",
       )
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .order("intent_logged_at", { ascending: false })
       .limit(200);
     if (error) throw new Error(`Couldn't load deposits: ${error.message}`);
@@ -267,7 +272,10 @@ export const listDepositIntents = createServerFn({ method: "POST" })
 export const markDepositVoided = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => voidInput.parse(input))
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     await sb
@@ -275,10 +283,10 @@ export const markDepositVoided = createServerFn({ method: "POST" })
       .update({
         status: "voided",
         voided_at: new Date().toISOString(),
-        voided_by: userId,
+        voided_by: effectiveUserId,
       })
       .eq("id", data.depositHoldId)
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .in("status", ["intent", "held"]); // Can't void already-applied/refunded
     return { ok: true };
   });

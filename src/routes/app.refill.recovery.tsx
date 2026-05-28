@@ -38,6 +38,7 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 import { useShell } from "@/lib/shell";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
   getRecoveryStats,
   listRecoveryEvents,
@@ -85,6 +86,14 @@ function RecoveryDashboard() {
   const brandHeader = isRefill ? "Refill" : "Emma(OS)";
   const brandName = isRefill ? "Refill" : "Emma";
 
+  // v1.26.8: admin viewing-as plumbing. All 7 server fns called from this
+  // page now accept viewAsUserId (emma-attribution + emma-deposits swept
+  // in v1.26.8; emma-billing.getInvoicePreview swept in v1.26.7). Wiring
+  // them all at once avoids the split-brain UI v1.25.6 warned about.
+  const membership = useTenantMembership();
+  const viewAsUserId =
+    membership.status === "tenant" ? membership.viewAsUserId : undefined;
+
   const load = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -95,10 +104,10 @@ function RecoveryDashboard() {
         return;
       }
       const [evts, st, inv, deps] = await Promise.all([
-        listRecoveryEvents({ data: { accessToken: token } }),
-        getRecoveryStats({ data: { accessToken: token } }),
-        getInvoicePreview({ data: { accessToken: token } }),
-        listDepositIntents({ data: { accessToken: token } }),
+        listRecoveryEvents({ data: { accessToken: token, viewAsUserId } }),
+        getRecoveryStats({ data: { accessToken: token, viewAsUserId } }),
+        getInvoicePreview({ data: { accessToken: token, viewAsUserId } }),
+        listDepositIntents({ data: { accessToken: token, viewAsUserId } }),
       ]);
       setEvents(evts);
       setStats(st);
@@ -110,7 +119,7 @@ function RecoveryDashboard() {
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [viewAsUserId]);
 
   async function voidDeposit(id: string) {
     if (
@@ -123,7 +132,7 @@ function RecoveryDashboard() {
       const token = sess.session?.access_token;
       if (!token) return;
       await markDepositVoided({
-        data: { accessToken: token, depositHoldId: id },
+        data: { accessToken: token, depositHoldId: id, viewAsUserId },
       });
       void load();
       toast.success("Voided.");
@@ -145,7 +154,12 @@ function RecoveryDashboard() {
       const token = sess.session?.access_token;
       if (!token) return;
       const updated = await manualConfirmRecovery({
-        data: { accessToken: token, recoveryEventId: eventId, amountUsd: amount },
+        data: {
+          accessToken: token,
+          recoveryEventId: eventId,
+          amountUsd: amount,
+          viewAsUserId,
+        },
       });
       setEvents((prev) =>
         prev?.map((e) =>
@@ -175,7 +189,7 @@ function RecoveryDashboard() {
       const token = sess.session?.access_token;
       if (!token) return;
       await unconfirmRecovery({
-        data: { accessToken: token, recoveryEventId: eventId },
+        data: { accessToken: token, recoveryEventId: eventId, viewAsUserId },
       });
       void load();
       toast.success("Reverted to unverified.");

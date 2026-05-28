@@ -30,7 +30,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
-import { verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId } from "@/server/auth-helpers";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -212,6 +212,7 @@ export async function reconcileRecoveryEventsForUser(args: {
 const listInput = z.object({
   accessToken: z.string().min(1),
   monthIso: z.string().optional(), // YYYY-MM, defaults to current month
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const manualInput = z.object({
@@ -219,15 +220,18 @@ const manualInput = z.object({
   recoveryEventId: z.string().uuid(),
   amountUsd: z.number().min(0).max(100000),
   notes: z.string().max(500).optional(),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const unconfirmInput = z.object({
   accessToken: z.string().min(1),
   recoveryEventId: z.string().uuid(),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const statsInput = z.object({
   accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 // ─── listRecoveryEvents (UI) ──────────────────────────────────────────────
@@ -235,7 +239,10 @@ const statsInput = z.object({
 export const listRecoveryEvents = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => listInput.parse(input))
   .handler(async ({ data }): Promise<RecoveryEvent[]> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     // Month bounds — UTC for the cron consistency. Spa-local rendering
@@ -257,7 +264,7 @@ export const listRecoveryEvents = createServerFn({ method: "POST" })
       .select(
         "id, appointment_id, patient_node_id, recovery_agent, attribution_method, attributed_revenue_usd, verification_source, verified_at, created_at",
       )
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .gte("created_at", monthStart.toISOString())
       .lt("created_at", monthEnd.toISOString())
       .order("created_at", { ascending: false })
@@ -332,7 +339,10 @@ export const listRecoveryEvents = createServerFn({ method: "POST" })
 export const manualConfirmRecovery = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => manualInput.parse(input))
   .handler(async ({ data }): Promise<RecoveryEvent> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     const { data: updated, error } = await sb
@@ -341,11 +351,11 @@ export const manualConfirmRecovery = createServerFn({ method: "POST" })
         verified_at: new Date().toISOString(),
         verification_source: "manual",
         attributed_revenue_usd: data.amountUsd,
-        verified_by: userId,
+        verified_by: effectiveUserId,
         notes: data.notes ?? null,
       })
       .eq("id", data.recoveryEventId)
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .is("verified_at", null) // Don't clobber an already-verified row.
       .select(
         "id, appointment_id, patient_node_id, recovery_agent, attribution_method, attributed_revenue_usd, verification_source, verified_at, created_at",
@@ -379,7 +389,10 @@ export const manualConfirmRecovery = createServerFn({ method: "POST" })
 export const unconfirmRecovery = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => unconfirmInput.parse(input))
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     await sb
@@ -391,7 +404,7 @@ export const unconfirmRecovery = createServerFn({ method: "POST" })
         verified_by: null,
       })
       .eq("id", data.recoveryEventId)
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .eq("verification_source", "manual"); // Only manual verifications are undoable.
     return { ok: true };
   });
@@ -401,7 +414,10 @@ export const unconfirmRecovery = createServerFn({ method: "POST" })
 export const getRecoveryStats = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => statsInput.parse(input))
   .handler(async ({ data }): Promise<RecoveryStats> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     const now = new Date();
@@ -419,26 +435,26 @@ export const getRecoveryStats = createServerFn({ method: "POST" })
         sb
           .from("emma_recovery_events")
           .select("attributed_revenue_usd, appointment_id")
-          .eq("user_id", userId)
+          .eq("user_id", effectiveUserId)
           .gte("verified_at", monthStart.toISOString())
           .not("verified_at", "is", null),
         // Prior-month verified — just the totals for MoM delta.
         sb
           .from("emma_recovery_events")
           .select("attributed_revenue_usd")
-          .eq("user_id", userId)
+          .eq("user_id", effectiveUserId)
           .gte("verified_at", priorMonthStart.toISOString())
           .lt("verified_at", monthStart.toISOString())
           .not("verified_at", "is", null),
         sb
           .from("emma_recovery_events")
           .select("attributed_revenue_usd")
-          .eq("user_id", userId)
+          .eq("user_id", effectiveUserId)
           .not("verified_at", "is", null),
         sb
           .from("emma_recovery_events")
           .select("id", { count: "exact", head: true })
-          .eq("user_id", userId)
+          .eq("user_id", effectiveUserId)
           .is("verified_at", null)
           .gte("created_at", monthStart.toISOString()),
       ]);
