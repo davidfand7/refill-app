@@ -158,8 +158,31 @@ function AListRulesPage() {
 
   // ─── Derived state ───────────────────────────────────────────────────────
 
+  // v1.26.5 hotfix: filter to 6mo-only here. v1.26.4 widened the server
+  // WHERE to include lifetime-only patients (so the toggle could surface
+  // lifetime totals), but the same widened set was being collapsed into
+  // unreliableIds and fed into the rule, silently flipping rule semantics
+  // from 6mo-strict to lifetime-inclusive. The rule has been 6mo-strict
+  // since v1.25.4 — changing it requires conscious opt-in, not a side
+  // effect of a data ship. Lifetime totals stay informational below.
   const unreliableIds = useMemo(
-    () => new Set(reliabilityFlags.map((f) => f.patientNodeId)),
+    () =>
+      new Set(
+        reliabilityFlags
+          .filter((f) => f.cancellations6mo > 0 || f.noShows6mo > 0)
+          .map((f) => f.patientNodeId),
+      ),
+    [reliabilityFlags],
+  );
+
+  const lifetimeOnlyCount = useMemo(
+    () =>
+      reliabilityFlags.filter(
+        (f) =>
+          f.cancellations6mo === 0 &&
+          f.noShows6mo === 0 &&
+          (f.cancellationsLifetime > 0 || f.noShowsLifetime > 0),
+      ).length,
     [reliabilityFlags],
   );
 
@@ -484,6 +507,14 @@ function AListRulesPage() {
                   {reliabilityTotals.cancellationsLifetime === 1 ? "" : "s"} /{" "}
                   {reliabilityTotals.noShowsLifetime.toLocaleString()} no-show
                   {reliabilityTotals.noShowsLifetime === 1 ? "" : "s"}
+                  {lifetimeOnlyCount > 0 && (
+                    <>
+                      {" "}&middot; {lifetimeOnlyCount.toLocaleString()} more
+                      patient{lifetimeOnlyCount === 1 ? "" : "s"} with older
+                      history outside the 6mo window (not excluded by this
+                      rule)
+                    </>
+                  )}
                 </span>
               </span>
             </label>
