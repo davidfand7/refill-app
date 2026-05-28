@@ -30,6 +30,7 @@ import {
   type NoShowPolicy,
 } from "@/server/emma-appointments.functions";
 import { useShell } from "@/lib/shell";
+import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/refill/settings/noshow")({
@@ -44,6 +45,10 @@ function NoShowSettingsPage() {
   const isRefill = shell === "refill";
   const brandHeader = isRefill ? "Refill" : "Emma(OS)";
   const brandName = isRefill ? "Refill" : "Emma";
+
+  const membership = useTenantMembership();
+  const viewAsUserId =
+    membership.status === "tenant" ? membership.viewAsUserId : undefined;
 
   const [policy, setPolicy] = useState<NoShowPolicy | null>(null);
   const [draft, setDraft] = useState<Partial<NoShowPolicy>>({});
@@ -60,7 +65,9 @@ function NoShowSettingsPage() {
         setLoadError("Please sign in.");
         return;
       }
-      const p = await getNoShowPolicy({ data: { accessToken: token } });
+      const p = await getNoShowPolicy({
+        data: { accessToken: token, viewAsUserId },
+      });
       setPolicy(p);
       setDraft({});
       setLoadError(null);
@@ -69,7 +76,7 @@ function NoShowSettingsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [viewAsUserId]);
 
   useEffect(() => {
     void load();
@@ -90,7 +97,7 @@ function NoShowSettingsPage() {
       const token = sess.session?.access_token;
       if (!token) return;
       const updated = await updateNoShowPolicy({
-        data: { accessToken: token, patch: draft as never },
+        data: { accessToken: token, patch: draft as never, viewAsUserId },
       });
       setPolicy(updated);
       setDraft({});

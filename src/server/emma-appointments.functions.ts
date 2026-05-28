@@ -180,14 +180,17 @@ const statusInput = z.object({
     "rescheduled",
   ]),
   reason: z.string().max(500).optional(),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const policyInput = z.object({
   accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const policyUpdateInput = z.object({
   accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
   patch: z
     .object({
       preshowEnabled: z.boolean().optional(),
@@ -672,7 +675,11 @@ export const listAppointments = createServerFn({ method: "POST" })
 export const updateAppointmentStatus = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => statusInput.parse(input))
   .handler(async ({ data }): Promise<EmmaAppointment> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const userId = effectiveUserId;
     const sb = admin();
 
     // Read current status for the audit event.
@@ -769,7 +776,11 @@ export const updateAppointmentStatus = createServerFn({ method: "POST" })
 export const getNoShowPolicy = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => policyInput.parse(input))
   .handler(async ({ data }): Promise<NoShowPolicy> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const userId = effectiveUserId;
     const sb = admin();
 
     const { data: row, error } = await sb
@@ -799,7 +810,11 @@ export const getNoShowPolicy = createServerFn({ method: "POST" })
 export const updateNoShowPolicy = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => policyUpdateInput.parse(input))
   .handler(async ({ data }): Promise<NoShowPolicy> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const userId = effectiveUserId;
     const sb = admin();
 
     const patch: Database["public"]["Tables"]["emma_noshow_policies"]["Update"] = {};
@@ -883,10 +898,19 @@ export type AppointmentMatchCoverage = {
  */
 export const getAppointmentMatchCoverage = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
-    z.object({ accessToken: z.string().min(1) }).parse(input),
+    z
+      .object({
+        accessToken: z.string().min(1),
+        viewAsUserId: z.string().uuid().optional(),
+      })
+      .parse(input),
   )
   .handler(async ({ data }): Promise<AppointmentMatchCoverage> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const userId = effectiveUserId;
     const sb = admin();
 
     const nowIso = new Date().toISOString();

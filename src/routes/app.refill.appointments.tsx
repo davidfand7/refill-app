@@ -78,7 +78,9 @@ function AppointmentsPage() {
       const [apts, stats, cov] = await Promise.all([
         listAppointments({ data: { accessToken: token, viewAsUserId } }),
         listRecentReminders({ data: { accessToken: token, viewAsUserId } }),
-        getAppointmentMatchCoverage({ data: { accessToken: token } }),
+        getAppointmentMatchCoverage({
+          data: { accessToken: token, viewAsUserId },
+        }),
       ]);
       setAppointments(apts);
       setReminderStats(stats);
@@ -136,7 +138,12 @@ function AppointmentsPage() {
       const token = sess.session?.access_token;
       if (!token) return;
       const updated = await updateAppointmentStatus({
-        data: { accessToken: token, appointmentId: apt.id, status: next },
+        data: {
+          accessToken: token,
+          appointmentId: apt.id,
+          status: next,
+          viewAsUserId,
+        },
       });
       setAppointments((prev) =>
         prev?.map((a) => (a.id === apt.id ? updated : a)) ?? null,

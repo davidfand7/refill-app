@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.25.6",
+    date: "May 2026",
+    items: [
+      "<strong>v1.25.6 &mdash; Impersonation sweep: close the remaining 4 viewing-as gaps in emma-appointments.functions.ts.</strong> v1.25.5 fixed the two highest-impact ones (ingestAppointmentCsv + listAppointments). On post-fix verification, the appointments page still showed a confusing &lsquo;14 of 14 future appointments aren&rsquo;t linked&rsquo; banner while the same page&rsquo;s empty state showed &lsquo;No appointments yet&rsquo; &mdash; classic split-brain. Root cause: <code>getAppointmentMatchCoverage</code> at line 884 was a THIRD impersonation gap I named in the v1.25.5 changelog but didn&rsquo;t close. It was reading the admin&rsquo;s bucket (14 pre-existing rows from earlier test ingests), while <code>listAppointments</code> correctly read Karen&rsquo;s (empty). Fixed it and swept the other three latent gaps in the same file: <code>updateAppointmentStatus</code>, <code>getNoShowPolicy</code>, <code>updateNoShowPolicy</code>. All four now thread <code>resolveEffectiveUserId</code> + accept <code>viewAsUserId</code> on their zod inputs. Call sites updated: <code>app.refill.appointments.tsx</code> for the first three, <code>app.refill.settings.noshow.tsx</code> for the policy pair (which had no <code>useTenantMembership</code> wired at all &mdash; added). Karen&rsquo;s 14-banner should now read 0/0 (her bucket is genuinely empty until the next CSV upload). Lesson: when you find one impersonation gap in a file, close the whole file in one sweep &mdash; whack-a-mole takes longer than a sweep and the partial fix produces split-brain UI states that are harder to debug than complete failure. Touched: <code>src/server/emma-appointments.functions.ts</code> (viewAsUserId on statusInput / policyInput / policyUpdateInput / coverage inline schema; resolveEffectiveUserId on 4 handlers), <code>src/routes/app.refill.appointments.tsx</code> (viewAsUserId on 3 call sites), <code>src/routes/app.refill.settings.noshow.tsx</code> (useTenantMembership added + viewAsUserId on 2 call sites + load deps), <code>src/lib/changelog.ts</code> (this entry).",
+    ],
+  },
+  {
     version: "v1.25.5",
     date: "May 2026",
     items: [
