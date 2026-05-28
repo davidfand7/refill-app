@@ -161,7 +161,7 @@ function RescuePage() {
       const token = sess.session?.access_token;
       if (!token) return;
       await dismissPatternAlert({
-        data: { accessToken: token, alertId: alert.id },
+        data: { accessToken: token, alertId: alert.id, viewAsUserId },
       });
       setPatterns(
         (prev) =>

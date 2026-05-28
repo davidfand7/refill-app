@@ -36,7 +36,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import type { Database, Json } from "@/integrations/supabase/types";
-import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId } from "@/server/auth-helpers";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -395,11 +395,13 @@ const listInput = z.object({
 const dismissInput = z.object({
   accessToken: z.string().min(1),
   alertId: z.string().uuid(),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const cardInput = z.object({
   accessToken: z.string().min(1),
   patientNodeId: z.string().uuid(),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 export const listPatternAlerts = createServerFn({ method: "POST" })
@@ -452,17 +454,20 @@ export const listPatternAlerts = createServerFn({ method: "POST" })
 export const dismissPatternAlert = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => dismissInput.parse(input))
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     await sb
       .from("emma_pattern_alerts")
       .update({
         dismissed_at: new Date().toISOString(),
-        dismissed_by: userId,
+        dismissed_by: effectiveUserId,
       })
       .eq("id", data.alertId)
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .is("dismissed_at", null);
     return { ok: true };
   });
@@ -470,7 +475,10 @@ export const dismissPatternAlert = createServerFn({ method: "POST" })
 export const getReliabilityCard = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => cardInput.parse(input))
   .handler(async ({ data }): Promise<ReliabilityCard | null> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     const { data: row } = await sb
@@ -478,7 +486,7 @@ export const getReliabilityCard = createServerFn({ method: "POST" })
       .select(
         "tier, no_shows_6mo, total_visits, cancellations_6mo, grace_credits_used, last_activity_at, recomputed_at",
       )
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .eq("patient_node_id", data.patientNodeId)
       .maybeSingle();
     if (!row) return null;
