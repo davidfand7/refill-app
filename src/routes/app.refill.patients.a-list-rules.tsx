@@ -1,0 +1,660 @@
+/**
+ * /app/refill/patients/a-list-rules — A-list automation dashboard (v1.25.1).
+ *
+ * Spa-owner-facing power surface. Lets the owner define WHO counts as VIP
+ * via numeric thresholds (lifetime spend, recency, visit count), preview
+ * the count live, and bulk-apply vip=true in a single round trip.
+ *
+ * Design rules carried in:
+ *   - Apply is ADDITIVE-ONLY. Manual stars set via the per-row VIP toggle
+ *     on /app/refill/patients are never silently unstarred by Apply.
+ *   - Clear is a separate destructive action with typed-confirm gate.
+ *   - Per the steering-wheel rule (project_three_agent_architecture) this
+ *     is power-user surface, NOT a Refill platform default — it lives off
+ *     the patients page header, not the main chip nav.
+ *
+ * Established 2026-05-28.
+ */
+
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  Loader2,
+  Star,
+  Wand2,
+} from "lucide-react";
+import { PageHeader } from "@/components/PageHeader";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
+import { useTenantMembership } from "@/lib/use-tenant-membership";
+import {
+  listPatients,
+  setPatientVipBulk,
+  type PatientListRow,
+} from "@/server/patient-ingest.functions";
+import {
+  DEFAULT_A_LIST_RULES,
+  getMyAListRules,
+  saveAListRulesAndMarkApplied,
+  type AListRules,
+} from "@/server/user-prefs.functions";
+
+export const Route = createFileRoute("/app/refill/patients/a-list-rules")({
+  component: AListRulesPage,
+});
+
+// ─── Pure helpers ──────────────────────────────────────────────────────────
+
+function matchesRules(
+  p: PatientListRow,
+  rules: AListRules,
+  todayMs: number,
+): boolean {
+  if (rules.excludeBanned && p.banned) return false;
+  if (
+    rules.lifetimeSpendMinUsd !== null &&
+    p.lifetimeSpendUsd < rules.lifetimeSpendMinUsd
+  ) {
+    return false;
+  }
+  if (rules.totalVisitsMin !== null && p.totalVisits < rules.totalVisitsMin) {
+    return false;
+  }
+  if (rules.lastVisitWithinDays !== null) {
+    if (!p.lastVisit) return false;
+    const lastMs = new Date(p.lastVisit).getTime();
+    if (Number.isNaN(lastMs)) return false;
+    const days = (todayMs - lastMs) / (1000 * 60 * 60 * 24);
+    if (days > rules.lastVisitWithinDays) return false;
+  }
+  return true;
+}
+
+function formatCurrency(n: number): string {
+  return n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
+}
+
+// ─── Component ─────────────────────────────────────────────────────────────
+
+function AListRulesPage() {
+  const [patients, setPatients] = useState<PatientListRow[] | null>(null);
+  const [rules, setRules] = useState<AListRules>(DEFAULT_A_LIST_RULES);
+  const [savedRules, setSavedRules] = useState<AListRules | null>(null);
+  const [lastAppliedAt, setLastAppliedAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [clearOpen, setClearOpen] = useState(false);
+  const [clearText, setClearText] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const membership = useTenantMembership();
+  const viewAsUserId =
+    membership.status === "tenant" ? membership.viewAsUserId : undefined;
+
+  const loadAll = useCallback(async () => {
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        setErrorMessage("Please sign in to manage A-list rules.");
+        setLoading(false);
+        return;
+      }
+      const [patientsRes, rulesRes] = await Promise.all([
+        listPatients({
+          data: { accessToken: token, viewAsUserId, limit: 5000 },
+        }),
+        getMyAListRules({ data: { accessToken: token, viewAsUserId } }),
+      ]);
+      setPatients(patientsRes);
+      setRules(rulesRes.rules);
+      setSavedRules(rulesRes.rules);
+      setLastAppliedAt(rulesRes.lastAppliedAt);
+    } catch (e) {
+      setErrorMessage(
+        e instanceof Error ? e.message : "Couldn't load A-list dashboard.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [viewAsUserId]);
+
+  useEffect(() => {
+    void loadAll();
+  }, [loadAll]);
+
+  // ─── Derived state ───────────────────────────────────────────────────────
+
+  const matchingIds = useMemo(() => {
+    if (!patients) return new Set<string>();
+    // Date.now() inside the memo body — stable across slider drags, refreshes
+    // only when patients reload (after Apply/Clear).
+    const todayMs = Date.now();
+    return new Set(
+      patients.filter((p) => matchesRules(p, rules, todayMs)).map((p) => p.id),
+    );
+  }, [patients, rules]);
+
+  const currentVipIds = useMemo(() => {
+    if (!patients) return new Set<string>();
+    return new Set(patients.filter((p) => p.vip).map((p) => p.id));
+  }, [patients]);
+
+  const addIds = useMemo(
+    () => [...matchingIds].filter((id) => !currentVipIds.has(id)),
+    [matchingIds, currentVipIds],
+  );
+
+  const alreadyMatchingCount = useMemo(
+    () => [...matchingIds].filter((id) => currentVipIds.has(id)).length,
+    [matchingIds, currentVipIds],
+  );
+
+  const manualOnlyVipIds = useMemo(
+    () => [...currentVipIds].filter((id) => !matchingIds.has(id)),
+    [matchingIds, currentVipIds],
+  );
+
+  const totalPatients = patients?.length ?? 0;
+  const totalMatching = matchingIds.size;
+  const totalCurrentVip = currentVipIds.size;
+  const isDirty =
+    savedRules !== null && JSON.stringify(rules) !== JSON.stringify(savedRules);
+
+  // ─── Handlers ────────────────────────────────────────────────────────────
+
+  const handleApply = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Session expired — please sign in again.");
+
+      const [bulkRes, saveRes] = await Promise.all([
+        setPatientVipBulk({
+          data: {
+            accessToken: token,
+            viewAsUserId,
+            addIds,
+            removeIds: [],
+          },
+        }),
+        saveAListRulesAndMarkApplied({
+          data: { accessToken: token, viewAsUserId, rules },
+        }),
+      ]);
+
+      setSavedRules(saveRes.rules);
+      setLastAppliedAt(saveRes.lastAppliedAt);
+      setApplyOpen(false);
+      toast.success(
+        bulkRes.touched > 0
+          ? `Added ${bulkRes.touched.toLocaleString()} patient${bulkRes.touched === 1 ? "" : "s"} to A-list.`
+          : "Rules saved. No new patients matched.",
+      );
+      await loadAll();
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Couldn't apply A-list rules.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, addIds, rules, viewAsUserId, loadAll]);
+
+  const handleClear = useCallback(async () => {
+    if (busy || clearText !== "CLEAR") return;
+    setBusy(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Session expired — please sign in again.");
+
+      const removeIds = [...currentVipIds];
+      const res = await setPatientVipBulk({
+        data: {
+          accessToken: token,
+          viewAsUserId,
+          addIds: [],
+          removeIds,
+        },
+      });
+      setClearOpen(false);
+      setClearText("");
+      toast.success(
+        `Cleared ${res.touched.toLocaleString()} A-list flag${res.touched === 1 ? "" : "s"}.`,
+      );
+      await loadAll();
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Couldn't clear A-list flags.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [busy, clearText, currentVipIds, viewAsUserId, loadAll]);
+
+  // ─── Render ──────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="h-5 w-5 animate-spin text-ink-faint" />
+      </div>
+    );
+  }
+
+  if (errorMessage) {
+    return (
+      <div className="px-6 lg:px-10 py-12 max-w-3xl mx-auto">
+        <div className="rounded-xl border border-amber/40 bg-amber/5 px-5 py-4 text-sm text-ink">
+          {errorMessage}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <PageHeader
+        title="A-list rules"
+        description={
+          patients
+            ? `Define who counts as VIP. ${totalPatients.toLocaleString()} patients in your book.`
+            : undefined
+        }
+        actions={
+          <Link
+            to="/app/refill/patients"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-xs font-medium hover:bg-rule-soft transition"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back to patients
+          </Link>
+        }
+      />
+
+      <div className="px-6 lg:px-10 py-6 space-y-6 max-w-4xl mx-auto">
+        {/* Rules form */}
+        <section className="rounded-2xl border border-rule bg-white p-6 space-y-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-base font-semibold text-ink">Rules</h2>
+            {isDirty && (
+              <span className="text-[11px] font-medium text-amber inline-flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                Unsaved changes
+              </span>
+            )}
+          </div>
+
+          <RuleRow
+            label="Lifetime spend"
+            comparator="≥"
+            valueDisplay={
+              rules.lifetimeSpendMinUsd === null
+                ? "any"
+                : formatCurrency(rules.lifetimeSpendMinUsd)
+            }
+            enabled={rules.lifetimeSpendMinUsd !== null}
+            onToggle={(on) =>
+              setRules((r) => ({ ...r, lifetimeSpendMinUsd: on ? 1000 : null }))
+            }
+            sliderMin={0}
+            sliderMax={10000}
+            sliderStep={100}
+            sliderValue={rules.lifetimeSpendMinUsd ?? 1000}
+            onSliderChange={(n) =>
+              setRules((r) => ({ ...r, lifetimeSpendMinUsd: n }))
+            }
+          />
+
+          <RuleRow
+            label="Last visit within"
+            comparator=""
+            valueDisplay={
+              rules.lastVisitWithinDays === null
+                ? "any time"
+                : `${rules.lastVisitWithinDays} day${rules.lastVisitWithinDays === 1 ? "" : "s"}`
+            }
+            enabled={rules.lastVisitWithinDays !== null}
+            onToggle={(on) =>
+              setRules((r) => ({ ...r, lastVisitWithinDays: on ? 365 : null }))
+            }
+            sliderMin={30}
+            sliderMax={1095}
+            sliderStep={30}
+            sliderValue={rules.lastVisitWithinDays ?? 365}
+            onSliderChange={(n) =>
+              setRules((r) => ({ ...r, lastVisitWithinDays: n }))
+            }
+          />
+
+          <RuleRow
+            label="Total visits"
+            comparator="≥"
+            valueDisplay={
+              rules.totalVisitsMin === null
+                ? "any"
+                : `${rules.totalVisitsMin}`
+            }
+            enabled={rules.totalVisitsMin !== null}
+            onToggle={(on) =>
+              setRules((r) => ({ ...r, totalVisitsMin: on ? 3 : null }))
+            }
+            sliderMin={1}
+            sliderMax={50}
+            sliderStep={1}
+            sliderValue={rules.totalVisitsMin ?? 3}
+            onSliderChange={(n) =>
+              setRules((r) => ({ ...r, totalVisitsMin: n }))
+            }
+          />
+
+          <label className="flex items-center gap-2.5 pt-2 border-t border-rule/60 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={rules.excludeBanned}
+              onChange={(e) =>
+                setRules((r) => ({ ...r, excludeBanned: e.target.checked }))
+              }
+              className="h-4 w-4 rounded border-rule"
+            />
+            <span className="text-sm text-ink">
+              Exclude banned patients
+            </span>
+          </label>
+        </section>
+
+        {/* Preview card */}
+        <section className="rounded-2xl border border-rule bg-paper p-6">
+          <div className="flex items-baseline justify-between gap-3 mb-4">
+            <h2 className="text-base font-semibold text-ink">Preview</h2>
+            {lastAppliedAt && (
+              <span className="text-[11px] text-ink-faint">
+                Last applied{" "}
+                {new Date(lastAppliedAt).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </span>
+            )}
+          </div>
+
+          <div className="text-[28px] leading-tight font-semibold text-ink mb-1 tabular-nums">
+            {totalMatching.toLocaleString()}{" "}
+            <span className="text-ink-faint font-normal">
+              of {totalPatients.toLocaleString()}
+            </span>
+          </div>
+          <p className="text-sm text-ink-soft mb-5">
+            patients match your rules.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+            <StatChip
+              icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+              tone="green"
+              label="Already A-list"
+              value={alreadyMatchingCount}
+            />
+            <StatChip
+              icon={<Wand2 className="h-3.5 w-3.5" />}
+              tone="blue"
+              label="Would be added"
+              value={addIds.length}
+            />
+            <StatChip
+              icon={<Star className="h-3.5 w-3.5" />}
+              tone="amber"
+              label="Manual stars preserved"
+              value={manualOnlyVipIds.length}
+              hint={
+                manualOnlyVipIds.length > 0
+                  ? "Manually starred patients who don't match these rules — kept as A-list."
+                  : undefined
+              }
+            />
+          </div>
+        </section>
+
+        {/* Action row */}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            disabled={busy || addIds.length === 0}
+            onClick={() => setApplyOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg bg-ink px-4 py-2.5 text-sm font-medium text-paper hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Wand2 className="h-4 w-4" />
+            {addIds.length === 0
+              ? "Nothing to add"
+              : `Apply rules (${addIds.length.toLocaleString()})`}
+          </button>
+
+          <button
+            type="button"
+            disabled={busy || totalCurrentVip === 0}
+            onClick={() => {
+              setClearText("");
+              setClearOpen(true);
+            }}
+            className="inline-flex items-center gap-2 rounded-lg border border-rule bg-white px-4 py-2.5 text-sm font-medium text-ink-soft hover:bg-rule-soft hover:text-ink transition disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Clear all A-list flags
+          </button>
+        </div>
+      </div>
+
+      {/* Apply confirm */}
+      <Dialog open={applyOpen} onOpenChange={(o) => !busy && setApplyOpen(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Apply A-list rules</DialogTitle>
+            <DialogDescription>
+              This will mark{" "}
+              <strong className="text-ink">
+                {addIds.length.toLocaleString()} patient
+                {addIds.length === 1 ? "" : "s"}
+              </strong>{" "}
+              as A-list.{" "}
+              {alreadyMatchingCount > 0 && (
+                <>
+                  {alreadyMatchingCount.toLocaleString()} already are.
+                </>
+              )}{" "}
+              {manualOnlyVipIds.length > 0 && (
+                <>
+                  Your {manualOnlyVipIds.length.toLocaleString()} manually
+                  starred patient{manualOnlyVipIds.length === 1 ? "" : "s"} will
+                  stay A-list.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setApplyOpen(false)}
+              className="inline-flex items-center rounded-lg border border-rule bg-white px-4 py-2 text-sm text-ink-soft hover:bg-rule-soft transition disabled:opacity-40"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={handleApply}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-4 py-2 text-sm font-medium text-paper hover:opacity-90 transition disabled:opacity-40"
+            >
+              {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Apply
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Clear confirm */}
+      <Dialog open={clearOpen} onOpenChange={(o) => !busy && setClearOpen(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Clear all A-list flags?</DialogTitle>
+            <DialogDescription>
+              This removes the A-list flag from{" "}
+              <strong className="text-ink">
+                {totalCurrentVip.toLocaleString()} patient
+                {totalCurrentVip === 1 ? "" : "s"}
+              </strong>
+              , including any you manually starred. Your rules stay saved — you
+              can re-apply anytime.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 pt-1">
+            <label className="text-xs font-medium text-ink-soft">
+              Type CLEAR to confirm
+            </label>
+            <input
+              type="text"
+              value={clearText}
+              onChange={(e) => setClearText(e.target.value)}
+              autoFocus
+              className="w-full rounded-lg border border-input bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder="CLEAR"
+            />
+          </div>
+          <DialogFooter>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setClearOpen(false)}
+              className="inline-flex items-center rounded-lg border border-rule bg-white px-4 py-2 text-sm text-ink-soft hover:bg-rule-soft transition disabled:opacity-40"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={busy || clearText !== "CLEAR"}
+              onClick={handleClear}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-amber px-4 py-2 text-sm font-medium text-paper hover:opacity-90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              Clear all flags
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── Subcomponents ─────────────────────────────────────────────────────────
+
+function RuleRow({
+  label,
+  comparator,
+  valueDisplay,
+  enabled,
+  onToggle,
+  sliderMin,
+  sliderMax,
+  sliderStep,
+  sliderValue,
+  onSliderChange,
+}: {
+  label: string;
+  comparator: string;
+  valueDisplay: string;
+  enabled: boolean;
+  onToggle: (on: boolean) => void;
+  sliderMin: number;
+  sliderMax: number;
+  sliderStep: number;
+  sliderValue: number;
+  onSliderChange: (n: number) => void;
+}) {
+  return (
+    <div className={enabled ? "" : "opacity-50"}>
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <label className="inline-flex items-center gap-2.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={enabled}
+            onChange={(e) => onToggle(e.target.checked)}
+            className="h-4 w-4 rounded border-rule"
+          />
+          <span className="text-sm text-ink font-medium">
+            {label}{" "}
+            {comparator && (
+              <span className="text-ink-faint">{comparator}</span>
+            )}
+          </span>
+        </label>
+        <span className="text-sm tabular-nums text-ink-soft">
+          {valueDisplay}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={sliderMin}
+        max={sliderMax}
+        step={sliderStep}
+        value={sliderValue}
+        disabled={!enabled}
+        onChange={(e) => onSliderChange(Number(e.target.value))}
+        className="w-full accent-ink disabled:cursor-not-allowed"
+      />
+    </div>
+  );
+}
+
+function StatChip({
+  icon,
+  tone,
+  label,
+  value,
+  hint,
+}: {
+  icon: React.ReactNode;
+  tone: "green" | "blue" | "amber";
+  label: string;
+  value: number;
+  hint?: string;
+}) {
+  const toneClasses =
+    tone === "green"
+      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+      : tone === "blue"
+        ? "bg-sky-50 text-sky-700 border-sky-200"
+        : "bg-amber/10 text-amber border-amber/30";
+  return (
+    <div
+      className={`rounded-xl border px-3.5 py-3 ${toneClasses}`}
+      title={hint}
+    >
+      <div className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide opacity-80">
+        {icon}
+        {label}
+      </div>
+      <div className="text-xl font-semibold mt-1 tabular-nums">
+        {value.toLocaleString()}
+      </div>
+    </div>
+  );
+}

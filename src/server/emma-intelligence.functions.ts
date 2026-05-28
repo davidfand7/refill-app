@@ -34,7 +34,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import type { Database, Json } from "@/integrations/supabase/types";
-import { verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -292,6 +292,7 @@ export async function generateRecommendationsForUser(args: {
 
 const listInput = z.object({
   accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const idInput = z.object({
@@ -304,7 +305,10 @@ const idInput = z.object({
 export const listRecommendations = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => listInput.parse(input))
   .handler(async ({ data }): Promise<Recommendation[]> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     // Foreground regen with simple per-spa debounce — only recompute
@@ -313,7 +317,7 @@ export const listRecommendations = createServerFn({ method: "POST" })
     const { data: latest } = await sb
       .from("emma_setting_recommendations")
       .select("generated_at")
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .order("generated_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -322,7 +326,7 @@ export const listRecommendations = createServerFn({ method: "POST" })
     const needsRegen = !latest || latest.generated_at < oneHourAgo;
     if (needsRegen) {
       try {
-        await generateRecommendationsForUser({ sb, userId });
+        await generateRecommendationsForUser({ sb, userId: effectiveUserId });
       } catch (e) {
         console.error("recommendations regen failed:", e instanceof Error ? e.message : e);
       }
@@ -333,7 +337,7 @@ export const listRecommendations = createServerFn({ method: "POST" })
       .select(
         "id, setting_key, current_value, suggested_value, source, headline, body, projected_lift_usd, applied_at, dismissed_at, generated_at",
       )
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .is("applied_at", null)
       .is("dismissed_at", null)
       .order("projected_lift_usd", { ascending: false, nullsFirst: false })

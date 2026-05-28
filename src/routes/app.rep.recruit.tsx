@@ -37,6 +37,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link2, Send, Sparkles, UserPlus, X } from "lucide-react";
 import { z } from "zod";
 
+import { getAdminViewAsUserId } from "@/lib/admin-view-as";
 import { useAuth } from "@/lib/auth";
 import {
   getMyRepAccount,
@@ -112,8 +113,10 @@ function RecruitPage() {
     let cancelled = false;
     (async () => {
       try {
+        const viewAsUserId =
+          typeof window !== "undefined" ? getAdminViewAsUserId() : undefined;
         const [repRes, tplRes, modeRes, sendsRes, statsRes] = await Promise.all([
-          getMyRepAccount({ data: { accessToken } }),
+          getMyRepAccount({ data: { accessToken, viewAsUserId } }),
           listOutreachTemplates({
             data: { accessToken, audience: "rep" },
           }).catch(() => ({ templates: [] })),

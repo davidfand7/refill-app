@@ -21,9 +21,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import {
+  BarChart3,
   FlaskConical,
+  History,
   Loader2,
   Mail,
+  ToggleLeft,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -44,6 +48,34 @@ interface AdminSurface {
 
 const ADMIN_SURFACES: AdminSurface[] = [
   {
+    path: "/app/admin/users",
+    label: "Users & roles",
+    description:
+      "Create users, grant/revoke roles, send password resets, delete accounts. Every mutation audit-logged.",
+    icon: Users,
+  },
+  {
+    path: "/app/admin/flags",
+    label: "Feature flags",
+    description:
+      "Global / tenant / user / rep scopes. Toggle features without a code ship. First-hit wins on the read API.",
+    icon: ToggleLeft,
+  },
+  {
+    path: "/app/admin/reports",
+    label: "Reports",
+    description:
+      "Per-tenant + per-rep rollups: patient count, recovery events, revenue, plan. Drill into any user via View-as.",
+    icon: BarChart3,
+  },
+  {
+    path: "/app/admin/audit",
+    label: "Audit log",
+    description:
+      "Chronological list of every admin action — role grants, user creates, password resets, flag toggles.",
+    icon: History,
+  },
+  {
     path: "/app/admin/outreach",
     label: "Outreach templates",
     description:
@@ -59,9 +91,10 @@ const ADMIN_SURFACES: AdminSurface[] = [
   },
 ];
 
-// Persona testing moved to direct URLs (no admin gate, no extra UI):
-//   /dev/admin · /dev/kelly · /dev/maria · /dev/karen
-// See src/routes/dev.$persona.tsx
+// v1.23.0 (P3) — the /dev/$persona route is gone. Persona testing now
+// happens via the PersonaSwitcher dropdown in the upper-right header of
+// any shell. Admin signs in once at /login (admin@refill-demo.test +
+// shared test password) and switches view without a logout cycle.
 
 function AdminIndexPage() {
   const { session, loading: authLoading } = useAuth();

@@ -251,9 +251,11 @@ function OverdueTodayCard() {
   const [preview, setPreview] = useState<OverduePatient[] | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // v1.20: admin viewing-as plumbing. summarizeOverdueCohort is not in
-  // the priority-5 opt-in surface so it still shows the admin's empty
-  // cohort; listOverduePatients (the surfaced list) is correct.
+  // v1.23.0 P3 sweep: summarizeOverdueCohort + listOverduePatients now
+  // both plumb viewAsUserId. Previously summarizeOverdueCohort was a
+  // priority-5-opt-in carve-out (admin-fallback showed admin's empty
+  // cohort); v1.23.0 closes that gap so the RefillHome overdue summary
+  // counts match the surfaced patient list when admin views-as.
   const membership = useTenantMembership();
   const viewAsUserId =
     membership.status === "tenant" ? membership.viewAsUserId : undefined;
@@ -270,7 +272,7 @@ function OverdueTodayCard() {
           return;
         }
         const [s, list] = await Promise.all([
-          summarizeOverdueCohort({ data: { accessToken: token } }),
+          summarizeOverdueCohort({ data: { accessToken: token, viewAsUserId } }),
           listOverduePatients({
             data: { accessToken: token, limit: 5, viewAsUserId },
           }),

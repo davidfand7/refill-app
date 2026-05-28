@@ -2997,6 +2997,7 @@ export type Database = {
       user_preferences: {
         Row: {
           created_at: string
+          prefs: Json
           primary_role: string | null
           rep_tier_policy: string | null
           updated_at: string
@@ -3004,6 +3005,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          prefs?: Json
           primary_role?: string | null
           rep_tier_policy?: string | null
           updated_at?: string
@@ -3011,6 +3013,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          prefs?: Json
           primary_role?: string | null
           rep_tier_policy?: string | null
           updated_at?: string
@@ -3087,6 +3090,14 @@ export type Database = {
           msg_id: number
           read_ct: number
         }[]
+      }
+      refill_bulk_set_vip: {
+        Args: {
+          p_add_ids: string[]
+          p_remove_ids: string[]
+          p_user_id: string
+        }
+        Returns: number
       }
       wipe_karen_demo_data: {
         Args: never

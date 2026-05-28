@@ -35,7 +35,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
-import { verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -101,11 +101,13 @@ function admin() {
 
 const listInput = z.object({
   accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const threadInput = z.object({
   accessToken: z.string().min(1),
   stateId: z.string().uuid(),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const markReadInput = z.object({
@@ -140,7 +142,10 @@ function isOptOutKeyword(body: string): boolean {
 export const listPatientInbox = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => listInput.parse(input))
   .handler(async ({ data }): Promise<InboxRow[]> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     // 1) Pull the inbound rows (sms + email only — click events excluded).
@@ -149,7 +154,7 @@ export const listPatientInbox = createServerFn({ method: "POST" })
       .select(
         "id, patient_outreach_state_id, channel, body, subject, sent_at, read_at, created_at",
       )
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .eq("direction", "inbound")
       .in("channel", ["sms", "email"])
       .order("created_at", { ascending: false })
@@ -276,7 +281,10 @@ export const listPatientInbox = createServerFn({ method: "POST" })
 export const getInboxThread = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => threadInput.parse(input))
   .handler(async ({ data }): Promise<InboxThreadMessage[]> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     const { data: rows, error } = await sb
@@ -284,7 +292,7 @@ export const getInboxThread = createServerFn({ method: "POST" })
       .select(
         "id, direction, channel, subject, body, sent_at, created_at, skip_reason",
       )
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .eq("patient_outreach_state_id", data.stateId)
       .order("created_at", { ascending: true });
     if (error) throw new Error(`Couldn't load thread: ${error.message}`);

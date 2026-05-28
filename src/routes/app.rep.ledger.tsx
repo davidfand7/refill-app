@@ -12,6 +12,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Receipt } from "lucide-react";
 
+import { getAdminViewAsUserId } from "@/lib/admin-view-as";
 import { useAuth } from "@/lib/auth";
 import { LiveEarningsCard } from "@/components/refill/LiveEarningsCard";
 import {
@@ -52,9 +53,11 @@ function LedgerPage() {
     let cancelled = false;
     (async () => {
       try {
+        const viewAsUserId =
+          typeof window !== "undefined" ? getAdminViewAsUserId() : undefined;
         const [repRes, ledgerRes] = await Promise.all([
-          getMyRepAccount({ data: { accessToken } }),
-          getMyLedger({ data: { accessToken } }),
+          getMyRepAccount({ data: { accessToken, viewAsUserId } }),
+          getMyLedger({ data: { accessToken, viewAsUserId } }),
         ]);
         if (cancelled) return;
         setRep(repRes.rep);

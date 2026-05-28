@@ -76,12 +76,10 @@ function RescuePage() {
   const [dismissingId, setDismissingId] = useState<string | null>(null);
   const [recBusyId, setRecBusyId] = useState<string | null>(null);
 
-  // v1.20: admin viewing-as plumbing — listWaitlist accepts viewAsUserId.
-  // The other three fns in the parallel batch (listRescueActivity,
-  // listPatternAlerts, listRecommendations) are scoped to user_id today
-  // but not in the v1.20 priority-5 opt-in surface; they'll see the
-  // admin's own (empty) rows. Acceptable for this ship — the waitlist
-  // table is the load-bearing surface on this page.
+  // v1.23.0 P3 sweep: all four parallel fns now accept viewAsUserId.
+  // Pre-P3 only listWaitlist was opted in (v1.20 priority-5); the other
+  // three returned the admin's empty data when impersonating. P3 closed
+  // the gap so the Recovery surface fully honors persona-switcher state.
   const membership = useTenantMembership();
   const viewAsUserId =
     membership.status === "tenant" ? membership.viewAsUserId : undefined;
@@ -96,10 +94,10 @@ function RescuePage() {
         return;
       }
       const [act, wait, pat, recs] = await Promise.all([
-        listRescueActivity({ data: { accessToken: token } }),
+        listRescueActivity({ data: { accessToken: token, viewAsUserId } }),
         listWaitlist({ data: { accessToken: token, viewAsUserId } }),
-        listPatternAlerts({ data: { accessToken: token } }),
-        listRecommendations({ data: { accessToken: token } }),
+        listPatternAlerts({ data: { accessToken: token, viewAsUserId } }),
+        listRecommendations({ data: { accessToken: token, viewAsUserId } }),
       ]);
       setActivity(act);
       setWaitlist(wait);

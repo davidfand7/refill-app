@@ -42,6 +42,7 @@ import {
 import {
   findFuzzyMatches,
   fuzzyTargetFromName,
+  nicknameCanonical,
   type FuzzyTarget,
 } from "@/lib/fuzzy-name-match";
 import type {
@@ -586,6 +587,19 @@ const setVipInput = z.object({
   vip: z.boolean(),
 });
 
+// v1.25.1: bulk variant for the A-list automation dashboard. Apply passes
+// addIds; Clear passes removeIds. Backed by the refill_bulk_set_vip Postgres
+// RPC (migration 20260528000000) which does both updates in a single round
+// trip via jsonb_set, preserving all other PatientSummary fields. Unlike
+// the per-row setPatientVip above, this fn DOES go through
+// resolveEffectiveUserId so admin viewing-as Karen writes to Karen's rows.
+const setVipBulkInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  addIds: z.array(z.string().uuid()).default([]),
+  removeIds: z.array(z.string().uuid()).default([]),
+});
+
 /**
  * v385.2: toggle the A-list / VIP flag on a patient row.
  *
@@ -641,6 +655,26 @@ export const setPatientVip = createServerFn({ method: "POST" })
       .eq("user_id", userId);
     if (updErr) throw new Error(`Couldn't update VIP: ${updErr.message}`);
     return { ok: true };
+  });
+
+export const setPatientVipBulk = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => setVipBulkInput.parse(raw))
+  .handler(async ({ data }): Promise<{ touched: number }> => {
+    if (data.addIds.length === 0 && data.removeIds.length === 0) {
+      return { touched: 0 };
+    }
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const { data: touched, error } = await sb.rpc("refill_bulk_set_vip", {
+      p_user_id: effectiveUserId,
+      p_add_ids: data.addIds,
+      p_remove_ids: data.removeIds,
+    });
+    if (error) throw new Error(`Bulk VIP write failed: ${error.message}`);
+    return { touched: typeof touched === "number" ? touched : 0 };
   });
 
 // ─── listPatients ──────────────────────────────────────────────────────────
@@ -778,14 +812,22 @@ export const listOverduePatients = createServerFn({ method: "POST" })
 
 export const summarizeOverdueCohort = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) =>
-    z.object({ accessToken: z.string().min(1) }).parse(input),
+    z
+      .object({
+        accessToken: z.string().min(1),
+        viewAsUserId: z.string().uuid().optional(),
+      })
+      .parse(input),
   )
   .handler(async ({ data }): Promise<OverdueCohortSummary> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
     // Pull every kind so the summary is comprehensive; limit big enough
     // to never truncate at a real-spa scale.
-    const all = await doListOverdue(sb, userId, 5000, null);
+    const all = await doListOverdue(sb, effectiveUserId, 5000, null);
     let totalLapsed = 0;
     const byKind: Partial<Record<ProductKind, number>> = {};
     const byManufacturer: Partial<Record<ProductManufacturer, number>> = {};
@@ -972,6 +1014,11 @@ const ingestClientInput = z.object({
   accessToken: z.string().min(1),
   csv: z.string().min(1).max(20 * 1024 * 1024),
   sourceFilename: z.string().max(500).optional(),
+  /** v1.23.0 P3 sweep — admin viewing-as for client-list ingest. Same
+   *  rationale as v1.20.5's opt-in for ingestPatientCsv: explicit admin-
+   *  on-behalf-of-tenant uploads during pilot setup, re-verified server-
+   *  side via resolveEffectiveUserId. */
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const confirmSuggestionInput = z.object({
@@ -988,12 +1035,14 @@ const dismissSuggestionInput = z.object({
 
 const overviewInput = z.object({
   accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const gapsInput = z.object({
   accessToken: z.string().min(1),
   /** Max gap rows to return. The UI paginates with offset/limit later. */
   limit: z.number().int().min(1).max(500).optional(),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 // ─── ingestClientListCsv ───────────────────────────────────────────────────
@@ -1001,9 +1050,12 @@ const gapsInput = z.object({
 export const ingestClientListCsv = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => ingestClientInput.parse(input))
   .handler(async ({ data }): Promise<ClientListReceipt> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
-    return doIngestClientList(sb, userId, data.csv, data.sourceFilename ?? null);
+    return doIngestClientList(sb, effectiveUserId, data.csv, data.sourceFilename ?? null);
   });
 
 export async function doIngestClientList(
@@ -1297,14 +1349,17 @@ function applyContactToSummary(
 export const listContactsOverview = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => overviewInput.parse(input))
   .handler(async ({ data }): Promise<ContactsOverview> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
     let totalPatients = 0;
     let withContact = 0;
     let withPhone = 0;
     let withEmail = 0;
     let banned = 0;
-    await forEachPatient(sb, userId, ({ attachments: a }) => {
+    await forEachPatient(sb, effectiveUserId, ({ attachments: a }) => {
       totalPatients++;
       if (!a) return;
       if (a.phone || a.email) withContact++;
@@ -1317,11 +1372,11 @@ export const listContactsOverview = createServerFn({ method: "POST" })
       sb
         .from("patient_contact_candidates")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", userId),
+        .eq("user_id", effectiveUserId),
       sb
         .from("patient_contact_candidates")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", userId)
+        .eq("user_id", effectiveUserId)
         .eq("status", "unmatched"),
     ]);
 
@@ -1342,7 +1397,10 @@ export const listContactsOverview = createServerFn({ method: "POST" })
 export const listContactGaps = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => gapsInput.parse(input))
   .handler(async ({ data }): Promise<ContactGap[]> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
     const limit = data.limit ?? 200;
 
@@ -1356,7 +1414,7 @@ export const listContactGaps = createServerFn({ method: "POST" })
       lookupKey: string | null;
       attachments: PatientSummary | null;
     }> = [];
-    await forEachPatient(sb, userId, (p) => allPatients.push(p));
+    await forEachPatient(sb, effectiveUserId, (p) => allPatients.push(p));
 
     const gapPatients = allPatients.filter((p) => {
       if (!p.lookupKey) return false;
@@ -1379,7 +1437,7 @@ export const listContactGaps = createServerFn({ method: "POST" })
     const { data: pool, error: poolErr } = await sb
       .from("patient_contact_candidates")
       .select("id, display_name, first_name, last_name, phone, email, banned")
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .eq("status", "unmatched");
     if (poolErr) throw new Error(`Couldn't load candidate pool: ${poolErr.message}`);
 
@@ -1536,4 +1594,203 @@ export const dismissContactSuggestion = createServerFn({ method: "POST" })
       .eq("id", data.candidateId);
     if (error) throw new Error(`Couldn't dismiss candidate: ${error.message}`);
     return { candidateId: data.candidateId };
+  });
+
+// ─── findSameContactDifferentName (Pass 3, v1.25.0) ────────────────────────
+//
+// Detects probable maiden/married surname-change pairs (and other source-
+// data duplicates) by finding patient records that share a phone or email
+// + a canonical first name, but differ on last name.
+//
+// Letter-distance fuzzy match (Pass 2) caps at 2 edits — it can't catch
+// Anderson↔Chen. Pass 3 uses CONTACT INFO as the bridge: if two patient
+// records share a phone OR email AND their first names map to the same
+// canonical form (e.g. "Sarah" vs "Sarah", or "Bob" vs "Robert"), they're
+// almost certainly the same person.
+//
+// First-name guard prevents household-sharing false positives: mom +
+// daughter sharing a phone have DIFFERENT first names, so they're filtered
+// out cleanly. This pass surfaces surname-change candidates only.
+//
+// Output: pairs ready for one-click confirmation. No merge action yet —
+// surfaced for spa-owner review; the merge primitive lands in a future ship.
+
+export type SameContactPatientStub = {
+  patientNodeId: string;
+  displayName: string;
+  lifetimeSpendUsd: number;
+  lastVisit: string | null;
+  totalVisits: number;
+};
+
+export type SameContactPair = {
+  /** First patient record (alphabetically earlier last name — stable). */
+  a: SameContactPatientStub;
+  /** Second patient record. */
+  b: SameContactPatientStub;
+  /** What linked them. */
+  matchedField: "phone" | "email";
+  /** The matching value (for UI display: phone number or email). */
+  matchedValue: string;
+  /** Canonical first name they shared (via nickname dictionary). Useful
+   *  for UI to render "Both first names map to <canonical>". */
+  sharedFirstNameCanonical: string;
+  /** True when the first-name equivalence required nickname resolution
+   *  (e.g. Bob ↔ Robert). UI can show a hint chip. */
+  matchedViaNickname: boolean;
+};
+
+const sameContactInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+});
+
+/** Pull the lowercase first-token of a display name (handles "Last, First"
+ *  and "First Last"). Empty string when nothing parseable. */
+function extractFirstName(display: string): string {
+  if (display.includes(",")) {
+    const parts = display.split(",", 2).map((s) => s.trim());
+    return parts[1]?.split(/\s+/)[0]?.toLowerCase() ?? "";
+  }
+  return display.trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+}
+
+/** Pull the lowercase last-token of a display name. */
+function extractLastName(display: string): string {
+  if (display.includes(",")) {
+    return display.split(",", 1)[0].trim().toLowerCase();
+  }
+  const parts = display.trim().split(/\s+/);
+  return parts[parts.length - 1].toLowerCase();
+}
+
+export const findSameContactDifferentName = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => sameContactInput.parse(input))
+  .handler(async ({ data }): Promise<{ pairs: SameContactPair[] }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+
+    type PatientRecord = {
+      stub: SameContactPatientStub;
+      firstNameCanonical: string;
+      lastName: string;
+      phone: string | null;
+      email: string | null;
+    };
+
+    const all: PatientRecord[] = [];
+    await forEachPatient(sb, effectiveUserId, ({ id, title, attachments }) => {
+      if (!attachments) return;
+      const phone = attachments.phone ?? null;
+      const email = attachments.email ?? null;
+      if (!phone && !email) return; // no contact = can't cross-match
+      const displayName = attachments.displayName || title;
+      const first = extractFirstName(displayName);
+      const last = extractLastName(displayName);
+      if (!first || !last) return;
+      all.push({
+        stub: {
+          patientNodeId: id,
+          displayName,
+          lifetimeSpendUsd: attachments.lifetimeSpendUsd ?? 0,
+          lastVisit: attachments.lastVisit ?? null,
+          totalVisits: attachments.totalVisits ?? 0,
+        },
+        firstNameCanonical: nicknameCanonical(first),
+        lastName: last.replace(/[^a-z0-9]/g, ""),
+        phone,
+        email: email ? email.toLowerCase() : null,
+      });
+    });
+
+    // Group by phone, then by email — each group is a list of patients
+    // sharing that contact value.
+    const byPhone = new Map<string, PatientRecord[]>();
+    const byEmail = new Map<string, PatientRecord[]>();
+    for (const r of all) {
+      if (r.phone) {
+        let arr = byPhone.get(r.phone);
+        if (!arr) {
+          arr = [];
+          byPhone.set(r.phone, arr);
+        }
+        arr.push(r);
+      }
+      if (r.email) {
+        let arr = byEmail.get(r.email);
+        if (!arr) {
+          arr = [];
+          byEmail.set(r.email, arr);
+        }
+        arr.push(r);
+      }
+    }
+
+    // Walk each group, generate pairs where last names differ + first
+    // names share a canonical form. Dedupe by (a.id, b.id) sorted —
+    // shouldn't appear under both phone and email for the same pair
+    // unless they genuinely share both, in which case the phone match
+    // takes precedence (arbitrary but stable).
+    const seen = new Set<string>();
+    const pairs: SameContactPair[] = [];
+
+    function tryPair(
+      group: PatientRecord[],
+      field: "phone" | "email",
+      value: string,
+    ) {
+      for (let i = 0; i < group.length; i++) {
+        for (let j = i + 1; j < group.length; j++) {
+          const a = group[i];
+          const b = group[j];
+          // Surname change = different last name.
+          if (a.lastName === b.lastName) continue;
+          // First name MUST share a canonical (filters out household phones).
+          if (a.firstNameCanonical !== b.firstNameCanonical) continue;
+
+          // Stable ordering: earlier-lastName-alphabetically first.
+          const [first, second] =
+            a.lastName < b.lastName ? [a, b] : [b, a];
+          const key = `${first.stub.patientNodeId}|${second.stub.patientNodeId}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+
+          // matchedViaNickname is true when the canonical resolution was
+          // needed (raw first names differed).
+          const aRawFirst = extractFirstName(a.stub.displayName);
+          const bRawFirst = extractFirstName(b.stub.displayName);
+          const matchedViaNickname = aRawFirst !== bRawFirst;
+
+          pairs.push({
+            a: first.stub,
+            b: second.stub,
+            matchedField: field,
+            matchedValue: value,
+            sharedFirstNameCanonical: a.firstNameCanonical,
+            matchedViaNickname,
+          });
+        }
+      }
+    }
+
+    for (const [phone, group] of byPhone) {
+      if (group.length < 2) continue;
+      tryPair(group, "phone", phone);
+    }
+    for (const [email, group] of byEmail) {
+      if (group.length < 2) continue;
+      tryPair(group, "email", email);
+    }
+
+    // Sort: combined lifetime spend desc (highest-value duplicates first).
+    pairs.sort(
+      (x, y) =>
+        y.a.lifetimeSpendUsd + y.b.lifetimeSpendUsd -
+        (x.a.lifetimeSpendUsd + x.b.lifetimeSpendUsd),
+    );
+
+    return { pairs };
   });

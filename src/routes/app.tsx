@@ -1,31 +1,37 @@
 /**
- * /app layout — Refill-only shell dispatcher.
+ * /app layout — outer AppShell wraps every shell-selection branch.
  *
- * Cleave rewrite 2026-05-24: collapsed from openagenticv4's 4-shell
- * dispatcher (refill / liz / karen / platform) to a 2-shell setup
- * (RefillShell for spa owners, RepShell for reps). All the Agentiport
- * scaffolding (AppSidebar, CommandPalette, KAREN_/LIZ_ALLOWED_PREFIXES,
- * ShortcutCheatsheet, MobileNav) is gone — replaced by per-shell chrome
- * already imported by the shell components themselves.
+ * v1.24.0 architectural rebuild. Pre-rebuild, chrome (sign-out, PersonaSwitcher,
+ * version pill, etc.) lived INSIDE RefillShell / RepShell, both of which were
+ * conditionally mounted. When tenant/role resolution failed, the chain
+ * collapsed and the user was trapped without sign-out. v1.24.0 separates:
  *
- * Auth gate: unauthed → redirect to /login.
+ *   - AppShell (always-on outer chrome): sign-out / PersonaSwitcher /
+ *     version pill / theme toggle / email. NEVER conditional on
+ *     tenant/role state. Lovable-style.
+ *   - Inner shells (RefillShell / RepShell): brand-specific nav chips +
+ *     banners. May render null when their state isn't ready, but
+ *     AppShell still keeps the user oriented.
+ *
+ * Auth gate: unauthed → /login.
  * Role gate: rep → RepShell, spa-owner with tenant → RefillShell.
- * Pre-tenant spa-owner: render bare /app outlet (the onboarding flow
- * lives at /onboard, not gated here — they get there from /scan or
- * the post-magic-link redirect).
+ * Pre-tenant spa-owner / admin-with-no-tenant: AppShell with bare Outlet
+ * inside (the route inside, e.g. /app/admin, renders its own page chrome).
  */
 
 import { createFileRoute, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, type ReactNode } from "react";
 
+import { AdminNav } from "@/components/admin/AdminNav";
+import { AppShell } from "@/components/AppShell";
 import { DemoModeProvider } from "@/lib/demo-mode";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { RefillShell } from "@/components/shells/RefillShell";
 import { RepShell } from "@/components/shells/RepShell";
-import { getMyPrimaryRole } from "@/server/user-prefs.functions";
-import { supabase } from "@/integrations/supabase/client";
+import { getAdminViewAsUserId } from "@/lib/admin-view-as";
 import { useAuth } from "@/lib/auth";
+import { useEffectiveRoles } from "@/hooks/useEffectiveRoles";
 import { useRepProfile } from "@/lib/use-rep-profile";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 
@@ -33,43 +39,36 @@ export const Route = createFileRoute("/app")({
   component: AppLayout,
 });
 
-type PrimaryRole = "spa-owner" | "rep" | "developer" | "admin" | null;
-
 function AppLayout() {
-  const { user, session, loading } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const tenantMembership = useTenantMembership();
   const repProfile = useRepProfile();
-  const [primaryRole, setPrimaryRole] = useState<PrimaryRole>(null);
+  // v1.23.0 (P3) cross-shell impersonation: shell derives from the
+  // impersonated user's roles when admin is viewing-as someone.
+  const viewAsUserId =
+    typeof window !== "undefined" ? getAdminViewAsUserId() : undefined;
+  const rolesState = useEffectiveRoles(viewAsUserId);
+  const shell =
+    rolesState.status === "resolved" ? rolesState.roles.shell : null;
 
   useEffect(() => {
     if (loading) return;
     if (!user) {
       void navigate({ to: "/login" });
-      return;
     }
-    const accessToken = session?.access_token;
-    if (!accessToken) return;
-    void getMyPrimaryRole({ data: { accessToken } })
-      .then((r) => setPrimaryRole((r?.primaryRole as PrimaryRole) ?? null))
-      .catch(() => setPrimaryRole(null));
-  }, [user, loading, session?.access_token, navigate]);
+  }, [user, loading, navigate]);
 
-  // Auto-dispatch users landing on bare /app to their shell home. Without
-  // this, magic-link-driven landings sit on /app with an empty Outlet.
+  // Auto-dispatch users landing on bare /app to their shell home.
   useEffect(() => {
     if (loading || !user) return;
     if (location.pathname !== "/app" && location.pathname !== "/app/") return;
-    if (primaryRole === "rep" || repProfile.profile) {
+    if (shell === "rep" || repProfile.profile) {
       void navigate({ to: "/app/rep", replace: true });
       return;
     }
-    if (primaryRole === "admin") {
-      void navigate({ to: "/app/admin", replace: true });
-      return;
-    }
-    if (primaryRole === "developer") {
+    if (shell === "admin" || shell === "developer") {
       void navigate({ to: "/app/admin", replace: true });
       return;
     }
@@ -77,11 +76,9 @@ function AppLayout() {
       void navigate({ to: "/app/refill", replace: true });
       return;
     }
-    // No role + no tenant + no rep profile yet — could still be loading.
-    // Wait for the async checks to settle; we'll re-fire when state updates.
   }, [
     location.pathname,
-    primaryRole,
+    shell,
     repProfile.profile,
     tenantMembership.tenant,
     user,
@@ -99,77 +96,67 @@ function AppLayout() {
 
   if (!user) return null;
 
-  // Path-priority shell selection. Fixes the rep-AND-tenant collision: a
-  // rep who also owns a spa lands on /app/refill via OAuth onboard and
-  // needs spa-owner chrome (Recovery/Inbox/Settings/Billing chips), not
-  // rep chrome (Outreach/Recruit/Network/...). Path wins when explicit;
-  // role-based fallback handles bare /app + ambiguous routes.
+  // Pick inner content + brand subtitle based on path + state. AppShell
+  // wraps every outcome so sign-out + PersonaSwitcher are always
+  // reachable — even if the inner shell can't mount.
   const pathname = location.pathname;
   const isRefillPath = pathname.startsWith("/app/refill");
   const isRepPath = pathname.startsWith("/app/rep");
-  const isRep = primaryRole === "rep" || !!repProfile.profile;
+  const isAdminPath = pathname.startsWith("/app/admin");
+  const isRep = shell === "rep" || !!repProfile.profile;
+
+  let subtitle: string | undefined;
+  let inner: ReactNode;
 
   if (isRefillPath && tenantMembership.tenant) {
-    return (
-      <DemoModeProvider>
-        <ErrorBoundary>
-          <OfflineBanner />
-          <RefillShell>
-            <Outlet />
-          </RefillShell>
-        </ErrorBoundary>
-      </DemoModeProvider>
+    subtitle = "no-show recovery";
+    inner = (
+      <RefillShell>
+        <Outlet />
+      </RefillShell>
     );
+  } else if (isRepPath && isRep) {
+    subtitle = "rep platform";
+    inner = (
+      <RepShell>
+        <Outlet />
+      </RepShell>
+    );
+  } else if (isAdminPath) {
+    // Admin pages get their own light identity (no spa-owner / rep brand
+    // bleed) + AdminNav chip strip below the AppShell header so admin
+    // can hop between admin surfaces without bouncing back to /app/admin.
+    subtitle = "admin";
+    inner = (
+      <>
+        <AdminNav />
+        <Outlet />
+      </>
+    );
+  } else if (isRep) {
+    subtitle = "rep platform";
+    inner = (
+      <RepShell>
+        <Outlet />
+      </RepShell>
+    );
+  } else if (tenantMembership.tenant) {
+    subtitle = "no-show recovery";
+    inner = (
+      <RefillShell>
+        <Outlet />
+      </RefillShell>
+    );
+  } else {
+    subtitle = undefined;
+    inner = <Outlet />;
   }
 
-  if (isRepPath && isRep) {
-    return (
-      <DemoModeProvider>
-        <ErrorBoundary>
-          <OfflineBanner />
-          <RepShell>
-            <Outlet />
-          </RepShell>
-        </ErrorBoundary>
-      </DemoModeProvider>
-    );
-  }
-
-  // Role-based fallback for non-explicit paths (bare /app, /app/admin, etc.)
-  if (isRep) {
-    return (
-      <DemoModeProvider>
-        <ErrorBoundary>
-          <OfflineBanner />
-          <RepShell>
-            <Outlet />
-          </RepShell>
-        </ErrorBoundary>
-      </DemoModeProvider>
-    );
-  }
-
-  if (tenantMembership.tenant) {
-    return (
-      <DemoModeProvider>
-        <ErrorBoundary>
-          <OfflineBanner />
-          <RefillShell>
-            <Outlet />
-          </RefillShell>
-        </ErrorBoundary>
-      </DemoModeProvider>
-    );
-  }
-
-  // Authed but no tenant + no rep profile — pre-tenant state. Render the
-  // outlet bare; the route inside (e.g. /app/admin/personas, /app/refill
-  // with its own non-tenant gate) decides what to show.
   return (
     <DemoModeProvider>
       <ErrorBoundary>
         <OfflineBanner />
-        <Outlet />
+        <AppShell subtitle={subtitle}>{inner}</AppShell>
       </ErrorBoundary>
     </DemoModeProvider>
   );

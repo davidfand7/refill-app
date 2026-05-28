@@ -36,7 +36,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import type { Database, Json } from "@/integrations/supabase/types";
-import { verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -383,6 +383,7 @@ export async function recomputeReliabilityForUser(args: {
 const listInput = z.object({
   accessToken: z.string().min(1),
   filter: z.enum(["unread", "all"]).optional(),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const dismissInput = z.object({
@@ -398,7 +399,10 @@ const cardInput = z.object({
 export const listPatternAlerts = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => listInput.parse(input))
   .handler(async ({ data }): Promise<PatternAlert[]> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     let query = sb
@@ -406,7 +410,7 @@ export const listPatternAlerts = createServerFn({ method: "POST" })
       .select(
         "id, patient_node_id, kind, from_tier, to_tier, headline, body, dismissed_at, created_at",
       )
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .order("created_at", { ascending: false })
       .limit(200);
     if (data.filter !== "all") {

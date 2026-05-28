@@ -25,6 +25,7 @@ import {
   ArrowLeft,
   Ban,
   CheckCircle2,
+  ExternalLink,
   FileText,
   Loader2,
   Mail,
@@ -38,15 +39,18 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
   confirmContactSuggestion,
   dismissContactSuggestion,
+  findSameContactDifferentName,
   ingestClientListCsv,
   listContactGaps,
   listContactsOverview,
   type ClientListReceipt,
   type ContactGap,
   type ContactsOverview,
+  type SameContactPair,
 } from "@/server/patient-ingest.functions";
 
 export const Route = createFileRoute("/app/refill/patients/contacts")({
@@ -64,12 +68,19 @@ type Stage =
 function ContactsPage() {
   const [overview, setOverview] = useState<ContactsOverview | null>(null);
   const [gaps, setGaps] = useState<ContactGap[] | null>(null);
+  // v1.25.0: Pass 3 — patient pairs sharing contact + canonical first name.
+  const [duplicatePairs, setDuplicatePairs] = useState<SameContactPair[]>([]);
   const [stage, setStage] = useState<Stage>("idle");
   const [file, setFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<ClientListReceipt | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // v1.23.0 P3 sweep: plumb viewAsUserId for admin impersonation.
+  const membership = useTenantMembership();
+  const viewAsUserId =
+    membership.status === "tenant" ? membership.viewAsUserId : undefined;
 
   const loadAll = useCallback(async () => {
     try {
@@ -79,16 +90,22 @@ function ContactsPage() {
         setErrorMessage("Please sign in to manage contacts.");
         return;
       }
-      const [ov, gs] = await Promise.all([
-        listContactsOverview({ data: { accessToken: token } }),
-        listContactGaps({ data: { accessToken: token, limit: 200 } }),
+      const [ov, gs, dups] = await Promise.all([
+        listContactsOverview({ data: { accessToken: token, viewAsUserId } }),
+        listContactGaps({ data: { accessToken: token, limit: 200, viewAsUserId } }),
+        // v1.25.0 Pass 3: patient pairs sharing contact + first name. Fail-
+        // soft so the page still renders if this query trips.
+        findSameContactDifferentName({
+          data: { accessToken: token, viewAsUserId },
+        }).catch(() => ({ pairs: [] })),
       ]);
       setOverview(ov);
       setGaps(gs);
+      setDuplicatePairs(dups.pairs);
     } catch (e) {
       setErrorMessage(e instanceof Error ? e.message : "Couldn't load contacts.");
     }
-  }, []);
+  }, [viewAsUserId]);
 
   useEffect(() => {
     void loadAll();
@@ -117,7 +134,7 @@ function ContactsPage() {
         return;
       }
       const r = await ingestClientListCsv({
-        data: { accessToken: token, csv: text, sourceFilename: file.name },
+        data: { accessToken: token, csv: text, sourceFilename: file.name, viewAsUserId },
       });
       setReceipt(r);
       setStage("done");
@@ -198,13 +215,34 @@ function ContactsPage() {
           { label: "Contacts" },
         ]}
         actions={
-          <Link
-            to="/app/refill/patients"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back to patients
-          </Link>
+          <div className="flex items-center gap-1.5">
+            {/* v1.24.7: cross-DB pointer to the Agentiport sister-app where
+                Karen's enriched contacts originally lived (815 reachable /
+                92 matched suggestions). See
+                memory/project_agentiport_refill_cross_db_contacts.md. */}
+            <a
+              href="https://agentiport.com/app/refill/patients/contacts"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition"
+              style={{
+                borderColor: "rgba(138, 109, 12, 0.3)",
+                background: "#fdf6dc",
+                color: "#8a6d0c",
+              }}
+              title="Karen's enriched contact data on the Agentiport sister app"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              See in Agentiport
+            </a>
+            <Link
+              to="/app/refill/patients"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to patients
+            </Link>
+          </div>
         }
       />
 
@@ -274,6 +312,11 @@ function ContactsPage() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* v1.25.0 Pass 3: pairs sharing phone/email + first name. */}
+        {duplicatePairs.length > 0 && (
+          <DuplicatesSection pairs={duplicatePairs} />
         )}
 
         {/* Suggestions — fuzzy matches with Confirm / Dismiss. */}
@@ -832,4 +875,113 @@ function Stat({
       {note && <div className="text-[11px] text-ink-faint mt-0.5">{note}</div>}
     </div>
   );
+}
+
+// ─── DuplicatesSection (v1.25.0 Pass 3) ────────────────────────────────────
+// Renders pairs of patient records that share a phone or email AND
+// resolve to the same canonical first name (via the nickname dictionary)
+// but differ on last name. Almost always: maiden/married surname change
+// OR a source-data duplicate that QuickBooks split. Surfaced for spa-owner
+// review; one-click merge primitive lands in a future ship.
+
+function DuplicatesSection({ pairs }: { pairs: SameContactPair[] }) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between mb-3">
+        <h2 className="text-base font-semibold flex items-center gap-2">
+          <Users className="h-4 w-4 text-emerald" />
+          Same contact, different name
+        </h2>
+        <div className="text-[11px] text-ink-soft">
+          {pairs.length.toLocaleString()} likely surname-change pair
+          {pairs.length === 1 ? "" : "s"}
+        </div>
+      </div>
+      <div
+        className="rounded-2xl border bg-card p-3 mb-3 text-[12px] text-ink-soft"
+        style={{ borderColor: "#e6e2d6", background: "#fdf6dc" }}
+      >
+        These two patient records share a phone or email + same first name.
+        Almost always a maiden→married surname change (or a source-data
+        duplicate). Review and merge manually in QuickBooks for now; one-click
+        merge will land soon.
+      </div>
+      <div className="space-y-3">
+        {pairs.map((pair) => (
+          <DuplicatePairRow
+            key={`${pair.a.patientNodeId}|${pair.b.patientNodeId}`}
+            pair={pair}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DuplicatePairRow({ pair }: { pair: SameContactPair }) {
+  const fmt = (n: number) =>
+    n.toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    });
+  return (
+    <div
+      className="rounded-2xl border bg-card p-4"
+      style={{ borderColor: "#e6e2d6" }}
+    >
+      <div className="flex items-center gap-2 mb-3 text-[11px] text-ink-soft">
+        <span
+          className="inline-flex h-5 items-center rounded-full px-2 font-semibold"
+          style={{ background: "#e8f1ed", color: "#056048" }}
+        >
+          {pair.matchedField === "phone" ? "Same phone" : "Same email"}
+        </span>
+        <span className="font-mono text-ink-faint">{pair.matchedValue}</span>
+        {pair.matchedViaNickname && (
+          <span
+            className="inline-flex h-5 items-center rounded-full px-2 font-semibold"
+            style={{ background: "#fdf6dc", color: "#8a6d0c" }}
+            title={`Both names resolve to "${pair.sharedFirstNameCanonical}" via nickname dictionary`}
+          >
+            via nickname
+          </span>
+        )}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <DuplicatePatientCard stub={pair.a} />
+        <DuplicatePatientCard stub={pair.b} />
+      </div>
+    </div>
+  );
+
+  function DuplicatePatientCard({
+    stub,
+  }: {
+    stub: SameContactPair["a"];
+  }) {
+    return (
+      <Link
+        to="/app/refill/patients/$patientId"
+        params={{ patientId: stub.patientNodeId }}
+        className="block rounded-xl border bg-background p-3 hover:bg-muted/40 transition"
+        style={{ borderColor: "#e6e2d6" }}
+      >
+        <div className="font-semibold text-[14px] mb-1">
+          {stub.displayName}
+        </div>
+        <div className="flex items-center gap-3 text-[11px] text-ink-soft">
+          <span className="tabular-nums">{fmt(stub.lifetimeSpendUsd)}</span>
+          <span className="text-ink-faint">·</span>
+          <span className="tabular-nums">{stub.totalVisits} visits</span>
+          {stub.lastVisit && (
+            <>
+              <span className="text-ink-faint">·</span>
+              <span>last {stub.lastVisit}</span>
+            </>
+          )}
+        </div>
+      </Link>
+    );
+  }
 }

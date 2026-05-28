@@ -34,6 +34,7 @@ import {
   type CampaignFunnel,
   type EmmaReports,
 } from "@/server/emma-reports.functions";
+import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/refill/reports")({
@@ -44,6 +45,11 @@ function ReportsPage() {
   const [reports, setReports] = useState<EmmaReports | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // v1.23.0 P3 sweep: plumb viewAsUserId for admin impersonation.
+  const membership = useTenantMembership();
+  const viewAsUserId =
+    membership.status === "tenant" ? membership.viewAsUserId : undefined;
+
   const load = useCallback(async () => {
     try {
       const { data: sess } = await supabase.auth.getSession();
@@ -52,13 +58,13 @@ function ReportsPage() {
         setLoadError("Please sign in to view reports.");
         return;
       }
-      const r = await getEmmaReports({ data: { accessToken: token } });
+      const r = await getEmmaReports({ data: { accessToken: token, viewAsUserId } });
       setReports(r);
       setLoadError(null);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Couldn't load reports.");
     }
-  }, []);
+  }, [viewAsUserId]);
 
   useEffect(() => {
     void load();

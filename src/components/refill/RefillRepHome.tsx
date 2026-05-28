@@ -29,6 +29,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import { getAdminViewAsUserId } from "@/lib/admin-view-as";
 import { useAuth } from "@/lib/auth";
 import { useRepProfile } from "@/lib/use-rep-profile";
 import {
@@ -111,9 +112,11 @@ export function RefillRepHome() {
     const accessToken = session?.access_token;
     if (!accessToken || profile.status !== "rep") return;
     let cancelled = false;
+    const viewAsUserId =
+      typeof window !== "undefined" ? getAdminViewAsUserId() : undefined;
     void Promise.all([
-      getMyNetwork({ data: { accessToken } }).then((r) => r.members),
-      getMyLiveEarnings({ data: { accessToken } }).then((r) => r.totals),
+      getMyNetwork({ data: { accessToken, viewAsUserId } }).then((r) => r.members),
+      getMyLiveEarnings({ data: { accessToken, viewAsUserId } }).then((r) => r.totals),
     ])
       .then(([members, totals]) => {
         if (cancelled) return;

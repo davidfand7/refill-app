@@ -1210,13 +1210,17 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
 
 const listInput = z.object({
   accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 export const listRescueActivity = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => listInput.parse(input))
   .handler(async ({ data }): Promise<RescueActivityItem[]> => {
-    const { verifyAuth } = await import("@/server/auth-helpers");
-    const userId = await verifyAuth(data.accessToken);
+    const { resolveEffectiveUserId } = await import("@/server/auth-helpers");
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     const { data: attempts } = await sb
@@ -1224,7 +1228,7 @@ export const listRescueActivity = createServerFn({ method: "POST" })
       .select(
         "id, freed_appointment_id, triggered_at, outreach_count, status, filled_at, filled_by_offer_id",
       )
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .order("triggered_at", { ascending: false })
       .limit(50);
     if (!attempts || attempts.length === 0) return [];

@@ -1,26 +1,41 @@
 /**
- * User-preferences server fns — primary_role read/write.
+ * User-preferences server fns — primary_role + A-list rules read/write.
  *
  * Stage 1 of the vertical breakout (Option C subdomain shell — see
  * project_vertical_breakout_locked memory). primary_role drives shell +
  * sidebar selection: 'spa-owner' / 'rep' / 'developer' / null.
  *
- * Two surfaces:
- *   getMyPrimaryRole({ accessToken }) — AuthProvider calls this on session
- *     load to populate context.
- *   setMyPrimaryRole({ accessToken, role }) — manual override (future
- *     Settings UI; today only used by admin tooling).
+ * v1.25.1 added a `prefs jsonb` column on user_preferences for arbitrary
+ * per-user settings. First consumer: A-list automation rules (the spa-
+ * owner-facing dashboard at /app/refill/patients/a-list-rules). Stored
+ * under prefs.aListRules + prefs.aListLastAppliedAt.
  *
- * Plus an internal helper `setPrimaryRoleIfUnset(sb, userId, role)` used by
- * the auto-stamp hooks in claimSpa + ensureLizSession. "Unset" = no row OR
- * row with primary_role IS NULL — never overwrites an existing role (a rep
- * who later claims their own spa keeps 'rep' until they manually switch).
+ * Surfaces:
+ *   getMyPrimaryRole({ accessToken }) — AuthProvider calls on session load.
+ *   setMyPrimaryRole({ accessToken, role }) — manual override.
+ *   getMyAListRules({ accessToken, viewAsUserId? }) — load rules + last
+ *     applied timestamp for the dashboard.
+ *   saveAListRulesAndMarkApplied({ accessToken, viewAsUserId?, rules })
+ *     — persist rules + stamp lastAppliedAt=now() after a successful Apply.
+ *
+ * Internal helper `setPrimaryRoleIfUnset(sb, userId, role)` powers the
+ * auto-stamp hooks in claimSpa + ensureLizSession. "Unset" = no row OR row
+ * with primary_role IS NULL — never overwrites an existing role.
+ *
+ * Tenant-impersonation note: the A-list fns use resolveEffectiveUserId so
+ * an admin viewing-as Karen writes rules to KAREN's row, not the admin's.
+ * The primary_role fns intentionally do NOT — they're for self-service
+ * role selection and impersonation isn't meaningful there.
  */
 
 import { createServerFn } from "@tanstack/react-start";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { accessTokenInput, verifyAuth } from "@/server/auth-helpers";
+import {
+  accessTokenInput,
+  resolveEffectiveUserId,
+  verifyAuth,
+} from "@/server/auth-helpers";
 import type { Database } from "@/integrations/supabase/types";
 
 export type PrimaryRole = "spa-owner" | "rep" | "developer";
@@ -147,3 +162,116 @@ export const setMyPrimaryRole = createServerFn({ method: "POST" })
     }
     return { primaryRole: data.role };
   });
+
+// ─── A-list rules (v1.25.1) ────────────────────────────────────────────────
+
+export type AListRules = {
+  /** null = rule disabled. */
+  lifetimeSpendMinUsd: number | null;
+  lastVisitWithinDays: number | null;
+  totalVisitsMin: number | null;
+  excludeBanned: boolean;
+};
+
+export const DEFAULT_A_LIST_RULES: AListRules = {
+  lifetimeSpendMinUsd: 1000,
+  lastVisitWithinDays: 365,
+  totalVisitsMin: 3,
+  excludeBanned: true,
+};
+
+const aListRulesSchema = z.object({
+  lifetimeSpendMinUsd: z.number().min(0).max(1_000_000).nullable(),
+  lastVisitWithinDays: z.number().int().min(1).max(3650).nullable(),
+  totalVisitsMin: z.number().int().min(1).max(1000).nullable(),
+  excludeBanned: z.boolean(),
+});
+
+const aListReadInput = accessTokenInput.extend({
+  viewAsUserId: z.string().uuid().optional(),
+});
+
+const aListSaveInput = accessTokenInput.extend({
+  viewAsUserId: z.string().uuid().optional(),
+  rules: aListRulesSchema,
+});
+
+export const getMyAListRules = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => aListReadInput.parse(input))
+  .handler(
+    async ({
+      data,
+    }): Promise<{ rules: AListRules; lastAppliedAt: string | null }> => {
+      const { effectiveUserId } = await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
+      const sb = admin();
+      const { data: row, error } = await sb
+        .from("user_preferences")
+        .select("prefs")
+        .eq("user_id", effectiveUserId)
+        .maybeSingle();
+      if (error) {
+        throw new Error(`Couldn't load A-list rules: ${error.message}`);
+      }
+      const prefs =
+        (row?.prefs as { aListRules?: AListRules; aListLastAppliedAt?: string } | null) ??
+        null;
+      return {
+        rules: prefs?.aListRules ?? DEFAULT_A_LIST_RULES,
+        lastAppliedAt: prefs?.aListLastAppliedAt ?? null,
+      };
+    },
+  );
+
+export const saveAListRulesAndMarkApplied = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => aListSaveInput.parse(input))
+  .handler(
+    async ({
+      data,
+    }): Promise<{ rules: AListRules; lastAppliedAt: string }> => {
+      const { effectiveUserId } = await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
+      const sb = admin();
+
+      // Read-merge-write so we don't clobber sibling pref keys (future
+      // notification cadence, dashboard layout, etc.). user_preferences is
+      // one row per user — the extra read is trivial.
+      const { data: existing, error: readErr } = await sb
+        .from("user_preferences")
+        .select("prefs")
+        .eq("user_id", effectiveUserId)
+        .maybeSingle();
+      if (readErr) {
+        throw new Error(`Couldn't read prior prefs: ${readErr.message}`);
+      }
+
+      const nowIso = new Date().toISOString();
+      const priorPrefs =
+        (existing?.prefs as Record<string, unknown> | null) ?? {};
+      const nextPrefs = {
+        ...priorPrefs,
+        aListRules: data.rules,
+        aListLastAppliedAt: nowIso,
+      };
+
+      const { error: upsertErr } = await sb
+        .from("user_preferences")
+        .upsert(
+          {
+            user_id: effectiveUserId,
+            prefs: nextPrefs,
+            updated_at: nowIso,
+          },
+          { onConflict: "user_id" },
+        );
+      if (upsertErr) {
+        throw new Error(`Couldn't save A-list rules: ${upsertErr.message}`);
+      }
+
+      return { rules: data.rules, lastAppliedAt: nowIso };
+    },
+  );

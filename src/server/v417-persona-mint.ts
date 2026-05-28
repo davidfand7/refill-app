@@ -43,8 +43,13 @@ import type { Database } from "@/integrations/supabase/types";
 // Persona roster — discriminated key the client passes, email resolved
 // server-side. Keep this list aligned with src/server/v417-personas.ts
 // PERSONAS so the admin dropdown + public /personas page share semantics.
+//
+// v1.23.0 P3: admin renamed from admin@refill-demo.test → admin@refill.platform
+// per the supabase/migrations/20260620000000_v123_admin_rename.sql migration.
+// The rename keeps the same user_id (addf1110-0000-0000-0000-000000000001),
+// so user_roles + admin_audit_log references stay valid.
 const PERSONA_EMAILS = {
-  admin: "admin@refill-demo.test",
+  admin: "admin@refill.platform",
   kelly: "kelly@refill-demo.test",
   maria: "maria@refill-demo.test",
   karen: "karen@rejuv-demo.test",

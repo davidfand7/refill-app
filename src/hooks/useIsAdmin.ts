@@ -1,53 +1,21 @@
 /**
  * Single source of truth for "is the current user an admin?".
  *
- * Admin checks were previously inlined ad-hoc on /app/templates. Promoting
- * this to a hook lets new admin gates (e.g. the agent → template fork flow)
- * share one cached query keyed on user id, so navigating between admin pages
- * doesn't refire the check on every mount.
+ * v1.22.2 (P2 of unified admin platform) — REWRITTEN as a thin wrapper
+ * over useEffectiveRoles().isAdmin. Pre-P2 this hook ran its own direct
+ * supabase query against public.user_roles, duplicating the same check
+ * that the new server-side getEffectiveRoles already performs (and that
+ * resolveEffectiveUserId enforces as the security boundary). One source
+ * of truth — eliminates the cache-divergence footgun where a future
+ * persona-switch could have left this hook returning stale `isAdmin`
+ * because its module-level cache key was uid-only, not session-aware.
  *
- * Returns `false` (never `null`) when no user / not yet loaded so callers can
- * gate UI without juggling tri-state booleans.
+ * Returns `false` (never `null`) when no user / not yet loaded so callers
+ * can gate UI without juggling tri-state booleans.
  */
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/lib/auth";
-
-// Module-level cache so cross-component navigations are free. Keyed by uid.
-const cache = new Map<string, boolean>();
+import { useEffectiveRoles } from "@/hooks/useEffectiveRoles";
 
 export function useIsAdmin(): boolean {
-  const { user } = useAuth();
-  const [isAdmin, setIsAdmin] = useState<boolean>(
-    user ? (cache.get(user.id) ?? false) : false,
-  );
-
-  useEffect(() => {
-    if (!user) {
-      setIsAdmin(false);
-      return;
-    }
-    const cached = cache.get(user.id);
-    if (cached !== undefined) {
-      setIsAdmin(cached);
-      return;
-    }
-    let cancelled = false;
-    supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("role", "admin")
-      .maybeSingle()
-      .then(({ data }) => {
-        const result = !!data;
-        cache.set(user.id, result);
-        if (!cancelled) setIsAdmin(result);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
-
-  return isAdmin;
+  const state = useEffectiveRoles();
+  return state.status === "resolved" && state.roles.isAdmin;
 }

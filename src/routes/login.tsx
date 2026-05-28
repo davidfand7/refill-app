@@ -26,7 +26,7 @@ import {
   markDispatched,
   postLoginTarget,
 } from "@/lib/post-login-redirect";
-import { getMyPrimaryRole } from "@/server/user-prefs.functions";
+import { getEffectiveRoles } from "@/server/role-helpers";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -52,10 +52,15 @@ function LoginPage() {
       return;
     }
     let cancelled = false;
-    void getMyPrimaryRole({ data: { accessToken } })
-      .then((r) => {
+    // v1.22.2 (P2): fetch the unified shell from getEffectiveRoles
+    // (user_roles source of truth) instead of legacy getMyPrimaryRole
+    // (user_preferences.primary_role). Admin sign-in now correctly
+    // routes to /app/admin instead of the legacy /app/refill default
+    // — the dead "admin" branch in postLoginTarget is now live.
+    void getEffectiveRoles({ data: { accessToken } })
+      .then((roles) => {
         if (cancelled) return;
-        const target = postLoginTarget(r?.primaryRole ?? null);
+        const target = postLoginTarget(roles?.shell ?? null);
         markDispatched();
         void navigate({ to: target.href });
       })

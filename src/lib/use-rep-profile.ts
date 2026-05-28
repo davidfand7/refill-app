@@ -17,6 +17,7 @@
 
 import { useEffect, useState } from "react";
 
+import { getAdminViewAsUserId } from "@/lib/admin-view-as";
 import { useAuth } from "@/lib/auth";
 import { getMyRepAccount, type RepAccountRow } from "@/server/rep-platform";
 
@@ -28,26 +29,33 @@ export type RepProfileState =
 const LOADING: RepProfileState = { status: "loading", rep: null };
 const NOT_A_REP: RepProfileState = { status: "not-a-rep", rep: null };
 
-// Module-level in-flight cache. Keyed by access-token so a token rotation
-// (refresh or sign-out / sign-in) invalidates without us having to wire
-// invalidation manually. Tokens that never resolve get a chance to be
-// re-tried because we cache the PROMISE, not the value — so a transient
-// network error will reject and the next caller starts a fresh fetch.
+// Module-level in-flight cache. Keyed by (access-token, viewAsUserId)
+// so admin switching personas re-fetches; sign-in/out invalidates naturally
+// because the token rotates. v1.24.0: keyed by access-token+viewAsUserId
+// so admin impersonating a rep returns the IMPERSONATED rep's profile
+// (server-side resolveEffectiveUserId enforces the admin gate).
 const cache = new Map<string, Promise<RepProfileState>>();
 
-function fetchRepProfile(accessToken: string): Promise<RepProfileState> {
-  const cached = cache.get(accessToken);
+function cacheKey(accessToken: string, viewAsUserId?: string): string {
+  return `${accessToken}|${viewAsUserId ?? ""}`;
+}
+
+function fetchRepProfile(
+  accessToken: string,
+  viewAsUserId?: string,
+): Promise<RepProfileState> {
+  const key = cacheKey(accessToken, viewAsUserId);
+  const cached = cache.get(key);
   if (cached) return cached;
-  const promise = getMyRepAccount({ data: { accessToken } })
+  const promise = getMyRepAccount({ data: { accessToken, viewAsUserId } })
     .then<RepProfileState>((r) =>
       r.rep ? { status: "rep", rep: r.rep } : NOT_A_REP,
     )
     .catch((err) => {
-      // Drop the failed promise from the cache so the next call retries.
-      cache.delete(accessToken);
+      cache.delete(key);
       throw err;
     });
-  cache.set(accessToken, promise);
+  cache.set(key, promise);
   return promise;
 }
 
@@ -56,8 +64,11 @@ function fetchRepProfile(accessToken: string): Promise<RepProfileState> {
  * already resolving by the time any shell-selection useLayoutEffect runs.
  * Returns the same shared promise the hook uses.
  */
-export function prefetchRepProfile(accessToken: string): Promise<RepProfileState> {
-  return fetchRepProfile(accessToken);
+export function prefetchRepProfile(
+  accessToken: string,
+  viewAsUserId?: string,
+): Promise<RepProfileState> {
+  return fetchRepProfile(accessToken, viewAsUserId);
 }
 
 /**
@@ -69,6 +80,10 @@ export function prefetchRepProfile(accessToken: string): Promise<RepProfileState
 export function useRepProfile(): RepProfileState {
   const { session, loading: authLoading } = useAuth();
   const accessToken = session?.access_token;
+  // v1.24.0: read admin-impersonation localStorage so admin viewing-as a
+  // rep gets the rep's profile, not their own.
+  const viewAsUserId =
+    typeof window !== "undefined" ? getAdminViewAsUserId() : undefined;
   const [state, setState] = useState<RepProfileState>(LOADING);
 
   useEffect(() => {
@@ -83,7 +98,7 @@ export function useRepProfile(): RepProfileState {
     }
     let cancelled = false;
     setState(LOADING);
-    fetchRepProfile(accessToken)
+    fetchRepProfile(accessToken, viewAsUserId)
       .then((result) => {
         if (!cancelled) setState(result);
       })
@@ -97,7 +112,7 @@ export function useRepProfile(): RepProfileState {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, authLoading]);
+  }, [accessToken, authLoading, viewAsUserId]);
 
   return state;
 }

@@ -49,7 +49,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
-import { verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 
 // ─── Public types exported to UI ──────────────────────────────────────────
 
@@ -103,6 +103,7 @@ function admin() {
 
 const input = z.object({
   accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -132,14 +133,17 @@ function emptyFunnel(): Omit<CampaignFunnel, "campaignId" | "title" | "lastActiv
 export const getEmmaReports = createServerFn({ method: "POST" })
   .inputValidator((input_: unknown) => input.parse(input_))
   .handler(async ({ data }): Promise<EmmaReports> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     // 1) Campaigns (id + title)
     const { data: campaignRows, error: cErr } = await sb
       .from("knowledge_nodes")
       .select("id, title")
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .eq("node_type", "campaign")
       .eq("context", "campaigns");
     if (cErr) throw new Error(`Couldn't load campaigns: ${cErr.message}`);
@@ -158,7 +162,7 @@ export const getEmmaReports = createServerFn({ method: "POST" })
       .select(
         "id, campaign_node_id, state, scheduled_at, last_touched_at, booking_confirmed_at, showed_at, attributed_revenue_usd, updated_at",
       )
-      .eq("user_id", userId);
+      .eq("user_id", effectiveUserId);
     if (sErr) throw new Error(`Couldn't load state rows: ${sErr.message}`);
 
     // 3) All outreach rows for this spa. Same one-shot read pattern.
@@ -167,7 +171,7 @@ export const getEmmaReports = createServerFn({ method: "POST" })
       .select(
         "patient_outreach_state_id, direction, channel, sent_at, opened_at, replied_at, skip_reason",
       )
-      .eq("user_id", userId);
+      .eq("user_id", effectiveUserId);
     if (oErr) throw new Error(`Couldn't load outreach rows: ${oErr.message}`);
 
     // 4) Build a map: campaignId → funnel accumulator. We also accumulate

@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Send, Sparkles, X } from "lucide-react";
 import { z } from "zod";
 
+import { getAdminViewAsUserId } from "@/lib/admin-view-as";
 import { useAuth } from "@/lib/auth";
 import {
   getMyRepAccount,
@@ -117,8 +118,10 @@ function OutreachPage() {
     let cancelled = false;
     (async () => {
       try {
+        const viewAsUserId =
+          typeof window !== "undefined" ? getAdminViewAsUserId() : undefined;
         const [repRes, tplRes, modeRes, sendsRes] = await Promise.all([
-          getMyRepAccount({ data: { accessToken } }),
+          getMyRepAccount({ data: { accessToken, viewAsUserId } }),
           listOutreachTemplates({ data: { accessToken } }).catch(() => ({
             templates: [],
           })),

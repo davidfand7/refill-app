@@ -25,7 +25,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
-import { verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 import { sendSms } from "@/server/sms-provider";
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
 
@@ -552,6 +552,7 @@ function extractFirstName(displayName: string | null): string | null {
 
 const recentInput = z.object({
   accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 export const listRecentReminders = createServerFn({ method: "POST" })
@@ -560,7 +561,10 @@ export const listRecentReminders = createServerFn({ method: "POST" })
     async ({
       data,
     }): Promise<{ sentThisWeek: number; sentToday: number; skippedThisWeek: number }> => {
-      const userId = await verifyAuth(data.accessToken);
+      const { effectiveUserId } = await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
       const sb = admin();
       const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
@@ -568,7 +572,7 @@ export const listRecentReminders = createServerFn({ method: "POST" })
       const { data: rows } = await sb
         .from("patient_outreach")
         .select("sent_at, skip_reason, subject")
-        .eq("user_id", userId)
+        .eq("user_id", effectiveUserId)
         .eq("direction", "outbound")
         .gte("created_at", weekAgo)
         .like("subject", "%[preshow:%");

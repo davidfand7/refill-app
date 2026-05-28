@@ -34,6 +34,7 @@ import {
   type InboxThreadMessage,
 } from "@/server/emma-inbox.functions";
 import { useShell } from "@/lib/shell";
+import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/refill/inbox")({
@@ -64,6 +65,11 @@ function InboxPage() {
     new Map(),
   );
 
+  // v1.23.0 P3 sweep: plumb viewAsUserId for admin impersonation.
+  const membership = useTenantMembership();
+  const viewAsUserId =
+    membership.status === "tenant" ? membership.viewAsUserId : undefined;
+
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     setRefreshing(true);
@@ -74,7 +80,7 @@ function InboxPage() {
         toast.error("Please sign in.");
         return;
       }
-      const fresh = await listPatientInbox({ data: { accessToken: token } });
+      const fresh = await listPatientInbox({ data: { accessToken: token, viewAsUserId } });
       setRows(fresh);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't load inbox.");
@@ -82,7 +88,7 @@ function InboxPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [viewAsUserId]);
 
   useEffect(() => {
     void load();
@@ -112,7 +118,7 @@ function InboxPage() {
       const { data: sess } = await supabase.auth.getSession();
       const token = sess.session?.access_token;
       if (!token) return;
-      const msgs = await getInboxThread({ data: { accessToken: token, stateId } });
+      const msgs = await getInboxThread({ data: { accessToken: token, stateId, viewAsUserId } });
       setThreads((prev) => {
         const next = new Map(prev);
         next.set(stateId, msgs);

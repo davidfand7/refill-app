@@ -31,7 +31,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import type { Database, Json } from "@/integrations/supabase/types";
-import { verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 import { callGeminiOneShot } from "@/server/gemini-oneshot";
 import type { ColAliases } from "@/lib/appointment-csv";
 
@@ -334,6 +334,7 @@ export const updateCsvDialectMapping = createServerFn({ method: "POST" })
 
 const listMappingsInput = z.object({
   accessToken: z.string(),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 export type CachedDialectMapping = {
@@ -351,14 +352,17 @@ export type CachedDialectMapping = {
 export const listCsvDialectMappings = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => listMappingsInput.parse(input))
   .handler(async ({ data }): Promise<CachedDialectMapping[]> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
     const { data: rows, error } = await sb
       .from("emma_csv_dialect_cache")
       .select(
         "header_hash, detected_platform, alias_map, llm_model, llm_at, user_corrected_at, use_count, created_at",
       )
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .order("llm_at", { ascending: false })
       .limit(50);
     if (error) {

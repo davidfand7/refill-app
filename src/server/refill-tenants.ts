@@ -342,11 +342,25 @@ export const getMyTenant = createServerFn({ method: "POST" })
 
 const adminFallbackInput = z.object({
   accessToken: z.string().min(1),
-  /** v1.20.6: when set + the tenant exists, return that tenant + its
-   *  owner instead of the default first-by-ordering choice. Falls through
-   *  to the default ordering when the preferred tenant doesn't exist
-   *  (defensive against stale localStorage from deleted tenants). */
+  /** v1.20.6 (DEPRECATED in v1.23.0 — viewAsUserId is the canonical
+   *  mechanism now). When set + the tenant exists, return that tenant +
+   *  its owner instead of the default first-by-ordering choice. Falls
+   *  through to the default ordering when the preferred tenant doesn't
+   *  exist (defensive against stale localStorage from deleted tenants).
+   *  Still honored for backward-compat with any stale tenant-id-keyed
+   *  localStorage from pre-v1.23.0 sessions; new writes target
+   *  refill-admin-view-as-user-id instead. */
   preferredTenantId: z.string().uuid().optional(),
+  /** v1.23.0 (P3 persona switcher): the impersonated user's user_id.
+   *  When set, look up the tenant owned by that user and return it.
+   *  Returns { tenant: null, ownerUserId: null } when the user isn't a
+   *  tenant owner (e.g. impersonating a rep) — useTenantMembership treats
+   *  that as NOT_A_TENANT so RepShell can take over.
+   *
+   *  Takes precedence over preferredTenantId when both are set (the
+   *  persona switcher should have cleared the legacy key on write, but
+   *  defensive ordering doesn't hurt). */
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 export const getFirstTenantForAdmin = createServerFn({ method: "POST" })
@@ -371,10 +385,10 @@ export const getFirstTenantForAdmin = createServerFn({ method: "POST" })
       if (!roles) {
         throw new Error("Admin only.");
       }
-      // v1.20.6: honor preferredTenantId when provided + tenant exists.
-      // Lets admin's banner-dropdown choice (persisted in localStorage)
-      // override the v1.20.3 first-by-ordering default. Falls through to
-      // the default ordering if preferred tenant doesn't exist (defensive).
+      // v1.23.0 (P3): if viewAsUserId is set, look up the tenant owned
+      // by that user. Returns null if the user isn't a tenant owner —
+      // useTenantMembership reads that as NOT_A_TENANT so RepShell or
+      // AdminShell can take over (cross-shell impersonation).
       let row: {
         id: string;
         slug: string;
@@ -383,7 +397,39 @@ export const getFirstTenantForAdmin = createServerFn({ method: "POST" })
         plan: string;
         is_demo: boolean | null;
       } | null = null;
-      if (data.preferredTenantId) {
+      let explicitOwnerUserId: string | null = null;
+      if (data.viewAsUserId) {
+        // Find the tenant_memberships row(s) for the target user; prefer
+        // role='owner', else the first by created_at.
+        const { data: memberships, error: memErr } = await sb
+          .from("tenant_memberships")
+          .select("tenant_id, role, created_at")
+          .eq("user_id", data.viewAsUserId)
+          .order("created_at", { ascending: true });
+        if (memErr) {
+          throw new Error(`Couldn't load memberships: ${memErr.message}`);
+        }
+        const list = memberships ?? [];
+        const ownerRow = list.find((m) => m.role === "owner") ?? list[0];
+        if (!ownerRow) {
+          // Target user isn't a tenant owner. Cross-shell impersonation
+          // (admin → rep, admin → developer) wants a null tenant here.
+          return { tenant: null, ownerUserId: null };
+        }
+        const { data: tenantRow } = await sb
+          .from("tenants")
+          .select("id, slug, name, trial_ends_at, plan, is_demo")
+          .eq("id", ownerRow.tenant_id)
+          .maybeSingle();
+        if (tenantRow) {
+          row = tenantRow;
+          explicitOwnerUserId = data.viewAsUserId;
+        }
+      }
+      // v1.20.6 (DEPRECATED v1.23.0): preferredTenantId backward-compat.
+      // Only used when viewAsUserId is NOT set — the new persona switcher
+      // writes viewAsUserId exclusively.
+      if (!row && data.preferredTenantId) {
         const { data: preferred } = await sb
           .from("tenants")
           .select("id, slug, name, trial_ends_at, plan, is_demo")
@@ -391,7 +437,7 @@ export const getFirstTenantForAdmin = createServerFn({ method: "POST" })
           .maybeSingle();
         if (preferred) row = preferred;
       }
-      if (!row) {
+      if (!row && !data.viewAsUserId) {
         // v1.20.3 fallback ordering: prefer real tenants over demo seeds.
         // is_demo ASC NULLS FIRST → null/false before true; ties by
         // created_at ASC. Pre-v1.20.3 returned oldest overall, which was
@@ -412,18 +458,27 @@ export const getFirstTenantForAdmin = createServerFn({ method: "POST" })
         row = orderedRow;
       }
       if (!row) return { tenant: null, ownerUserId: null };
-      // v1.20: also return the owner user_id so the client can plumb
+      // v1.20: return the owner user_id so the client can plumb
       // viewAsUserId through to spa-owner server fns. Prefer the 'owner'
       // role row; fall back to any membership row if the role enum hasn't
       // been populated (early-migration safety).
-      const { data: ownerRow } = await sb
-        .from("tenant_memberships")
-        .select("user_id, role")
-        .eq("tenant_id", row.id)
-        .order("created_at", { ascending: true })
-        .limit(50);
-      const owner =
-        (ownerRow ?? []).find((r) => r.role === "owner") ?? (ownerRow ?? [])[0];
+      //
+      // v1.23.0: when the caller specified viewAsUserId AND we matched a
+      // tenant for that user, the owner is by definition the impersonated
+      // user — skip the membership lookup.
+      let ownerUserId: string | null = explicitOwnerUserId;
+      if (!ownerUserId) {
+        const { data: ownerRow } = await sb
+          .from("tenant_memberships")
+          .select("user_id, role")
+          .eq("tenant_id", row.id)
+          .order("created_at", { ascending: true })
+          .limit(50);
+        const owner =
+          (ownerRow ?? []).find((r) => r.role === "owner") ??
+          (ownerRow ?? [])[0];
+        ownerUserId = owner?.user_id ?? null;
+      }
       return {
         tenant: {
           id: row.id,
@@ -433,7 +488,7 @@ export const getFirstTenantForAdmin = createServerFn({ method: "POST" })
           plan: row.plan,
           isDemo: row.is_demo ?? false,
         },
-        ownerUserId: owner?.user_id ?? null,
+        ownerUserId,
       };
     },
   );

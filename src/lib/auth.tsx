@@ -1,23 +1,21 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  getMyPrimaryRole,
-  type PrimaryRole,
-} from "@/server/user-prefs.functions";
+import { clearAdminViewAsUserIdNoReload } from "@/lib/admin-view-as";
 import { clearDispatchFlag } from "@/lib/post-login-redirect";
+
+// v1.22.2 (P2 of unified admin platform) — useAuth no longer exposes
+// primaryRole. The previous primary_role read (from user_preferences) was
+// the shell-selection signal pre-cleave but had zero live consumers after
+// the v1.22.2 cutover: app.tsx and login.tsx now read shell from
+// useEffectiveRoles() / getEffectiveRoles() against the unified
+// public.user_roles. The user_preferences.primary_role column itself
+// stays for one release as fallback (per D3 lock); drops in v1.24.
 
 interface AuthContextValue {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  /**
-   * Stage 1 of vertical breakout (Option C subdomain shell). Drives sidebar
-   * + (eventually) shell selection. null means "no role stamped yet" → full
-   * platform UX, same as 'developer'. Auto-stamped server-side on first
-   * spa claim or first Liz message; manually settable via setMyPrimaryRole.
-   */
-  primaryRole: PrimaryRole | null;
   signOut: () => Promise<void>;
 }
 
@@ -27,7 +25,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [primaryRole, setPrimaryRole] = useState<PrimaryRole | null>(null);
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
@@ -66,37 +63,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Fetch primary_role whenever the session lands or changes. Errors fall
-  // back to null = full platform — never block render on a pref read.
-  useEffect(() => {
-    const accessToken = session?.access_token;
-    if (!accessToken) {
-      setPrimaryRole(null);
-      return;
-    }
-    let cancelled = false;
-    getMyPrimaryRole({ data: { accessToken } })
-      .then((r) => {
-        if (!cancelled) setPrimaryRole(r.primaryRole);
-      })
-      .catch(() => {
-        if (!cancelled) setPrimaryRole(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [session?.access_token]);
-
   const signOut = async () => {
     // Clear the post-login redirect gate so the next sign-in dispatches
     // fresh — otherwise a re-login in the same tab would skip the role-based
     // bounce and dump the user on /app instead of their subdomain home.
     clearDispatchFlag();
+    // v1.24.3: also clear admin impersonation state. Otherwise the next
+    // sign-in (this user OR anyone else on this device) would start
+    // already mid-impersonation, which is the obvious wrong default.
+    clearAdminViewAsUserIdNoReload();
     await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, primaryRole, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   );

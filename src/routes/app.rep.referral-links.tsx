@@ -15,6 +15,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Check, Copy, Link2, Sparkles } from "lucide-react";
 
+import { getAdminViewAsUserId } from "@/lib/admin-view-as";
 import { useAuth } from "@/lib/auth";
 import {
   ensureMyRepAccount,
@@ -54,11 +55,13 @@ function ReferralLinksPage() {
         // use_count / last_used_at history) instead of showing the empty
         // "Generate" CTA every time. Fail-soft on the links query so a
         // transient DB error doesn't kill the rep-profile path.
+        const viewAsUserId =
+          typeof window !== "undefined" ? getAdminViewAsUserId() : undefined;
         const [repRes, linksRes] = await Promise.all([
-          getMyRepAccount({ data: { accessToken } }),
-          listMyReferralLinks({ data: { accessToken } }).catch(() => ({
-            links: [],
-          })),
+          getMyRepAccount({ data: { accessToken, viewAsUserId } }),
+          listMyReferralLinks({ data: { accessToken, viewAsUserId } }).catch(
+            () => ({ links: [] }),
+          ),
         ]);
         if (cancelled) return;
         setRep(repRes.rep);

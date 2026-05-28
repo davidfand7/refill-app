@@ -25,6 +25,7 @@ import {
   REFILL_TAKE_RATE,
   TOTAL_TAKE_RATE,
 } from "@/lib/rep-economics";
+import { getAdminViewAsUserId } from "@/lib/admin-view-as";
 import {
   getMyNetwork,
   getMyRepAccount,
@@ -57,9 +58,11 @@ function EconomicsPage() {
     let cancelled = false;
     (async () => {
       try {
+        const viewAsUserId =
+          typeof window !== "undefined" ? getAdminViewAsUserId() : undefined;
         const [repRes, netRes] = await Promise.all([
-          getMyRepAccount({ data: { accessToken } }),
-          getMyNetwork({ data: { accessToken } }).catch(() => ({
+          getMyRepAccount({ data: { accessToken, viewAsUserId } }),
+          getMyNetwork({ data: { accessToken, viewAsUserId } }).catch(() => ({
             members: [],
           })),
         ]);

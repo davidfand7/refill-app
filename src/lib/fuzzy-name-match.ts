@@ -4,20 +4,87 @@
  * The 276 sales-no-client gap is mostly spelling drift: "Bob → Robert",
  * maiden vs married names, typos like "yearsly" vs "Yearsley". Levenshtein
  * distance ≤ 2 on the last-name token catches the typo class cleanly; the
- * "Bob/Robert" class needs a nickname dictionary — out of scope for P1.5,
- * deferred.
+ * "Bob/Robert" class is now handled via the nickname dictionary in
+ * NICKNAME_CANONICAL below (v1.25.0). Maiden/married surname changes are
+ * harder; that's the patient-duplicate-detection feature in
+ * patient-ingest.findSameContactDifferentName.
  *
- * Confidence ranking: lower distance = higher confidence. We also require
- * a first-letter-of-first-name match, otherwise "Hennesy, Megan" matches
- * "Hennessey, Mark" (close last name, wrong person). The first-letter
- * guard is what makes "≤2" usable as a one-click confirmation threshold
- * rather than a manual review queue.
+ * Confidence ranking: lower distance = higher confidence. We require a
+ * first-name match — either first-initial-equal OR known-nickname-equivalent
+ * — otherwise "Hennesy, Megan" matches "Hennessey, Mark" (close last name,
+ * wrong person). The guard is what makes "≤2" usable as a one-click
+ * confirmation threshold rather than a manual review queue.
  *
  * Pure functions; no I/O. Used by the contacts server fn to assemble the
  * suggestion list and by tests to keep the algorithm honest.
  *
- * Established 2026-05-15 (Patient Architecture P1.5).
+ * Established 2026-05-15 (Patient Architecture P1.5). v1.25.0 added
+ * nickname-dictionary equivalence.
  */
+
+// ─── Nickname dictionary (v1.25.0) ─────────────────────────────────────────
+//
+// Maps every known nickname/variant to a single CANONICAL form. Two names
+// share a canonical → they're treated as first-name-equal even if their
+// raw initials differ ("B" vs "R" for Bob/Robert).
+//
+// Curated list of the most common Western nickname pairs that show up in
+// US med-spa books. Keep additions to actual common pairs — over-eager
+// equivalences (e.g. mapping every "Ann*" variant to one canonical) would
+// generate false-positive merges.
+const NICKNAME_CANONICAL: Record<string, string> = {
+  // ─── Male
+  bob: "robert", bobby: "robert", rob: "robert", robbie: "robert", robert: "robert",
+  bill: "william", billy: "william", will: "william", willy: "william", william: "william",
+  jim: "james", jimmy: "james", jamie: "james", james: "james",
+  jack: "john", johnny: "john", jon: "john", john: "john",
+  mike: "michael", mikey: "michael", mick: "michael", michael: "michael",
+  dick: "richard", rick: "richard", ricky: "richard", richie: "richard", richard: "richard",
+  tom: "thomas", tommy: "thomas", thomas: "thomas",
+  dan: "daniel", danny: "daniel", daniel: "daniel",
+  dave: "david", davey: "david", david: "david",
+  tony: "anthony", anthony: "anthony",
+  chris: "christopher", topher: "christopher", christopher: "christopher",
+  matt: "matthew", matty: "matthew", matthew: "matthew",
+  ed: "edward", eddie: "edward", ned: "edward", ted: "edward", edward: "edward",
+  steve: "stephen", stephen: "stephen", steven: "stephen",
+  joe: "joseph", joey: "joseph", joseph: "joseph",
+  nick: "nicholas", nicky: "nicholas", nicholas: "nicholas",
+  ben: "benjamin", benny: "benjamin", benjamin: "benjamin",
+  alex: "alexander", al: "alexander", alexander: "alexander",
+  // ─── Female
+  liz: "elizabeth", lizzie: "elizabeth", beth: "elizabeth", betsy: "elizabeth", betty: "elizabeth", ellie: "elizabeth", elle: "elizabeth", elizabeth: "elizabeth",
+  kate: "katherine", katie: "katherine", kathy: "katherine", kathryn: "katherine", katherine: "katherine", kat: "katherine",
+  meg: "margaret", maggie: "margaret", peggy: "margaret", margaret: "margaret",
+  sue: "susan", susie: "susan", suzie: "susan", susan: "susan", suzanne: "susan",
+  cathy: "catherine", cat: "catherine", catherine: "catherine",
+  patty: "patricia", pat: "patricia", patti: "patricia", trish: "patricia", patricia: "patricia",
+  jen: "jennifer", jenny: "jennifer", jenn: "jennifer", jennifer: "jennifer",
+  jess: "jessica", jessie: "jessica", jessica: "jessica",
+  becky: "rebecca", becca: "rebecca", rebecca: "rebecca",
+  abby: "abigail", abigail: "abigail",
+  sam: "samantha", sammy: "samantha", samantha: "samantha",
+  nat: "natalie", natalie: "natalie",
+  nikki: "nicole", nicki: "nicole", nicole: "nicole",
+  steph: "stephanie", stephanie: "stephanie",
+  vicki: "victoria", vicky: "victoria", tori: "victoria", victoria: "victoria",
+  // ─── Common shortenings (gender-neutral)
+  pete: "peter", peter: "peter",
+  andy: "andrew", drew: "andrew", andrew: "andrew",
+  ken: "kenneth", kenny: "kenneth", kenneth: "kenneth",
+  ron: "ronald", ronnie: "ronald", ronald: "ronald",
+  greg: "gregory", gregory: "gregory",
+  tim: "timothy", timmy: "timothy", timothy: "timothy",
+  larry: "lawrence", lawrence: "lawrence", laurence: "lawrence",
+};
+
+/** Map a raw first name to its canonical form (or itself when unknown).
+ *  Exported so the Pass-3 duplicate detector in patient-ingest can
+ *  resolve "Bob → robert" + "Robert → robert" to a common key. */
+export function nicknameCanonical(raw: string): string {
+  const k = raw.trim().toLowerCase();
+  return NICKNAME_CANONICAL[k] ?? k;
+}
 
 // ─── Public types ──────────────────────────────────────────────────────────
 
@@ -30,6 +97,11 @@ export type FuzzyTarget = {
   lastNameKey: string;
   /** Lowercased first-character of first name. */
   firstInitial: string;
+  /** v1.25.0: lowercased canonical first name (resolves nicknames to a
+   *  common form so Bob/Robert match through the dictionary). Falls back
+   *  to the raw lowercase first name when no entry exists. Empty when
+   *  first name was unknown at target-construction time. */
+  firstNameCanonical: string;
 };
 
 export type FuzzyMatch = {
@@ -38,6 +110,10 @@ export type FuzzyMatch = {
   distance: number;
   /** Higher = better. Computed once at match time so the UI can sort cheaply. */
   confidence: number;
+  /** v1.25.0: true when the first-name match required nickname-dictionary
+   *  resolution (e.g. Bob ↔ Robert). UI can render a hint chip so the
+   *  operator knows WHY a confidently-wrong-looking name pair surfaced. */
+  matchedViaNickname: boolean;
 };
 
 // ─── Public entry point ────────────────────────────────────────────────────
@@ -60,15 +136,25 @@ export function findFuzzyMatches(
   for (const target of pool) {
     if (target.id === source.id) continue;
     if (!target.lastNameKey) continue;
-    // First-letter-of-first-name guard. The few cases where this guard hurts
-    // (people who changed their first name) are rarer than the cases where
-    // it saves us from confidently-wrong pairings.
-    if (
-      source.firstInitial &&
-      target.firstInitial &&
-      source.firstInitial !== target.firstInitial
-    )
-      continue;
+    // First-name guard. Two acceptances:
+    //   (1) first initial matches (existing behavior)
+    //   (2) v1.25.0: canonical-form matches via nickname dictionary
+    //       (Bob/Robert/Bobby all resolve to "robert")
+    let matchedViaNickname = false;
+    if (source.firstInitial && target.firstInitial) {
+      if (source.firstInitial !== target.firstInitial) {
+        // Initials differ — only allow if nickname dictionary collapses them.
+        if (
+          source.firstNameCanonical &&
+          target.firstNameCanonical &&
+          source.firstNameCanonical === target.firstNameCanonical
+        ) {
+          matchedViaNickname = true;
+        } else {
+          continue;
+        }
+      }
+    }
     // Fast-reject: |length diff| > maxDistance → distance can't be ≤ maxDistance.
     if (Math.abs(source.lastNameKey.length - target.lastNameKey.length) > maxDistance)
       continue;
@@ -78,6 +164,7 @@ export function findFuzzyMatches(
       target,
       distance: d,
       confidence: confidenceFromDistance(d, source.lastNameKey.length),
+      matchedViaNickname,
     });
   }
 
@@ -99,25 +186,25 @@ export function fuzzyTargetFromName(
   // Prefer explicit firstName/lastName when present; otherwise derive from
   // "Last, First" (patient knowledge_nodes title format).
   let last = lastName?.trim().toLowerCase() ?? "";
-  let firstInitial = "";
-  if (firstName) firstInitial = firstName.trim().charAt(0).toLowerCase();
+  let first = firstName?.trim() ?? "";
   if (!last && displayName.includes(",")) {
     const [l, rest] = displayName.split(",", 2).map((s) => s.trim());
     last = l.toLowerCase();
-    if (!firstInitial && rest) firstInitial = rest.charAt(0).toLowerCase();
+    if (!first && rest) first = rest;
   } else if (!last) {
     // "Firstname Lastname" form — take the last whitespace-separated token.
     const parts = displayName.trim().split(/\s+/);
     if (parts.length >= 1) {
       last = parts[parts.length - 1].toLowerCase();
-      if (!firstInitial && parts.length >= 2)
-        firstInitial = parts[0].charAt(0).toLowerCase();
+      if (!first && parts.length >= 2) first = parts[0];
     }
   }
+  const firstInitial = first ? first.charAt(0).toLowerCase() : "";
+  const firstNameCanonical = first ? nicknameCanonical(first) : "";
   // Strip non-alphanumerics from the last-name key — "Garas." and "Garas"
   // collapse, "Yearsley" and "Yearsly" stay one edit apart.
   last = last.replace(/[^a-z0-9]/g, "");
-  return { id, displayName, lastNameKey: last, firstInitial };
+  return { id, displayName, lastNameKey: last, firstInitial, firstNameCanonical };
 }
 
 // ─── Internals ─────────────────────────────────────────────────────────────

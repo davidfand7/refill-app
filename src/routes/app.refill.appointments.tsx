@@ -39,6 +39,7 @@ import {
 } from "@/server/emma-appointments.functions";
 import { listRecentReminders } from "@/server/emma-preshow.functions";
 import { dialectLabel, SUPPORTED_PLATFORMS } from "@/lib/appointment-csv";
+import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/refill/appointments")({
@@ -61,6 +62,11 @@ function AppointmentsPage() {
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // v1.23.0 P3 sweep: plumb viewAsUserId for admin impersonation.
+  const membership = useTenantMembership();
+  const viewAsUserId =
+    membership.status === "tenant" ? membership.viewAsUserId : undefined;
+
   const load = useCallback(async () => {
     try {
       const { data: sess } = await supabase.auth.getSession();
@@ -71,7 +77,7 @@ function AppointmentsPage() {
       }
       const [apts, stats, cov] = await Promise.all([
         listAppointments({ data: { accessToken: token } }),
-        listRecentReminders({ data: { accessToken: token } }),
+        listRecentReminders({ data: { accessToken: token, viewAsUserId } }),
         getAppointmentMatchCoverage({ data: { accessToken: token } }),
       ]);
       setAppointments(apts);
@@ -81,7 +87,7 @@ function AppointmentsPage() {
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Couldn't load appointments.");
     }
-  }, []);
+  }, [viewAsUserId]);
 
   useEffect(() => {
     void load();

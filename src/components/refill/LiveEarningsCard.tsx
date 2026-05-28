@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { Activity } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { getAdminViewAsUserId } from "@/lib/admin-view-as";
 import {
   CASCADE_COMMISSION_RATE,
   DIRECT_COMMISSION_RATE,
@@ -52,8 +53,10 @@ export function LiveEarningsCard({ accessToken, repUserId }: Props) {
 
     const load = async () => {
       try {
+        const viewAsUserId =
+          typeof window !== "undefined" ? getAdminViewAsUserId() : undefined;
         const { totals: t, recent: r } = await getMyLiveEarnings({
-          data: { accessToken },
+          data: { accessToken, viewAsUserId },
         });
         if (cancelled) return;
         setTotals(t);

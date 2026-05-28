@@ -22,11 +22,16 @@
  *   and consumers can know the membership isn't real.
  *
  *   v1.20.4 fix: the original gate `primaryRole === "admin"` was wrong —
- *   useAuth().primaryRole reads user_preferences.primary_role, which is
- *   the shell-selection signal ("spa-owner" / "rep" / "developer"), and
- *   NEVER returns "admin". So the gate was dead and the admin-bypass
- *   path never fired. v1.20.4 removes the gate; getFirstTenantForAdmin
+ *   useAuth().primaryRole read user_preferences.primary_role, the
+ *   shell-selection signal ("spa-owner" / "rep" / "developer"), and
+ *   NEVER returned "admin". So the gate was dead and the admin-bypass
+ *   path never fired. v1.20.4 removed the gate; getFirstTenantForAdmin
  *   server-side admin check is the authoritative gate.
+ *
+ *   v1.22.2 (P2 of unified admin platform): useAuth().primaryRole no
+ *   longer exists — the consumer cutover landed it on getEffectiveRoles
+ *   instead. The admin-fallback below stays purely server-gated; client
+ *   never decides "you're admin" anywhere in this hook.
  *
  *   Why this is admin-only and not e.g. rep-viewing-tenant: admins are
  *   the platform operators who legitimately need cross-tenant chrome
@@ -35,11 +40,15 @@
 
 import { useEffect, useState } from "react";
 
+import { getAdminViewAsUserId } from "@/lib/admin-view-as";
 import { useAuth } from "@/lib/auth";
 import { getFirstTenantForAdmin, getMyTenant, type MyTenant } from "@/server/refill-tenants";
 
 // v1.20.6: localStorage key for the admin tenant switcher choice.
-// Exported so the RefillShellChrome switcher can read/write the same key.
+// v1.23.0 (DEPRECATED): superseded by ADMIN_VIEW_AS_USER_ID_KEY in
+// admin-view-as.ts. Still readable here for back-compat with any stale
+// pre-v1.23.0 localStorage; new writes go to the user-id key. Remove the
+// legacy key entirely in v1.24.
 export const ADMIN_VIEW_AS_TENANT_ID_KEY = "refill-admin-view-as-tenant-id";
 
 function readPreferredTenantId(): string | undefined {
@@ -52,11 +61,12 @@ function readPreferredTenantId(): string | undefined {
 }
 
 /**
- * Write the admin's chosen view-as tenant id and reload so all components
- * re-fetch with the new context. Reload is the simple, correct choice
- * here — a SPA-style re-render would require invalidating the
- * use-tenant-membership cache + every page-side data fetcher that has
- * already plumbed viewAsUserId. Reload is one line and unambiguous.
+ * v1.20.6 (DEPRECATED v1.23.0) — write the admin's chosen view-as tenant
+ * id and reload. The v1.23.0 PersonaSwitcher writes a user_id instead
+ * (via setAdminViewAsUserId in admin-view-as.ts), which is the canonical
+ * mechanism now. This export stays for back-compat / external callers
+ * that haven't migrated; no in-repo callers remain after the v1.23.0
+ * RefillShellChrome cleanup.
  */
 export function setAdminViewAsTenantId(tenantId: string | null): void {
   if (typeof window === "undefined") return;
@@ -168,21 +178,31 @@ export function useTenantMembership(): TenantMembershipState {
         // non-admin without a membership.
         //
         // Pre-v1.20.4 this was gated client-side on
-        // `primaryRole === "admin"`, but useAuth().primaryRole reads
+        // `primaryRole === "admin"`, but useAuth().primaryRole read
         // user_preferences.primary_role (shell-selection signal —
-        // "spa-owner" / "rep" / "developer"). It NEVER returns
-        // "admin", so the gate was dead and the admin-bypass path
-        // never fired. Cost of the un-gated version: one extra
-        // POST per non-tenant non-admin sign-in, returning a 401.
-        // Non-tenant users are rare (typically mid-onboarding)
-        // so the bandwidth is negligible.
+        // "spa-owner" / "rep" / "developer"). It NEVER returned
+        // "admin", so the gate was dead. v1.20.4 removed the gate;
+        // v1.22.2 (P2) removed useAuth().primaryRole entirely. Cost
+        // of the un-gated version: one extra POST per non-tenant
+        // non-admin sign-in, returning a 401. Non-tenant users are
+        // rare (typically mid-onboarding) so the bandwidth is
+        // negligible.
         try {
-          // v1.20.6: honor admin's banner-dropdown choice (persisted in
-          // localStorage). Falls through to server-side default ordering
-          // when the preferred tenant doesn't exist (handled server-side).
+          // v1.23.0 (P3): honor the PersonaSwitcher's user-id choice
+          // (localStorage). When set, the server returns the tenant
+          // owned by THAT user (null if the user isn't a tenant owner
+          // — e.g. impersonating a rep — which short-circuits to
+          // NOT_A_TENANT here, so RepShell can take over via app.tsx's
+          // shell dispatch).
+          //
+          // preferredTenantId remains for back-compat with stale
+          // pre-v1.23.0 localStorage (where the inline tenant-select
+          // wrote tenant-id). When both keys are present, the server
+          // prefers viewAsUserId.
+          const viewAsUserId = getAdminViewAsUserId();
           const preferredTenantId = readPreferredTenantId();
           const { tenant, ownerUserId } = await getFirstTenantForAdmin({
-            data: { accessToken, preferredTenantId },
+            data: { accessToken, viewAsUserId, preferredTenantId },
           });
           if (cancelled) return;
           if (tenant) {
@@ -197,6 +217,7 @@ export function useTenantMembership(): TenantMembershipState {
         } catch {
           // Non-admin → server threw "Admin only." Expected.
           // Or admin but no tenants exist (rare).
+          // Or admin impersonating a non-owner (rep) → tenant=null.
         }
         setState(NOT_A_TENANT);
       })

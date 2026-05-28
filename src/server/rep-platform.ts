@@ -19,7 +19,7 @@ import { z } from "zod";
 
 import type { Database, Json } from "@/integrations/supabase/types";
 import { DIRECT_COMMISSION_RATE } from "@/lib/rep-economics";
-import { verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 import { mintReferralToken } from "@/server/referral-tokens";
 
 type SbClient = ReturnType<typeof createClient<Database>>;
@@ -38,6 +38,12 @@ function admin(): SbClient {
 
 const authInput = z.object({
   accessToken: z.string().min(1),
+});
+
+// v1.24.5: shared input for read fns that honor admin impersonation.
+// Mirrors readWithViewAsInput in refill-billing.ts.
+const authWithViewAsInput = authInput.extend({
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 export type RepAccountRow = {
@@ -85,18 +91,29 @@ function isDemoMetadata(meta: Json | null | undefined): boolean {
 
 // ─── getMyRepAccount ─────────────────────────────────────────────────────
 
+// v1.24.0: viewAsUserId opt-in so admin impersonating a rep gets the
+// impersonated rep's profile (not the caller's null). resolveEffectiveUserId
+// re-verifies admin role server-side before honoring the override.
+const getMyRepAccountInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+});
+
 export const getMyRepAccount = createServerFn({ method: "POST" })
-  .inputValidator((raw: unknown) => authInput.parse(raw))
+  .inputValidator((raw: unknown) => getMyRepAccountInput.parse(raw))
   .handler(
     async ({ data }): Promise<{ rep: RepAccountRow | null }> => {
-      const userId = await verifyAuth(data.accessToken);
+      const { effectiveUserId } = await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
       const sb = admin();
       const { data: row, error } = await sb
         .from("rep_accounts")
         .select(
           "rep_user_id, display_name, business_name, status, origin_type, territory, joined_at, metadata",
         )
-        .eq("rep_user_id", userId)
+        .eq("rep_user_id", effectiveUserId)
         .maybeSingle();
       if (error) {
         throw new Error(`Couldn't load your rep account: ${error.message}`);
@@ -343,15 +360,18 @@ export const mintMyReferralLink = createServerFn({ method: "POST" })
 // future multi-campaign-link model without breaking callers.
 
 export const listMyReferralLinks = createServerFn({ method: "POST" })
-  .inputValidator((raw: unknown) => authInput.parse(raw))
+  .inputValidator((raw: unknown) => authWithViewAsInput.parse(raw))
   .handler(
     async ({ data }): Promise<{ links: ReferralLink[] }> => {
-      const userId = await verifyAuth(data.accessToken);
+      const { effectiveUserId } = await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
       const sb = admin();
       const { data: rows, error } = await sb
         .from("rep_referral_links")
         .select("short_slug, token, use_count, last_used_at, created_at")
-        .eq("rep_user_id", userId)
+        .eq("rep_user_id", effectiveUserId)
         .order("created_at", { ascending: false });
       if (error) {
         throw new Error(`Couldn't load your referral links: ${error.message}`);
@@ -361,7 +381,7 @@ export const listMyReferralLinks = createServerFn({ method: "POST" })
         url: buildShortReferralUrl(r.short_slug),
         longUrl: buildLongReferralUrl(r.token),
         shortSlug: r.short_slug,
-        repId: userId,
+        repId: effectiveUserId,
         useCount: r.use_count,
         lastUsedAt: r.last_used_at,
         createdAt: r.created_at,
@@ -674,13 +694,16 @@ export type NetworkMember = {
 };
 
 export const getMyNetwork = createServerFn({ method: "POST" })
-  .inputValidator((raw: unknown) => authInput.parse(raw))
+  .inputValidator((raw: unknown) => authWithViewAsInput.parse(raw))
   .handler(async ({ data }): Promise<{ members: NetworkMember[] }> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     const { data: rows, error } = await sb.rpc("get_rep_network", {
-      root_rep_id: userId,
+      root_rep_id: effectiveUserId,
       max_depth: 3,
     });
     if (error) {
@@ -724,12 +747,15 @@ export type LedgerTotals = {
 };
 
 export const getMyLedger = createServerFn({ method: "POST" })
-  .inputValidator((raw: unknown) => authInput.parse(raw))
+  .inputValidator((raw: unknown) => authWithViewAsInput.parse(raw))
   .handler(
     async ({
       data,
     }): Promise<{ rows: LedgerRow[]; totals: LedgerTotals }> => {
-      const userId = await verifyAuth(data.accessToken);
+      const { effectiveUserId } = await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
       const sb = admin();
 
       const { data: dbRows, error } = await sb
@@ -737,7 +763,7 @@ export const getMyLedger = createServerFn({ method: "POST" })
         .select(
           "id, period_month, tier_level, commission_split, source_revenue_usd, commission_usd, status, paid_at, source_tenant_id, notes",
         )
-        .eq("rep_id", userId)
+        .eq("rep_id", effectiveUserId)
         .order("period_month", { ascending: false })
         .order("tier_level", { ascending: true });
       if (error) {
@@ -803,7 +829,7 @@ export type LiveEarningsTotals = {
 };
 
 export const getMyLiveEarnings = createServerFn({ method: "POST" })
-  .inputValidator((raw: unknown) => authInput.parse(raw))
+  .inputValidator((raw: unknown) => authWithViewAsInput.parse(raw))
   .handler(
     async ({
       data,
@@ -811,7 +837,10 @@ export const getMyLiveEarnings = createServerFn({ method: "POST" })
       totals: LiveEarningsTotals;
       recent: LiveEarningsEvent[];
     }> => {
-      const userId = await verifyAuth(data.accessToken);
+      const { effectiveUserId } = await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
       const sb = admin();
 
       const { data: rows, error } = await sb
@@ -819,7 +848,7 @@ export const getMyLiveEarnings = createServerFn({ method: "POST" })
         .select(
           "id, created_at, recovery_agent, attributed_revenue_usd, verified_at",
         )
-        .eq("referred_by_rep_id", userId)
+        .eq("referred_by_rep_id", effectiveUserId)
         .order("created_at", { ascending: false });
       if (error) {
         throw new Error(`Couldn't load your live earnings: ${error.message}`);

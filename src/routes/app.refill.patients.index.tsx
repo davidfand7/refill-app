@@ -28,6 +28,7 @@ import {
   Star,
   Upload,
   Users,
+  Wand2,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
@@ -433,6 +434,13 @@ function PatientsPage() {
         }
         actions={
           <div className="flex items-center gap-2">
+            <Link
+              to="/app/refill/patients/a-list-rules"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-xs font-medium hover:bg-rule-soft transition"
+            >
+              <Wand2 className="h-3.5 w-3.5" />
+              A-list rules
+            </Link>
             <Link
               to="/app/refill/patients/contacts"
               className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-xs font-medium hover:bg-rule-soft transition"
