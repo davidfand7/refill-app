@@ -572,20 +572,19 @@ export const ingestAppointmentCsv = createServerFn({ method: "POST" })
       receipt.inserted += inserted?.length ?? 0;
     }
 
-    // v1.25.5: bulk-ingest reliability sweep. The per-row reliability
-    // recompute hook (line ~705 in updateAppointmentStatus) only fires on
-    // individual status flips; a bulk import of cancellations/no-shows
-    // never triggers it, so emma_reliability_status stays stale and the
-    // A-list excludeUnreliable rule reads 0 flags. Sweep once at end of
-    // ingest. Fire-and-await — the recompute is cheap (one query per
-    // distinct patient_node_id) and we want the receipt to wait so the
-    // UI can show fresh reliability counts on next refresh.
+    // v1.25.7: bulk-ingest reliability sweep — now a single RPC instead
+    // of looping recomputeReliabilityForPatient per patient. The v1.25.5
+    // implementation timed out on Karen's ~800-patient ingest because
+    // each per-patient call did ~3 round trips → 2,400+ RTs total → past
+    // the 30s Workers CPU budget. The new RPC computes counts in one SQL
+    // statement (CTE + INSERT...ON CONFLICT) and updates only the count
+    // columns; tier stays on its existing path (per-row trigger + cron).
+    // See migration 20260528010000.
     if (receipt.patientsMatched > 0) {
       try {
-        const { recomputeReliabilityForUser } = await import(
-          "@/server/emma-reliability.functions"
-        );
-        await recomputeReliabilityForUser({ sb, userId });
+        await sb.rpc("refill_recompute_reliability_counts", {
+          p_user_id: userId,
+        });
       } catch (e) {
         console.error(
           "post-ingest reliability sweep failed:",

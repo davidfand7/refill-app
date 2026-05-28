@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.25.7",
+    date: "May 2026",
+    items: [
+      "<strong>v1.25.7 &mdash; Hotfix: Workers CPU timeout on bulk appointment ingest. The v1.25.5 reliability sweep was the wrong shape.</strong> Karen re-uploaded the 5,754-row Acuity export expecting a clean receipt. UI flashed and went blank instead. Root cause: the post-ingest <code>recomputeReliabilityForUser</code> sweep added in v1.25.5 loops <code>recomputeReliabilityForPatient</code> over every distinct patient (~800-1,000 at Karen-scale), each iteration ~3 DB round trips. 2,400+ round trips blew past Cloudflare Workers&rsquo; 30s CPU budget; the inserts committed (they run first, fast) but the receipt never returned to the client. EXACT antipattern that the file&rsquo;s own line 498 comment warns about for buildPatientIndex (which was fixed in v372.2 by collapsing per-row queries into a single bulk query). I added the warned-against pattern back in. Naming the wrong claim: I shipped a loop-of-DB-queries on a Workers handler 7 days after re-anchoring scout-first / Boris north star and 2 days after caching v372.2&rsquo;s anti-pattern lesson in my own changelog comment. Should have seen it in scout. <strong>Fix</strong>: new Postgres RPC <code>refill_recompute_reliability_counts(p_user_id)</code> via migration <code>20260528010000</code>. Single SQL statement: CTE aggregates no_shows_6mo / cancellations_6mo / total_visits per patient using count(*) filter, INSERT ... ON CONFLICT upserts into <code>emma_reliability_status</code>. Tier stays untouched (per-row trigger + cron still own tier transitions). One round trip from the Worker, server-side aggregation. <code>ingestAppointmentCsv</code> now calls <code>sb.rpc(&apos;refill_recompute_reliability_counts&apos;, { p_user_id })</code> instead of the looping helper. The looping helper still exists for the cron path where Workers timeouts don&rsquo;t apply. <strong>Karen&rsquo;s previous upload likely committed all 5,754 rows</strong> before the timeout. Verification SQL in the next ship message will confirm what landed; no re-upload needed if the count checks out. Touched: <code>supabase/migrations/20260528010000_refill_recompute_reliability_counts.sql</code> (new), <code>src/server/emma-appointments.functions.ts</code> (RPC call replaces sync loop), <code>src/integrations/supabase/types.ts</code> (RPC type), <code>src/lib/changelog.ts</code> (this entry).",
+    ],
+  },
+  {
     version: "v1.25.6",
     date: "May 2026",
     items: [

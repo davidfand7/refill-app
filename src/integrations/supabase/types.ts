@@ -3099,6 +3099,10 @@ export type Database = {
         }
         Returns: number
       }
+      refill_recompute_reliability_counts: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
       wipe_karen_demo_data: {
         Args: never
         Returns: {
