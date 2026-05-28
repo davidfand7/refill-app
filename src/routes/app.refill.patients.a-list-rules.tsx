@@ -23,6 +23,9 @@ import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Eye,
   Loader2,
   Star,
   Wand2,
@@ -102,6 +105,7 @@ function AListRulesPage() {
   const [clearOpen, setClearOpen] = useState(false);
   const [clearText, setClearText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const membership = useTenantMembership();
   const viewAsUserId =
@@ -170,6 +174,29 @@ function AListRulesPage() {
     () => [...currentVipIds].filter((id) => !matchingIds.has(id)),
     [matchingIds, currentVipIds],
   );
+
+  // v1.25.3: the prospective post-Apply A-list — everyone who would be vip
+  // after clicking Apply (currently-vip preserved by additive design + new
+  // additions from rules). Sorted by lifetime spend desc so highest-value
+  // first matches how Karen thinks about her book.
+  const previewRows = useMemo(() => {
+    if (!patients) return [];
+    return patients
+      .filter((p) => matchingIds.has(p.id) || currentVipIds.has(p.id))
+      .map((p) => {
+        const matches = matchingIds.has(p.id);
+        const wasVip = currentVipIds.has(p.id);
+        const status: "kept-by-rule" | "would-add" | "manual-kept" = matches
+          ? wasVip
+            ? "kept-by-rule"
+            : "would-add"
+          : "manual-kept";
+        return { patient: p, status };
+      })
+      .sort(
+        (a, b) => b.patient.lifetimeSpendUsd - a.patient.lifetimeSpendUsd,
+      );
+  }, [patients, matchingIds, currentVipIds]);
 
   const totalPatients = patients?.length ?? 0;
   const totalMatching = matchingIds.size;
@@ -451,6 +478,21 @@ function AListRulesPage() {
 
           <button
             type="button"
+            disabled={busy || previewRows.length === 0}
+            onClick={() => setPreviewOpen((o) => !o)}
+            className="inline-flex items-center gap-2 rounded-lg border border-rule bg-white px-4 py-2.5 text-sm font-medium text-ink-soft hover:bg-rule-soft hover:text-ink transition disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <Eye className="h-4 w-4" />
+            {previewOpen ? "Hide preview" : "Preview list"}
+            {previewOpen ? (
+              <ChevronUp className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronDown className="h-3.5 w-3.5" />
+            )}
+          </button>
+
+          <button
+            type="button"
             disabled={busy || totalCurrentVip === 0}
             onClick={() => {
               setClearText("");
@@ -461,6 +503,61 @@ function AListRulesPage() {
             Clear all A-list flags
           </button>
         </div>
+
+        {/* Preview list (toggled) */}
+        {previewOpen && (
+          <section className="rounded-2xl border border-rule bg-white overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-rule flex items-baseline justify-between gap-3 bg-rule/30">
+              <div>
+                <h2 className="text-sm font-semibold text-ink">
+                  A-list after apply
+                </h2>
+                <p className="text-[11px] text-ink-soft mt-0.5">
+                  Sorted by lifetime spend. Manual stars stay even when they
+                  don&rsquo;t match the rules.
+                </p>
+              </div>
+              <span className="text-[11px] tabular-nums text-ink-soft">
+                {previewRows.length.toLocaleString()} patient
+                {previewRows.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            {previewRows.length === 0 ? (
+              <div className="px-5 py-8 text-center text-sm text-ink-soft">
+                No patients would be A-list under these rules.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-rule/20">
+                    <tr className="text-left text-[10px] uppercase tracking-wider text-ink-soft">
+                      <th className="px-4 py-2.5 font-semibold">Patient</th>
+                      <th className="px-4 py-2.5 font-semibold">Last visit</th>
+                      <th className="px-4 py-2.5 font-semibold text-right">
+                        Visits
+                      </th>
+                      <th className="px-4 py-2.5 font-semibold text-right">
+                        Lifetime spend
+                      </th>
+                      <th className="px-4 py-2.5 font-semibold text-center">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-rule">
+                    {previewRows.map(({ patient, status }) => (
+                      <PreviewRow
+                        key={patient.id}
+                        patient={patient}
+                        status={status}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
       </div>
 
       {/* Apply confirm */}
@@ -621,6 +718,68 @@ function RuleRow({
         className="w-full accent-ink disabled:cursor-not-allowed"
       />
     </div>
+  );
+}
+
+function PreviewRow({
+  patient,
+  status,
+}: {
+  patient: PatientListRow;
+  status: "kept-by-rule" | "would-add" | "manual-kept";
+}) {
+  const lastVisitLabel = patient.lastVisit
+    ? new Date(patient.lastVisit).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "—";
+  const statusMeta =
+    status === "kept-by-rule"
+      ? {
+          label: "Already A-list",
+          chip: "bg-emerald-50 text-emerald-700 border-emerald-200",
+          icon: <CheckCircle2 className="h-3 w-3" />,
+        }
+      : status === "would-add"
+        ? {
+            label: "Would be added",
+            chip: "bg-sky-50 text-sky-700 border-sky-200",
+            icon: <Wand2 className="h-3 w-3" />,
+          }
+        : {
+            label: "Manual star",
+            chip: "bg-amber/10 text-amber border-amber/30",
+            icon: <Star className="h-3 w-3" />,
+          };
+  return (
+    <tr className="hover:bg-rule-soft/40 transition">
+      <td className="px-4 py-2.5">
+        <Link
+          to="/app/refill/patients/$patientId"
+          params={{ patientId: patient.id }}
+          className="font-medium text-ink hover:text-emerald-700 transition"
+        >
+          {patient.displayName}
+        </Link>
+      </td>
+      <td className="px-4 py-2.5 text-ink-soft">{lastVisitLabel}</td>
+      <td className="px-4 py-2.5 text-right tabular-nums text-ink-soft">
+        {patient.totalVisits.toLocaleString()}
+      </td>
+      <td className="px-4 py-2.5 text-right tabular-nums font-medium text-ink">
+        {formatCurrency(patient.lifetimeSpendUsd)}
+      </td>
+      <td className="px-4 py-2.5 text-center">
+        <span
+          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border ${statusMeta.chip}`}
+        >
+          {statusMeta.icon}
+          {statusMeta.label}
+        </span>
+      </td>
+    </tr>
   );
 }
 

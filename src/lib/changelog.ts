@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.25.3",
+    date: "May 2026",
+    items: [
+      "<strong>v1.25.3 &mdash; A-list rules: Preview list button reveals the prospective A-list before Apply.</strong> Karen ask post-walk of v1.25.2: counts on the preview card are good but she wants to scan NAMES before applying so she can catch anything weird (e.g., a banned-but-not-flagged regular, a former-favorite who churned). New <strong>Preview list</strong> button between Apply + Clear toggles an inline table that shows the full post-Apply A-list &mdash; everyone who would be vip after clicking Apply, sorted by lifetime spend descending. Three status chips: <strong>Already A-list</strong> (green) for currently-vip patients who also match rules; <strong>Would be added</strong> (blue) for the delta Apply would create; <strong>Manual star</strong> (amber) for currently-vip patients who DON&rsquo;T match the rules and are preserved by the additive-only design. Header copy makes the preservation behavior explicit so Karen doesn&rsquo;t have to remember the design call &mdash; the chip distinction tells her at a glance what she&rsquo;s about to mutate vs what survives untouched. Patient names link to <code>/app/refill/patients/$patientId</code> for drill-in. Button-triggered (not live) per spec &mdash; opening on every slider tick would jitter the page. Same-page reveal (not modal) so Karen can keep tuning rules with the list visible. Table columns: Name / Last visit / Visits / Lifetime spend / Status. Touched: <code>src/routes/app.refill.patients.a-list-rules.tsx</code> (previewOpen state + previewRows useMemo + Preview button + inline table section + new PreviewRow subcomponent), <code>src/lib/changelog.ts</code> (this entry).",
+    ],
+  },
+  {
     version: "v1.25.2",
     date: "May 2026",
     items: [
