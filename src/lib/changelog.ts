@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.26.3",
+    date: "May 2026",
+    items: [
+      "<strong>v1.26.3 &mdash; Rescue claim page: provider promoted to the headline.</strong> v1.26.0 made provider a matching criterion in the rescue dispatcher and the SMS body already carried &lsquo;with Michelle&rsquo; via <code>providerClause</code>. But on the claim landing page (<code>/rescue/claim/&lt;token&gt;</code>) the provider was buried in the offer details card as one of four equal-weight rows (When / Treatment / With / Duration). A patient who normally sees Karen and gets an SMS for a Michelle slot needs to know that <strong>before</strong> they tap Grab &mdash; not after reading down a list. Same fundamental ask as v1.26.0 (provider matters to patients because the relationship is provider-shaped, not spa-shaped), one surface lower in the funnel. <strong>Headline change</strong>: &lsquo;{Name}, an opening just came up&rsquo; becomes &lsquo;{Name}, an opening just came up with <span style=&quot;color:#056048&quot;>Michelle</span>&rsquo; &mdash; provider rendered in brand green (same accent as the CalendarClock icon and the Grab CTA), making it visually the second-strongest element on the screen after the headline itself. <strong>Confirmation state extended</strong>: &lsquo;You&rsquo;re on the books / See you at {when}&rsquo; becomes &lsquo;See you with <strong>Michelle</strong> at {when}&rsquo; for the same reason &mdash; the patient should confirm-back what they grabbed. Both reuse the existing <code>showProvider</code> dedup at line 116 which suppresses the &lsquo;with&rsquo; clause when <code>providerName === spaName</code> (Acuity calendars named after the practice). <strong>What does NOT change</strong>: the offer details row labeled &lsquo;With&rsquo; stays as-is &mdash; repetition of the load-bearing fact across headline + details is intentional, not redundant. The SMS / email body composer is also untouched (already correct since v379.2). The subhead (&lsquo;{spa} just had a cancellation&rsquo;) stays at spa-level because the spa is the relationship-of-record; provider is the human-of-record for THIS slot specifically. Touched: <code>src/routes/rescue.claim.$token.tsx</code> (headline + already_claimed_by_you copy), <code>src/lib/changelog.ts</code> (this entry). No migration, no server change, no schema.",
+    ],
+  },
+  {
     version: "v1.26.2",
     date: "May 2026",
     items: [

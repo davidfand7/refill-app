@@ -148,6 +148,14 @@ function RescueClaimPage() {
             <h1 className="text-xl font-semibold text-center mb-1">
               {payload.patientFirstName ? `${payload.patientFirstName}, ` : ""}
               an opening just came up
+              {showProvider && (
+                <>
+                  {" "}with{" "}
+                  <span className="text-[#056048]">
+                    {payload.providerName}
+                  </span>
+                </>
+              )}
             </h1>
             <p className="text-sm text-[#5a6068] text-center mb-4">
               {payload.spaName} just had a cancellation. Tap below to grab it
@@ -187,7 +195,16 @@ function RescueClaimPage() {
             <p className="text-sm text-[#5a6068]">
               {when && (
                 <>
-                  See you at <strong className="text-[#1c2024]">{when}</strong>.
+                  See you
+                  {showProvider && (
+                    <>
+                      {" "}with{" "}
+                      <strong className="text-[#1c2024]">
+                        {payload.providerName}
+                      </strong>
+                    </>
+                  )}{" "}
+                  at <strong className="text-[#1c2024]">{when}</strong>.
                 </>
               )}
             </p>
