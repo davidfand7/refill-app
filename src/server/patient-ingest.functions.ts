@@ -182,7 +182,11 @@ const ingestInput = z.object({
 
 const listInput = z.object({
   accessToken: z.string().min(1),
-  limit: z.number().int().min(1).max(2000).optional(),
+  // v1.25.2: raised from 2000 → 5000 so the A-list rules dashboard can
+  // count across multi-location tenant books without truncating. Rejuv
+  // at 1,140 was well under the old cap; the new ceiling is headroom
+  // for spas with 3+ locations under one tenant.
+  limit: z.number().int().min(1).max(5000).optional(),
   /** v1.20 admin viewing-as: when set + caller is admin, fetch this
    *  user's patients instead of the caller's. See resolveEffectiveUserId. */
   viewAsUserId: z.string().uuid().optional(),

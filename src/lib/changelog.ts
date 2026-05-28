@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.25.2",
+    date: "May 2026",
+    items: [
+      "<strong>v1.25.2 &mdash; Hotfix: A-list rules page was 500ing on load. <code>listInput</code> zod validator in <code>patient-ingest.functions.ts</code> capped <code>limit</code> at 2000; v1.25.1 route passed 5000 (per Plan-agent recommendation to handle multi-location tenant books). The validator rejected the call before the handler ran &mdash; Karen saw a raw zod error blob instead of the dashboard. Raised the cap to 5000 to match the route's intent. Caught in screen 1 of the dry-run-as-Karen walk (<code>feedback_dry_run_after_major_builds</code> earning its keep again). Pre-flight schema check missed during v1.25.1 plan-to-code translation &mdash; the Plan-agent's call-out was correct in shape but I didn't trace it back to the validator's max. Touched: <code>src/server/patient-ingest.functions.ts</code> (validator cap 2000 → 5000), <code>src/lib/changelog.ts</code> (this entry).",
+    ],
+  },
+  {
     version: "v1.25.1",
     date: "May 2026",
     items: [
