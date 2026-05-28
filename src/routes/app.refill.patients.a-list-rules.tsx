@@ -163,19 +163,28 @@ function AListRulesPage() {
     [reliabilityFlags],
   );
 
-  // v1.26.2: surface the underlying cancel/no-show split so the toggle copy is
-  // honest about what it actually excludes. Real Acuity data (Karen, 6mo window)
-  // shows 172 cancellations vs 2 no-shows — effectively cancellation history.
-  // Keeping both inputs in the rule (the underlying reliability engine still
-  // flags either) but the label now matches reality.
+  // v1.26.2 + v1.26.4: surface both the rolling 6mo split AND the lifetime
+  // totals. The rule itself still filters on the 6mo window (in_recovery
+  // semantics need recovery), but the lifetime number answers Karen's
+  // original "have they ever cancelled?" question without changing rule
+  // behavior. Real Karen Acuity data, last refresh: 6mo = 172 cancels / 2
+  // no-shows; lifetime is whatever the latest backfill / sweep computed.
   const reliabilityTotals = useMemo(
     () =>
       reliabilityFlags.reduce(
         (acc, f) => ({
           cancellations: acc.cancellations + f.cancellations6mo,
           noShows: acc.noShows + f.noShows6mo,
+          cancellationsLifetime:
+            acc.cancellationsLifetime + f.cancellationsLifetime,
+          noShowsLifetime: acc.noShowsLifetime + f.noShowsLifetime,
         }),
-        { cancellations: 0, noShows: 0 },
+        {
+          cancellations: 0,
+          noShows: 0,
+          cancellationsLifetime: 0,
+          noShowsLifetime: 0,
+        },
       ),
     [reliabilityFlags],
   );
@@ -467,6 +476,14 @@ function AListRulesPage() {
                   {reliabilityTotals.cancellations === 1 ? "" : "s"} /{" "}
                   {reliabilityTotals.noShows.toLocaleString()} no-show
                   {reliabilityTotals.noShows === 1 ? "" : "s"})
+                </span>
+                <span className="block text-ink-faint text-[12px] mt-0.5">
+                  Lifetime across all patients:{" "}
+                  {reliabilityTotals.cancellationsLifetime.toLocaleString()}{" "}
+                  cancel
+                  {reliabilityTotals.cancellationsLifetime === 1 ? "" : "s"} /{" "}
+                  {reliabilityTotals.noShowsLifetime.toLocaleString()} no-show
+                  {reliabilityTotals.noShowsLifetime === 1 ? "" : "s"}
                 </span>
               </span>
             </label>

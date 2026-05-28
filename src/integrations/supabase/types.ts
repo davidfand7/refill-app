@@ -749,11 +749,13 @@ export type Database = {
       emma_reliability_status: {
         Row: {
           cancellations_6mo: number
+          cancellations_lifetime: number
           created_at: string
           grace_credits_used: number
           id: string
           last_activity_at: string | null
           no_shows_6mo: number
+          no_shows_lifetime: number
           patient_node_id: string
           recomputed_at: string
           tier: string
@@ -763,11 +765,13 @@ export type Database = {
         }
         Insert: {
           cancellations_6mo?: number
+          cancellations_lifetime?: number
           created_at?: string
           grace_credits_used?: number
           id?: string
           last_activity_at?: string | null
           no_shows_6mo?: number
+          no_shows_lifetime?: number
           patient_node_id: string
           recomputed_at?: string
           tier?: string
@@ -777,11 +781,13 @@ export type Database = {
         }
         Update: {
           cancellations_6mo?: number
+          cancellations_lifetime?: number
           created_at?: string
           grace_credits_used?: number
           id?: string
           last_activity_at?: string | null
           no_shows_6mo?: number
+          no_shows_lifetime?: number
           patient_node_id?: string
           recomputed_at?: string
           tier?: string

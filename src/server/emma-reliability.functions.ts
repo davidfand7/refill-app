@@ -250,10 +250,14 @@ export async function recomputeReliabilityForPatient(args: {
   let noShows6mo = 0;
   let totalVisits = 0;
   let cancellations6mo = 0;
+  let noShowsLifetime = 0;
+  let cancellationsLifetime = 0;
   let lastActivityAt: string | null = null;
 
   for (const a of all) {
     if (a.status === "showed") totalVisits++;
+    if (a.status === "no_show") noShowsLifetime++;
+    if (a.status === "cancelled") cancellationsLifetime++;
     if (a.scheduled_at >= windowStart) {
       if (a.status === "no_show") noShows6mo++;
       if (a.status === "cancelled") cancellations6mo++;
@@ -287,6 +291,8 @@ export async function recomputeReliabilityForPatient(args: {
         no_shows_6mo: noShows6mo,
         total_visits: totalVisits,
         cancellations_6mo: cancellations6mo,
+        no_shows_lifetime: noShowsLifetime,
+        cancellations_lifetime: cancellationsLifetime,
         grace_credits_used: cancellations6mo, // For v362, grace = cancellation count in window
         last_activity_at: lastActivityAt,
         recomputed_at: nowIso,
@@ -490,16 +496,19 @@ export const getReliabilityCard = createServerFn({ method: "POST" })
 // ─── listReliabilityFlags (v1.25.4) ───────────────────────────────────────
 //
 // Bulk reader: returns one row per patient with a no-show or cancellation
-// inside the rolling 6-month reliability window. Powers the A-list rules
-// page's "exclude cancellation history" toggle (the toggle still excludes
-// either signal — labeled "cancellation history" because in real data the
-// cancel:no-show ratio runs ~85:1, per v1.26.2). Fetched once at mount,
-// joined into matchesRules() client-side.
+// inside EITHER the rolling 6-month window or the patient's lifetime.
+// Powers the A-list rules page's "exclude cancellation history" toggle
+// (the toggle still excludes either signal — labeled "cancellation history"
+// because in real data the cancel:no-show ratio runs ~85:1, per v1.26.2).
+// Fetched once at mount, joined into matchesRules() client-side.
 //
-// The window is 6mo (not lifetime) because that's what emma_reliability_
-// status materializes. If lifetime semantics are needed later, switch to
-// a count(*) against emma_appointments filtered by status IN ('no_show',
-// 'cancelled') without the recomputed_at window cap.
+// v1.26.4: lifetime counts (no_shows_lifetime + cancellations_lifetime)
+// are now materialized on emma_reliability_status alongside the 6mo
+// columns, so this returns both. Surface chose to expose lifetime in the
+// toggle description so Karen sees the full history alongside the rolling
+// window. The rule itself still filters on the 6mo window today — switching
+// to a lifetime filter is a separate UX decision (see project_emma_noshow_
+// recovery_engine).
 
 const flagsInput = z.object({
   accessToken: z.string().min(1),
@@ -510,6 +519,8 @@ export type ReliabilityFlag = {
   patientNodeId: string;
   noShows6mo: number;
   cancellations6mo: number;
+  noShowsLifetime: number;
+  cancellationsLifetime: number;
 };
 
 export const listReliabilityFlags = createServerFn({ method: "POST" })
@@ -522,9 +533,13 @@ export const listReliabilityFlags = createServerFn({ method: "POST" })
     const sb = admin();
     const { data: rows, error } = await sb
       .from("emma_reliability_status")
-      .select("patient_node_id, no_shows_6mo, cancellations_6mo")
+      .select(
+        "patient_node_id, no_shows_6mo, cancellations_6mo, no_shows_lifetime, cancellations_lifetime",
+      )
       .eq("user_id", effectiveUserId)
-      .or("no_shows_6mo.gt.0,cancellations_6mo.gt.0");
+      .or(
+        "no_shows_6mo.gt.0,cancellations_6mo.gt.0,no_shows_lifetime.gt.0,cancellations_lifetime.gt.0",
+      );
     if (error) {
       throw new Error(`Couldn't load reliability flags: ${error.message}`);
     }
@@ -532,5 +547,7 @@ export const listReliabilityFlags = createServerFn({ method: "POST" })
       patientNodeId: r.patient_node_id,
       noShows6mo: r.no_shows_6mo,
       cancellations6mo: r.cancellations_6mo,
+      noShowsLifetime: r.no_shows_lifetime,
+      cancellationsLifetime: r.cancellations_lifetime,
     }));
   });
