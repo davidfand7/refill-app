@@ -12,6 +12,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Clock, Database, Link2, Sparkles } from "lucide-react";
 
+import { getAdminViewAsUserId } from "@/lib/admin-view-as";
 import { useAuth } from "@/lib/auth";
 import {
   getMyRepAccount,
@@ -38,7 +39,11 @@ function IntegrationsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const repRes = await getMyRepAccount({ data: { accessToken } });
+        const viewAsUserId =
+          typeof window !== "undefined" ? getAdminViewAsUserId() : undefined;
+        const repRes = await getMyRepAccount({
+          data: { accessToken, viewAsUserId },
+        });
         if (cancelled) return;
         setRep(repRes.rep);
       } finally {

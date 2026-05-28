@@ -88,7 +88,11 @@ function ReferralLinksPage() {
     setBusy(true);
     setError(null);
     try {
-      const { rep: row } = await ensureMyRepAccount({ data: { accessToken } });
+      const viewAsUserId =
+        typeof window !== "undefined" ? getAdminViewAsUserId() : undefined;
+      const { rep: row } = await ensureMyRepAccount({
+        data: { accessToken, viewAsUserId },
+      });
       setRep(row);
     } catch (err) {
       setError(
@@ -104,8 +108,10 @@ function ReferralLinksPage() {
     setBusy(true);
     setError(null);
     try {
+      const viewAsUserId =
+        typeof window !== "undefined" ? getAdminViewAsUserId() : undefined;
       const result = await mintMyReferralLink({
-        data: { accessToken },
+        data: { accessToken, viewAsUserId },
       });
       setLink(result);
       setCopied(false);

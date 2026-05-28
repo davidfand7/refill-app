@@ -124,7 +124,7 @@ export const getMyRepAccount = createServerFn({ method: "POST" })
 
 // ─── ensureMyRepAccount ──────────────────────────────────────────────────
 
-const ensureInput = authInput.extend({
+const ensureInput = authWithViewAsInput.extend({
   displayName: z.string().trim().min(1).max(200).optional(),
   businessName: z.string().trim().max(200).optional(),
   originType: z
@@ -135,7 +135,15 @@ const ensureInput = authInput.extend({
 export const ensureMyRepAccount = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => ensureInput.parse(raw))
   .handler(async ({ data }): Promise<{ rep: RepAccountRow }> => {
-    const userId = await verifyAuth(data.accessToken);
+    // v1.26.1: admin viewing-as a rep ensures the IMPERSONATED user's
+    // rep_account row, not the admin's own. Without this, opening the
+    // rep page while impersonating creates a phantom rep_account for
+    // the admin and the impersonated rep stays unprovisioned.
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const userId = effectiveUserId;
     const sb = admin();
 
     const { data: existing, error: readErr } = await sb
@@ -197,7 +205,7 @@ export const ensureMyRepAccount = createServerFn({ method: "POST" })
 // window.location.origin baked the wrong host into the link the prospect
 // received, 404'ing because /onboard only exists on getrefill.app).
 
-const mintInput = authInput;
+const mintInput = authWithViewAsInput;
 
 export type ReferralLink = {
   token: string;
@@ -263,7 +271,15 @@ async function findAvailableSlug(
 export const mintMyReferralLink = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => mintInput.parse(raw))
   .handler(async ({ data }): Promise<ReferralLink> => {
-    const userId = await verifyAuth(data.accessToken);
+    // v1.26.1: admin viewing-as a rep mints a link for the IMPERSONATED
+    // rep. The token encodes their rep_user_id; without this, admin
+    // would mint links pointing to themselves (and rep_accounts row
+    // lookup would fail since admin has no rep_account).
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const userId = effectiveUserId;
     const sb = admin();
 
     const { data: rep, error } = await sb
