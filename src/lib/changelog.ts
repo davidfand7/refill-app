@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.26.2",
+    date: "May 2026",
+    items: [
+      "<strong>v1.26.2 &mdash; A-list rules: honest toggle copy + surface the cancel/no-show split.</strong> v1.25.4 shipped the toggle as &lsquo;Exclude no-show / cancellation history&rsquo; because the underlying reliability engine flags either signal inside the 6mo window. On Karen&rsquo;s real 5,754-row Acuity ingest the split landed at <strong>172 cancellations vs 2 no-shows</strong> &mdash; effectively cancellation-only. Leaving the label dual-named would have implied the toggle was meaningfully filtering on no-shows, which is misleading when 99% of the signal is cancels. Renamed to <strong>&lsquo;Exclude cancellation history&rsquo;</strong> and surfaced the split inline in the description so spa owners see exactly what they&rsquo;re filtering on: &lsquo;last 6 months &middot; 115 flagged &middot; 172 cancels / 2 no-shows&rsquo;. Per the [VERIFIED] convention &mdash; numbers in owner-facing UI must be exact, computed from real data, not approximated. Implementation: <code>listReliabilityFlags</code> already returned per-patient <code>noShows6mo</code> + <code>cancellations6mo</code>; the client was throwing the split away by collapsing the response to a <code>Set&lt;patientId&gt;</code>. Now we hold the full flags array in state, derive <code>unreliableIds</code> + <code>reliabilityTotals</code> via <code>useMemo</code>, and render the totals in the toggle description with singular/plural agreement. <strong>Behavior unchanged</strong> &mdash; the toggle still excludes any patient with either signal in the window. Underlying rule (<code>excludeUnreliable</code> on AListRules) is untouched; this is a copy + transparency ship. Server-side comment on <code>listReliabilityFlags</code> updated to reflect the new label + note the ratio so future readers don&rsquo;t accidentally split the underlying field. Touched: <code>src/routes/app.refill.patients.a-list-rules.tsx</code> (reliabilityFlags state + derived unreliableIds/Totals memos + toggle copy), <code>src/server/emma-reliability.functions.ts</code> (comment), <code>src/lib/changelog.ts</code> (this entry).",
+    ],
+  },
+  {
     version: "v1.26.1",
     date: "May 2026",
     items: [

@@ -52,7 +52,10 @@ import {
   saveAListRulesAndMarkApplied,
   type AListRules,
 } from "@/server/user-prefs.functions";
-import { listReliabilityFlags } from "@/server/emma-reliability.functions";
+import {
+  listReliabilityFlags,
+  type ReliabilityFlag,
+} from "@/server/emma-reliability.functions";
 
 export const Route = createFileRoute("/app/refill/patients/a-list-rules")({
   component: AListRulesPage,
@@ -99,8 +102,8 @@ function formatCurrency(n: number): string {
 
 function AListRulesPage() {
   const [patients, setPatients] = useState<PatientListRow[] | null>(null);
-  const [unreliableIds, setUnreliableIds] = useState<Set<string>>(
-    () => new Set(),
+  const [reliabilityFlags, setReliabilityFlags] = useState<ReliabilityFlag[]>(
+    [],
   );
   const [rules, setRules] = useState<AListRules>(DEFAULT_A_LIST_RULES);
   const [savedRules, setSavedRules] = useState<AListRules | null>(null);
@@ -139,7 +142,7 @@ function AListRulesPage() {
       setRules(rulesRes.rules);
       setSavedRules(rulesRes.rules);
       setLastAppliedAt(rulesRes.lastAppliedAt);
-      setUnreliableIds(new Set(flagsRes.map((f) => f.patientNodeId)));
+      setReliabilityFlags(flagsRes);
     } catch (e) {
       setErrorMessage(
         e instanceof Error ? e.message : "Couldn't load A-list dashboard.",
@@ -154,6 +157,28 @@ function AListRulesPage() {
   }, [loadAll]);
 
   // ─── Derived state ───────────────────────────────────────────────────────
+
+  const unreliableIds = useMemo(
+    () => new Set(reliabilityFlags.map((f) => f.patientNodeId)),
+    [reliabilityFlags],
+  );
+
+  // v1.26.2: surface the underlying cancel/no-show split so the toggle copy is
+  // honest about what it actually excludes. Real Acuity data (Karen, 6mo window)
+  // shows 172 cancellations vs 2 no-shows — effectively cancellation history.
+  // Keeping both inputs in the rule (the underlying reliability engine still
+  // flags either) but the label now matches reality.
+  const reliabilityTotals = useMemo(
+    () =>
+      reliabilityFlags.reduce(
+        (acc, f) => ({
+          cancellations: acc.cancellations + f.cancellations6mo,
+          noShows: acc.noShows + f.noShows6mo,
+        }),
+        { cancellations: 0, noShows: 0 },
+      ),
+    [reliabilityFlags],
+  );
 
   const matchingIds = useMemo(() => {
     if (!patients) return new Set<string>();
@@ -434,10 +459,14 @@ function AListRulesPage() {
                 className="h-4 w-4 rounded border-rule mt-0.5"
               />
               <span className="text-sm text-ink leading-tight">
-                Exclude no-show / cancellation history{" "}
+                Exclude cancellation history{" "}
                 <span className="text-ink-faint text-[12px]">
                   (last 6 months &middot;{" "}
-                  {unreliableIds.size.toLocaleString()} flagged)
+                  {unreliableIds.size.toLocaleString()} flagged &middot;{" "}
+                  {reliabilityTotals.cancellations.toLocaleString()} cancel
+                  {reliabilityTotals.cancellations === 1 ? "" : "s"} /{" "}
+                  {reliabilityTotals.noShows.toLocaleString()} no-show
+                  {reliabilityTotals.noShows === 1 ? "" : "s"})
                 </span>
               </span>
             </label>

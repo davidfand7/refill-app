@@ -491,8 +491,10 @@ export const getReliabilityCard = createServerFn({ method: "POST" })
 //
 // Bulk reader: returns one row per patient with a no-show or cancellation
 // inside the rolling 6-month reliability window. Powers the A-list rules
-// page's "exclude no-show / cancellation history" toggle — fetched once
-// at mount, joined into matchesRules() client-side.
+// page's "exclude cancellation history" toggle (the toggle still excludes
+// either signal — labeled "cancellation history" because in real data the
+// cancel:no-show ratio runs ~85:1, per v1.26.2). Fetched once at mount,
+// joined into matchesRules() client-side.
 //
 // The window is 6mo (not lifetime) because that's what emma_reliability_
 // status materializes. If lifetime semantics are needed later, switch to
