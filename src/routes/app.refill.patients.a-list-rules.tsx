@@ -52,6 +52,7 @@ import {
   saveAListRulesAndMarkApplied,
   type AListRules,
 } from "@/server/user-prefs.functions";
+import { listReliabilityFlags } from "@/server/emma-reliability.functions";
 
 export const Route = createFileRoute("/app/refill/patients/a-list-rules")({
   component: AListRulesPage,
@@ -63,8 +64,10 @@ function matchesRules(
   p: PatientListRow,
   rules: AListRules,
   todayMs: number,
+  unreliableIds: Set<string>,
 ): boolean {
   if (rules.excludeBanned && p.banned) return false;
+  if (rules.excludeUnreliable && unreliableIds.has(p.id)) return false;
   if (
     rules.lifetimeSpendMinUsd !== null &&
     p.lifetimeSpendUsd < rules.lifetimeSpendMinUsd
@@ -96,6 +99,9 @@ function formatCurrency(n: number): string {
 
 function AListRulesPage() {
   const [patients, setPatients] = useState<PatientListRow[] | null>(null);
+  const [unreliableIds, setUnreliableIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [rules, setRules] = useState<AListRules>(DEFAULT_A_LIST_RULES);
   const [savedRules, setSavedRules] = useState<AListRules | null>(null);
   const [lastAppliedAt, setLastAppliedAt] = useState<string | null>(null);
@@ -120,16 +126,20 @@ function AListRulesPage() {
         setLoading(false);
         return;
       }
-      const [patientsRes, rulesRes] = await Promise.all([
+      const [patientsRes, rulesRes, flagsRes] = await Promise.all([
         listPatients({
           data: { accessToken: token, viewAsUserId, limit: 5000 },
         }),
         getMyAListRules({ data: { accessToken: token, viewAsUserId } }),
+        listReliabilityFlags({
+          data: { accessToken: token, viewAsUserId },
+        }),
       ]);
       setPatients(patientsRes);
       setRules(rulesRes.rules);
       setSavedRules(rulesRes.rules);
       setLastAppliedAt(rulesRes.lastAppliedAt);
+      setUnreliableIds(new Set(flagsRes.map((f) => f.patientNodeId)));
     } catch (e) {
       setErrorMessage(
         e instanceof Error ? e.message : "Couldn't load A-list dashboard.",
@@ -151,9 +161,11 @@ function AListRulesPage() {
     // only when patients reload (after Apply/Clear).
     const todayMs = Date.now();
     return new Set(
-      patients.filter((p) => matchesRules(p, rules, todayMs)).map((p) => p.id),
+      patients
+        .filter((p) => matchesRules(p, rules, todayMs, unreliableIds))
+        .map((p) => p.id),
     );
-  }, [patients, rules]);
+  }, [patients, rules, unreliableIds]);
 
   const currentVipIds = useMemo(() => {
     if (!patients) return new Set<string>();
@@ -394,19 +406,42 @@ function AListRulesPage() {
             }
           />
 
-          <label className="flex items-center gap-2.5 pt-2 border-t border-rule/60 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={rules.excludeBanned}
-              onChange={(e) =>
-                setRules((r) => ({ ...r, excludeBanned: e.target.checked }))
-              }
-              className="h-4 w-4 rounded border-rule"
-            />
-            <span className="text-sm text-ink">
-              Exclude banned patients
-            </span>
-          </label>
+          <div className="pt-2 border-t border-rule/60 space-y-2.5">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={rules.excludeBanned}
+                onChange={(e) =>
+                  setRules((r) => ({ ...r, excludeBanned: e.target.checked }))
+                }
+                className="h-4 w-4 rounded border-rule"
+              />
+              <span className="text-sm text-ink">
+                Exclude banned patients
+              </span>
+            </label>
+
+            <label className="flex items-start gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={rules.excludeUnreliable}
+                onChange={(e) =>
+                  setRules((r) => ({
+                    ...r,
+                    excludeUnreliable: e.target.checked,
+                  }))
+                }
+                className="h-4 w-4 rounded border-rule mt-0.5"
+              />
+              <span className="text-sm text-ink leading-tight">
+                Exclude no-show / cancellation history{" "}
+                <span className="text-ink-faint text-[12px]">
+                  (last 6 months &middot;{" "}
+                  {unreliableIds.size.toLocaleString()} flagged)
+                </span>
+              </span>
+            </label>
+          </div>
         </section>
 
         {/* Preview card */}

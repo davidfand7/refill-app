@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.25.4",
+    date: "May 2026",
+    items: [
+      "<strong>v1.25.4 &mdash; A-list rules: new toggle to exclude patients with no-show / cancellation history.</strong> Karen ask: A-list shouldn&rsquo;t include patients who&rsquo;ve been unreliable, even if their spend / cadence math otherwise qualifies. Reliability data already lives in <code>emma_reliability_status</code> as <code>no_shows_6mo</code> + <code>cancellations_6mo</code> per patient (denormalized at appointment-status transitions by Emma&rsquo;s reliability engine). New bulk reader <code>listReliabilityFlags</code> in <code>emma-reliability.functions.ts</code> returns one row per patient with any flag in the rolling 6-month window &mdash; fetched once at page mount in parallel with patients + saved rules, materialized into a <code>Set&lt;patientId&gt;</code>, AND-ed into <code>matchesRules()</code> client-side. <strong>The window is 6mo, not lifetime</strong> &mdash; checkbox label calls this out explicitly (&lsquo;last 6 months&rsquo;) so Karen knows what&rsquo;s being checked. Lifetime variant is a follow-up if she asks: would require either a new column on reliability_status or a live count against emma_appointments where status IN no-show/cancelled. Live-count path is straightforward but heavier; defer until Karen says 6mo isn&rsquo;t enough. <strong>Persistence note</strong>: AListRules type extended with <code>excludeUnreliable: boolean</code>, default true. Old persisted rule rows in <code>user_preferences.prefs.aListRules</code> don&rsquo;t have this field, so <code>getMyAListRules</code> now does a sanitize-on-read spread (<code>...DEFAULT_A_LIST_RULES, ...stored</code>) &mdash; missing keys inherit defaults, stored nulls (which are valid for the nullable threshold rules) are preserved correctly. Backward-compat without a data migration. <strong>Flagged-count surfaced inline</strong>: checkbox shows &lsquo;N flagged&rsquo; in the description so Karen knows the rule&rsquo;s effective scope before toggling. Touched: <code>src/server/emma-reliability.functions.ts</code> (listReliabilityFlags + ReliabilityFlag type), <code>src/server/user-prefs.functions.ts</code> (excludeUnreliable on AListRules + DEFAULT + zod + sanitize-on-read spread), <code>src/routes/app.refill.patients.a-list-rules.tsx</code> (unreliableIds state + parallel load + matchesRules signature + checkbox), <code>src/lib/changelog.ts</code> (this entry).",
+    ],
+  },
+  {
     version: "v1.25.3",
     date: "May 2026",
     items: [

@@ -486,3 +486,49 @@ export const getReliabilityCard = createServerFn({ method: "POST" })
       recomputedAt: row.recomputed_at,
     };
   });
+
+// ─── listReliabilityFlags (v1.25.4) ───────────────────────────────────────
+//
+// Bulk reader: returns one row per patient with a no-show or cancellation
+// inside the rolling 6-month reliability window. Powers the A-list rules
+// page's "exclude no-show / cancellation history" toggle — fetched once
+// at mount, joined into matchesRules() client-side.
+//
+// The window is 6mo (not lifetime) because that's what emma_reliability_
+// status materializes. If lifetime semantics are needed later, switch to
+// a count(*) against emma_appointments filtered by status IN ('no_show',
+// 'cancelled') without the recomputed_at window cap.
+
+const flagsInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+});
+
+export type ReliabilityFlag = {
+  patientNodeId: string;
+  noShows6mo: number;
+  cancellations6mo: number;
+};
+
+export const listReliabilityFlags = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => flagsInput.parse(input))
+  .handler(async ({ data }): Promise<ReliabilityFlag[]> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const { data: rows, error } = await sb
+      .from("emma_reliability_status")
+      .select("patient_node_id, no_shows_6mo, cancellations_6mo")
+      .eq("user_id", effectiveUserId)
+      .or("no_shows_6mo.gt.0,cancellations_6mo.gt.0");
+    if (error) {
+      throw new Error(`Couldn't load reliability flags: ${error.message}`);
+    }
+    return (rows ?? []).map((r) => ({
+      patientNodeId: r.patient_node_id,
+      noShows6mo: r.no_shows_6mo,
+      cancellations6mo: r.cancellations_6mo,
+    }));
+  });

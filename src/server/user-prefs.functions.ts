@@ -171,6 +171,9 @@ export type AListRules = {
   lastVisitWithinDays: number | null;
   totalVisitsMin: number | null;
   excludeBanned: boolean;
+  /** v1.25.4: exclude patients with any no-show or cancellation in the
+   * rolling 6-month reliability window. */
+  excludeUnreliable: boolean;
 };
 
 export const DEFAULT_A_LIST_RULES: AListRules = {
@@ -178,6 +181,7 @@ export const DEFAULT_A_LIST_RULES: AListRules = {
   lastVisitWithinDays: 365,
   totalVisitsMin: 3,
   excludeBanned: true,
+  excludeUnreliable: true,
 };
 
 const aListRulesSchema = z.object({
@@ -185,6 +189,7 @@ const aListRulesSchema = z.object({
   lastVisitWithinDays: z.number().int().min(1).max(3650).nullable(),
   totalVisitsMin: z.number().int().min(1).max(1000).nullable(),
   excludeBanned: z.boolean(),
+  excludeUnreliable: z.boolean(),
 });
 
 const aListReadInput = accessTokenInput.extend({
@@ -216,10 +221,19 @@ export const getMyAListRules = createServerFn({ method: "POST" })
         throw new Error(`Couldn't load A-list rules: ${error.message}`);
       }
       const prefs =
-        (row?.prefs as { aListRules?: AListRules; aListLastAppliedAt?: string } | null) ??
-        null;
+        (row?.prefs as {
+          aListRules?: Partial<AListRules>;
+          aListLastAppliedAt?: string;
+        } | null) ?? null;
+      // Spread DEFAULT first, then stored — missing keys (older saved
+      // rules pre-dating new fields) inherit defaults; null values for
+      // the nullable fields ARE preserved (null !== undefined).
+      const rules: AListRules = {
+        ...DEFAULT_A_LIST_RULES,
+        ...(prefs?.aListRules ?? {}),
+      };
       return {
-        rules: prefs?.aListRules ?? DEFAULT_A_LIST_RULES,
+        rules,
         lastAppliedAt: prefs?.aListLastAppliedAt ?? null,
       };
     },
