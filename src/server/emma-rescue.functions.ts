@@ -156,6 +156,14 @@ async function selectFitPatients(
   userId: string,
   appointmentTreatment: string | null,
   maxConcurrent: number,
+  // v1.26.0: provider-affinity matching criterion. When non-null, the
+  // candidate pool is filtered to patients whose most-frequent prior
+  // provider (case-insensitive trim) matches this string. Falls back
+  // to the full pool when zero affinity-matched candidates qualify so
+  // the rescue isn't lost outright when no Michelle-patients are on
+  // the waitlist. Null = skip the filter (e.g. provider_name absent,
+  // or matches spa name — caller handles that gate).
+  appointmentProvider: string | null,
 ): Promise<
   Array<{
     waitlistId: string;
@@ -228,6 +236,78 @@ async function selectFitPatients(
       phone: p.phone,
       lifetimeSpend: p.lifetimeSpend,
     });
+  }
+
+  // v1.26.0 — provider-affinity filter. Bulk-load each remaining candidate's
+  // appointment history in a single round trip, derive their primary
+  // provider (most-frequent provider_name across all-time appointments,
+  // ties broken by string-asc which is stable enough for this scale), and
+  // keep only those whose primary provider matches the appointment's. If
+  // the affinity-filtered pool is empty, fall back to the unfiltered fit[]
+  // so we never lose a fill-opportunity entirely. Skipped when
+  // appointmentProvider is null (caller's job to gate spa-name-equals
+  // suppression — see providerClause at line 245 for the pattern).
+  if (appointmentProvider && fit.length > 0) {
+    const targetProvider = appointmentProvider.trim().toLowerCase();
+    const candidateIds = fit.map((f) => f.patientNodeId);
+
+    const { data: aptRows } = await sb
+      .from("emma_appointments")
+      .select("patient_node_id, provider_name")
+      .eq("user_id", userId)
+      .in("patient_node_id", candidateIds)
+      .not("provider_name", "is", null);
+
+    // Per-patient provider tallies → primary provider per patient.
+    const tallyByPatient = new Map<string, Map<string, number>>();
+    for (const r of aptRows ?? []) {
+      if (!r.patient_node_id || !r.provider_name) continue;
+      const p = r.provider_name.trim();
+      if (!p) continue;
+      let bucket = tallyByPatient.get(r.patient_node_id);
+      if (!bucket) {
+        bucket = new Map<string, number>();
+        tallyByPatient.set(r.patient_node_id, bucket);
+      }
+      bucket.set(p, (bucket.get(p) ?? 0) + 1);
+    }
+
+    const primaryByPatient = new Map<string, string>();
+    for (const [pid, bucket] of tallyByPatient) {
+      let bestProvider: string | null = null;
+      let bestCount = -1;
+      for (const [provider, count] of bucket) {
+        if (
+          count > bestCount ||
+          (count === bestCount && bestProvider !== null && provider < bestProvider)
+        ) {
+          bestProvider = provider;
+          bestCount = count;
+        }
+      }
+      if (bestProvider) primaryByPatient.set(pid, bestProvider);
+    }
+
+    const affinityFit = fit.filter((f) => {
+      const primary = primaryByPatient.get(f.patientNodeId);
+      return primary !== undefined && primary.toLowerCase() === targetProvider;
+    });
+
+    if (affinityFit.length > 0) {
+      affinityFit.sort((a, b) => b.lifetimeSpend - a.lifetimeSpend);
+      return affinityFit.slice(0, maxConcurrent);
+    }
+
+    console.warn(
+      JSON.stringify({
+        event: "rescue_provider_affinity_fallback",
+        userId,
+        appointmentProvider,
+        waitlistCandidates: fit.length,
+        ts: new Date().toISOString(),
+      }),
+    );
+    // Fall through to unfiltered fit[] below.
   }
 
   // Sort by lifetime value desc; tie-break is stable.
@@ -511,11 +591,26 @@ export async function dispatchRescueAttempt(args: {
   }
 
   // 4) Select fit-patients
+  // v1.26.0: pass the appointment's provider through so the matcher can
+  // bias the waitlist to patients with affinity to THIS provider. Suppress
+  // when provider_name is null OR matches the spa name (mirrors the same
+  // gate that providerClause uses at line 245 — Acuity calendars are
+  // often named after the practice itself). spaName is the same string
+  // that resolveSpaName(sb, userId) returns below at line 590; computing
+  // it twice is cheaper than restructuring the function.
+  const spaNameForProviderGate = await resolveSpaName(sb, userId);
+  const providerForMatch =
+    apt.provider_name &&
+    apt.provider_name.trim().toLowerCase() !==
+      spaNameForProviderGate.trim().toLowerCase()
+      ? apt.provider_name
+      : null;
   const fitPatients = await selectFitPatients(
     sb,
     userId,
     apt.treatment_type,
     policy.rescue_max_concurrent ?? 5,
+    providerForMatch,
   );
   if (fitPatients.length === 0) {
     // Still record an attempt for the audit trail, marked closed_unfilled.
