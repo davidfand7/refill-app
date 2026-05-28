@@ -32,7 +32,7 @@ import {
   REFILL_PLAN_STARTER_MONTHLY_USD,
   REFILL_PLAN_STARTER_REV_SHARE,
 } from "@/lib/rep-economics";
-import { verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -106,6 +106,13 @@ const accessTokenOnly = z.object({
 const applyPlanInput = z.object({
   accessToken: z.string().min(1),
   plan: z.enum(["performance", "predictable", "hybrid"]),
+});
+
+// v1.26.7: getInvoicePreview gets its own input schema with viewAsUserId
+// since accessTokenOnly is shared with dead-code fns we don't want to touch.
+const invoicePreviewInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 // ─── applyPricingPlan (spa selects/changes plan) ──────────────────────────
@@ -380,9 +387,12 @@ export type InvoicePreview = {
  * dashboard renders a friendlier "choose a plan" affordance in that case.
  */
 export const getInvoicePreview = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => accessTokenOnly.parse(input))
+  .inputValidator((input: unknown) => invoicePreviewInput.parse(input))
   .handler(async ({ data }): Promise<InvoicePreview> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     const now = new Date();
@@ -397,7 +407,7 @@ export const getInvoicePreview = createServerFn({ method: "POST" })
       sb
         .from("emma_pricing_plans")
         .select("plan, revenue_share_pct, monthly_flat_usd")
-        .eq("user_id", userId)
+        .eq("user_id", effectiveUserId)
         .is("plan_ended_at", null)
         .order("plan_started_at", { ascending: false })
         .limit(1)
@@ -405,7 +415,7 @@ export const getInvoicePreview = createServerFn({ method: "POST" })
       sb
         .from("emma_recovery_events")
         .select("attributed_revenue_usd")
-        .eq("user_id", userId)
+        .eq("user_id", effectiveUserId)
         .gte("verified_at", periodStart.toISOString())
         .lt("verified_at", periodEnd.toISOString())
         .not("verified_at", "is", null),

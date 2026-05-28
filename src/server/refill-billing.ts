@@ -163,6 +163,7 @@ const readWithViewAsInput = z.object({
 const applyPlanInput = z.object({
   accessToken: z.string().min(1),
   plan: z.enum(["starter", "predictable", "pro"]),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 // ─── applyPricingPlan (spa picks/changes plan) ───────────────────────────
@@ -170,9 +171,12 @@ const applyPlanInput = z.object({
 export const applyPricingPlan = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => applyPlanInput.parse(input))
   .handler(async ({ data }): Promise<RefillActivePlan> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, userId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
     const econ = PLAN_ECONOMICS[data.plan];
 
     // Close any existing active plan for this tenant.

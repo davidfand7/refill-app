@@ -229,7 +229,7 @@ function BillingPage() {
       const token = sess.session?.access_token;
       if (!token) return;
       const updated = await applyPricingPlan({
-        data: { accessToken: token, plan },
+        data: { accessToken: token, plan, viewAsUserId },
       });
       setActive(updated);
       toast.success(`${PLAN_META[plan].label} plan activated.`);
