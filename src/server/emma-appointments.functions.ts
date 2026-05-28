@@ -30,7 +30,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import type { Database, Json } from "@/integrations/supabase/types";
-import { verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 import {
   parseAppointmentCsv,
   parseAppointmentCsvWithAliases,
@@ -152,12 +152,20 @@ const ingestInput = z.object({
   accessToken: z.string().min(1),
   csv: z.string().min(1),
   sourceFilename: z.string().max(200).optional(),
+  // v1.25.5: admin viewing-as opt-in. Without this, the ingest writes
+  // appointments to the ADMIN's user_id while the patient index is also
+  // built from admin (who has 0 patients) → 100% match failure. See
+  // resolveEffectiveUserId in auth-helpers.ts.
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const listInput = z.object({
   accessToken: z.string().min(1),
   fromIso: z.string().datetime().optional(),
   toIso: z.string().datetime().optional(),
+  // v1.25.5: admin viewing-as opt-in so the appointments list reads
+  // the impersonated tenant's bucket, not the admin's empty one.
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const statusInput = z.object({
@@ -430,7 +438,11 @@ function rowToPolicy(
 export const ingestAppointmentCsv = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => ingestInput.parse(input))
   .handler(async ({ data }): Promise<IngestReceipt> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const userId = effectiveUserId;
     const sb = admin();
 
     let parsed = parseAppointmentCsv(data.csv);
@@ -557,6 +569,28 @@ export const ingestAppointmentCsv = createServerFn({ method: "POST" })
       receipt.inserted += inserted?.length ?? 0;
     }
 
+    // v1.25.5: bulk-ingest reliability sweep. The per-row reliability
+    // recompute hook (line ~705 in updateAppointmentStatus) only fires on
+    // individual status flips; a bulk import of cancellations/no-shows
+    // never triggers it, so emma_reliability_status stays stale and the
+    // A-list excludeUnreliable rule reads 0 flags. Sweep once at end of
+    // ingest. Fire-and-await — the recompute is cheap (one query per
+    // distinct patient_node_id) and we want the receipt to wait so the
+    // UI can show fresh reliability counts on next refresh.
+    if (receipt.patientsMatched > 0) {
+      try {
+        const { recomputeReliabilityForUser } = await import(
+          "@/server/emma-reliability.functions"
+        );
+        await recomputeReliabilityForUser({ sb, userId });
+      } catch (e) {
+        console.error(
+          "post-ingest reliability sweep failed:",
+          e instanceof Error ? e.message : e,
+        );
+      }
+    }
+
     return receipt;
   });
 
@@ -565,7 +599,11 @@ export const ingestAppointmentCsv = createServerFn({ method: "POST" })
 export const listAppointments = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => listInput.parse(input))
   .handler(async ({ data }): Promise<EmmaAppointment[]> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const userId = effectiveUserId;
     const sb = admin();
 
     // Default window: from now to +30 days

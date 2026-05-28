@@ -76,7 +76,7 @@ function AppointmentsPage() {
         return;
       }
       const [apts, stats, cov] = await Promise.all([
-        listAppointments({ data: { accessToken: token } }),
+        listAppointments({ data: { accessToken: token, viewAsUserId } }),
         listRecentReminders({ data: { accessToken: token, viewAsUserId } }),
         getAppointmentMatchCoverage({ data: { accessToken: token } }),
       ]);
@@ -105,7 +105,12 @@ function AppointmentsPage() {
         return;
       }
       const receipt = await ingestAppointmentCsv({
-        data: { accessToken: token, csv, sourceFilename: file.name },
+        data: {
+          accessToken: token,
+          csv,
+          sourceFilename: file.name,
+          viewAsUserId,
+        },
       });
       setLastReceipt(receipt);
       if (receipt.totalParsed === 0) {

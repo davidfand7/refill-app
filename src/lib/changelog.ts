@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.25.5",
+    date: "May 2026",
+    items: [
+      "<strong>v1.25.5 &mdash; Hotfix: ingestAppointmentCsv + listAppointments now respect admin viewing-as. Also: bulk-ingest reliability sweep.</strong> Karen ran her Acuity schedule export through /app/refill/appointments. Receipt: 5,754 parsed, 5,754 inserted, <strong>0 matched patients</strong>. Root cause: <code>ingestAppointmentCsv</code> at <code>emma-appointments.functions.ts:433</code> called raw <code>verifyAuth</code>, returning the admin's user_id. <code>buildPatientIndex(sb, userId)</code> then loaded the admin's patient list (empty), so every appointment failed name/phone/email match. Worse, the appointments themselves were written under admin's user_id rather than Karen's &mdash; orphaned in a tenant bucket Karen can't see. The pre-existing impersonation gap I flagged for <code>setPatientVip</code> during the v1.25.1 plan but never closed for the appointment ingest path. The yellow banner on the page (&lsquo;CSV ingest writes into this tenant &mdash; v1.20.5&rsquo;) describes <code>ingestPatientCsv</code> ONLY; the appointment surface inherited the gap. Fix: <code>ingestInput</code> + <code>listInput</code> zod schemas now accept <code>viewAsUserId</code>, both handlers thread through <code>resolveEffectiveUserId</code>, route at <code>app.refill.appointments.tsx</code> passes the impersonated user. <strong>Bonus fix</strong>: the per-row reliability recompute hook (line ~705) fires only on individual status flips, not bulk ingest. So even when matching works, bulk-imported cancellations never updated <code>emma_reliability_status</code> &mdash; A-list&rsquo;s <code>excludeUnreliable</code> rule would read 0 forever. Added a sweep call to <code>recomputeReliabilityForUser</code> at end of successful ingest (gated on <code>patientsMatched &gt; 0</code> to avoid pointless work when match rate is zero). <strong>Cleanup</strong>: the 5,754 orphaned admin rows from Karen&rsquo;s first attempt need a one-shot DELETE before re-upload (Supabase dashboard paste, included in the next ship message). Touched: <code>src/server/emma-appointments.functions.ts</code> (viewAsUserId on both inputs + resolveEffectiveUserId on both handlers + post-ingest reliability sweep), <code>src/routes/app.refill.appointments.tsx</code> (viewAsUserId on both calls), <code>src/lib/changelog.ts</code> (this entry). Other emma-appointments fns (lines 637, 734, 764, 851) still use raw verifyAuth &mdash; separate impersonation gaps to close in a v1.25.6 sweep.",
+    ],
+  },
+  {
     version: "v1.25.4",
     date: "May 2026",
     items: [
