@@ -53,8 +53,11 @@ import {
   type AListRules,
 } from "@/server/user-prefs.functions";
 import {
+  getReliabilityFreshness,
   listReliabilityFlags,
+  recomputeReliabilityNow,
   type ReliabilityFlag,
+  type ReliabilityFreshness,
 } from "@/server/emma-reliability.functions";
 
 export const Route = createFileRoute("/app/refill/patients/a-list-rules")({
@@ -115,6 +118,8 @@ function AListRulesPage() {
   const [clearText, setClearText] = useState("");
   const [busy, setBusy] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [freshness, setFreshness] = useState<ReliabilityFreshness | null>(null);
+  const [recomputing, setRecomputing] = useState(false);
 
   const membership = useTenantMembership();
   const viewAsUserId =
@@ -129,20 +134,26 @@ function AListRulesPage() {
         setLoading(false);
         return;
       }
-      const [patientsRes, rulesRes, flagsRes] = await Promise.all([
-        listPatients({
-          data: { accessToken: token, viewAsUserId, limit: 5000 },
-        }),
-        getMyAListRules({ data: { accessToken: token, viewAsUserId } }),
-        listReliabilityFlags({
-          data: { accessToken: token, viewAsUserId },
-        }),
-      ]);
+      const [patientsRes, rulesRes, flagsRes, freshnessRes] = await Promise.all(
+        [
+          listPatients({
+            data: { accessToken: token, viewAsUserId, limit: 5000 },
+          }),
+          getMyAListRules({ data: { accessToken: token, viewAsUserId } }),
+          listReliabilityFlags({
+            data: { accessToken: token, viewAsUserId },
+          }),
+          getReliabilityFreshness({
+            data: { accessToken: token, viewAsUserId },
+          }),
+        ],
+      );
       setPatients(patientsRes);
       setRules(rulesRes.rules);
       setSavedRules(rulesRes.rules);
       setLastAppliedAt(rulesRes.lastAppliedAt);
       setReliabilityFlags(flagsRes);
+      setFreshness(freshnessRes);
     } catch (e) {
       setErrorMessage(
         e instanceof Error ? e.message : "Couldn't load A-list dashboard.",
@@ -346,6 +357,45 @@ function AListRulesPage() {
       setBusy(false);
     }
   }, [busy, clearText, currentVipIds, viewAsUserId, loadAll]);
+
+  // v1.26.9 — manual tier recompute. The daily cron at 02:00 UTC normally
+  // refreshes tiers, but after a bulk Acuity ingest the counts are fresh
+  // while tier stays stale until the next cron run. This button forces a
+  // bulk sweep immediately (single RPC + bulk in-memory tier compute, no
+  // per-patient round-trip).
+  const handleRecompute = useCallback(async () => {
+    if (recomputing) return;
+    setRecomputing(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Session expired — please sign in again.");
+
+      const res = await recomputeReliabilityNow({
+        data: { accessToken: token, viewAsUserId },
+      });
+
+      setFreshness({
+        latestRecomputedAt: res.completedAt,
+        patientsTracked: res.patientsRecomputed,
+      });
+
+      toast.success(
+        res.transitions > 0
+          ? `Recomputed ${res.patientsRecomputed.toLocaleString()} patient${res.patientsRecomputed === 1 ? "" : "s"} · ${res.transitions} tier transition${res.transitions === 1 ? "" : "s"}.`
+          : `Recomputed ${res.patientsRecomputed.toLocaleString()} patient${res.patientsRecomputed === 1 ? "" : "s"} · no tier changes.`,
+      );
+
+      // Reload so the flagged counts pick up any new in_recovery patients.
+      await loadAll();
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Couldn't recompute reliability.",
+      );
+    } finally {
+      setRecomputing(false);
+    }
+  }, [recomputing, viewAsUserId, loadAll]);
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
@@ -670,6 +720,54 @@ function AListRulesPage() {
             )}
           </section>
         )}
+
+        {/* v1.26.9 — Reliability data freshness + manual recompute. */}
+        <section className="rounded-2xl border border-rule bg-paper p-5">
+          <div className="flex items-baseline justify-between gap-3 mb-2">
+            <h2 className="text-sm font-semibold text-ink">
+              Reliability data
+            </h2>
+            <button
+              type="button"
+              disabled={recomputing}
+              onClick={() => void handleRecompute()}
+              className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-2.5 py-1 text-[12px] font-medium text-ink-soft hover:bg-rule-soft hover:text-ink transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {recomputing ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Recomputing&hellip;
+                </>
+              ) : (
+                "Recompute now"
+              )}
+            </button>
+          </div>
+          <p className="text-[12px] text-ink-soft leading-relaxed">
+            Tiers (trusted / regular / vip / in-recovery) recompute nightly at
+            2&thinsp;AM&nbsp;UTC. The flagged-count above already reflects the
+            latest counts; this button forces a tier sweep too &mdash; useful
+            after a bulk Acuity import.
+          </p>
+          <p className="text-[12px] text-ink-faint mt-2 tabular-nums">
+            Last computed:{" "}
+            {freshness?.latestRecomputedAt
+              ? new Date(freshness.latestRecomputedAt).toLocaleString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })
+              : "never"}
+            {freshness && freshness.patientsTracked > 0 && (
+              <>
+                {" "}&middot;{" "}
+                {freshness.patientsTracked.toLocaleString()} patient
+                {freshness.patientsTracked === 1 ? "" : "s"} tracked
+              </>
+            )}
+          </p>
+        </section>
       </div>
 
       {/* Apply confirm */}

@@ -342,6 +342,25 @@ export async function recomputeReliabilityForPatient(args: {
 }
 
 // ─── recomputeReliabilityForUser (cron sweep helper) ──────────────────────
+//
+// v1.26.9 BULK REFACTOR. The pre-v1.26.9 implementation looped
+// recomputeReliabilityForPatient per patient — each iteration ~4-6 DB
+// round trips. At Karen-scale (~700 patients) that's 2800-4200 RTs, well
+// past the Cloudflare Workers CPU timeout the v1.25.7 RPC was created to
+// fix for the count columns. The cron was silently timing out, leaving
+// tiers indefinitely stale after bulk ingests.
+//
+// New shape: ~5-15 RTs total regardless of patient count.
+//   1. Refresh counts via the v1.25.7 RPC (single SQL statement)
+//   2. Read policy thresholds (1 RT)
+//   3. Read all reliability rows for the user (1 RT)
+//   4. Compute new tier per row IN MEMORY using existing computeTier()
+//   5. Bulk-write changed tiers via chunked UPDATEs (Promise.all'd, chunk=50)
+//   6. Batch-insert pattern_alerts for transitions (1 RT for names + 1 RT for insert)
+//
+// The per-patient path (recomputeReliabilityForPatient, called from
+// updateAppointmentStatus on per-status flips) is unchanged — single
+// patient calls don't have scale issues. Coexists.
 
 export async function recomputeReliabilityForUser(args: {
   sb: SupabaseAdmin;
@@ -349,39 +368,128 @@ export async function recomputeReliabilityForUser(args: {
 }): Promise<{ patientsRecomputed: number; transitions: number }> {
   const { sb, userId } = args;
 
-  // Get distinct patient_node_ids that have any appointment history.
-  const { data: rows } = await sb
-    .from("emma_appointments")
-    .select("patient_node_id")
-    .eq("user_id", userId)
-    .not("patient_node_id", "is", null);
+  // Step 1: Refresh counts (no_shows_6mo, cancellations_6mo, no_shows_lifetime,
+  // cancellations_lifetime, total_visits) via the v1.25.7 RPC. Single SQL
+  // statement; handles new rows via INSERT ... ON CONFLICT.
+  const { error: rpcErr } = await sb.rpc("refill_recompute_reliability_counts", {
+    p_user_id: userId,
+  });
+  if (rpcErr) {
+    throw new Error(`Couldn't refresh reliability counts: ${rpcErr.message}`);
+  }
 
-  const patientIds = Array.from(
-    new Set(
-      (rows ?? [])
-        .map((r) => r.patient_node_id)
-        .filter((id): id is string => id !== null),
-    ),
+  // Step 2: Load policy thresholds (or use defaults).
+  const { data: policy } = await sb
+    .from("emma_noshow_policies")
+    .select("reliability_tier_thresholds")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const thresholds = readThresholds(
+    policy?.reliability_tier_thresholds ?? null,
   );
 
-  let transitions = 0;
-  for (const pid of patientIds) {
-    try {
-      const r = await recomputeReliabilityForPatient({
-        sb,
-        userId,
-        patientNodeId: pid,
+  // Step 3: Read all reliability rows back. Counts are now fresh from step 1.
+  const { data: rows, error: readErr } = await sb
+    .from("emma_reliability_status")
+    .select("patient_node_id, tier, no_shows_6mo, total_visits")
+    .eq("user_id", userId);
+  if (readErr) {
+    throw new Error(`Couldn't read reliability rows: ${readErr.message}`);
+  }
+
+  const all = rows ?? [];
+
+  // Step 4: In-memory tier computation. Diff against current.
+  type TierUpdate = {
+    patientNodeId: string;
+    priorTier: ReliabilityTier;
+    newTier: ReliabilityTier;
+    noShows6mo: number;
+    totalVisits: number;
+  };
+  const updates: TierUpdate[] = [];
+  for (const r of all) {
+    const newTier = computeTier(
+      { noShows6mo: r.no_shows_6mo, totalVisits: r.total_visits },
+      thresholds,
+    );
+    if (newTier !== r.tier) {
+      updates.push({
+        patientNodeId: r.patient_node_id,
+        priorTier: r.tier as ReliabilityTier,
+        newTier,
+        noShows6mo: r.no_shows_6mo,
+        totalVisits: r.total_visits,
       });
-      if (r.transitioned) transitions++;
-    } catch (e) {
-      console.error(
-        `recompute failed for ${pid}:`,
-        e instanceof Error ? e.message : e,
-      );
     }
   }
 
-  return { patientsRecomputed: patientIds.length, transitions };
+  if (updates.length === 0) {
+    return { patientsRecomputed: all.length, transitions: 0 };
+  }
+
+  // Step 5: Bulk-write tier changes. Chunked UPDATEs (Promise.all'd) keep
+  // round trips bounded without exposing a CASE-WHEN bulk-UPDATE SQL shape
+  // through supabase-js. Chunk size 50 → ~1 RT per 50 updates.
+  const nowIso = new Date().toISOString();
+  const chunkSize = 50;
+  for (let i = 0; i < updates.length; i += chunkSize) {
+    const chunk = updates.slice(i, i + chunkSize);
+    await Promise.all(
+      chunk.map((u) =>
+        sb
+          .from("emma_reliability_status")
+          .update({ tier: u.newTier, recomputed_at: nowIso })
+          .eq("user_id", userId)
+          .eq("patient_node_id", u.patientNodeId),
+      ),
+    );
+  }
+
+  // Step 6: Fire pattern_alerts for transitions. composeAlert() returns null
+  // for non-meaningful transitions (e.g. trusted → trusted equivalence,
+  // initial assignment); filter those out. Batch insert.
+  const patientIds = updates.map((u) => u.patientNodeId);
+  const { data: patients } = await sb
+    .from("knowledge_nodes")
+    .select("id, title")
+    .in("id", patientIds);
+  const nameById = new Map(
+    (patients ?? []).map((p) => [p.id, p.title as string | null]),
+  );
+
+  const alertRows = updates
+    .map((u) => {
+      const alert = composeAlert({
+        fromTier: u.priorTier,
+        toTier: u.newTier,
+        patientName: nameById.get(u.patientNodeId) ?? null,
+        noShows6mo: u.noShows6mo,
+        totalVisits: u.totalVisits,
+      });
+      if (!alert) return null;
+      return {
+        user_id: userId,
+        patient_node_id: u.patientNodeId,
+        kind: alert.kind,
+        from_tier: u.priorTier,
+        to_tier: u.newTier,
+        headline: alert.headline,
+        body: alert.body,
+      };
+    })
+    .filter((a): a is NonNullable<typeof a> => a !== null);
+
+  if (alertRows.length > 0) {
+    const { error: alertErr } = await sb
+      .from("emma_pattern_alerts")
+      .insert(alertRows);
+    if (alertErr) {
+      console.error("pattern_alerts batch insert failed:", alertErr.message);
+    }
+  }
+
+  return { patientsRecomputed: all.length, transitions: alertRows.length };
 }
 
 // ─── Server fns ───────────────────────────────────────────────────────────
@@ -403,6 +511,27 @@ const cardInput = z.object({
   patientNodeId: z.string().uuid(),
   viewAsUserId: z.string().uuid().optional(),
 });
+
+// v1.26.9 — observability + manual recompute lever.
+const freshnessInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+});
+const recomputeNowInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+});
+
+export type ReliabilityFreshness = {
+  latestRecomputedAt: string | null;
+  patientsTracked: number;
+};
+
+export type RecomputeNowResult = {
+  patientsRecomputed: number;
+  transitions: number;
+  completedAt: string;
+};
 
 export const listPatternAlerts = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => listInput.parse(input))
@@ -558,4 +687,60 @@ export const listReliabilityFlags = createServerFn({ method: "POST" })
       noShowsLifetime: r.no_shows_lifetime,
       cancellationsLifetime: r.cancellations_lifetime,
     }));
+  });
+
+// ─── getReliabilityFreshness + recomputeReliabilityNow (v1.26.9) ──────────
+//
+// Observability + manual lever. The cron at 02:00 UTC daily recomputes
+// tiers across all spas; tier transitions emit pattern_alerts. But after
+// a bulk Acuity ingest the counts refresh instantly (v1.25.7 RPC) while
+// tier stays on whatever the cron last computed — for fresh data that's
+// "trusted" by default for new patients, and otherwise the stale tier
+// from the prior day. Freshness surface shows lag; manual button forces
+// an immediate sweep.
+
+export const getReliabilityFreshness = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => freshnessInput.parse(input))
+  .handler(async ({ data }): Promise<ReliabilityFreshness> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+
+    // Two queries in parallel: max(recomputed_at) and count.
+    const [{ data: latestRow }, { count }] = await Promise.all([
+      sb
+        .from("emma_reliability_status")
+        .select("recomputed_at")
+        .eq("user_id", effectiveUserId)
+        .order("recomputed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      sb
+        .from("emma_reliability_status")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", effectiveUserId),
+    ]);
+
+    return {
+      latestRecomputedAt: latestRow?.recomputed_at ?? null,
+      patientsTracked: count ?? 0,
+    };
+  });
+
+export const recomputeReliabilityNow = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => recomputeNowInput.parse(input))
+  .handler(async ({ data }): Promise<RecomputeNowResult> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const r = await recomputeReliabilityForUser({ sb, userId: effectiveUserId });
+    return {
+      patientsRecomputed: r.patientsRecomputed,
+      transitions: r.transitions,
+      completedAt: new Date().toISOString(),
+    };
   });
