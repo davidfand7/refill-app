@@ -375,9 +375,19 @@ function AListRulesPage() {
         data: { accessToken: token, viewAsUserId },
       });
 
+      // v1.26.10 — also stash the run result into freshness.lastRun so the
+      // freshness card updates immediately to "X patients · N transitions"
+      // without waiting for loadAll(). loadAll() runs anyway below and will
+      // reconcile from emma_reliability_runs.
       setFreshness({
         latestRecomputedAt: res.completedAt,
         patientsTracked: res.patientsRecomputed,
+        lastRun: {
+          completedAt: res.completedAt,
+          patientsRecomputed: res.patientsRecomputed,
+          transitions: res.transitions,
+          trigger: "manual",
+        },
       });
 
       toast.success(
@@ -721,7 +731,9 @@ function AListRulesPage() {
           </section>
         )}
 
-        {/* v1.26.9 — Reliability data freshness + manual recompute. */}
+        {/* v1.26.9 — Reliability data freshness + manual recompute.
+            v1.26.10 — last-sweep result (patients + transitions + trigger)
+            now persists via emma_reliability_runs and survives reload. */}
         <section className="rounded-2xl border border-rule bg-paper p-5">
           <div className="flex items-baseline justify-between gap-3 mb-2">
             <h2 className="text-sm font-semibold text-ink">
@@ -749,24 +761,7 @@ function AListRulesPage() {
             latest counts; this button forces a tier sweep too &mdash; useful
             after a bulk Acuity import.
           </p>
-          <p className="text-[12px] text-ink-faint mt-2 tabular-nums">
-            Last computed:{" "}
-            {freshness?.latestRecomputedAt
-              ? new Date(freshness.latestRecomputedAt).toLocaleString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  hour: "numeric",
-                  minute: "2-digit",
-                })
-              : "never"}
-            {freshness && freshness.patientsTracked > 0 && (
-              <>
-                {" "}&middot;{" "}
-                {freshness.patientsTracked.toLocaleString()} patient
-                {freshness.patientsTracked === 1 ? "" : "s"} tracked
-              </>
-            )}
-          </p>
+          <FreshnessLastRun freshness={freshness} />
         </section>
       </div>
 
@@ -990,6 +985,80 @@ function PreviewRow({
         </span>
       </td>
     </tr>
+  );
+}
+
+// v1.26.10 — persistent last-sweep surface. Replaces the toast-only window
+// after a Recompute now click. Reads from emma_reliability_runs via
+// getReliabilityFreshness; falls back to a "never" line on a fresh tenant
+// that hasn't been swept since the v1.26.10 deploy. The "no tier changes"
+// case is explicit so a successful sweep that found nothing to flip doesn't
+// look like the card is broken.
+function FreshnessLastRun({
+  freshness,
+}: {
+  freshness: ReliabilityFreshness | null;
+}) {
+  if (!freshness) return null;
+
+  const whenLabel = freshness.latestRecomputedAt
+    ? new Date(freshness.latestRecomputedAt).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "never";
+  const trackedLabel =
+    freshness.patientsTracked > 0
+      ? `${freshness.patientsTracked.toLocaleString()} patient${freshness.patientsTracked === 1 ? "" : "s"} tracked`
+      : null;
+
+  const run = freshness.lastRun;
+
+  return (
+    <div className="mt-3 space-y-1.5">
+      <p className="text-[12px] text-ink-faint tabular-nums">
+        Last computed: {whenLabel}
+        {trackedLabel && <> &middot; {trackedLabel}</>}
+      </p>
+      {run && (
+        <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+          <span className="inline-flex items-center gap-1 rounded-md border border-rule bg-white px-2 py-0.5 tabular-nums text-ink-soft">
+            <span className="font-semibold text-ink">
+              {run.patientsRecomputed.toLocaleString()}
+            </span>
+            <span>patient{run.patientsRecomputed === 1 ? "" : "s"} swept</span>
+          </span>
+          <span
+            className={
+              "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 tabular-nums " +
+              (run.transitions > 0
+                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                : "border-rule bg-white text-ink-soft")
+            }
+          >
+            <span className="font-semibold">
+              {run.transitions.toLocaleString()}
+            </span>
+            <span>
+              tier transition{run.transitions === 1 ? "" : "s"}
+              {run.transitions === 0 && " (no tier changes)"}
+            </span>
+          </span>
+          <span
+            className={
+              "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide " +
+              (run.trigger === "manual"
+                ? "border-sky-200 bg-sky-50 text-sky-700"
+                : "border-rule bg-rule/30 text-ink-soft")
+            }
+          >
+            {run.trigger === "manual" ? "Manual" : "Nightly cron"}
+          </span>
+        </div>
+      )}
+    </div>
   );
 }
 

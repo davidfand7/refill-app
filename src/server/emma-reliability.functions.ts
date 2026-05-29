@@ -365,8 +365,16 @@ export async function recomputeReliabilityForPatient(args: {
 export async function recomputeReliabilityForUser(args: {
   sb: SupabaseAdmin;
   userId: string;
-}): Promise<{ patientsRecomputed: number; transitions: number }> {
-  const { sb, userId } = args;
+  // v1.26.10 — distinguishes cron sweep from manual button click in the
+  // emma_reliability_runs log. Defaults to 'manual' so legacy callers that
+  // don't pass it (none in tree today) get the safer label.
+  trigger?: "cron" | "manual";
+}): Promise<{
+  patientsRecomputed: number;
+  transitions: number;
+  completedAt: string;
+}> {
+  const { sb, userId, trigger = "manual" } = args;
 
   // Step 1: Refresh counts (no_shows_6mo, cancellations_6mo, no_shows_lifetime,
   // cancellations_lifetime, total_visits) via the v1.25.7 RPC. Single SQL
@@ -399,6 +407,12 @@ export async function recomputeReliabilityForUser(args: {
 
   const all = rows ?? [];
 
+  // v1.26.10 — anchor a single completion timestamp for both the
+  // recomputed_at column writes (changed rows) and the runs-log row.
+  // Keeps "Last computed" on the freshness card aligned with the
+  // recomputed_at stamp that would appear on a tier-changed row.
+  const completedAt = new Date().toISOString();
+
   // Step 4: In-memory tier computation. Diff against current.
   type TierUpdate = {
     patientNodeId: string;
@@ -425,13 +439,19 @@ export async function recomputeReliabilityForUser(args: {
   }
 
   if (updates.length === 0) {
-    return { patientsRecomputed: all.length, transitions: 0 };
+    await logReliabilityRun(sb, {
+      userId,
+      completedAt,
+      patientsRecomputed: all.length,
+      transitions: 0,
+      trigger,
+    });
+    return { patientsRecomputed: all.length, transitions: 0, completedAt };
   }
 
   // Step 5: Bulk-write tier changes. Chunked UPDATEs (Promise.all'd) keep
   // round trips bounded without exposing a CASE-WHEN bulk-UPDATE SQL shape
   // through supabase-js. Chunk size 50 → ~1 RT per 50 updates.
-  const nowIso = new Date().toISOString();
   const chunkSize = 50;
   for (let i = 0; i < updates.length; i += chunkSize) {
     const chunk = updates.slice(i, i + chunkSize);
@@ -439,7 +459,7 @@ export async function recomputeReliabilityForUser(args: {
       chunk.map((u) =>
         sb
           .from("emma_reliability_status")
-          .update({ tier: u.newTier, recomputed_at: nowIso })
+          .update({ tier: u.newTier, recomputed_at: completedAt })
           .eq("user_id", userId)
           .eq("patient_node_id", u.patientNodeId),
       ),
@@ -489,7 +509,47 @@ export async function recomputeReliabilityForUser(args: {
     }
   }
 
-  return { patientsRecomputed: all.length, transitions: alertRows.length };
+  // v1.26.10 — persist the sweep result so the freshness card can show
+  // it after the toast fades + after a page reload.
+  await logReliabilityRun(sb, {
+    userId,
+    completedAt,
+    patientsRecomputed: all.length,
+    transitions: alertRows.length,
+    trigger,
+  });
+
+  return {
+    patientsRecomputed: all.length,
+    transitions: alertRows.length,
+    completedAt,
+  };
+}
+
+// v1.26.10 — best-effort insert into the runs log. A failure here is
+// observability data loss only; the sweep itself succeeded, so we
+// console.error rather than throw (matches the pattern_alerts insert
+// posture above).
+async function logReliabilityRun(
+  sb: SupabaseAdmin,
+  row: {
+    userId: string;
+    completedAt: string;
+    patientsRecomputed: number;
+    transitions: number;
+    trigger: "cron" | "manual";
+  },
+): Promise<void> {
+  const { error } = await sb.from("emma_reliability_runs").insert({
+    user_id: row.userId,
+    completed_at: row.completedAt,
+    patients_recomputed: row.patientsRecomputed,
+    transitions: row.transitions,
+    trigger: row.trigger,
+  });
+  if (error) {
+    console.error("emma_reliability_runs insert failed:", error.message);
+  }
 }
 
 // ─── Server fns ───────────────────────────────────────────────────────────
@@ -525,6 +585,15 @@ const recomputeNowInput = z.object({
 export type ReliabilityFreshness = {
   latestRecomputedAt: string | null;
   patientsTracked: number;
+  // v1.26.10 — persisted result of the most recent sweep. Null when
+  // no run has been logged yet for this tenant (first deploy after
+  // the runs-table migration; cleared tenants; etc.).
+  lastRun: {
+    completedAt: string;
+    patientsRecomputed: number;
+    transitions: number;
+    trigger: "cron" | "manual";
+  } | null;
 };
 
 export type RecomputeNowResult = {
@@ -708,24 +777,48 @@ export const getReliabilityFreshness = createServerFn({ method: "POST" })
     });
     const sb = admin();
 
-    // Two queries in parallel: max(recomputed_at) and count.
-    const [{ data: latestRow }, { count }] = await Promise.all([
-      sb
-        .from("emma_reliability_status")
-        .select("recomputed_at")
-        .eq("user_id", effectiveUserId)
-        .order("recomputed_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      sb
-        .from("emma_reliability_status")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", effectiveUserId),
-    ]);
+    // v1.26.10 — three queries in parallel:
+    //   1. patientsTracked: count of rows in emma_reliability_status
+    //   2. lastRun: most recent emma_reliability_runs row (post-v1.26.10)
+    //   3. latestRecomputedAtFallback: max(recomputed_at) — used only when
+    //      no runs row exists yet (covers the gap between migration deploy
+    //      and the first sweep that writes to the runs log).
+    const [{ count }, { data: lastRunRow }, { data: latestFallbackRow }] =
+      await Promise.all([
+        sb
+          .from("emma_reliability_status")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", effectiveUserId),
+        sb
+          .from("emma_reliability_runs")
+          .select("completed_at, patients_recomputed, transitions, trigger")
+          .eq("user_id", effectiveUserId)
+          .order("completed_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        sb
+          .from("emma_reliability_status")
+          .select("recomputed_at")
+          .eq("user_id", effectiveUserId)
+          .order("recomputed_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+    const lastRun = lastRunRow
+      ? {
+          completedAt: lastRunRow.completed_at,
+          patientsRecomputed: lastRunRow.patients_recomputed,
+          transitions: lastRunRow.transitions,
+          trigger: lastRunRow.trigger as "cron" | "manual",
+        }
+      : null;
 
     return {
-      latestRecomputedAt: latestRow?.recomputed_at ?? null,
+      latestRecomputedAt:
+        lastRun?.completedAt ?? latestFallbackRow?.recomputed_at ?? null,
       patientsTracked: count ?? 0,
+      lastRun,
     };
   });
 
@@ -737,10 +830,19 @@ export const recomputeReliabilityNow = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const r = await recomputeReliabilityForUser({ sb, userId: effectiveUserId });
+    // v1.26.10 — pass through trigger='manual' so the runs log can tell
+    // user-initiated sweeps apart from overnight cron sweeps. completedAt
+    // is now sourced from the sweep itself (same timestamp written to the
+    // runs row + onto recomputed_at on changed rows) instead of a fresh
+    // post-sweep Date.now(), which kept drifting a few ms ahead.
+    const r = await recomputeReliabilityForUser({
+      sb,
+      userId: effectiveUserId,
+      trigger: "manual",
+    });
     return {
       patientsRecomputed: r.patientsRecomputed,
       transitions: r.transitions,
-      completedAt: new Date().toISOString(),
+      completedAt: r.completedAt,
     };
   });

@@ -61,7 +61,11 @@ export const Route = createFileRoute("/api/cron/emma-reliability-sweep")({
 
         for (const userId of userIds) {
           try {
-            const r = await recomputeReliabilityForUser({ sb, userId });
+            const r = await recomputeReliabilityForUser({
+              sb,
+              userId,
+              trigger: "cron",
+            });
             totalPatients += r.patientsRecomputed;
             totalTransitions += r.transitions;
           } catch (e) {

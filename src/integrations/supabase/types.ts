@@ -746,6 +746,36 @@ export type Database = {
           },
         ]
       }
+      emma_reliability_runs: {
+        Row: {
+          completed_at: string
+          created_at: string
+          id: string
+          patients_recomputed: number
+          transitions: number
+          trigger: string
+          user_id: string
+        }
+        Insert: {
+          completed_at: string
+          created_at?: string
+          id?: string
+          patients_recomputed?: number
+          transitions?: number
+          trigger: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string
+          created_at?: string
+          id?: string
+          patients_recomputed?: number
+          transitions?: number
+          trigger?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       emma_reliability_status: {
         Row: {
           cancellations_6mo: number
