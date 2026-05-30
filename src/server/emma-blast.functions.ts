@@ -1246,20 +1246,21 @@ export const cancelScheduledBlast = createServerFn({ method: "POST" })
   });
 
 /**
- * Look up an active outbound SMS number provisioned for this spa.
- * For v1 we pull from the existing phone_numbers table that Liz uses;
- * a separate per-spa Emma-only number isn't a v1 concern.
+ * Look up an outbound SMS number provisioned for this spa.
+ * v1.26.18 — see emma-rescue.functions.ts:resolveSpaFromNumber for the
+ * architectural note. Same body across all 3 emma surfaces; folding into
+ * a shared helper is a future DRY pass.
  */
 async function resolveSpaFromNumber(
   sb: ReturnType<typeof admin>,
   userId: string,
 ): Promise<string | null> {
   const { data } = await sb
-    .from("phone_numbers")
-    .select("phone_number")
+    .from("knowledge_nodes")
+    .select("title")
     .eq("user_id", userId)
-    .eq("is_active", true)
-    .limit(1)
+    .eq("context", "spa-profile")
+    .eq("lookup_key", "from-number")
     .maybeSingle();
-  return data?.phone_number ?? null;
+  return data?.title?.trim() || null;
 }

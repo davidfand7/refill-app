@@ -152,19 +152,23 @@ async function resolveOwnerDisplayName(
   return trimmed || null;
 }
 
+// v1.26.18 — pull from knowledge_nodes spa-profile (the same bucket the
+// v1.26.12 owner-display-name override lives in) instead of the
+// `phone_numbers` table that never existed in Refill's schema (vestigial
+// pattern from the cleaved-from Liz CRM). Returns null when unset; the
+// willNeedFromNumber gate at the call site handles direct-vs-proxy modes.
 async function resolveSpaFromNumber(
   sb: SupabaseAdmin,
   userId: string,
 ): Promise<string | null> {
   const { data } = await sb
-    .from("phone_numbers")
-    .select("phone_number")
+    .from("knowledge_nodes")
+    .select("title")
     .eq("user_id", userId)
-    .eq("is_active", true)
-    .order("created_at", { ascending: true })
-    .limit(1)
+    .eq("context", "spa-profile")
+    .eq("lookup_key", "from-number")
     .maybeSingle();
-  return data?.phone_number ?? null;
+  return data?.title?.trim() || null;
 }
 
 // ─── Fit-patient selection ────────────────────────────────────────────────

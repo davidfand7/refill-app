@@ -222,19 +222,21 @@ async function resolveSpaName(sb: SupabaseAdmin, userId: string): Promise<string
 
 // ─── From-number helper ───────────────────────────────────────────────────
 
+// v1.26.18 — see emma-rescue.functions.ts:resolveSpaFromNumber for the
+// architectural note. Same body across all 3 emma surfaces; folding into
+// a shared helper is a future DRY pass.
 async function resolveSpaFromNumber(
   sb: SupabaseAdmin,
   userId: string,
 ): Promise<string | null> {
   const { data } = await sb
-    .from("phone_numbers")
-    .select("phone_number")
+    .from("knowledge_nodes")
+    .select("title")
     .eq("user_id", userId)
-    .eq("is_active", true)
-    .order("created_at", { ascending: true })
-    .limit(1)
+    .eq("context", "spa-profile")
+    .eq("lookup_key", "from-number")
     .maybeSingle();
-  return data?.phone_number ?? null;
+  return data?.title?.trim() || null;
 }
 
 // ─── dispatchPreShowReminder (the core pure fn) ───────────────────────────
