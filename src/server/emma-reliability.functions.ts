@@ -376,6 +376,30 @@ export async function recomputeReliabilityForUser(args: {
 }> {
   const { sb, userId, trigger = "manual" } = args;
 
+  // Step 0 (v1.26.11): snapshot patient_node_ids that ALREADY have a
+  // reliability row before the RPC runs. Anything NOT in this set is being
+  // tiered for the first time — that's an initial assignment, not a
+  // transition, and should not fire a promotion alert.
+  //
+  // composeAlert() already short-circuits when fromTier === null (line ~162),
+  // but the bulk path can't surface a null fromTier: the RPC at step 1
+  // INSERT … ON CONFLICTs new rows with the column default tier='trusted',
+  // step 3 reads them back as 'trusted', and step 4's diff sees
+  // 'trusted' → 'vip' (or whatever) — looking like a real promotion. Result
+  // pre-v1.26.11: every brand-new patient on a tenant's first-ever sweep got
+  // a fake "promotion" alert. Karen's first sweep produced 200 of these in
+  // one batch — pure noise, no signal.
+  //
+  // This snapshot is the missing context: if the patient_node_id isn't in
+  // `priorPatientIds`, suppress the alert at step 6.
+  const { data: priorRows } = await sb
+    .from("emma_reliability_status")
+    .select("patient_node_id")
+    .eq("user_id", userId);
+  const priorPatientIds = new Set(
+    (priorRows ?? []).map((r) => r.patient_node_id),
+  );
+
   // Step 1: Refresh counts (no_shows_6mo, cancellations_6mo, no_shows_lifetime,
   // cancellations_lifetime, total_visits) via the v1.25.7 RPC. Single SQL
   // statement; handles new rows via INSERT ... ON CONFLICT.
@@ -469,7 +493,15 @@ export async function recomputeReliabilityForUser(args: {
   // Step 6: Fire pattern_alerts for transitions. composeAlert() returns null
   // for non-meaningful transitions (e.g. trusted → trusted equivalence,
   // initial assignment); filter those out. Batch insert.
-  const patientIds = updates.map((u) => u.patientNodeId);
+  //
+  // v1.26.11 — also drop updates whose patient was NOT in the pre-RPC
+  // snapshot. Those are first-time tier assignments dressed up as
+  // 'trusted → X' transitions by the ON CONFLICT INSERT default. Real
+  // transitions (a known patient crossing a threshold) stay in.
+  const realTransitions = updates.filter((u) =>
+    priorPatientIds.has(u.patientNodeId),
+  );
+  const patientIds = realTransitions.map((u) => u.patientNodeId);
   const { data: patients } = await sb
     .from("knowledge_nodes")
     .select("id, title")
@@ -478,7 +510,7 @@ export async function recomputeReliabilityForUser(args: {
     (patients ?? []).map((p) => [p.id, p.title as string | null]),
   );
 
-  const alertRows = updates
+  const alertRows = realTransitions
     .map((u) => {
       const alert = composeAlert({
         fromTier: u.priorTier,
