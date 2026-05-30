@@ -50,8 +50,8 @@ import {
 } from "@/server/emma-attribution.functions";
 import {
   getInvoicePreview,
-  type InvoicePreview,
-} from "@/server/emma-billing.functions";
+  type RefillInvoicePreview,
+} from "@/server/refill-billing";
 import {
   listDepositIntents,
   markDepositVoided,
@@ -69,7 +69,7 @@ function RecoveryDashboard() {
   const [tab, setTab] = useState<Tab>("saves");
   const [events, setEvents] = useState<RecoveryEvent[] | null>(null);
   const [stats, setStats] = useState<RecoveryStats | null>(null);
-  const [invoice, setInvoice] = useState<InvoicePreview | null>(null);
+  const [invoice, setInvoice] = useState<RefillInvoicePreview | null>(null);
   const [deposits, setDeposits] = useState<DepositHold[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -88,7 +88,8 @@ function RecoveryDashboard() {
 
   // v1.26.8: admin viewing-as plumbing. All 7 server fns called from this
   // page now accept viewAsUserId (emma-attribution + emma-deposits swept
-  // in v1.26.8; emma-billing.getInvoicePreview swept in v1.26.7). Wiring
+  // in v1.26.8; emma-billing.getInvoicePreview swept in v1.26.7; v1.26.23
+  // repointed to refill-billing.getInvoicePreview). Wiring
   // them all at once avoids the split-brain UI v1.25.6 warned about.
   const membership = useTenantMembership();
   const viewAsUserId =
@@ -288,7 +289,7 @@ function RecoveryDashboard() {
 
         {/* Invoice preview — the case-study screenshot anchor. v377. */}
         {invoice && stats && (
-          <InvoicePreviewCard invoice={invoice} stats={stats} brandName={brandName} />
+          <RefillInvoicePreviewCard invoice={invoice} stats={stats} brandName={brandName} />
         )}
 
         {/* Tabs */}
@@ -649,20 +650,26 @@ function MoMDelta({
   );
 }
 
-// ─── InvoicePreviewCard (v377) ────────────────────────────────────────────
+// ─── RefillInvoicePreviewCard (v377) ────────────────────────────────────────────
 
+// v1.26.23 — labels updated to current refill_pricing_plans names
+// (starter/predictable/pro) when the preview swapped from the legacy
+// emma_pricing_plans (performance/predictable/hybrid) to the live
+// refill source. Pre-v1.26.23 any tenant on a refill-side plan rendered
+// the raw enum string ("starter") in this card because the label map
+// only knew about the legacy names.
 const PLAN_LABEL: Record<string, string> = {
-  performance: "Performance",
+  starter: "Starter",
   predictable: "Predictable",
-  hybrid: "Hybrid",
+  pro: "Pro",
 };
 
-function InvoicePreviewCard({
+function RefillInvoicePreviewCard({
   invoice,
   stats,
   brandName,
 }: {
-  invoice: InvoicePreview;
+  invoice: RefillInvoicePreview;
   stats: RecoveryStats;
   brandName: string;
 }) {

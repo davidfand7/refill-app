@@ -226,7 +226,16 @@ export function getPlanEconomics(plan: PricingPlan) {
   return PLAN_ECONOMICS[plan];
 }
 
-// ─── getInvoicePreview (v377 dashboard) ───────────────────────────────────
+// ─── getInvoicePreview (v377 dashboard, DEPRECATED v1.26.23) ─────────────
+//
+// v1.26.23: zero callers remain after the recovery page was repointed to
+// refill-billing.ts:getInvoicePreview (the tenant-aware, refill_pricing_plans
+// variant). This emma-side fn reads the legacy emma_pricing_plans table
+// which no spa-facing surface writes to anymore — leaving it live would
+// silently return plan=null for every modern tenant. Kept temporarily so
+// the broader Phase 3 deletion of this whole file (post-cron-decommission)
+// is a single atomic cleanup. New code MUST import getInvoicePreview from
+// @/server/refill-billing.
 
 export type InvoicePreview = {
   /** null when the spa hasn't selected a plan yet — UI prompts them to. */
