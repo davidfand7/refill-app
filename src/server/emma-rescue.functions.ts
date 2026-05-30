@@ -43,6 +43,11 @@ import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { sendSms } from "@/server/sms-provider";
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
+import {
+  resolveOwnerDisplayName,
+  resolveSpaFromNumber,
+  resolveSpaName,
+} from "@/server/emma-spa-profile";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -117,58 +122,6 @@ function buildRescueClaimUrl(token: string): string {
   // Pattern matches src/server/rep-platform.ts.
   const base = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://getrefill.app").replace(/\/+$/, "");
   return `${base}/rescue/claim/${token}`;
-}
-
-// ─── Spa name + from-number helpers ───────────────────────────────────────
-
-async function resolveSpaName(sb: SupabaseAdmin, userId: string): Promise<string> {
-  const { data } = await sb
-    .from("knowledge_nodes")
-    .select("title")
-    .eq("user_id", userId)
-    .eq("context", "spa-profile")
-    .eq("lookup_key", "spa-name")
-    .maybeSingle();
-  return data?.title?.trim() || "your spa";
-}
-
-// v1.26.12 — solo-practitioner override. When set, providerClause renders
-// this name in place of the "with X" suppression for the case where the
-// Acuity calendar's provider_name equals the spa name. Null = no override =
-// suppression holds (matches v379.2 semantics for multi-practitioner spas
-// where calendar names alias the practice).
-async function resolveOwnerDisplayName(
-  sb: SupabaseAdmin,
-  userId: string,
-): Promise<string | null> {
-  const { data } = await sb
-    .from("knowledge_nodes")
-    .select("title")
-    .eq("user_id", userId)
-    .eq("context", "spa-profile")
-    .eq("lookup_key", "owner-display-name")
-    .maybeSingle();
-  const trimmed = data?.title?.trim();
-  return trimmed || null;
-}
-
-// v1.26.18 — pull from knowledge_nodes spa-profile (the same bucket the
-// v1.26.12 owner-display-name override lives in) instead of the
-// `phone_numbers` table that never existed in Refill's schema (vestigial
-// pattern from the cleaved-from Liz CRM). Returns null when unset; the
-// willNeedFromNumber gate at the call site handles direct-vs-proxy modes.
-async function resolveSpaFromNumber(
-  sb: SupabaseAdmin,
-  userId: string,
-): Promise<string | null> {
-  const { data } = await sb
-    .from("knowledge_nodes")
-    .select("title")
-    .eq("user_id", userId)
-    .eq("context", "spa-profile")
-    .eq("lookup_key", "from-number")
-    .maybeSingle();
-  return data?.title?.trim() || null;
 }
 
 // ─── Fit-patient selection ────────────────────────────────────────────────

@@ -28,6 +28,10 @@ import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 import { sendSms } from "@/server/sms-provider";
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
+import {
+  resolveSpaFromNumber,
+  resolveSpaName,
+} from "@/server/emma-spa-profile";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -205,38 +209,6 @@ function formatLocalTime(iso: string): string {
     hour: "numeric",
     minute: "2-digit",
   });
-}
-
-// ─── Spa name helper ──────────────────────────────────────────────────────
-
-async function resolveSpaName(sb: SupabaseAdmin, userId: string): Promise<string> {
-  const { data } = await sb
-    .from("knowledge_nodes")
-    .select("title")
-    .eq("user_id", userId)
-    .eq("context", "spa-profile")
-    .eq("lookup_key", "spa-name")
-    .maybeSingle();
-  return data?.title?.trim() || "your spa";
-}
-
-// ─── From-number helper ───────────────────────────────────────────────────
-
-// v1.26.18 — see emma-rescue.functions.ts:resolveSpaFromNumber for the
-// architectural note. Same body across all 3 emma surfaces; folding into
-// a shared helper is a future DRY pass.
-async function resolveSpaFromNumber(
-  sb: SupabaseAdmin,
-  userId: string,
-): Promise<string | null> {
-  const { data } = await sb
-    .from("knowledge_nodes")
-    .select("title")
-    .eq("user_id", userId)
-    .eq("context", "spa-profile")
-    .eq("lookup_key", "from-number")
-    .maybeSingle();
-  return data?.title?.trim() || null;
 }
 
 // ─── dispatchPreShowReminder (the core pure fn) ───────────────────────────

@@ -30,6 +30,7 @@ import { callGeminiOneShot } from "@/server/gemini-oneshot";
 import { sendSms } from "@/server/sms-provider";
 import { bookingUrlFor, ensureBookingToken } from "@/server/emma-booking.functions";
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
+import { resolveSpaFromNumber } from "@/server/emma-spa-profile";
 import type { CampaignAttachments } from "@/lib/campaign-templates";
 import type { PatientSummary } from "@/lib/patient-csv";
 
@@ -1245,22 +1246,3 @@ export const cancelScheduledBlast = createServerFn({ method: "POST" })
     return { ok: true, count: rows?.length ?? 0 };
   });
 
-/**
- * Look up an outbound SMS number provisioned for this spa.
- * v1.26.18 — see emma-rescue.functions.ts:resolveSpaFromNumber for the
- * architectural note. Same body across all 3 emma surfaces; folding into
- * a shared helper is a future DRY pass.
- */
-async function resolveSpaFromNumber(
-  sb: ReturnType<typeof admin>,
-  userId: string,
-): Promise<string | null> {
-  const { data } = await sb
-    .from("knowledge_nodes")
-    .select("title")
-    .eq("user_id", userId)
-    .eq("context", "spa-profile")
-    .eq("lookup_key", "from-number")
-    .maybeSingle();
-  return data?.title?.trim() || null;
-}
