@@ -48,11 +48,19 @@ import type { Database } from "@/integrations/supabase/types";
 // per the supabase/migrations/20260620000000_v123_admin_rename.sql migration.
 // The rename keeps the same user_id (addf1110-0000-0000-0000-000000000001),
 // so user_roles + admin_audit_log references stay valid.
+// v1.26.13 — Karen tenant renamed from karen@rejuv-demo.test →
+// testspaowner@test.com. The misleading "karen@rejuv-demo.test" suffix
+// kept implying "dev/test, not real" while it was actually the LIVE
+// working tenant where the rescue engine fires (11 attempts + 10 offers
+// + 9 future cancellations queued as of 2026-05-29 diagnostic). New
+// convention: auth identity = generic-test (testspaowner@test.com),
+// display name = warm-human (still "Karen" via spa-profile owner-display-
+// name in customer copy). See [[feedback-test-naming-convention]].
 const PERSONA_EMAILS = {
   admin: "admin@refill.platform",
   kelly: "kelly@refill-demo.test",
   maria: "maria@refill-demo.test",
-  karen: "karen@rejuv-demo.test",
+  karen: "testspaowner@test.com",
 } as const;
 
 export type PersonaKey = keyof typeof PERSONA_EMAILS;
