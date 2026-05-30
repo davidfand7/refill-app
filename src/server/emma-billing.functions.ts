@@ -12,11 +12,18 @@
  * actual invoice push + collection) when a real spa explicitly opts
  * in. Same pattern as v364 — engine first, money flow later.
  *
- * Surfaces:
- *   applyPricingPlan          — spa selects/changes plan
- *   getActivePlan             — for the billing page
- *   generateMonthlyInvoicesForAll — cron helper
- *   listInvoices              — for the billing page invoice history
+ * Surfaces (v1.26.14 cleanup): file is now in maintenance-mode for the
+ * legacy emma_pricing_plans / emma_invoices tables. The spa-facing
+ * plan/invoice flow lives in refill-billing.ts as of the v1.7.2 fork;
+ * this file retains only:
+ *   getInvoicePreview         — MTD math for /app/refill/recovery
+ *   generateMonthlyInvoiceForUser / generateMonthlyInvoicesForAll
+ *                              — legacy emma_invoices cron helpers
+ *
+ * The three formerly-exported plan/invoice fns
+ * (applyPricingPlan, getActivePlan, listInvoices) were removed in
+ * v1.26.14 — they had been orphaned since v1.9's emma→refill UI
+ * unification routed app.billing.tsx to refill-billing.ts.
  *
  * Established 2026-05-17 (Promotions Engine v366 — engine complete).
  */
@@ -32,36 +39,17 @@ import {
   REFILL_PLAN_STARTER_MONTHLY_USD,
   REFILL_PLAN_STARTER_REV_SHARE,
 } from "@/lib/rep-economics";
-import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId } from "@/server/auth-helpers";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
 export type PricingPlan = "performance" | "predictable" | "hybrid";
 
-export type ActivePlan = {
-  id: string;
-  plan: PricingPlan;
-  revenueSharePct: number;
-  monthlyFlatUsd: number;
-  planStartedAt: string;
-  stripeCustomerId: string | null;
-} | null;
-
-export type Invoice = {
-  id: string;
-  periodStart: string;
-  periodEnd: string;
-  planAtInvoice: PricingPlan;
-  revenueSharePct: number;
-  monthlyFlatUsd: number;
-  recoveredRevenueCount: number;
-  recoveredRevenueUsd: number;
-  shareDueUsd: number;
-  totalDueUsd: number;
-  status: "draft" | "sent" | "paid" | "failed" | "void";
-  generatedAt: string;
-  paidAt: string | null;
-};
+// v1.26.14 removed ActivePlan + Invoice types alongside their owning
+// dead fns (applyPricingPlan, getActivePlan, listInvoices). The
+// refill-billing.ts file owns the live equivalents
+// (RefillActivePlan, RefillInvoice). PricingPlan stays because
+// getInvoicePreview, getPlanEconomics, and PLAN_ECONOMICS still use it.
 
 // ─── Plan economics ──────────────────────────────────────────────────────
 
@@ -99,124 +87,10 @@ type SupabaseAdmin = ReturnType<typeof admin>;
 
 // ─── Zod ──────────────────────────────────────────────────────────────────
 
-const accessTokenOnly = z.object({
-  accessToken: z.string().min(1),
-});
-
-const applyPlanInput = z.object({
-  accessToken: z.string().min(1),
-  plan: z.enum(["performance", "predictable", "hybrid"]),
-});
-
-// v1.26.7: getInvoicePreview gets its own input schema with viewAsUserId
-// since accessTokenOnly is shared with dead-code fns we don't want to touch.
 const invoicePreviewInput = z.object({
   accessToken: z.string().min(1),
   viewAsUserId: z.string().uuid().optional(),
 });
-
-// ─── applyPricingPlan (spa selects/changes plan) ──────────────────────────
-
-export const applyPricingPlan = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => applyPlanInput.parse(input))
-  .handler(async ({ data }): Promise<ActivePlan> => {
-    const userId = await verifyAuth(data.accessToken);
-    const sb = admin();
-    const econ = PLAN_ECONOMICS[data.plan];
-
-    // Close any existing active plan
-    await sb
-      .from("emma_pricing_plans")
-      .update({ plan_ended_at: new Date().toISOString() })
-      .eq("user_id", userId)
-      .is("plan_ended_at", null);
-
-    // Insert the new active plan
-    const { data: row, error } = await sb
-      .from("emma_pricing_plans")
-      .insert({
-        user_id: userId,
-        plan: data.plan,
-        revenue_share_pct: econ.revenue_share_pct,
-        monthly_flat_usd: econ.monthly_flat_usd,
-      })
-      .select("*")
-      .single();
-    if (error || !row) {
-      throw new Error(`Couldn't apply plan: ${error?.message ?? "no row"}`);
-    }
-    return {
-      id: row.id,
-      plan: row.plan as PricingPlan,
-      revenueSharePct: Number(row.revenue_share_pct),
-      monthlyFlatUsd: Number(row.monthly_flat_usd),
-      planStartedAt: row.plan_started_at,
-      stripeCustomerId: row.stripe_customer_id,
-    };
-  });
-
-// ─── getActivePlan ────────────────────────────────────────────────────────
-
-export const getActivePlan = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => accessTokenOnly.parse(input))
-  .handler(async ({ data }): Promise<ActivePlan> => {
-    const userId = await verifyAuth(data.accessToken);
-    const sb = admin();
-
-    const { data: row } = await sb
-      .from("emma_pricing_plans")
-      .select("*")
-      .eq("user_id", userId)
-      .is("plan_ended_at", null)
-      .order("plan_started_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (!row) return null;
-
-    return {
-      id: row.id,
-      plan: row.plan as PricingPlan,
-      revenueSharePct: Number(row.revenue_share_pct),
-      monthlyFlatUsd: Number(row.monthly_flat_usd),
-      planStartedAt: row.plan_started_at,
-      stripeCustomerId: row.stripe_customer_id,
-    };
-  });
-
-// ─── listInvoices ─────────────────────────────────────────────────────────
-
-export const listInvoices = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => accessTokenOnly.parse(input))
-  .handler(async ({ data }): Promise<Invoice[]> => {
-    const userId = await verifyAuth(data.accessToken);
-    const sb = admin();
-
-    const { data: rows, error } = await sb
-      .from("emma_invoices")
-      .select(
-        "id, period_start, period_end, plan_at_invoice, revenue_share_pct, monthly_flat_usd, recovered_revenue_count, recovered_revenue_usd, share_due_usd, total_due_usd, status, generated_at, paid_at",
-      )
-      .eq("user_id", userId)
-      .order("period_start", { ascending: false })
-      .limit(24);
-    if (error) throw new Error(`Couldn't load invoices: ${error.message}`);
-
-    return (rows ?? []).map((r) => ({
-      id: r.id,
-      periodStart: r.period_start,
-      periodEnd: r.period_end,
-      planAtInvoice: r.plan_at_invoice as PricingPlan,
-      revenueSharePct: Number(r.revenue_share_pct),
-      monthlyFlatUsd: Number(r.monthly_flat_usd),
-      recoveredRevenueCount: r.recovered_revenue_count,
-      recoveredRevenueUsd: Number(r.recovered_revenue_usd),
-      shareDueUsd: Number(r.share_due_usd),
-      totalDueUsd: Number(r.total_due_usd),
-      status: r.status as Invoice["status"],
-      generatedAt: r.generated_at,
-      paidAt: r.paid_at,
-    }));
-  });
 
 // ─── generateMonthlyInvoiceForUser (cron helper, exported) ────────────────
 

@@ -10,10 +10,14 @@
  *   getActivePlan             — for /app/billing (v391.1)
  *   applyPricingPlan          — spa picks/changes plan
  *   listInvoices              — invoice history for /app/billing
- *   getInvoicePreview         — MTD math for the billing dashboard preview
  *   generateMonthlyInvoiceForTenant — cron helper (v391.2)
  *   generateMonthlyInvoicesForAll   — cron entry (v391.2)
  *   getPlanEconomics          — UI helper
+ *
+ * v1.26.14 removed getInvoicePreview here — the only consumer
+ * (app.refill.recovery.tsx) imports it from emma-billing.functions
+ * instead. The legacy emma-billing surface had been kept on its tenant-
+ * untranslated form anyway, so the refill-billing variant was dead.
  *
  * Auth pattern: verifyAuth → getTenantIdForUser membership gate. A user with
  * NO tenant membership cannot read or write any pricing/invoice rows. A user
@@ -702,97 +706,7 @@ export function getPlanEconomics(plan: RefillPricingPlan) {
   return PLAN_ECONOMICS[plan];
 }
 
-// ─── getInvoicePreview (MTD math for /app/billing dashboard) ─────────────
-
-export type RefillInvoicePreview = {
-  /** null when the tenant hasn't picked a paid plan yet (still on trial). */
-  plan: RefillPricingPlan | null;
-  revenueSharePct: number;
-  monthlyFlatUsd: number;
-  periodStart: string;
-  periodEnd: string;
-  mtdRecoveredUsd: number;
-  mtdRecoveredCount: number;
-  shareDueUsd: number;
-  totalDueUsd: number;
-};
-
-export const getInvoicePreview = createServerFn({ method: "POST" })
-  .inputValidator((input: unknown) => accessTokenOnly.parse(input))
-  .handler(async ({ data }): Promise<RefillInvoicePreview> => {
-    const userId = await verifyAuth(data.accessToken);
-    const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, userId);
-
-    const now = new Date();
-    const periodStart = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
-    );
-    const periodEnd = new Date(
-      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
-    );
-
-    const { data: memberships } = await sb
-      .from("tenant_memberships")
-      .select("user_id")
-      .eq("tenant_id", tenantId);
-    const userIds = (memberships ?? []).map((m) => m.user_id);
-
-    const [planRes, recRes] = await Promise.all([
-      sb
-        .from("refill_pricing_plans")
-        .select("plan, revenue_share_pct, monthly_flat_usd")
-        .eq("tenant_id", tenantId)
-        .is("plan_ended_at", null)
-        .order("plan_started_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      userIds.length > 0
-        ? sb
-            .from("emma_recovery_events")
-            .select("attributed_revenue_usd")
-            .in("user_id", userIds)
-            .gte("verified_at", periodStart.toISOString())
-            .lt("verified_at", periodEnd.toISOString())
-            .not("verified_at", "is", null)
-        : Promise.resolve({ data: [] as { attributed_revenue_usd: number | null }[] }),
-    ]);
-
-    const recRows = recRes.data ?? [];
-    const mtdRecoveredUsd = +recRows
-      .reduce((s, r) => s + Number(r.attributed_revenue_usd ?? 0), 0)
-      .toFixed(2);
-    const mtdRecoveredCount = recRows.length;
-
-    if (!planRes.data) {
-      return {
-        plan: null,
-        revenueSharePct: 0,
-        monthlyFlatUsd: 0,
-        periodStart: periodStart.toISOString(),
-        periodEnd: periodEnd.toISOString(),
-        mtdRecoveredUsd,
-        mtdRecoveredCount,
-        shareDueUsd: 0,
-        totalDueUsd: 0,
-      };
-    }
-
-    const plan = planRes.data.plan as RefillPricingPlan;
-    const revenueSharePct = Number(planRes.data.revenue_share_pct);
-    const monthlyFlatUsd = Number(planRes.data.monthly_flat_usd);
-    const shareDueUsd = +(mtdRecoveredUsd * revenueSharePct).toFixed(2);
-    const totalDueUsd = +(shareDueUsd + monthlyFlatUsd).toFixed(2);
-
-    return {
-      plan,
-      revenueSharePct,
-      monthlyFlatUsd,
-      periodStart: periodStart.toISOString(),
-      periodEnd: periodEnd.toISOString(),
-      mtdRecoveredUsd,
-      mtdRecoveredCount,
-      shareDueUsd,
-      totalDueUsd,
-    };
-  });
+// v1.26.14 removed: getInvoicePreview + RefillInvoicePreview type. The
+// only consumer (app.refill.recovery.tsx) imports both from
+// emma-billing.functions.ts (which has its own viewAsUserId-capable
+// variant since v1.26.7). This file's variant was dead.
