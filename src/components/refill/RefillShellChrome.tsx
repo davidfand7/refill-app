@@ -62,9 +62,9 @@ export function RefillShellChrome({
           <span>
             Viewing as <strong>{tenant.name}</strong>. Use the persona
             switcher in the upper-right to change view. Read fetchers
-            return this tenant&rsquo;s data (v1.20). CSV ingest writes
-            into this tenant (v1.20.5). Stripe and plan writes still
-            scope to your own user_id.
+            return this tenant&rsquo;s data (v1.20). CSV ingest (v1.20.5)
+            and plan writes (v1.26.7) target this tenant. Stripe
+            payment-method writes still scope to your own user_id.
           </span>
         </div>
       )}

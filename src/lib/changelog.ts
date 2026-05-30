@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.26.16",
+    date: "May 2026",
+    items: [
+      "<strong>v1.26.16 &mdash; Update admin viewing-as banner copy to reflect v1.26.7 plan-writes impersonation.</strong> Surfaced during the v1.26.7 verification walk: the yellow banner on the spa-owner shell still read <code>Stripe and plan writes still scope to your own user_id</code> &mdash; written pre-v1.26.7 when that was true, now stale on the plan-writes half (Stripe still intentionally scopes to admin&rsquo;s own id per the v1.26.7 <code>getPaymentMethodStatus</code> carve-out). Walk verified end-to-end: admin impersonating Karen, picked Predictable, plan persisted on Karen&rsquo;s tenant; switched back to Admin, admin&rsquo;s bucket unchanged. The mechanism works; only the banner copy was lying. <strong>New copy</strong>: <code>Viewing as &lt;tenant.name&gt;. Use the persona switcher in the upper-right to change view. Read fetchers return this tenant&rsquo;s data (v1.20). CSV ingest (v1.20.5) and plan writes (v1.26.7) target this tenant. Stripe payment-method writes still scope to your own user_id.</code> The version-pill suffix style preserved on each clause so the banner doubles as an audit trail of which capabilities got impersonation-wired when. <strong>Backlog noted (NOT in this ship)</strong>: (1) when admin picks the &lsquo;Admin&rsquo; persona, <code>setAdminViewAsUserId(null)</code> clears localStorage but the spa-owner shell still falls back to <code>getFirstTenantForAdmin</code> &mdash; admin sees a default tenant&rsquo;s data, not their own. Walk happened to pass because the default fallback tenant (dormant Karen, spa-name &lsquo;Rejuv&rsquo;) has no billing plan either, matching admin&rsquo;s empty bucket by coincidence. Real fix would plumb &lsquo;explicit persona pick vs. defaulted&rsquo; into shell state and either hide the banner or show a different variant when defaulted. v1.27 candidate. (2) The dormant tenant&rsquo;s spa-name reads &lsquo;Rejuv&rsquo; instead of &lsquo;Rejuv Skin Spa&rsquo; or similar, creating a confusing visual when defaulting to it. Data fix, not code &mdash; sweep when the next tenant-hygiene pass happens. <strong>Touched</strong>: <code>src/components/refill/RefillShellChrome.tsx</code> (banner copy text only), <code>src/lib/changelog.ts</code> (this entry).",
+    ],
+  },
+  {
     version: "v1.26.15",
     date: "May 2026",
     items: [
