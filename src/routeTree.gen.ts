@@ -70,6 +70,7 @@ import { Route as AppRefillPatientsIndexRouteImport } from './routes/app.refill.
 import { Route as AppRefillCampaignsIndexRouteImport } from './routes/app.refill.campaigns.index'
 import { Route as AppRefillWaitlistSeedRouteImport } from './routes/app.refill.waitlist.seed'
 import { Route as AppRefillWaitlistBulkRouteImport } from './routes/app.refill.waitlist.bulk'
+import { Route as AppRefillSettingsSpaProfileRouteImport } from './routes/app.refill.settings.spa-profile'
 import { Route as AppRefillSettingsSenderRouteImport } from './routes/app.refill.settings.sender'
 import { Route as AppRefillSettingsSchedulerRouteImport } from './routes/app.refill.settings.scheduler'
 import { Route as AppRefillSettingsNoshowRouteImport } from './routes/app.refill.settings.noshow'
@@ -392,6 +393,12 @@ const AppRefillWaitlistBulkRoute = AppRefillWaitlistBulkRouteImport.update({
   path: '/waitlist/bulk',
   getParentRoute: () => AppRefillRoute,
 } as any)
+const AppRefillSettingsSpaProfileRoute =
+  AppRefillSettingsSpaProfileRouteImport.update({
+    id: '/settings/spa-profile',
+    path: '/settings/spa-profile',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
 const AppRefillSettingsSenderRoute = AppRefillSettingsSenderRouteImport.update({
   id: '/settings/sender',
   path: '/settings/sender',
@@ -542,6 +549,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
+  '/app/refill/settings/spa-profile': typeof AppRefillSettingsSpaProfileRoute
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
   '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
   '/app/refill/campaigns/': typeof AppRefillCampaignsIndexRoute
@@ -614,6 +622,7 @@ export interface FileRoutesByTo {
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
+  '/app/refill/settings/spa-profile': typeof AppRefillSettingsSpaProfileRoute
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
   '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
   '/app/refill/campaigns': typeof AppRefillCampaignsIndexRoute
@@ -692,6 +701,7 @@ export interface FileRoutesById {
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
+  '/app/refill/settings/spa-profile': typeof AppRefillSettingsSpaProfileRoute
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
   '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
   '/app/refill/campaigns/': typeof AppRefillCampaignsIndexRoute
@@ -771,6 +781,7 @@ export interface FileRouteTypes {
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
     | '/app/refill/settings/sender'
+    | '/app/refill/settings/spa-profile'
     | '/app/refill/waitlist/bulk'
     | '/app/refill/waitlist/seed'
     | '/app/refill/campaigns/'
@@ -843,6 +854,7 @@ export interface FileRouteTypes {
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
     | '/app/refill/settings/sender'
+    | '/app/refill/settings/spa-profile'
     | '/app/refill/waitlist/bulk'
     | '/app/refill/waitlist/seed'
     | '/app/refill/campaigns'
@@ -920,6 +932,7 @@ export interface FileRouteTypes {
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
     | '/app/refill/settings/sender'
+    | '/app/refill/settings/spa-profile'
     | '/app/refill/waitlist/bulk'
     | '/app/refill/waitlist/seed'
     | '/app/refill/campaigns/'
@@ -1390,6 +1403,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillWaitlistBulkRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/refill/settings/spa-profile': {
+      id: '/app/refill/settings/spa-profile'
+      path: '/settings/spa-profile'
+      fullPath: '/app/refill/settings/spa-profile'
+      preLoaderRoute: typeof AppRefillSettingsSpaProfileRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/settings/sender': {
       id: '/app/refill/settings/sender'
       path: '/settings/sender'
@@ -1561,6 +1581,7 @@ interface AppRefillRouteChildren {
   AppRefillSettingsNoshowRoute: typeof AppRefillSettingsNoshowRoute
   AppRefillSettingsSchedulerRoute: typeof AppRefillSettingsSchedulerRoute
   AppRefillSettingsSenderRoute: typeof AppRefillSettingsSenderRoute
+  AppRefillSettingsSpaProfileRoute: typeof AppRefillSettingsSpaProfileRoute
   AppRefillWaitlistBulkRoute: typeof AppRefillWaitlistBulkRoute
   AppRefillWaitlistSeedRoute: typeof AppRefillWaitlistSeedRoute
 }
@@ -1582,6 +1603,7 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillSettingsNoshowRoute: AppRefillSettingsNoshowRoute,
   AppRefillSettingsSchedulerRoute: AppRefillSettingsSchedulerRoute,
   AppRefillSettingsSenderRoute: AppRefillSettingsSenderRoute,
+  AppRefillSettingsSpaProfileRoute: AppRefillSettingsSpaProfileRoute,
   AppRefillWaitlistBulkRoute: AppRefillWaitlistBulkRoute,
   AppRefillWaitlistSeedRoute: AppRefillWaitlistSeedRoute,
 }

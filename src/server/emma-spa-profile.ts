@@ -76,3 +76,73 @@ export async function resolveSpaFromNumber(
     .maybeSingle();
   return data?.title?.trim() || null;
 }
+
+// v1.26.22 — Settings UI bundle reader. Returns all three scalars in one
+// round-trip with no fallback strings ("your spa" etc. — those are
+// SMS-composer concerns, not editor concerns). Empty/missing rows
+// render as null so the form shows blank inputs.
+export type SpaProfileLookupKey = "spa-name" | "owner-display-name" | "from-number";
+
+export type SpaProfileBundle = {
+  spaName: string | null;
+  ownerDisplayName: string | null;
+  fromNumber: string | null;
+};
+
+export async function getSpaProfileBundle(
+  sb: SpaProfileClient,
+  userId: string,
+): Promise<SpaProfileBundle> {
+  const { data } = await sb
+    .from("knowledge_nodes")
+    .select("lookup_key, title")
+    .eq("user_id", userId)
+    .eq("context", "spa-profile")
+    .in("lookup_key", ["spa-name", "owner-display-name", "from-number"]);
+  const byKey = new Map<string, string | null>(
+    (data ?? []).map((r) => [r.lookup_key ?? "", r.title?.trim() || null]),
+  );
+  return {
+    spaName: byKey.get("spa-name") ?? null,
+    ownerDisplayName: byKey.get("owner-display-name") ?? null,
+    fromNumber: byKey.get("from-number") ?? null,
+  };
+}
+
+// v1.26.22 — Settings UI writer. UPSERT a single lookup_key; passing
+// an empty/whitespace value DELETEs the row (cleanest representation
+// of "unset" — both readers above treat null and empty-trim as the
+// same state, so storing an explicit empty row would just create
+// future ambiguity). Relies on the partial unique index on
+// (user_id, context, lookup_key) WHERE context IN ('spa-profile',
+// 'services') AND lookup_key IS NOT NULL from migration
+// 20260511010000_idempotent_spa_claim.sql. PG matches the partial
+// index for spa-profile inserts so ON CONFLICT resolves correctly.
+export async function setSpaProfileLookupKey(
+  sb: SpaProfileClient,
+  userId: string,
+  lookupKey: SpaProfileLookupKey,
+  value: string | null,
+): Promise<void> {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    const { error } = await sb
+      .from("knowledge_nodes")
+      .delete()
+      .eq("user_id", userId)
+      .eq("context", "spa-profile")
+      .eq("lookup_key", lookupKey);
+    if (error) throw new Error(`Couldn't clear ${lookupKey}: ${error.message}`);
+    return;
+  }
+  const { error } = await sb.from("knowledge_nodes").upsert(
+    {
+      user_id: userId,
+      context: "spa-profile",
+      lookup_key: lookupKey,
+      title: trimmed,
+    },
+    { onConflict: "user_id,context,lookup_key" },
+  );
+  if (error) throw new Error(`Couldn't save ${lookupKey}: ${error.message}`);
+}
