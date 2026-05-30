@@ -373,6 +373,38 @@ function providerClause(
   return `${prefix}${providerName}`;
 }
 
+// v1.26.15 — Acuity treatment strings often bake provider into the label
+// itself ("Tox w/ Karen", "Filler with Lisa", "Tox - Karen"). Every rescue
+// surface (SMS, proxy SMS, proxy email, claim page) also stitches its own
+// " with <provider>" clause via providerClause / displayProviderName, so
+// the raw Acuity value double-renders the same name. This strips the
+// redundancy in one place; the connector list covers what's been seen in
+// Acuity exports across pilot tenants. Returns the input unchanged when
+// no candidate matches (treatment has no baked-in provider, or matches a
+// different name).
+function stripProviderFromTreatment(
+  treatment: string | null,
+  providerName: string | null,
+  ownerDisplayName: string | null,
+): string | null {
+  if (!treatment) return treatment;
+  const candidates = [providerName, ownerDisplayName]
+    .map((c) => c?.trim())
+    .filter((c): c is string => !!c && c.length > 0);
+  if (candidates.length === 0) return treatment;
+
+  let out = treatment.trim();
+  for (const candidate of candidates) {
+    const escaped = candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const pattern = new RegExp(
+      `\\s*(?:w\\/\\s*|with\\s+|[-–—\\/:]\\s*)${escaped}\\s*$`,
+      "i",
+    );
+    out = out.replace(pattern, "").trim();
+  }
+  return out || treatment;
+}
+
 function composeRescueSms(args: {
   spaName: string;
   treatmentType: string | null;
@@ -393,7 +425,12 @@ function composeRescueSms(args: {
     minute: "2-digit",
     timeZone: "America/Denver",
   });
-  const treatment = args.treatmentType ? ` for ${args.treatmentType}` : "";
+  const cleanedTreatment = stripProviderFromTreatment(
+    args.treatmentType,
+    args.providerName,
+    args.ownerDisplayName,
+  );
+  const treatment = cleanedTreatment ? ` for ${cleanedTreatment}` : "";
   const provider = providerClause(
     args.spaName,
     args.providerName,
@@ -444,7 +481,12 @@ function composeProxySms(args: {
   offers: ProxyOfferLine[];
 }): string {
   const when = formatRescueWhen(args.scheduledAt);
-  const treatment = args.treatmentType ? ` ${args.treatmentType}` : "";
+  const cleanedTreatment = stripProviderFromTreatment(
+    args.treatmentType,
+    args.providerName,
+    args.ownerDisplayName,
+  );
+  const treatment = cleanedTreatment ? ` ${cleanedTreatment}` : "";
   const provider = providerClause(
     args.spaName,
     args.providerName,
@@ -470,7 +512,12 @@ function composeProxyEmail(args: {
   offers: ProxyOfferLine[];
 }): { subject: string; text: string; html: string } {
   const when = formatRescueWhen(args.scheduledAt);
-  const treatment = args.treatmentType ?? "Appointment";
+  const cleanedTreatment = stripProviderFromTreatment(
+    args.treatmentType,
+    args.providerName,
+    args.ownerDisplayName,
+  );
+  const treatment = cleanedTreatment ?? "Appointment";
   const provider = providerClause(
     args.spaName,
     args.providerName,
@@ -1068,13 +1115,18 @@ export const getRescueOfferPayload = createServerFn({ method: "POST" })
       status = "claimable";
     }
 
+    const resolvedOwnerDisplayName = owner?.title?.trim() || null;
     return {
       spaName: spa?.title?.trim() || "your spa",
       patientFirstName: extractFirstName(patient?.title ?? null),
       status,
-      treatmentType: apt.treatment_type,
+      treatmentType: stripProviderFromTreatment(
+        apt.treatment_type,
+        apt.provider_name,
+        resolvedOwnerDisplayName,
+      ),
       providerName: apt.provider_name,
-      ownerDisplayName: owner?.title?.trim() || null,
+      ownerDisplayName: resolvedOwnerDisplayName,
       scheduledAt: apt.scheduled_at,
       durationMin: apt.duration_min,
     };
