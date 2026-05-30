@@ -34,7 +34,7 @@ import {
   pickRedirectForPersonaSwitch,
   setAdminViewAsUserId,
 } from "@/lib/admin-view-as";
-import { DEMO_PERSONA_EMAILS } from "@/lib/demo-personas";
+import { DEMO_PERSONA_EMAILS } from "@/lib/personas";
 import { useEffectiveRoles } from "@/hooks/useEffectiveRoles";
 import {
   listImpersonableUsers,
