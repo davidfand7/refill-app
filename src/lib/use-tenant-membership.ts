@@ -83,8 +83,8 @@ export function setAdminViewAsTenantId(tenantId: string | null): void {
 }
 
 export type TenantMembershipState =
-  | { status: "loading"; tenant: null; viewAs?: never; viewAsUserId?: never }
-  | { status: "not-a-tenant"; tenant: null; viewAs?: never; viewAsUserId?: never }
+  | { status: "loading"; tenant: null; viewAs?: never; viewAsUserId?: never; viewAsExplicit?: never }
+  | { status: "not-a-tenant"; tenant: null; viewAs?: never; viewAsUserId?: never; viewAsExplicit?: never }
   | {
       status: "tenant";
       tenant: MyTenant;
@@ -97,6 +97,14 @@ export type TenantMembershipState =
        * Undefined when viewAs is not set (the membership is real).
        */
       viewAsUserId?: string;
+      /**
+       * v1.26.20: when viewAs === "admin", distinguishes admin-picked-this
+       * (PersonaSwitcher set localStorage) from admin-defaulted-here
+       * (no pick made; server returned first available tenant). The
+       * banner in RefillShellChrome varies copy so admin knows whether
+       * the landing was deliberate. Undefined when viewAs is not set.
+       */
+      viewAsExplicit?: boolean;
     };
 
 const LOADING: TenantMembershipState = { status: "loading", tenant: null };
@@ -206,11 +214,18 @@ export function useTenantMembership(): TenantMembershipState {
           });
           if (cancelled) return;
           if (tenant) {
+            // v1.26.20: viewAsExplicit reflects whether the admin actively
+            // picked this target via PersonaSwitcher (localStorage set) vs
+            // landed here by server-side first-tenant default. Read AT
+            // resolve-time so a later PersonaSwitcher edit doesn't
+            // retroactively reclassify this resolution.
+            const viewAsExplicit = viewAsUserId !== undefined;
             setState({
               status: "tenant",
               tenant,
               viewAs: "admin",
               viewAsUserId: ownerUserId ?? undefined,
+              viewAsExplicit,
             });
             return;
           }

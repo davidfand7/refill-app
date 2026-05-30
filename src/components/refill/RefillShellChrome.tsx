@@ -34,6 +34,7 @@ function deriveActiveKey(pathname: string): RefillNavKey | undefined {
 export function RefillShellChrome({
   tenant,
   viewAs,
+  viewAsExplicit,
 }: {
   tenant: MyTenant;
   /**
@@ -42,9 +43,33 @@ export function RefillShellChrome({
    * and show a banner so the admin knows they're not on their own data.
    */
   viewAs?: "admin";
+  /**
+   * v1.26.20 — distinguishes admin-picked-this (PersonaSwitcher set
+   * localStorage) from admin-defaulted-here (no pick made, server
+   * returned first available tenant). Branches banner copy + color so
+   * an unintended landing doesn't masquerade as an explicit choice.
+   * Ignored when viewAs is not set.
+   */
+  viewAsExplicit?: boolean;
 }) {
   const location = useLocation();
   const activeKey = deriveActiveKey(location.pathname);
+
+  // v1.26.20 — defaulted-landing visual is amber-bright (vs the calmer
+  // soft-yellow used for explicit picks) so admin notices the surprise
+  // landing rather than reading the banner as "yep this is what I picked".
+  const isDefaulted = viewAs === "admin" && viewAsExplicit === false;
+  const bannerStyle = isDefaulted
+    ? {
+        background: "#fff1d6",
+        borderColor: "rgba(180, 95, 6, 0.45)",
+        color: "#7a4a06",
+      }
+    : {
+        background: "#fdf6dc",
+        borderColor: "rgba(138, 109, 12, 0.3)",
+        color: "#8a6d0c",
+      };
 
   return (
     <div className="mx-auto max-w-6xl px-4 pt-4">
@@ -52,20 +77,30 @@ export function RefillShellChrome({
       {viewAs === "admin" && (
         <div
           className="mb-3 rounded-lg border px-3 py-2 text-[12px] flex items-center gap-2"
-          style={{
-            background: "#fdf6dc",
-            borderColor: "rgba(138, 109, 12, 0.3)",
-            color: "#8a6d0c",
-          }}
+          style={bannerStyle}
         >
           <Sparkles className="h-3.5 w-3.5 shrink-0" />
-          <span>
-            Viewing as <strong>{tenant.name}</strong>. Use the persona
-            switcher in the upper-right to change view. Read fetchers
-            return this tenant&rsquo;s data (v1.20). CSV ingest (v1.20.5)
-            and plan writes (v1.26.7) target this tenant. Stripe
-            payment-method writes still scope to your own user_id.
-          </span>
+          {isDefaulted ? (
+            <span>
+              <strong>Defaulted to {tenant.name}</strong> &mdash; you
+              haven&rsquo;t picked a persona, so the server returned the
+              first tenant available. Use the persona switcher in the
+              upper-right to view a specific tenant deliberately. Read
+              fetchers return this tenant&rsquo;s data (v1.20). CSV
+              ingest (v1.20.5) and plan writes (v1.26.7) target this
+              tenant. Stripe payment-method writes still scope to your
+              own user_id.
+            </span>
+          ) : (
+            <span>
+              Viewing as <strong>{tenant.name}</strong>. Use the persona
+              switcher in the upper-right to change view. Read fetchers
+              return this tenant&rsquo;s data (v1.20). CSV ingest
+              (v1.20.5) and plan writes (v1.26.7) target this tenant.
+              Stripe payment-method writes still scope to your own
+              user_id.
+            </span>
+          )}
         </div>
       )}
       <RefillNav active={activeKey} />

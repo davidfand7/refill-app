@@ -29,7 +29,11 @@ export function RefillShell({ children }: { children: React.ReactNode }) {
   // tenant_memberships row.
   return (
     <div className="min-h-screen" style={{ background: "#fbfaf7" }}>
-      <RefillShellChrome tenant={membership.tenant} viewAs={membership.viewAs} />
+      <RefillShellChrome
+        tenant={membership.tenant}
+        viewAs={membership.viewAs}
+        viewAsExplicit={membership.viewAsExplicit}
+      />
       <main className="flex-1 min-w-0 pb-16 md:pb-0">{children}</main>
     </div>
   );
