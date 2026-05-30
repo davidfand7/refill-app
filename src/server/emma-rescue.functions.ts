@@ -65,6 +65,10 @@ export type RescueOfferPayload = {
     | "expired";
   treatmentType: string | null;
   providerName: string | null;
+  /** v1.26.12 — solo-practitioner override; rendered when providerName equals
+   * spaName (the calendar-as-practice case). Null = render no "with" clause
+   * for that case (current default for multi-practitioner spas). */
+  ownerDisplayName: string | null;
   scheduledAt: string;
   durationMin: number;
 };
@@ -126,6 +130,26 @@ async function resolveSpaName(sb: SupabaseAdmin, userId: string): Promise<string
     .eq("lookup_key", "spa-name")
     .maybeSingle();
   return data?.title?.trim() || "your spa";
+}
+
+// v1.26.12 — solo-practitioner override. When set, providerClause renders
+// this name in place of the "with X" suppression for the case where the
+// Acuity calendar's provider_name equals the spa name. Null = no override =
+// suppression holds (matches v379.2 semantics for multi-practitioner spas
+// where calendar names alias the practice).
+async function resolveOwnerDisplayName(
+  sb: SupabaseAdmin,
+  userId: string,
+): Promise<string | null> {
+  const { data } = await sb
+    .from("knowledge_nodes")
+    .select("title")
+    .eq("user_id", userId)
+    .eq("context", "spa-profile")
+    .eq("lookup_key", "owner-display-name")
+    .maybeSingle();
+  const trimmed = data?.title?.trim();
+  return trimmed || null;
 }
 
 async function resolveSpaFromNumber(
@@ -317,18 +341,35 @@ async function selectFitPatients(
 
 // ─── Compose the rescue SMS ───────────────────────────────────────────────
 
-// Suppress the "with X" clause when provider_name matches the spa name —
-// Acuity calendars are commonly named after the practice rather than the
-// human provider, which would otherwise produce "at Rejuv Skin Spa with
-// Rejuv Skin Spa" in every body. (v379.2.) Returns the prefixed clause or
-// empty string.
+// When provider_name matches the spa name, two possible interpretations:
+//
+//   1. Acuity calendar is named after the practice rather than a human
+//      provider — rendering both yields "at Rejuv Skin Spa with Rejuv Skin
+//      Spa" which reads broken. SUPPRESS the "with" clause. (Original
+//      v379.2 case.)
+//
+//   2. Solo-practitioner setup where the owner IS the practice — Karen at
+//      Rejuv Skin Spa runs every appointment herself; provider_name='Rejuv
+//      Skin Spa' on Acuity exports is shorthand for "Karen." Suppressing
+//      strips the warmth signal ("Tox at 6:50pm" loses to "Tox with Karen
+//      at 6:50pm"). RENDER the owner's display name instead. (v1.26.12.)
+//
+// The tenant tells us which interpretation applies via the spa-profile
+// `owner-display-name` lookup_key — when set, that's the solo-practitioner
+// case; when null, suppression holds as before.
 function providerClause(
   spaName: string,
   providerName: string | null,
+  ownerDisplayName: string | null,
   prefix: string,
 ): string {
   if (!providerName) return "";
-  if (providerName.trim().toLowerCase() === spaName.trim().toLowerCase()) return "";
+  const sameAsSpa =
+    providerName.trim().toLowerCase() === spaName.trim().toLowerCase();
+  if (sameAsSpa) {
+    const owner = ownerDisplayName?.trim();
+    return owner ? `${prefix}${owner}` : "";
+  }
   return `${prefix}${providerName}`;
 }
 
@@ -336,6 +377,7 @@ function composeRescueSms(args: {
   spaName: string;
   treatmentType: string | null;
   providerName: string | null;
+  ownerDisplayName: string | null;
   scheduledAt: string;
   claimUrl: string;
 }): string {
@@ -352,7 +394,12 @@ function composeRescueSms(args: {
     timeZone: "America/Denver",
   });
   const treatment = args.treatmentType ? ` for ${args.treatmentType}` : "";
-  const provider = providerClause(args.spaName, args.providerName, " with ");
+  const provider = providerClause(
+    args.spaName,
+    args.providerName,
+    args.ownerDisplayName,
+    " with ",
+  );
   return [
     `${args.spaName} — last-minute opening! ${when}${treatment}${provider}.`,
     `Tap to grab it: ${args.claimUrl}`,
@@ -392,12 +439,18 @@ function composeProxySms(args: {
   spaName: string;
   treatmentType: string | null;
   providerName: string | null;
+  ownerDisplayName: string | null;
   scheduledAt: string;
   offers: ProxyOfferLine[];
 }): string {
   const when = formatRescueWhen(args.scheduledAt);
   const treatment = args.treatmentType ? ` ${args.treatmentType}` : "";
-  const provider = providerClause(args.spaName, args.providerName, " w/ ");
+  const provider = providerClause(
+    args.spaName,
+    args.providerName,
+    args.ownerDisplayName,
+    " w/ ",
+  );
   const head = `${args.spaName} — ${args.offers.length} rescue offer${args.offers.length === 1 ? "" : "s"} ready for ${when}${treatment}${provider}:`;
   const body = args.offers
     .map(
@@ -412,12 +465,18 @@ function composeProxyEmail(args: {
   spaName: string;
   treatmentType: string | null;
   providerName: string | null;
+  ownerDisplayName: string | null;
   scheduledAt: string;
   offers: ProxyOfferLine[];
 }): { subject: string; text: string; html: string } {
   const when = formatRescueWhen(args.scheduledAt);
   const treatment = args.treatmentType ?? "Appointment";
-  const provider = providerClause(args.spaName, args.providerName, " with ");
+  const provider = providerClause(
+    args.spaName,
+    args.providerName,
+    args.ownerDisplayName,
+    " with ",
+  );
   const subject = `${args.spaName} — ${args.offers.length} rescue offer${args.offers.length === 1 ? "" : "s"} ready for ${when} ${treatment}`;
 
   const draftLines = args.offers
@@ -683,6 +742,8 @@ export async function dispatchRescueAttempt(args: {
   //    Caught during the first real Karen Acuity cancel test 2026-05-26
   //    after the v1.4.3 TZ fix.
   const spaName = await resolveSpaName(sb, userId);
+  // v1.26.12 — pre-fetched once for all composer call sites below.
+  const ownerDisplayName = await resolveOwnerDisplayName(sb, userId);
   const fromNumber = await resolveSpaFromNumber(sb, userId);
 
   // Read proxy config early so we know which delivery path(s) will fire.
@@ -789,6 +850,7 @@ export async function dispatchRescueAttempt(args: {
         spaName,
         treatmentType: apt.treatment_type,
         providerName: apt.provider_name,
+        ownerDisplayName,
         scheduledAt: apt.scheduled_at,
         offers: offerLines,
       });
@@ -815,6 +877,7 @@ export async function dispatchRescueAttempt(args: {
           spaName,
           treatmentType: apt.treatment_type,
           providerName: apt.provider_name,
+          ownerDisplayName,
           scheduledAt: apt.scheduled_at,
           offers: offerLines,
         });
@@ -884,6 +947,7 @@ export async function dispatchRescueAttempt(args: {
         spaName,
         treatmentType: apt.treatment_type,
         providerName: apt.provider_name,
+        ownerDisplayName,
         scheduledAt: apt.scheduled_at,
         claimUrl: c.claimUrl,
       });
@@ -939,36 +1003,50 @@ export const getRescueOfferPayload = createServerFn({ method: "POST" })
       .maybeSingle();
     if (!offer) return null;
 
-    const [{ data: apt }, { data: spa }, { data: patient }, { data: anyClaimed }] =
-      await Promise.all([
-        sb
-          .from("emma_appointments")
-          .select(
-            "scheduled_at, duration_min, treatment_type, provider_name, status, patient_node_id",
-          )
-          .eq("id", offer.appointment_id)
-          .maybeSingle(),
-        sb
-          .from("knowledge_nodes")
-          .select("title")
-          .eq("user_id", offer.user_id)
-          .eq("context", "spa-profile")
-          .eq("lookup_key", "spa-name")
-          .maybeSingle(),
-        sb
-          .from("knowledge_nodes")
-          .select("title")
-          .eq("id", offer.patient_node_id)
-          .maybeSingle(),
-        // Has any sibling offer been claimed?
-        sb
-          .from("emma_rescue_offers")
-          .select("id")
-          .eq("appointment_id", offer.appointment_id)
-          .not("claimed_at", "is", null)
-          .limit(1)
-          .maybeSingle(),
-      ]);
+    const [
+      { data: apt },
+      { data: spa },
+      { data: owner },
+      { data: patient },
+      { data: anyClaimed },
+    ] = await Promise.all([
+      sb
+        .from("emma_appointments")
+        .select(
+          "scheduled_at, duration_min, treatment_type, provider_name, status, patient_node_id",
+        )
+        .eq("id", offer.appointment_id)
+        .maybeSingle(),
+      sb
+        .from("knowledge_nodes")
+        .select("title")
+        .eq("user_id", offer.user_id)
+        .eq("context", "spa-profile")
+        .eq("lookup_key", "spa-name")
+        .maybeSingle(),
+      // v1.26.12 — solo-practitioner override fetched in parallel; null
+      // when the tenant hasn't set it (existing suppression-by-default).
+      sb
+        .from("knowledge_nodes")
+        .select("title")
+        .eq("user_id", offer.user_id)
+        .eq("context", "spa-profile")
+        .eq("lookup_key", "owner-display-name")
+        .maybeSingle(),
+      sb
+        .from("knowledge_nodes")
+        .select("title")
+        .eq("id", offer.patient_node_id)
+        .maybeSingle(),
+      // Has any sibling offer been claimed?
+      sb
+        .from("emma_rescue_offers")
+        .select("id")
+        .eq("appointment_id", offer.appointment_id)
+        .not("claimed_at", "is", null)
+        .limit(1)
+        .maybeSingle(),
+    ]);
     if (!apt) return null;
 
     let status: RescueOfferPayload["status"];
@@ -996,6 +1074,7 @@ export const getRescueOfferPayload = createServerFn({ method: "POST" })
       status,
       treatmentType: apt.treatment_type,
       providerName: apt.provider_name,
+      ownerDisplayName: owner?.title?.trim() || null,
       scheduledAt: apt.scheduled_at,
       durationMin: apt.duration_min,
     };

@@ -108,16 +108,25 @@ function RescueClaimPage() {
     });
   })();
 
-  // Suppress the "With" row when the appointment's provider_name is the same
-  // as the spa name (common Acuity setup: the calendar is named after the
-  // practice, not after the human provider). Rendering both produces e.g.
-  // "Rejuv Skin Spa · With Rejuv Skin Spa" which reads broken. Same dedup
-  // applied in the SMS/email composer. (v379.2.)
-  const showProvider =
-    payload && payload !== "loading" &&
-    !!payload.providerName &&
-    payload.providerName.trim().toLowerCase() !==
+  // What name (if any) to render after "with" on the claim card.
+  //   - Different from spa name → use the provider name as-is.
+  //   - Same as spa name + tenant has `owner-display-name` set → use that
+  //     (solo-practitioner case; v1.26.12 — at Karen's Rejuv Skin Spa the
+  //     Acuity calendar is named after the practice but Karen IS the
+  //     provider; render "with Karen").
+  //   - Same as spa name + no owner override → suppress, matches the
+  //     original v379.2 behavior for multi-practitioner spas where the
+  //     calendar aliases the practice.
+  const displayProviderName: string | null = (() => {
+    if (!payload || payload === "loading") return null;
+    if (!payload.providerName) return null;
+    const sameAsSpa =
+      payload.providerName.trim().toLowerCase() ===
       payload.spaName.trim().toLowerCase();
+    if (sameAsSpa) return payload.ownerDisplayName?.trim() || null;
+    return payload.providerName;
+  })();
+  const showProvider = !!displayProviderName;
 
   return (
     <div className="min-h-screen bg-[#fbfaf7] text-[#1c2024] flex flex-col items-center justify-center p-6 font-[-apple-system,BlinkMacSystemFont,'Helvetica_Neue',system-ui,sans-serif]">
@@ -152,7 +161,7 @@ function RescueClaimPage() {
                 <>
                   {" "}with{" "}
                   <span className="text-[#056048]">
-                    {payload.providerName}
+                    {displayProviderName}
                   </span>
                 </>
               )}
@@ -164,7 +173,7 @@ function RescueClaimPage() {
             <div className="rounded-lg bg-[#f4f1ea] border border-[#e2dfd6] p-4 mb-5 space-y-1.5">
               <Row label="When" value={when ?? ""} />
               {payload.treatmentType && <Row label="Treatment" value={payload.treatmentType} />}
-              {showProvider && <Row label="With" value={payload.providerName!} />}
+              {showProvider && <Row label="With" value={displayProviderName!} />}
               <Row label="Duration" value={`${payload.durationMin} min`} />
             </div>
             <button
@@ -200,7 +209,7 @@ function RescueClaimPage() {
                     <>
                       {" "}with{" "}
                       <strong className="text-[#1c2024]">
-                        {payload.providerName}
+                        {displayProviderName}
                       </strong>
                     </>
                   )}{" "}
