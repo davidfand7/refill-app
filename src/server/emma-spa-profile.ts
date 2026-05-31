@@ -77,16 +77,24 @@ export async function resolveSpaFromNumber(
   return data?.title?.trim() || null;
 }
 
-// v1.26.22 — Settings UI bundle reader. Returns all three scalars in one
+// v1.26.22 — Settings UI bundle reader. Returns all scalars in one
 // round-trip with no fallback strings ("your spa" etc. — those are
 // SMS-composer concerns, not editor concerns). Empty/missing rows
 // render as null so the form shows blank inputs.
-export type SpaProfileLookupKey = "spa-name" | "owner-display-name" | "from-number";
+// v1.27.1 — invite-copy-template joins the bucket. Per-tenant editable
+// iMessage invite body for the waitlist opt-in pipeline. Empty/null =
+// use the system default from emma-waitlist-invite.functions.ts.
+export type SpaProfileLookupKey =
+  | "spa-name"
+  | "owner-display-name"
+  | "from-number"
+  | "invite-copy-template";
 
 export type SpaProfileBundle = {
   spaName: string | null;
   ownerDisplayName: string | null;
   fromNumber: string | null;
+  inviteCopyTemplate: string | null;
 };
 
 export async function getSpaProfileBundle(
@@ -98,7 +106,12 @@ export async function getSpaProfileBundle(
     .select("lookup_key, title")
     .eq("user_id", userId)
     .eq("context", "spa-profile")
-    .in("lookup_key", ["spa-name", "owner-display-name", "from-number"]);
+    .in("lookup_key", [
+      "spa-name",
+      "owner-display-name",
+      "from-number",
+      "invite-copy-template",
+    ]);
   const byKey = new Map<string, string | null>(
     (data ?? []).map((r) => [r.lookup_key ?? "", r.title?.trim() || null]),
   );
@@ -106,6 +119,7 @@ export async function getSpaProfileBundle(
     spaName: byKey.get("spa-name") ?? null,
     ownerDisplayName: byKey.get("owner-display-name") ?? null,
     fromNumber: byKey.get("from-number") ?? null,
+    inviteCopyTemplate: byKey.get("invite-copy-template") ?? null,
   };
 }
 

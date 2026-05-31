@@ -61,7 +61,12 @@ export const getSpaProfileBundleFn = createServerFn({ method: "POST" })
 
 const setInput = z.object({
   accessToken: z.string().min(1),
-  lookupKey: z.enum(["spa-name", "owner-display-name", "from-number"]),
+  lookupKey: z.enum([
+    "spa-name",
+    "owner-display-name",
+    "from-number",
+    "invite-copy-template",
+  ]),
   value: z.string().nullable(),
   viewAsUserId: z.string().uuid().optional(),
 });
