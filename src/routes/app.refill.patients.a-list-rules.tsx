@@ -59,39 +59,13 @@ import {
   type ReliabilityFlag,
   type ReliabilityFreshness,
 } from "@/server/emma-reliability.functions";
+import { matchesAListRules } from "@/lib/a-list-rules";
 
 export const Route = createFileRoute("/app/refill/patients/a-list-rules")({
   component: AListRulesPage,
 });
 
 // ─── Pure helpers ──────────────────────────────────────────────────────────
-
-function matchesRules(
-  p: PatientListRow,
-  rules: AListRules,
-  todayMs: number,
-  unreliableIds: Set<string>,
-): boolean {
-  if (rules.excludeBanned && p.banned) return false;
-  if (rules.excludeUnreliable && unreliableIds.has(p.id)) return false;
-  if (
-    rules.lifetimeSpendMinUsd !== null &&
-    p.lifetimeSpendUsd < rules.lifetimeSpendMinUsd
-  ) {
-    return false;
-  }
-  if (rules.totalVisitsMin !== null && p.totalVisits < rules.totalVisitsMin) {
-    return false;
-  }
-  if (rules.lastVisitWithinDays !== null) {
-    if (!p.lastVisit) return false;
-    const lastMs = new Date(p.lastVisit).getTime();
-    if (Number.isNaN(lastMs)) return false;
-    const days = (todayMs - lastMs) / (1000 * 60 * 60 * 24);
-    if (days > rules.lastVisitWithinDays) return false;
-  }
-  return true;
-}
 
 function formatCurrency(n: number): string {
   return n.toLocaleString("en-US", {
@@ -230,7 +204,7 @@ function AListRulesPage() {
     const todayMs = Date.now();
     return new Set(
       patients
-        .filter((p) => matchesRules(p, rules, todayMs, unreliableIds))
+        .filter((p) => matchesAListRules(p, rules, todayMs, unreliableIds))
         .map((p) => p.id),
     );
   }, [patients, rules, unreliableIds]);

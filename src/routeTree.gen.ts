@@ -70,6 +70,7 @@ import { Route as ApiCronEmmaInvoiceRouteImport } from './routes/api.cron.emma-i
 import { Route as AppRefillPatientsIndexRouteImport } from './routes/app.refill.patients.index'
 import { Route as AppRefillCampaignsIndexRouteImport } from './routes/app.refill.campaigns.index'
 import { Route as AppRefillWaitlistSeedRouteImport } from './routes/app.refill.waitlist.seed'
+import { Route as AppRefillWaitlistInviteRouteImport } from './routes/app.refill.waitlist.invite'
 import { Route as AppRefillWaitlistBulkRouteImport } from './routes/app.refill.waitlist.bulk'
 import { Route as AppRefillSettingsSpaProfileRouteImport } from './routes/app.refill.settings.spa-profile'
 import { Route as AppRefillSettingsSenderRouteImport } from './routes/app.refill.settings.sender'
@@ -394,6 +395,11 @@ const AppRefillWaitlistSeedRoute = AppRefillWaitlistSeedRouteImport.update({
   path: '/waitlist/seed',
   getParentRoute: () => AppRefillRoute,
 } as any)
+const AppRefillWaitlistInviteRoute = AppRefillWaitlistInviteRouteImport.update({
+  id: '/waitlist/invite',
+  path: '/waitlist/invite',
+  getParentRoute: () => AppRefillRoute,
+} as any)
 const AppRefillWaitlistBulkRoute = AppRefillWaitlistBulkRouteImport.update({
   id: '/waitlist/bulk',
   path: '/waitlist/bulk',
@@ -558,6 +564,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
   '/app/refill/settings/spa-profile': typeof AppRefillSettingsSpaProfileRoute
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
+  '/app/refill/waitlist/invite': typeof AppRefillWaitlistInviteRoute
   '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
   '/app/refill/campaigns/': typeof AppRefillCampaignsIndexRoute
   '/app/refill/patients/': typeof AppRefillPatientsIndexRoute
@@ -632,6 +639,7 @@ export interface FileRoutesByTo {
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
   '/app/refill/settings/spa-profile': typeof AppRefillSettingsSpaProfileRoute
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
+  '/app/refill/waitlist/invite': typeof AppRefillWaitlistInviteRoute
   '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
   '/app/refill/campaigns': typeof AppRefillCampaignsIndexRoute
   '/app/refill/patients': typeof AppRefillPatientsIndexRoute
@@ -712,6 +720,7 @@ export interface FileRoutesById {
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
   '/app/refill/settings/spa-profile': typeof AppRefillSettingsSpaProfileRoute
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
+  '/app/refill/waitlist/invite': typeof AppRefillWaitlistInviteRoute
   '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
   '/app/refill/campaigns/': typeof AppRefillCampaignsIndexRoute
   '/app/refill/patients/': typeof AppRefillPatientsIndexRoute
@@ -793,6 +802,7 @@ export interface FileRouteTypes {
     | '/app/refill/settings/sender'
     | '/app/refill/settings/spa-profile'
     | '/app/refill/waitlist/bulk'
+    | '/app/refill/waitlist/invite'
     | '/app/refill/waitlist/seed'
     | '/app/refill/campaigns/'
     | '/app/refill/patients/'
@@ -867,6 +877,7 @@ export interface FileRouteTypes {
     | '/app/refill/settings/sender'
     | '/app/refill/settings/spa-profile'
     | '/app/refill/waitlist/bulk'
+    | '/app/refill/waitlist/invite'
     | '/app/refill/waitlist/seed'
     | '/app/refill/campaigns'
     | '/app/refill/patients'
@@ -946,6 +957,7 @@ export interface FileRouteTypes {
     | '/app/refill/settings/sender'
     | '/app/refill/settings/spa-profile'
     | '/app/refill/waitlist/bulk'
+    | '/app/refill/waitlist/invite'
     | '/app/refill/waitlist/seed'
     | '/app/refill/campaigns/'
     | '/app/refill/patients/'
@@ -1416,6 +1428,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillWaitlistSeedRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/refill/waitlist/invite': {
+      id: '/app/refill/waitlist/invite'
+      path: '/waitlist/invite'
+      fullPath: '/app/refill/waitlist/invite'
+      preLoaderRoute: typeof AppRefillWaitlistInviteRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/waitlist/bulk': {
       id: '/app/refill/waitlist/bulk'
       path: '/waitlist/bulk'
@@ -1603,6 +1622,7 @@ interface AppRefillRouteChildren {
   AppRefillSettingsSenderRoute: typeof AppRefillSettingsSenderRoute
   AppRefillSettingsSpaProfileRoute: typeof AppRefillSettingsSpaProfileRoute
   AppRefillWaitlistBulkRoute: typeof AppRefillWaitlistBulkRoute
+  AppRefillWaitlistInviteRoute: typeof AppRefillWaitlistInviteRoute
   AppRefillWaitlistSeedRoute: typeof AppRefillWaitlistSeedRoute
 }
 
@@ -1625,6 +1645,7 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillSettingsSenderRoute: AppRefillSettingsSenderRoute,
   AppRefillSettingsSpaProfileRoute: AppRefillSettingsSpaProfileRoute,
   AppRefillWaitlistBulkRoute: AppRefillWaitlistBulkRoute,
+  AppRefillWaitlistInviteRoute: AppRefillWaitlistInviteRoute,
   AppRefillWaitlistSeedRoute: AppRefillWaitlistSeedRoute,
 }
 
