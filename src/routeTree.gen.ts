@@ -31,6 +31,7 @@ import { Route as ApiRefillCheckoutRouteImport } from './routes/api.refill-check
 import { Route as AppRepIndexRouteImport } from './routes/app.rep.index'
 import { Route as AppRefillIndexRouteImport } from './routes/app.refill.index'
 import { Route as AppAdminIndexRouteImport } from './routes/app.admin.index'
+import { Route as WaitlistOptinTokenRouteImport } from './routes/waitlist.optin.$token'
 import { Route as RescueClaimTokenRouteImport } from './routes/rescue.claim.$token'
 import { Route as AppRepReferralLinksRouteImport } from './routes/app.rep.referral-links'
 import { Route as AppRepRecruitRouteImport } from './routes/app.rep.recruit'
@@ -195,6 +196,11 @@ const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
   id: '/admin/',
   path: '/admin/',
   getParentRoute: () => AppRoute,
+} as any)
+const WaitlistOptinTokenRoute = WaitlistOptinTokenRouteImport.update({
+  id: '/waitlist/optin/$token',
+  path: '/waitlist/optin/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const RescueClaimTokenRoute = RescueClaimTokenRouteImport.update({
   id: '/rescue/claim/$token',
@@ -535,6 +541,7 @@ export interface FileRoutesByFullPath {
   '/app/rep/recruit': typeof AppRepRecruitRoute
   '/app/rep/referral-links': typeof AppRepReferralLinksRoute
   '/rescue/claim/$token': typeof RescueClaimTokenRoute
+  '/waitlist/optin/$token': typeof WaitlistOptinTokenRoute
   '/app/admin/': typeof AppAdminIndexRoute
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
@@ -609,6 +616,7 @@ export interface FileRoutesByTo {
   '/app/rep/recruit': typeof AppRepRecruitRoute
   '/app/rep/referral-links': typeof AppRepReferralLinksRoute
   '/rescue/claim/$token': typeof RescueClaimTokenRoute
+  '/waitlist/optin/$token': typeof WaitlistOptinTokenRoute
   '/app/admin': typeof AppAdminIndexRoute
   '/app/refill': typeof AppRefillIndexRoute
   '/app/rep': typeof AppRepIndexRoute
@@ -687,6 +695,7 @@ export interface FileRoutesById {
   '/app/rep/recruit': typeof AppRepRecruitRoute
   '/app/rep/referral-links': typeof AppRepReferralLinksRoute
   '/rescue/claim/$token': typeof RescueClaimTokenRoute
+  '/waitlist/optin/$token': typeof WaitlistOptinTokenRoute
   '/app/admin/': typeof AppAdminIndexRoute
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
@@ -767,6 +776,7 @@ export interface FileRouteTypes {
     | '/app/rep/recruit'
     | '/app/rep/referral-links'
     | '/rescue/claim/$token'
+    | '/waitlist/optin/$token'
     | '/app/admin/'
     | '/app/refill/'
     | '/app/rep/'
@@ -841,6 +851,7 @@ export interface FileRouteTypes {
     | '/app/rep/recruit'
     | '/app/rep/referral-links'
     | '/rescue/claim/$token'
+    | '/waitlist/optin/$token'
     | '/app/admin'
     | '/app/refill'
     | '/app/rep'
@@ -918,6 +929,7 @@ export interface FileRouteTypes {
     | '/app/rep/recruit'
     | '/app/rep/referral-links'
     | '/rescue/claim/$token'
+    | '/waitlist/optin/$token'
     | '/app/admin/'
     | '/app/refill/'
     | '/app/rep/'
@@ -970,6 +982,7 @@ export interface RootRouteChildren {
   ApiTwilioInboundRoute: typeof ApiTwilioInboundRoute
   ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
   RescueClaimTokenRoute: typeof RescueClaimTokenRoute
+  WaitlistOptinTokenRoute: typeof WaitlistOptinTokenRoute
   ApiIntegrationsAcuityOauthCallbackRoute: typeof ApiIntegrationsAcuityOauthCallbackRoute
   ApiWebhooksSchedulerAcuitySecretRoute: typeof ApiWebhooksSchedulerAcuitySecretRoute
 }
@@ -1129,6 +1142,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/admin/'
       preLoaderRoute: typeof AppAdminIndexRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/waitlist/optin/$token': {
+      id: '/waitlist/optin/$token'
+      path: '/waitlist/optin/$token'
+      fullPath: '/waitlist/optin/$token'
+      preLoaderRoute: typeof WaitlistOptinTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/rescue/claim/$token': {
       id: '/rescue/claim/$token'
@@ -1693,6 +1713,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiTwilioInboundRoute: ApiTwilioInboundRoute,
   ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
   RescueClaimTokenRoute: RescueClaimTokenRoute,
+  WaitlistOptinTokenRoute: WaitlistOptinTokenRoute,
   ApiIntegrationsAcuityOauthCallbackRoute:
     ApiIntegrationsAcuityOauthCallbackRoute,
   ApiWebhooksSchedulerAcuitySecretRoute: ApiWebhooksSchedulerAcuitySecretRoute,
