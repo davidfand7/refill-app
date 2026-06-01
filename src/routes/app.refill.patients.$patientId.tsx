@@ -49,11 +49,16 @@ import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/integrations/supabase/client";
 import {
   addPatientCustomTag,
+  clearPatientCustomSelection,
   clearPatientSoftTag,
+  createCustomTagDefinition,
+  deleteCustomTagDefinition,
   deletePatientCustomTag,
   getPatientById,
   recomputePatientPatterns,
+  setPatientCustomSelection,
   setPatientSoftTag,
+  updateCustomTagDefinition,
   updatePatientCustomTag,
   type PatientDetail,
   type PatientListRow,
@@ -66,7 +71,9 @@ import type {
 import {
   normalizeCustomTag,
   type CadenceMetrics,
+  type CustomTagDefinition,
   type PatientCustomTag,
+  type PatientCustomTagValue,
   type PatientPurchasePatterns,
   type PatientSoftTagEntry,
   type PatientSoftTagKey,
@@ -177,6 +184,7 @@ function PatientDetailPage() {
             <SummaryCard patient={data.patient} />
             <SoftTagsCard
               patient={data.patient}
+              definitions={data.customTagDefinitions}
               viewAsUserId={viewAsUserId}
               onTagsChange={(next) =>
                 setData((prev) =>
@@ -186,6 +194,11 @@ function PatientDetailPage() {
                         patient: { ...prev.patient, softTags: next },
                       }
                     : prev,
+                )
+              }
+              onDefinitionsChange={(next) =>
+                setData((prev) =>
+                  prev ? { ...prev, customTagDefinitions: next } : prev,
                 )
               }
             />
@@ -458,12 +471,16 @@ const LOYALTY_OPTIONS: EnumDef<"loyal" | "comparison" | "unknown">[] = [
 
 function SoftTagsCard({
   patient,
+  definitions,
   viewAsUserId,
   onTagsChange,
+  onDefinitionsChange,
 }: {
   patient: PatientListRow;
+  definitions: CustomTagDefinition[];
   viewAsUserId: string | undefined;
   onTagsChange: (next: PatientSoftTags) => void;
+  onDefinitionsChange: (next: CustomTagDefinition[]) => void;
 }) {
   const [openKey, setOpenKey] = useState<PatientSoftTagKey | null>(null);
   const [busyKey, setBusyKey] = useState<PatientSoftTagKey | null>(null);
@@ -628,7 +645,14 @@ function SoftTagsCard({
           onClear={() => clear("culturalNotes")}
         />
       </div>
-      <CustomTagsSection
+      <TenantCustomTagsSection
+        patient={patient}
+        definitions={definitions}
+        viewAsUserId={viewAsUserId}
+        onTagsChange={onTagsChange}
+        onDefinitionsChange={onDefinitionsChange}
+      />
+      <LegacyCustomTagsSection
         patient={patient}
         viewAsUserId={viewAsUserId}
         onTagsChange={onTagsChange}
@@ -674,7 +698,7 @@ function parseOptions(text: string): string[] {
   return out;
 }
 
-function CustomTagsSection({
+function LegacyCustomTagsSection({
   patient,
   viewAsUserId,
   onTagsChange,
@@ -687,6 +711,9 @@ function CustomTagsSection({
   const customs: PatientCustomTag[] = (patient.softTags?.custom ?? []).map(
     (t) => normalizeCustomTag(t as PatientCustomTag),
   );
+  // v1.31.5: this section only appears if there ARE legacy per-patient
+  // tags. Tenant-wide defs render in TenantCustomTagsSection above.
+  if (customs.length === 0) return null;
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<CustomTagDraft>(EMPTY_CUSTOM_DRAFT);
@@ -789,15 +816,18 @@ function CustomTagsSection({
     );
 
   return (
-    <div className="border-t border-rule bg-rule-soft/30">
+    <div className="border-t border-rule bg-amber-50/40">
       <div className="px-5 py-2 flex items-center gap-2">
-        <Tag className="h-3 w-3 text-ink-faint" />
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
-          Custom tags
+        <Tag className="h-3 w-3 text-amber-600" />
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+          Legacy (per-patient) custom tags
         </div>
-        <div className="ml-auto text-[10px] text-ink-faint">
-          {customs.length} {customs.length === 1 ? "tag" : "tags"}
+        <div className="ml-auto text-[10px] text-amber-600">
+          {customs.length} {customs.length === 1 ? "tag" : "tags"} &middot; pre-v1.31.5
         </div>
+      </div>
+      <div className="px-5 pb-2 text-[10px] text-ink-faint italic">
+        These were created on this patient only. To use them across all your patients, re-create as a tenant-wide tag in the section above &mdash; then you can delete the legacy entry here.
       </div>
       <div className="divide-y divide-rule bg-white">
         {customs.map((tag) =>
@@ -829,20 +859,512 @@ function CustomTagsSection({
             onCancel={cancel}
           />
         )}
-        {!adding && editingId === null && (
-          <button
-            type="button"
-            onClick={beginAdd}
-            className="w-full px-5 py-3 text-left text-[12px] text-ink-soft hover:text-ink hover:bg-rule-soft/50 transition inline-flex items-center gap-1.5"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add a custom tag
-          </button>
-        )}
       </div>
       {error && (
         <div className="px-5 py-2 text-[11px] text-rose">{error}</div>
       )}
+    </div>
+  );
+}
+
+// ─── Tenant-wide custom tag definitions (v1.31.5) ─────────────────────────
+
+type DefEditMode =
+  | { mode: "idle" }
+  | { mode: "set"; defId: string }
+  | { mode: "editDef"; defId: string }
+  | { mode: "create" };
+
+function TenantCustomTagsSection({
+  patient,
+  definitions,
+  viewAsUserId,
+  onTagsChange,
+  onDefinitionsChange,
+}: {
+  patient: PatientListRow;
+  definitions: CustomTagDefinition[];
+  viewAsUserId: string | undefined;
+  onTagsChange: (next: PatientSoftTags) => void;
+  onDefinitionsChange: (next: CustomTagDefinition[]) => void;
+}) {
+  const selections: Record<string, PatientCustomTagValue> =
+    patient.softTags?.customSelections ?? {};
+  const [edit, setEdit] = useState<DefEditMode>({ mode: "idle" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const withToken = async <T,>(
+    fn: (token: string) => Promise<T>,
+  ): Promise<T | null> => {
+    setError(null);
+    setBusy(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Please sign in again.");
+      return await fn(token);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save.");
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveSelection = async (
+    defId: string,
+    selected: string[],
+    reason: string,
+  ) => {
+    const result = await withToken((token) =>
+      setPatientCustomSelection({
+        data: {
+          accessToken: token,
+          viewAsUserId,
+          patientNodeId: patient.id,
+          definitionId: defId,
+          selected,
+          reason: reason.trim() || null,
+        },
+      }),
+    );
+    if (result) {
+      onTagsChange(result.softTags);
+      setEdit({ mode: "idle" });
+    }
+  };
+
+  const clearSelection = async (defId: string) => {
+    const result = await withToken((token) =>
+      clearPatientCustomSelection({
+        data: {
+          accessToken: token,
+          viewAsUserId,
+          patientNodeId: patient.id,
+          definitionId: defId,
+        },
+      }),
+    );
+    if (result) {
+      onTagsChange(result.softTags);
+      setEdit({ mode: "idle" });
+    }
+  };
+
+  const createDefinition = async (name: string, options: string[]) => {
+    const result = await withToken((token) =>
+      createCustomTagDefinition({
+        data: { accessToken: token, viewAsUserId, name, options },
+      }),
+    );
+    if (result) {
+      const next = definitions.some((d) => d.id === result.id)
+        ? definitions.map((d) => (d.id === result.id ? result : d))
+        : [...definitions, result];
+      onDefinitionsChange(next);
+      // Open the Set tag form so Karen can immediately apply the new tag
+      // to this patient.
+      setEdit({ mode: "set", defId: result.id });
+    }
+  };
+
+  const updateDefinition = async (
+    id: string,
+    name: string,
+    options: string[],
+  ) => {
+    const result = await withToken((token) =>
+      updateCustomTagDefinition({
+        data: { accessToken: token, viewAsUserId, id, name, options },
+      }),
+    );
+    if (result) {
+      onDefinitionsChange(definitions.map((d) => (d.id === id ? result : d)));
+      setEdit({ mode: "idle" });
+    }
+  };
+
+  const deleteDefinition = async (id: string) => {
+    if (
+      !confirm(
+        "Delete this custom tag for ALL patients? Selections will be hidden but not permanently removed. You can re-create the tag later.",
+      )
+    )
+      return;
+    const result = await withToken((token) =>
+      deleteCustomTagDefinition({
+        data: { accessToken: token, viewAsUserId, id },
+      }),
+    );
+    if (result) {
+      onDefinitionsChange(definitions.filter((d) => d.id !== id));
+      setEdit({ mode: "idle" });
+    }
+  };
+
+  return (
+    <>
+      {definitions.length > 0 && (
+        <div className="border-t border-rule bg-rule-soft/30">
+          <div className="px-5 py-2 flex items-center gap-2">
+            <Tag className="h-3 w-3 text-ink-faint" />
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+              Custom tags (tenant-wide)
+            </div>
+            <div className="ml-auto text-[10px] text-ink-faint">
+              {definitions.length}{" "}
+              {definitions.length === 1 ? "tag" : "tags"}
+            </div>
+          </div>
+          <div className="divide-y divide-rule bg-white">
+            {definitions.map((def) => {
+              const value = selections[def.id] ?? null;
+              if (edit.mode === "set" && edit.defId === def.id) {
+                return (
+                  <CustomSelectionForm
+                    key={def.id}
+                    definition={def}
+                    initialSelected={value?.selected ?? []}
+                    initialReason={value?.reason ?? ""}
+                    busy={busy}
+                    onSave={(selected, reason) =>
+                      saveSelection(def.id, selected, reason)
+                    }
+                    onClear={value ? () => clearSelection(def.id) : undefined}
+                    onCancel={() => setEdit({ mode: "idle" })}
+                  />
+                );
+              }
+              if (edit.mode === "editDef" && edit.defId === def.id) {
+                return (
+                  <DefinitionEditForm
+                    key={def.id}
+                    definition={def}
+                    busy={busy}
+                    onSave={(name, options) =>
+                      updateDefinition(def.id, name, options)
+                    }
+                    onDelete={() => deleteDefinition(def.id)}
+                    onCancel={() => setEdit({ mode: "idle" })}
+                  />
+                );
+              }
+              return (
+                <DefinitionRow
+                  key={def.id}
+                  definition={def}
+                  value={value}
+                  disabled={busy || edit.mode !== "idle"}
+                  onSet={() => setEdit({ mode: "set", defId: def.id })}
+                  onEditDef={() => setEdit({ mode: "editDef", defId: def.id })}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <div className="border-t border-rule bg-white">
+        {edit.mode === "create" ? (
+          <DefinitionEditForm
+            definition={null}
+            busy={busy}
+            onSave={(name, options) => createDefinition(name, options)}
+            onCancel={() => setEdit({ mode: "idle" })}
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setEdit({ mode: "create" })}
+            disabled={busy || edit.mode !== "idle"}
+            className="w-full px-5 py-3 text-left text-[12px] text-ink-soft hover:text-ink hover:bg-rule-soft/50 transition inline-flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Create a new custom tag (shows on all patients)
+          </button>
+        )}
+      </div>
+      {error && (
+        <div className="px-5 py-2 border-t border-rose/30 bg-rose-soft text-[11px] text-rose">
+          {error}
+        </div>
+      )}
+    </>
+  );
+}
+
+function DefinitionRow({
+  definition,
+  value,
+  disabled,
+  onSet,
+  onEditDef,
+}: {
+  definition: CustomTagDefinition;
+  value: PatientCustomTagValue | null;
+  disabled: boolean;
+  onSet: () => void;
+  onEditDef: () => void;
+}) {
+  const selectedSet = new Set(value?.selected ?? []);
+  const hasSelection = value && value.selected.length > 0;
+  return (
+    <div className="px-5 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
+              {definition.name}
+            </div>
+            <button
+              type="button"
+              onClick={onEditDef}
+              disabled={disabled}
+              title="Edit tag definition (name + chip options)"
+              className="text-ink-faint hover:text-ink transition disabled:opacity-50"
+            >
+              <Pencil className="h-2.5 w-2.5" />
+            </button>
+          </div>
+          {hasSelection ? (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {definition.options.map((opt) => {
+                const active = selectedSet.has(opt);
+                return (
+                  <span
+                    key={opt}
+                    className={
+                      "inline-flex items-center rounded-full px-3 py-1 text-[11px] font-medium border " +
+                      (active
+                        ? "border-emerald bg-emerald-soft text-emerald-ink"
+                        : "border-rule bg-white text-ink-faint")
+                    }
+                  >
+                    {opt}
+                  </span>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-1 text-xs text-ink-faint italic">Not set</div>
+          )}
+          {hasSelection && value?.reason && (
+            <div className="mt-1.5 text-[12px] text-ink-soft italic">
+              &ldquo;{value.reason}&rdquo;
+            </div>
+          )}
+          {hasSelection && value?.setAt && (
+            <div className="mt-1 text-[10px] text-ink-faint">
+              Set {formatDate(value.setAt.slice(0, 10))}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onSet}
+          disabled={disabled}
+          className="shrink-0 inline-flex items-center gap-1 rounded-md border border-rule bg-white px-2.5 py-1 text-[11px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition disabled:opacity-50"
+        >
+          {hasSelection ? (
+            <>
+              <Pencil className="h-3 w-3" />
+              Edit
+            </>
+          ) : (
+            <>
+              <Tag className="h-3 w-3" />
+              Set tag
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CustomSelectionForm({
+  definition,
+  initialSelected,
+  initialReason,
+  busy,
+  onSave,
+  onClear,
+  onCancel,
+}: {
+  definition: CustomTagDefinition;
+  initialSelected: string[];
+  initialReason: string;
+  busy: boolean;
+  onSave: (selected: string[], reason: string) => void;
+  onClear?: () => void;
+  onCancel: () => void;
+}) {
+  const [selected, setSelected] = useState<string[]>(initialSelected);
+  const [reason, setReason] = useState<string>(initialReason);
+  const selectedSet = new Set(selected);
+  const toggle = (opt: string) => {
+    setSelected((prev) =>
+      prev.includes(opt) ? prev.filter((s) => s !== opt) : [...prev, opt],
+    );
+  };
+  return (
+    <div className="px-5 py-3 space-y-2 bg-emerald-soft/30">
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
+        {definition.name}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {definition.options.map((opt) => (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => toggle(opt)}
+            disabled={busy}
+            className={
+              "rounded-full px-3 py-1 text-[11px] font-medium border transition disabled:opacity-50 " +
+              (selectedSet.has(opt)
+                ? "border-emerald bg-emerald-soft text-emerald-ink"
+                : "border-rule bg-white text-ink-soft hover:border-emerald/40 hover:text-ink")
+            }
+          >
+            {opt}
+          </button>
+        ))}
+      </div>
+      <input
+        type="text"
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder="Reason (optional)"
+        maxLength={500}
+        disabled={busy}
+        className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
+      />
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => onSave(selected, reason)}
+          disabled={busy}
+          className="inline-flex items-center gap-1 rounded-md bg-emerald px-3 py-1.5 text-[12px] font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
+        >
+          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          className="inline-flex items-center gap-1 rounded-md border border-rule bg-white px-2.5 py-1.5 text-[11px] font-medium text-ink-soft hover:text-ink transition disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        {onClear && (
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={busy}
+            className="ml-auto inline-flex items-center gap-1 text-[11px] text-rose hover:text-rose/80 transition disabled:opacity-50"
+          >
+            <X className="h-3 w-3" />
+            Clear for this patient
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DefinitionEditForm({
+  definition,
+  busy,
+  onSave,
+  onDelete,
+  onCancel,
+}: {
+  definition: CustomTagDefinition | null;
+  busy: boolean;
+  onSave: (name: string, options: string[]) => void;
+  onDelete?: () => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState<string>(definition?.name ?? "");
+  const [optionsText, setOptionsText] = useState<string>(
+    definition?.options.join(", ") ?? "",
+  );
+  const parsed = parseOptions(optionsText);
+  const canSave = name.trim().length > 0 && parsed.length > 0;
+  const isNew = definition === null;
+  return (
+    <div className="px-5 py-3 space-y-2.5 bg-emerald-soft/30">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+        {isNew ? "Create custom tag" : "Edit tag definition"}
+      </div>
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Tag name (e.g., Allergies, Rescheduler, Family / Friends)"
+        maxLength={80}
+        disabled={busy}
+        className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] font-medium text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
+      />
+      <div>
+        <textarea
+          value={optionsText}
+          onChange={(e) => setOptionsText(e.target.value)}
+          placeholder="Chip options (comma-separated). E.g., 'Chronic, Occasional, Never' or 'Mother/Daughter, Siblings, Wife/Husband'."
+          maxLength={2000}
+          rows={2}
+          disabled={busy}
+          className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
+        />
+        <div className="mt-0.5 text-[10px] text-ink-faint">
+          {isNew
+            ? "This tag will appear on every patient with a Set tag affordance."
+            : "Editing options affects how chips render across every patient who has this tag set."}
+        </div>
+      </div>
+      {parsed.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {parsed.map((opt) => (
+            <span
+              key={opt}
+              className="inline-flex items-center rounded-full px-3 py-1 text-[11px] font-medium border border-rule bg-white text-ink-soft"
+            >
+              {opt}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          type="button"
+          onClick={() => onSave(name.trim(), parsed)}
+          disabled={busy || !canSave}
+          className="inline-flex items-center gap-1 rounded-md bg-emerald px-3 py-1.5 text-[12px] font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
+        >
+          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+          {isNew ? "Create tag" : "Save changes"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          className="inline-flex items-center gap-1 rounded-md border border-rule bg-white px-2.5 py-1.5 text-[11px] font-medium text-ink-soft hover:text-ink transition disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={busy}
+            className="ml-auto inline-flex items-center gap-1 text-[11px] text-rose hover:text-rose/80 transition disabled:opacity-50"
+          >
+            <X className="h-3 w-3" />
+            Delete tag (all patients)
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -38,6 +38,8 @@ import {
   type PatientSoftTags,
   type PatientSoftTagKey,
   type PatientCustomTag,
+  type PatientCustomTagValue,
+  type CustomTagDefinition,
   type PatientIncomeTier,
   type PatientNegotiator,
   type PatientPersonality,
@@ -144,6 +146,13 @@ export type PatientTransactionRow = {
 export type PatientDetail = {
   patient: PatientListRow;
   transactions: PatientTransactionRow[];
+  /**
+   * v1.31.5: tenant-wide custom tag definitions. Returned with the
+   * patient so the SoftTagsCard can render Set tag affordances for
+   * every definition this tenant has created, regardless of whether
+   * THIS patient has any selections yet.
+   */
+  customTagDefinitions: CustomTagDefinition[];
 };
 
 /** A patient flagged as overdue for a touchup by the cadence rules. */
@@ -809,6 +818,317 @@ export const setPatientSoftTag = createServerFn({ method: "POST" })
     return { ok: true, softTags: nextTags };
   });
 
+// ─── Tenant-wide custom tag definitions (v1.31.5) ────────────────────────
+//
+// Karen defines a custom tag ONCE for her practice (name + chip options);
+// it then appears on every patient&rsquo;s SoftTagsCard with a Set tag
+// affordance, matching the seeded six tags exactly. Per-patient values
+// live in softTags.customSelections keyed by definitionId.
+
+const listDefsInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+});
+
+const createDefInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  name: z.string().min(1).max(80),
+  options: z.array(z.string().min(1).max(200)).min(1).max(50),
+});
+
+const updateDefInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  id: z.string().uuid(),
+  name: z.string().min(1).max(80),
+  options: z.array(z.string().min(1).max(200)).min(1).max(50),
+});
+
+const deleteDefInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  id: z.string().uuid(),
+});
+
+const setSelectionInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  patientNodeId: z.string().uuid(),
+  definitionId: z.string().uuid(),
+  selected: z.array(z.string().min(1).max(200)).max(50),
+  reason: z.string().max(500).nullable().optional(),
+});
+
+const clearSelectionInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  patientNodeId: z.string().uuid(),
+  definitionId: z.string().uuid(),
+});
+
+function hydrateCustomTagDefinition(node: KnowledgeNodeRow): CustomTagDefinition {
+  const a = (node.attachments ?? {}) as {
+    options?: string[];
+    createdByUserId?: string;
+    createdAt?: string;
+  };
+  return {
+    id: node.id,
+    name: node.title ?? "Untitled tag",
+    options: Array.isArray(a.options) ? a.options : [],
+    createdByUserId: a.createdByUserId ?? node.user_id,
+    createdAt: a.createdAt ?? node.created_at,
+  };
+}
+
+export const listCustomTagDefinitions = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => listDefsInput.parse(raw))
+  .handler(async ({ data }): Promise<CustomTagDefinition[]> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const { data: rows, error } = await sb
+      .from("knowledge_nodes")
+      .select("*")
+      .eq("user_id", effectiveUserId)
+      .eq("node_type", "custom_tag_definition")
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(`Couldn't list tag defs: ${error.message}`);
+    return (rows ?? []).map(hydrateCustomTagDefinition);
+  });
+
+export const createCustomTagDefinition = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => createDefInput.parse(raw))
+  .handler(async ({ data }): Promise<CustomTagDefinition> => {
+    const { effectiveUserId, callerUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const name = data.name.trim();
+    const options = data.options.map((o) => o.trim()).filter(Boolean);
+    if (options.length === 0)
+      throw new Error("Tag needs at least one option chip.");
+    const lookupKey = name.toLowerCase();
+    // Dedupe by name within this tenant — if a def with this name exists,
+    // merge the new options into the existing one rather than duplicating.
+    const { data: existing, error: lookupErr } = await sb
+      .from("knowledge_nodes")
+      .select("*")
+      .eq("user_id", effectiveUserId)
+      .eq("node_type", "custom_tag_definition")
+      .eq("lookup_key", lookupKey)
+      .maybeSingle();
+    if (lookupErr) throw new Error(`Couldn't check duplicates: ${lookupErr.message}`);
+    if (existing) {
+      const existingDef = hydrateCustomTagDefinition(existing);
+      const mergedOptions = Array.from(
+        new Set([...existingDef.options, ...options]),
+      );
+      const { error: updErr } = await sb
+        .from("knowledge_nodes")
+        .update({
+          attachments: {
+            options: mergedOptions,
+            createdByUserId: existingDef.createdByUserId,
+            createdAt: existingDef.createdAt,
+          } as unknown as Json,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id)
+        .eq("user_id", effectiveUserId);
+      if (updErr) throw new Error(`Couldn't merge def options: ${updErr.message}`);
+      return { ...existingDef, options: mergedOptions };
+    }
+    const nowIso = new Date().toISOString();
+    const { data: inserted, error: insErr } = await sb
+      .from("knowledge_nodes")
+      .insert({
+        user_id: effectiveUserId,
+        node_type: "custom_tag_definition",
+        lookup_type: "custom_tag_definition",
+        context: "soft_tag_definitions",
+        title: name,
+        lookup_key: lookupKey,
+        content: `Custom tag: ${name} (${options.length} option${options.length === 1 ? "" : "s"})`,
+        attachments: {
+          options,
+          createdByUserId: callerUserId,
+          createdAt: nowIso,
+        } as unknown as Json,
+        source: "refill-custom-tag",
+      })
+      .select("*")
+      .single();
+    if (insErr) throw new Error(`Couldn't create tag def: ${insErr.message}`);
+    return hydrateCustomTagDefinition(inserted);
+  });
+
+export const updateCustomTagDefinition = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => updateDefInput.parse(raw))
+  .handler(async ({ data }): Promise<CustomTagDefinition> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const name = data.name.trim();
+    const options = data.options.map((o) => o.trim()).filter(Boolean);
+    if (options.length === 0)
+      throw new Error("Tag needs at least one option chip.");
+    const { data: existing, error: readErr } = await sb
+      .from("knowledge_nodes")
+      .select("*")
+      .eq("id", data.id)
+      .eq("user_id", effectiveUserId)
+      .maybeSingle();
+    if (readErr) throw new Error(`Couldn't read def: ${readErr.message}`);
+    if (!existing) throw new Error("Tag definition not found.");
+    const existingDef = hydrateCustomTagDefinition(existing);
+    const { error: updErr } = await sb
+      .from("knowledge_nodes")
+      .update({
+        title: name,
+        lookup_key: name.toLowerCase(),
+        attachments: {
+          options,
+          createdByUserId: existingDef.createdByUserId,
+          createdAt: existingDef.createdAt,
+        } as unknown as Json,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.id)
+      .eq("user_id", effectiveUserId);
+    if (updErr) throw new Error(`Couldn't update def: ${updErr.message}`);
+    return { ...existingDef, name, options };
+  });
+
+export const deleteCustomTagDefinition = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => deleteDefInput.parse(raw))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const { error: delErr } = await sb
+      .from("knowledge_nodes")
+      .delete()
+      .eq("id", data.id)
+      .eq("user_id", effectiveUserId);
+    if (delErr) throw new Error(`Couldn't delete def: ${delErr.message}`);
+    // Note: per-patient selections referencing this definitionId become
+    // orphans. UI filters them out on render. A sweeper job could clean
+    // them up; deferred until tenant cleanup is a real concern.
+    return { ok: true };
+  });
+
+async function mutateCustomSelection(
+  args: {
+    accessToken: string;
+    viewAsUserId?: string;
+    patientNodeId: string;
+  },
+  mutate: (
+    prior: Record<string, PatientCustomTagValue>,
+    callerUserId: string,
+  ) => Record<string, PatientCustomTagValue>,
+): Promise<{ ok: true; softTags: PatientSoftTags }> {
+  const { effectiveUserId, callerUserId } = await resolveEffectiveUserId({
+    accessToken: args.accessToken,
+    viewAsUserId: args.viewAsUserId,
+  });
+  const sb = admin();
+  const { data: existing, error: readErr } = await sb
+    .from("knowledge_nodes")
+    .select("attachments")
+    .eq("id", args.patientNodeId)
+    .eq("user_id", effectiveUserId)
+    .eq("node_type", "patient")
+    .maybeSingle();
+  if (readErr) throw new Error(`Couldn't read patient: ${readErr.message}`);
+  if (!existing) throw new Error("Patient not found.");
+
+  const summary =
+    (existing.attachments as unknown as PatientSummary | null) ?? null;
+  const priorTags: PatientSoftTags = summary?.softTags ?? {};
+  const priorSelections: Record<string, PatientCustomTagValue> =
+    priorTags.customSelections ?? {};
+  const nextSelections = mutate(priorSelections, callerUserId);
+  const nextTags: PatientSoftTags = {
+    ...priorTags,
+    customSelections: nextSelections,
+  };
+
+  const next: PatientSummary = {
+    ...(summary ?? ({
+      normalizedName: "",
+      displayName: "",
+      firstVisit: null,
+      lastVisit: null,
+      totalVisits: 0,
+      lifetimeUnits: 0,
+      lifetimeSpendUsd: 0,
+      netSpendUsd: 0,
+      primaryManufacturer: null,
+      productMix: {},
+      loyaltyEngagement: {},
+    } as PatientSummary)),
+    softTags: nextTags,
+  };
+  const { error: updErr } = await sb
+    .from("knowledge_nodes")
+    .update({
+      attachments: next as unknown as Json,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", args.patientNodeId)
+    .eq("user_id", effectiveUserId);
+  if (updErr) throw new Error(`Couldn't update selection: ${updErr.message}`);
+  return { ok: true, softTags: nextTags };
+}
+
+export const setPatientCustomSelection = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => setSelectionInput.parse(raw))
+  .handler(({ data }) =>
+    mutateCustomSelection(
+      {
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+        patientNodeId: data.patientNodeId,
+      },
+      (prior, callerUserId) => ({
+        ...prior,
+        [data.definitionId]: {
+          selected: data.selected.map((s) => s.trim()).filter(Boolean),
+          setByUserId: callerUserId,
+          setAt: new Date().toISOString(),
+          reason: data.reason?.trim() || null,
+        },
+      }),
+    ),
+  );
+
+export const clearPatientCustomSelection = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => clearSelectionInput.parse(raw))
+  .handler(({ data }) =>
+    mutateCustomSelection(
+      {
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+        patientNodeId: data.patientNodeId,
+      },
+      (prior) => {
+        const next = { ...prior };
+        delete next[data.definitionId];
+        return next;
+      },
+    ),
+  );
+
 // ─── recomputePatientPatterns (v1.31.2) ───────────────────────────────────
 //
 // Single-patient rebuild of summary + purchasePatterns from the
@@ -1143,6 +1463,7 @@ export const getPatientByKey = createServerFn({ method: "POST" })
     return {
       patient: hydratePatientListRow(node),
       transactions: (txns ?? []).map(hydrateTransactionRow),
+      customTagDefinitions: [],
     };
   });
 
@@ -1189,9 +1510,23 @@ export const getPatientById = createServerFn({ method: "POST" })
       from += PAGE;
     }
 
+    // v1.31.5: fetch tenant-wide custom tag definitions alongside.
+    const { data: defRows, error: defErr } = await sb
+      .from("knowledge_nodes")
+      .select("*")
+      .eq("user_id", effectiveUserId)
+      .eq("node_type", "custom_tag_definition")
+      .order("created_at", { ascending: true });
+    if (defErr)
+      throw new Error(`Couldn't load custom tag defs: ${defErr.message}`);
+    const customTagDefinitions = (defRows ?? []).map(
+      hydrateCustomTagDefinition,
+    );
+
     return {
       patient: hydratePatientListRow(node),
       transactions: lines,
+      customTagDefinitions,
     };
   });
 

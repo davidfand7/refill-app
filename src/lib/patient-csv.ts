@@ -435,12 +435,47 @@ export type PatientSoftTags = {
   shopperLoyalty?: PatientSoftTagEntry<PatientShopperLoyalty> | null;
   culturalNotes?: PatientSoftTagEntry<string> | null;
   /**
-   * v1.31.1: Karen-defined custom tags (any name + free-text value).
-   * Each carries the same provenance shape as the seeded six. Stable
-   * uuid id for react keys + targeting updates/deletes. Owner-only
-   * visibility (same scoping as the rest of softTags).
+   * v1.31.1 LEGACY: per-patient custom tags. v1.31.5 introduces
+   * tenant-wide custom tag definitions (see customSelections) — new
+   * tags use that shape. Old entries continue to render in a
+   * &lsquo;Legacy&rsquo; subsection with a promote-to-tenant affordance.
    */
   custom?: PatientCustomTag[] | null;
+  /**
+   * v1.31.5: per-patient values for tenant-wide custom tag definitions.
+   * Keyed by definitionId (uuid) which points to a row in
+   * knowledge_nodes with node_type='custom_tag_definition' under the
+   * tenant&rsquo;s user_id. The options chips come from the definition;
+   * the patient&rsquo;s selected subset + provenance live here.
+   */
+  customSelections?: Record<string, PatientCustomTagValue> | null;
+};
+
+/**
+ * v1.31.5: per-patient value for a tenant-wide custom tag definition.
+ * The options chips themselves live on the definition; this just stores
+ * which chips Karen toggled active for THIS patient + provenance.
+ */
+export type PatientCustomTagValue = {
+  selected: string[];
+  setByUserId: string;
+  setAt: string;
+  reason: string | null;
+};
+
+/**
+ * v1.31.5: tenant-wide custom tag definition. Stored as a
+ * knowledge_nodes row with node_type='custom_tag_definition'. Karen
+ * creates one (&lsquo;Rescheduler&rsquo; with chips Chronic/Occasional/Never),
+ * and it appears on every patient&rsquo;s SoftTagsCard with a Set tag
+ * affordance &mdash; same UX as the seeded six tags.
+ */
+export type CustomTagDefinition = {
+  id: string;
+  name: string;
+  options: string[];
+  createdByUserId: string;
+  createdAt: string;
 };
 
 /**
