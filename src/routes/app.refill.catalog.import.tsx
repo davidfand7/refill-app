@@ -150,7 +150,7 @@ function CatalogImportPage() {
     <div>
       <PageHeader
         title="Import services from CSV"
-        description="Drop your Acuity service-list export (or any CSV with a service name column). We'll preview what would land in your Service catalog before anything writes. Re-uploading the same file is safe — services match by name within your tenant, no duplicates created."
+        description="Drop your QuickBooks Item List export (or Acuity / Square / any CSV with a service name column). Cost-of-goods columns from QB flow straight into your margin math. Preview-then-commit — nothing writes until you confirm. Re-uploading the same file is safe: services match by name, no duplicates."
         actions={
           <Link
             to="/app/refill/catalog/services"
@@ -181,11 +181,10 @@ function CatalogImportPage() {
               <Upload className="h-6 w-6 text-emerald" />
             </div>
             <h3 className="mt-3 text-[17px] font-semibold text-ink">
-              Drop your service-list CSV here
+              Drop your QuickBooks Item List (or any CSV)
             </h3>
             <p className="mt-1.5 text-[13px] text-ink-soft max-w-md mx-auto leading-relaxed">
-              Acuity export, Square, Vagaro, or any CSV with a service-name column.
-              We&rsquo;ll auto-detect the columns we recognize and show you a preview before importing.
+              QuickBooks is the typical source &mdash; that&rsquo;s where cost-of-goods lives, and QB&rsquo;s Cost column flows straight into your margin math. Acuity / Square / Vagaro service exports also work as fallback.
             </p>
             <button
               type="button"
@@ -244,6 +243,7 @@ function CatalogImportPage() {
                 <tbody className="divide-y divide-rule">
                   <MappingRow label="Service name" header={preview.fieldMapping.name} required />
                   <MappingRow label="Sales price" header={preview.fieldMapping.price} />
+                  <MappingRow label="Cost / COGS" header={preview.fieldMapping.cost} hint="Flows into cogs_per_service on each row — margin math hot on first import." />
                   <MappingRow label="Category" header={preview.fieldMapping.category} hint="If missing, we'll infer category from the service name (e.g. 'botox' → Tox)." />
                   <MappingRow label="Description / notes" header={preview.fieldMapping.description} />
                   <MappingRow label="Duration" header={preview.fieldMapping.duration} hint="Currently ignored — duration isn't stored on services yet." />
@@ -277,6 +277,9 @@ function CatalogImportPage() {
                 {preview.willUpdate > 0 && (
                   <SummaryChip label="Will update" value={preview.willUpdate} tone="info" />
                 )}
+                {preview.withCogs > 0 && (
+                  <SummaryChip label="With COGS" value={preview.withCogs} tone="good" />
+                )}
               </div>
               {preview.parseErrors.length > 0 && (
                 <details className="text-[12px] text-ink-soft">
@@ -307,6 +310,7 @@ function CatalogImportPage() {
                         <th className="text-left py-2 pr-3">Name</th>
                         <th className="text-left py-2 pr-3">Category</th>
                         <th className="text-right py-2 pr-3">Price</th>
+                        <th className="text-right py-2 pr-3">COGS</th>
                         <th className="text-left py-2 pr-3">Action</th>
                         <th className="text-left py-2">Notes</th>
                       </tr>
@@ -328,6 +332,13 @@ function CatalogImportPage() {
                             </span>
                           </td>
                           <td className="py-2 pr-3 text-right tabular-nums">{fmtUsd(r.parsedPrice)}</td>
+                          <td className="py-2 pr-3 text-right tabular-nums">
+                            {r.parsedCogs !== null ? (
+                              fmtUsd(r.parsedCogs)
+                            ) : (
+                              <span className="text-ink-faint">—</span>
+                            )}
+                          </td>
                           <td className="py-2 pr-3">
                             <span
                               className={cn(

@@ -1,14 +1,21 @@
 /**
- * catalog-csv.ts — service-list CSV parser (v1.29.4).
+ * catalog-csv.ts — service-list CSV parser (v1.29.4 / .1).
  *
  * Hand-rolled CSV parser (no dependency) mirroring the patient-csv /
- * appointment-csv style. Targets Acuity Scheduling service-list exports
- * first per feedback_validate_against_real_exports; other platforms get
- * added incrementally as real exports surface.
+ * appointment-csv style.
  *
- * Header detection is fuzzy: we look for common name variants for each
- * field. If a category column isn't present, we fall back to name-based
- * inference (botox/dysport/etc → tox, juvederm/restylane → filler, etc).
+ * v1.29.4.1 reframe (per Grasshopper 2026-06-01): the typical export
+ * source for spa CATALOG data is the ACCOUNTING platform (QuickBooks),
+ * NOT the scheduling platform (Acuity). Reason: cost-of-goods lives in
+ * accounting. The original v1.29.4 led with Acuity columns; v1.29.4.1
+ * leads with QB Item List columns (Item, Sales Price, Cost, Type,
+ * Sales Description) and treats Acuity columns as a fallback. The QB
+ * Cost column flows directly into cogs_per_service when present —
+ * margin math is hot on first import.
+ *
+ * Header detection is fuzzy. If a category column isn't present, we
+ * fall back to name-based inference (botox/dysport → tox,
+ * juvederm/restylane → filler, etc).
  *
  * Pattern: client parses for preview, then on commit POSTs the raw CSV
  * to ingestServicesCsvFn which re-parses server-side and upserts by
@@ -22,12 +29,14 @@ export type ParsedServiceRow = {
   rawName: string;
   rawCategory: string | null;
   rawPrice: string;
+  rawCost: string | null;
   rawDuration: string | null;
   rawDescription: string | null;
   parsedName: string;
   parsedCategory: ServiceCategory;
   categorySource: "csv" | "name-inferred" | "default";
   parsedPrice: number | null;
+  parsedCogs: number | null;
   parsedDescription: string | null;
   warnings: string[];
 };
@@ -39,6 +48,7 @@ export type ParsedCatalogCsv = {
     name: string | null;
     category: string | null;
     price: string | null;
+    cost: string | null;
     duration: string | null;
     description: string | null;
   };
@@ -91,20 +101,33 @@ function splitCsvRows(text: string): string[] {
 
 // ─── Header fuzzy matching ────────────────────────────────────────────────
 
+// Order matters: QB-first because accounting platforms are the typical
+// catalog source (cost-of-goods lives there). Acuity / Square / Vagaro
+// service-list exports stay as fallback header shapes.
 const NAME_HEADER_CANDIDATES = [
-  "service name", "name", "title", "service", "treatment", "appointment type",
+  "item", "item name", "service name", "name", "title", "service",
+  "treatment", "appointment type", "product/service",
 ];
 const CATEGORY_HEADER_CANDIDATES = [
-  "category", "service category", "type", "service type", "group", "appointment category",
+  "type", "item type", "category", "service category", "service type",
+  "group", "class", "appointment category",
 ];
 const PRICE_HEADER_CANDIDATES = [
-  "price", "service price", "rate", "fee", "cost", "amount",
+  "sales price", "price", "service price", "rate", "fee", "amount",
+  "unit price", "selling price",
+];
+// QB Item List has a separate Cost column — flows straight into
+// services.cogs_per_service when present. v1.29.4 (Acuity-first) didn't
+// look for this; v1.29.4.1 does.
+const COST_HEADER_CANDIDATES = [
+  "cost", "item cost", "purchase cost", "cogs", "wholesale cost",
 ];
 const DURATION_HEADER_CANDIDATES = [
   "duration", "service duration", "duration (minutes)", "minutes", "length",
 ];
 const DESCRIPTION_HEADER_CANDIDATES = [
-  "description", "service description", "notes", "details",
+  "sales description", "description", "service description", "notes",
+  "purchase description", "details",
 ];
 
 function findHeader(headers: string[], candidates: string[]): string | null {
@@ -185,11 +208,18 @@ export function parseServiceListCsv(text: string): ParsedCatalogCsv {
   const nameHeader = findHeader(headers, NAME_HEADER_CANDIDATES);
   const categoryHeader = findHeader(headers, CATEGORY_HEADER_CANDIDATES);
   const priceHeader = findHeader(headers, PRICE_HEADER_CANDIDATES);
+  const costHeader = findHeader(
+    // Don't collide with the price column: if price already pointed at a
+    // header that's also in the cost candidates (e.g. "Cost" used as sale
+    // price by a small practice), skip cost.
+    headers.filter((h) => h !== priceHeader),
+    COST_HEADER_CANDIDATES,
+  );
   const durationHeader = findHeader(headers, DURATION_HEADER_CANDIDATES);
   const descriptionHeader = findHeader(headers, DESCRIPTION_HEADER_CANDIDATES);
 
   const mappedHeaders = new Set(
-    [nameHeader, categoryHeader, priceHeader, durationHeader, descriptionHeader].filter(
+    [nameHeader, categoryHeader, priceHeader, costHeader, durationHeader, descriptionHeader].filter(
       (h): h is string => h !== null,
     ),
   );
@@ -199,6 +229,7 @@ export function parseServiceListCsv(text: string): ParsedCatalogCsv {
   const nameIdx = headerIndex(nameHeader);
   const categoryIdx = headerIndex(categoryHeader);
   const priceIdx = headerIndex(priceHeader);
+  const costIdx = headerIndex(costHeader);
   const durationIdx = headerIndex(durationHeader);
   const descriptionIdx = headerIndex(descriptionHeader);
 
@@ -210,6 +241,7 @@ export function parseServiceListCsv(text: string): ParsedCatalogCsv {
     const rawName = nameIdx >= 0 ? (cols[nameIdx] ?? "") : "";
     const rawCategory = categoryIdx >= 0 ? (cols[categoryIdx] ?? "") : "";
     const rawPrice = priceIdx >= 0 ? (cols[priceIdx] ?? "") : "";
+    const rawCost = costIdx >= 0 ? (cols[costIdx] ?? "") : "";
     const rawDuration = durationIdx >= 0 ? (cols[durationIdx] ?? "") : "";
     const rawDescription = descriptionIdx >= 0 ? (cols[descriptionIdx] ?? "") : "";
 
@@ -223,6 +255,10 @@ export function parseServiceListCsv(text: string): ParsedCatalogCsv {
     const parsedPrice = parsePriceString(rawPrice);
     if (parsedPrice === null) {
       warnings.push(rawPrice ? `Couldn't parse price "${rawPrice}".` : "No price found; will land at $0.");
+    }
+    const parsedCogs = rawCost ? parsePriceString(rawCost) : null;
+    if (rawCost && parsedCogs === null) {
+      warnings.push(`Couldn't parse cost "${rawCost}".`);
     }
 
     let parsedCategory: ServiceCategory;
@@ -251,12 +287,14 @@ export function parseServiceListCsv(text: string): ParsedCatalogCsv {
       rawName,
       rawCategory: rawCategory || null,
       rawPrice,
+      rawCost: rawCost || null,
       rawDuration: rawDuration || null,
       rawDescription: rawDescription || null,
       parsedName,
       parsedCategory,
       categorySource,
       parsedPrice: parsedPrice ?? 0,
+      parsedCogs,
       parsedDescription,
       warnings,
     });
@@ -269,6 +307,7 @@ export function parseServiceListCsv(text: string): ParsedCatalogCsv {
       name: nameHeader,
       category: categoryHeader,
       price: priceHeader,
+      cost: costHeader,
       duration: durationHeader,
       description: descriptionHeader,
     },

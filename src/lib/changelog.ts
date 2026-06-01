@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.29.4.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.29.4.1 &mdash; QuickBooks-first reframe + Cost column &rarr; cogs_per_service.</strong> v1.29.4 led the import parser + copy with Acuity (scheduling platform). Grasshopper called the wrong claim: the typical catalog data source is the ACCOUNTING platform (QuickBooks), not scheduling, because that&rsquo;s where cost-of-goods lives. Margin math is hot on first import only if we read QB&rsquo;s Cost column &mdash; which v1.29.4 missed. <strong>Three corrections</strong>: (1) parser header candidates reordered with QB Item List columns FIRST (<code>Item</code>, <code>Sales Price</code>, <code>Cost</code>, <code>Type</code>, <code>Sales Description</code>), Acuity / Square / Vagaro columns retained as fallback; (2) new <code>COST_HEADER_CANDIDATES</code> + collision-avoidance with the price column (if a small-practice CSV uses &lsquo;Cost&rsquo; as the price column, we don&rsquo;t double-map); (3) Cost column parses into <code>parsedCogs</code> and flows into <code>services.cogs_per_service</code> on insert / update &mdash; on update we honor cogs_source by NOT overwriting cogs on services already in <code>derived</code> mode (auto-derived from product linkage takes priority over CSV-cost). <strong>UI changes</strong>: column-mapping table gains a Cost / COGS row; summary chips add &lsquo;With COGS&rsquo; count; preview table gains a COGS column showing the per-row cost (or &mdash; when blank). Empty-state copy and PageHeader description both lead with &ldquo;QuickBooks Item List&rdquo; first. <strong>Touched</strong>: <code>src/lib/catalog-csv.ts</code> (header candidates reordered + COST_HEADER_CANDIDATES + parsedCogs in ParsedServiceRow + cost-column collision avoidance), <code>src/server/refill-catalog.ts</code> (ImportPreview gains <code>cost</code> field-mapping + <code>withCogs</code> count + commit honors derived-mode on existing rows), <code>src/routes/app.refill.catalog.import.tsx</code> (copy reframe + COGS column in mapping + summary + preview table), <code>src/lib/changelog.ts</code> (this entry).",
+    ],
+  },
+  {
     version: "v1.29.4",
     date: "June 2026",
     items: [

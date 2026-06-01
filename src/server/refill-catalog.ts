@@ -783,6 +783,7 @@ export type ImportPreviewRow = {
   parsedCategory: ServiceCategory;
   categorySource: "csv" | "name-inferred" | "default";
   parsedPrice: number;
+  parsedCogs: number | null;
   parsedDescription: string | null;
   action: "create" | "update" | "skip-error";
   existingServiceId: string | null;
@@ -795,6 +796,7 @@ export type ImportPreview = {
     name: string | null;
     category: string | null;
     price: string | null;
+    cost: string | null;
     duration: string | null;
     description: string | null;
   };
@@ -804,6 +806,7 @@ export type ImportPreview = {
   skippedRows: number;
   willCreate: number;
   willUpdate: number;
+  withCogs: number;
   preview: ImportPreviewRow[];
   parseErrors: Array<{ rowIndex: number; reason: string }>;
 };
@@ -847,17 +850,20 @@ export const ingestServicesCsvFn = createServerFn({ method: "POST" })
     if (data.mode === "preview") {
       let willCreate = 0;
       let willUpdate = 0;
+      let withCogs = 0;
       const preview: ImportPreviewRow[] = parsed.rows.map((r) => {
         const existingId = byNameLower.get(r.parsedName.trim().toLowerCase()) ?? null;
         const action: ImportPreviewRow["action"] = existingId ? "update" : "create";
         if (action === "create") willCreate++;
         else willUpdate++;
+        if (r.parsedCogs !== null) withCogs++;
         return {
           rowIndex: r.rowIndex,
           parsedName: r.parsedName,
           parsedCategory: r.parsedCategory,
           categorySource: r.categorySource,
           parsedPrice: r.parsedPrice ?? 0,
+          parsedCogs: r.parsedCogs,
           parsedDescription: r.parsedDescription,
           action,
           existingServiceId: existingId,
@@ -873,6 +879,7 @@ export const ingestServicesCsvFn = createServerFn({ method: "POST" })
         skippedRows: parsed.skippedRows,
         willCreate,
         willUpdate,
+        withCogs,
         preview,
         parseErrors: parsed.parseErrors,
       };
@@ -887,13 +894,30 @@ export const ingestServicesCsvFn = createServerFn({ method: "POST" })
       const existingId = byNameLower.get(r.parsedName.trim().toLowerCase()) ?? null;
       try {
         if (existingId) {
+          // On update, only set cogs_per_service if the CSV provided one
+          // AND the existing service is in 'manual' mode. Skip cogs write
+          // for derived-mode services (their cogs is auto-managed) — would
+          // be silently overwritten on next link change otherwise.
+          const updatePayload: Record<string, unknown> = {
+            category: r.parsedCategory,
+            service_price: r.parsedPrice ?? 0,
+            notes: r.parsedDescription,
+          };
+          if (r.parsedCogs !== null) {
+            const { data: existing } = await sb
+              .from("services")
+              .select("cogs_source")
+              .eq("id", existingId)
+              .eq("tenant_id", tenantId)
+              .maybeSingle();
+            if (existing?.cogs_source !== "derived") {
+              updatePayload.cogs_per_service = r.parsedCogs;
+              updatePayload.cogs_source = "manual";
+            }
+          }
           const { error } = await sb
             .from("services")
-            .update({
-              category: r.parsedCategory,
-              service_price: r.parsedPrice ?? 0,
-              notes: r.parsedDescription,
-            })
+            .update(updatePayload)
             .eq("id", existingId)
             .eq("tenant_id", tenantId);
           if (error) throw new Error(error.message);
@@ -906,6 +930,7 @@ export const ingestServicesCsvFn = createServerFn({ method: "POST" })
               name: r.parsedName,
               category: r.parsedCategory,
               service_price: r.parsedPrice ?? 0,
+              cogs_per_service: r.parsedCogs,
               cogs_source: "manual",
               notes: r.parsedDescription,
             });
