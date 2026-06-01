@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.29.4.3",
+    date: "June 2026",
+    items: [
+      "<strong>v1.29.4.3 &mdash; Header-row detection that doesn&rsquo;t get fooled + positive auto-detection UX.</strong> v1.29.4.2&rsquo;s title-row skip was too eager: QB&rsquo;s subtitle row contains &lsquo;Product/Service List&rsquo; which substring-matches the name-column alias &lsquo;product/service&rsquo;, so the parser stopped at row 1 and started data parsing from row 2 onward &mdash; treating the REAL header row (&lsquo;Product/Service full name | Type | Memo/Description | Sales price | Purchase price&rsquo;) as the first data row. Result: 218 rows parsed with name = the literal header strings, every other column &lsquo;not found&rsquo;, every price $0. <strong>Fix #1 &mdash; multi-candidate scoring</strong>: <code>findHeaderRowIndex</code> now scans the first 8 rows and SCORES each by how many cells look like recognized headers across ALL field candidates (name + type + price + cost + category + description + duration). Real header rows score 4-5; title rows score 0-1. Plus a guard: rows with fewer than 2 non-empty cells are skipped entirely (disqualifies single-cell title / subtitle rows even when they substring-match a candidate). Highest score wins. For Karen&rsquo;s QB export: row 0 &lsquo;REJUV SKIN SPA, LLC&rsquo; scores 0, row 1 &lsquo;Product/Service List&rsquo; has 1 non-empty cell &mdash; skipped, row 2 blank &mdash; skipped, row 3 has 5 cells matching 5 candidates &mdash; SELECTED. Preview note now reads &lsquo;Skipped 3 preamble rows&rsquo;. <strong>Fix #2 &mdash; positive auto-detection callout</strong>: when name column IS found, a green-emerald banner replaces the prior &lsquo;not found&rsquo;-everywhere visual: &ldquo;Auto-detected N of 5 columns. Smart-mapping found your QB columns. Review the table below to confirm &mdash; anything marked &lsquo;not found&rsquo; is optional and won&rsquo;t block the import.&rdquo; Failing path retains a red AlertCircle banner. Mapping table rows now show a green CheckCircle next to each found field, and the found-header value renders in emerald-on-emerald-soft instead of plain mono; missing fields render as a quiet em-dash instead of italics &lsquo;not found&rsquo;. UX reads as success when it succeeds. <strong>Touched</strong>: <code>src/lib/catalog-csv.ts</code> (findHeaderRowIndex algorithm rewrite), <code>src/routes/app.refill.catalog.import.tsx</code> (auto-detection banner + per-row checkmarks + emerald success styling on found headers), <code>src/lib/changelog.ts</code> (this entry).",
+    ],
+  },
+  {
     version: "v1.29.4.2",
     date: "June 2026",
     items: [

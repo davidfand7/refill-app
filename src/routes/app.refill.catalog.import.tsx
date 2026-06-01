@@ -28,6 +28,7 @@ import {
   ClipboardList,
   FileText,
   Loader2,
+  Sparkles,
   Upload,
   X,
 } from "lucide-react";
@@ -237,6 +238,56 @@ function CatalogImportPage() {
 
         {preview && !receipt && (
           <>
+            {(() => {
+              const fields = [
+                preview.fieldMapping.name,
+                preview.fieldMapping.type,
+                preview.fieldMapping.price,
+                preview.fieldMapping.cost,
+                preview.fieldMapping.description,
+              ];
+              const found = fields.filter((f) => f !== null).length;
+              const total = fields.length;
+              return (
+                <section
+                  className={cn(
+                    "rounded-xl border px-5 py-3.5 flex items-start gap-3",
+                    preview.fieldMapping.name
+                      ? "border-emerald/30 bg-emerald-soft"
+                      : "border-red-200 bg-red-50",
+                  )}
+                >
+                  {preview.fieldMapping.name ? (
+                    <Sparkles className="h-5 w-5 text-emerald shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div
+                      className={cn(
+                        "text-[14px] font-semibold",
+                        preview.fieldMapping.name ? "text-emerald-ink" : "text-red-800",
+                      )}
+                    >
+                      {preview.fieldMapping.name
+                        ? `Auto-detected ${found} of ${total} columns`
+                        : "No service-name column found"}
+                    </div>
+                    <div
+                      className={cn(
+                        "text-[12px] mt-0.5",
+                        preview.fieldMapping.name ? "text-emerald-ink/85" : "text-red-700",
+                      )}
+                    >
+                      {preview.fieldMapping.name
+                        ? "Smart-mapping found your QB columns. Review the table below to confirm — anything marked 'not found' is optional and won't block the import."
+                        : "Tell me which header is the service name and I'll teach the parser to recognize it."}
+                    </div>
+                  </div>
+                </section>
+              );
+            })()}
+
             <section className="rounded-xl border border-rule bg-white px-5 py-4 space-y-3">
               <h3 className="text-[14px] font-semibold text-ink">Column mapping</h3>
               <table className="w-full text-[13px]">
@@ -261,14 +312,6 @@ function CatalogImportPage() {
                   <span className="font-semibold">Ignored columns:</span>{" "}
                   {preview.unmappedHeaders.join(", ")}
                 </p>
-              )}
-              {!preview.fieldMapping.name && (
-                <div className="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-[13px] text-red-800 flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>
-                    No service-name column found. Tell me which header is the service name and I'll teach the parser to recognize it.
-                  </span>
-                </div>
               )}
             </section>
 
@@ -478,14 +521,15 @@ function MappingRow({
   return (
     <tr>
       <td className="py-2 pr-3 text-ink-soft">
+        {header && <CheckCircle2 className="inline h-3.5 w-3.5 text-emerald mr-1.5 -mt-0.5" />}
         {label}
         {required && <span className="text-red-600">*</span>}
       </td>
       <td className="py-2 pr-3">
         {header ? (
-          <code className="text-[12px] bg-bg-soft rounded px-2 py-0.5">{header}</code>
+          <code className="text-[12px] bg-emerald-soft text-emerald-ink rounded px-2 py-0.5">{header}</code>
         ) : (
-          <span className="text-[12px] text-ink-faint italic">not found</span>
+          <span className="text-[12px] text-ink-faint italic">&mdash;</span>
         )}
       </td>
       <td className="py-2 text-[11px] text-ink-soft italic">{hint ?? ""}</td>

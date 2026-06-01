@@ -210,21 +210,55 @@ function parsePriceString(raw: string): number | null {
 // ─── Title-row skip (QB Quirk) ────────────────────────────────────────────
 
 /**
- * QB exports prepend a company-name title row before the actual headers
- * (e.g. "REJUV SKIN SPA, LLC,,,,"). Look through the first few rows for
- * the row that actually contains a recognizable name-column header.
+ * QB exports prepend multiple preamble rows before the actual headers:
+ *   row 0: "REJUV SKIN SPA, LLC,,,,"     (company name title)
+ *   row 1: "Product/Service List,,,,"    (report subtitle)
+ *   row 2: ""                            (blank)
+ *   row 3: "Product/Service full name,Type,Memo/Description,Sales price,Purchase price"  ← actual headers
+ *
+ * v1.29.4.2's naive "first row containing a name candidate" picked row 1
+ * because "Product/Service List" substring-matches "product/service".
+ *
+ * v1.29.4.3: score each candidate row by how many of its cells look like
+ * recognized headers across ALL field candidates (name + type + price +
+ * cost + category + description + duration). The real header row will
+ * have 4-5 matches; a single-cell title/subtitle row will have at most 1.
+ * Require ≥2 non-empty cells to disqualify title rows entirely. Highest
+ * score wins; ties resolve to the earliest row.
  */
 function findHeaderRowIndex(lines: string[]): number {
   const limit = Math.min(8, lines.length);
+  const allCandidates = [
+    ...NAME_HEADER_CANDIDATES,
+    ...TYPE_HEADER_CANDIDATES,
+    ...CATEGORY_HEADER_CANDIDATES,
+    ...PRICE_HEADER_CANDIDATES,
+    ...COST_HEADER_CANDIDATES,
+    ...DURATION_HEADER_CANDIDATES,
+    ...DESCRIPTION_HEADER_CANDIDATES,
+  ];
+  let bestIdx = 0;
+  let bestScore = 0;
   for (let i = 0; i < limit; i++) {
     const cells = parseCsvLine(lines[i]).map((c) => c.toLowerCase().trim());
-    for (const candidate of NAME_HEADER_CANDIDATES) {
-      if (cells.some((c) => c === candidate || c.includes(candidate))) {
-        return i;
+    const nonEmpty = cells.filter((c) => c.length > 0).length;
+    if (nonEmpty < 2) continue;
+    let score = 0;
+    for (const cell of cells) {
+      if (!cell) continue;
+      for (const candidate of allCandidates) {
+        if (cell === candidate || cell.includes(candidate)) {
+          score++;
+          break; // count each cell at most once
+        }
       }
     }
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
   }
-  return 0;
+  return bestIdx;
 }
 
 // ─── Main parser ──────────────────────────────────────────────────────────
