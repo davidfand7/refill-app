@@ -460,3 +460,351 @@ export const deleteServiceFn = createServerFn({ method: "POST" })
     if (error) throw new Error(`Couldn't delete service: ${error.message}`);
     return { ok: true };
   });
+
+// ══ Service-Products linkage + auto-COGS derive (v1.29.3) ════════════════
+
+export type ServiceProductLink = {
+  id: string;
+  serviceId: string;
+  productId: string;
+  productBrand: string;
+  productUnitType: string;
+  productCostPerUnit: number;
+  quantityPerService: number;
+  derivedCostContribution: number;
+};
+
+type ServiceProductRow = {
+  id: string;
+  service_id: string;
+  product_id: string;
+  quantity_per_service: string | number;
+  products: {
+    id: string;
+    brand: string;
+    unit_type: string;
+    cost_per_unit: string | number;
+    tenant_id: string;
+  } | null;
+};
+
+function rowToLink(r: ServiceProductRow): ServiceProductLink | null {
+  if (!r.products) return null;
+  const qty = typeof r.quantity_per_service === "string" ? Number(r.quantity_per_service) : r.quantity_per_service;
+  const cost = typeof r.products.cost_per_unit === "string" ? Number(r.products.cost_per_unit) : r.products.cost_per_unit;
+  return {
+    id: r.id,
+    serviceId: r.service_id,
+    productId: r.product_id,
+    productBrand: r.products.brand,
+    productUnitType: r.products.unit_type,
+    productCostPerUnit: cost,
+    quantityPerService: qty,
+    derivedCostContribution: cost * qty,
+  };
+}
+
+/**
+ * Compute SUM(product.cost_per_unit × link.quantity_per_service) for a service.
+ * If the service has cogs_source = 'derived', this value gets written back to
+ * services.cogs_per_service on every link/unlink/quantity change so the read
+ * path stays single-column-simple.
+ */
+async function computeDerivedCogs(
+  sb: SupabaseAdmin,
+  serviceId: string,
+  tenantId: string,
+): Promise<number> {
+  const { data, error } = await sb
+    .from("service_products")
+    .select(`
+      quantity_per_service,
+      products!inner ( cost_per_unit, tenant_id )
+    `)
+    .eq("service_id", serviceId);
+  if (error) throw new Error(`Couldn't compute derived COGS: ${error.message}`);
+  let sum = 0;
+  for (const r of (data ?? []) as unknown as Array<{
+    quantity_per_service: string | number;
+    products: { cost_per_unit: string | number; tenant_id: string };
+  }>) {
+    if (r.products?.tenant_id !== tenantId) continue;
+    const qty = typeof r.quantity_per_service === "string" ? Number(r.quantity_per_service) : r.quantity_per_service;
+    const cost = typeof r.products.cost_per_unit === "string" ? Number(r.products.cost_per_unit) : r.products.cost_per_unit;
+    sum += qty * cost;
+  }
+  return Math.round(sum * 100) / 100;
+}
+
+/**
+ * If the service is in 'derived' mode, recompute and persist cogs_per_service
+ * from the current linkage. No-op if in 'manual' mode.
+ */
+async function syncDerivedCogsIfNeeded(
+  sb: SupabaseAdmin,
+  serviceId: string,
+  tenantId: string,
+): Promise<void> {
+  const { data: svc, error: svcErr } = await sb
+    .from("services")
+    .select("cogs_source")
+    .eq("id", serviceId)
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+  if (svcErr) throw new Error(`Couldn't read service: ${svcErr.message}`);
+  if (!svc || svc.cogs_source !== "derived") return;
+  const derived = await computeDerivedCogs(sb, serviceId, tenantId);
+  const { error: updErr } = await sb
+    .from("services")
+    .update({ cogs_per_service: derived })
+    .eq("id", serviceId)
+    .eq("tenant_id", tenantId);
+  if (updErr) throw new Error(`Couldn't persist derived COGS: ${updErr.message}`);
+}
+
+async function loadServiceById(
+  sb: SupabaseAdmin,
+  serviceId: string,
+  tenantId: string,
+): Promise<Service> {
+  const { data, error } = await sb
+    .from("services")
+    .select("*")
+    .eq("id", serviceId)
+    .eq("tenant_id", tenantId)
+    .single();
+  if (error || !data) throw new Error(`Couldn't load service: ${error?.message ?? "no row"}`);
+  return rowToService(data as ServiceRow);
+}
+
+async function loadLinksForService(
+  sb: SupabaseAdmin,
+  serviceId: string,
+  tenantId: string,
+): Promise<ServiceProductLink[]> {
+  const { data, error } = await sb
+    .from("service_products")
+    .select(`
+      id,
+      service_id,
+      product_id,
+      quantity_per_service,
+      products ( id, brand, unit_type, cost_per_unit, tenant_id )
+    `)
+    .eq("service_id", serviceId)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(`Couldn't list service-products: ${error.message}`);
+  const rows = (data ?? []) as unknown as ServiceProductRow[];
+  return rows
+    .map(rowToLink)
+    .filter((l): l is ServiceProductLink => l !== null && l.productCostPerUnit >= 0)
+    .filter((l) => {
+      // defense-in-depth: ensure the joined product belongs to the same tenant
+      const r = rows.find((row) => row.id === l.id);
+      return r?.products?.tenant_id === tenantId;
+    });
+}
+
+const linkInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  serviceId: z.string().uuid(),
+});
+
+const createLinkInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  serviceId: z.string().uuid(),
+  productId: z.string().uuid(),
+  quantityPerService: z.number().positive("Quantity must be greater than 0."),
+});
+
+const updateLinkInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  linkId: z.string().uuid(),
+  quantityPerService: z.number().positive("Quantity must be greater than 0."),
+});
+
+const unlinkInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  linkId: z.string().uuid(),
+});
+
+const setCogsSourceInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  serviceId: z.string().uuid(),
+  cogsSource: z.enum(["manual", "derived"]),
+});
+
+export type ServiceLinkageBundle = {
+  service: Service;
+  links: ServiceProductLink[];
+};
+
+// ─── listServiceProductsFn ────────────────────────────────────────────────
+
+export const listServiceProductsFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => linkInput.parse(raw))
+  .handler(async ({ data }): Promise<ServiceLinkageBundle> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const service = await loadServiceById(sb, data.serviceId, tenantId);
+    const links = await loadLinksForService(sb, data.serviceId, tenantId);
+    return { service, links };
+  });
+
+// ─── linkProductToServiceFn ───────────────────────────────────────────────
+
+export const linkProductToServiceFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => createLinkInput.parse(raw))
+  .handler(async ({ data }): Promise<ServiceLinkageBundle> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    // Validate both service + product belong to this tenant.
+    const { data: svc, error: svcErr } = await sb
+      .from("services")
+      .select("id")
+      .eq("id", data.serviceId)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (svcErr) throw new Error(`Couldn't verify service: ${svcErr.message}`);
+    if (!svc) throw new Error("Service not found in this tenant.");
+    const { data: prod, error: prodErr } = await sb
+      .from("products")
+      .select("id")
+      .eq("id", data.productId)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (prodErr) throw new Error(`Couldn't verify product: ${prodErr.message}`);
+    if (!prod) throw new Error("Product not found in this tenant.");
+    // Upsert via the unique (service_id, product_id) constraint — if the
+    // owner clicks Link twice on the same product, second click updates qty.
+    const { error: linkErr } = await sb
+      .from("service_products")
+      .upsert(
+        {
+          service_id: data.serviceId,
+          product_id: data.productId,
+          quantity_per_service: data.quantityPerService,
+        },
+        { onConflict: "service_id,product_id" },
+      );
+    if (linkErr) throw new Error(`Couldn't link product: ${linkErr.message}`);
+    await syncDerivedCogsIfNeeded(sb, data.serviceId, tenantId);
+    const service = await loadServiceById(sb, data.serviceId, tenantId);
+    const links = await loadLinksForService(sb, data.serviceId, tenantId);
+    return { service, links };
+  });
+
+// ─── updateServiceProductQuantityFn ───────────────────────────────────────
+
+export const updateServiceProductQuantityFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => updateLinkInput.parse(raw))
+  .handler(async ({ data }): Promise<ServiceLinkageBundle> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    // Verify the link belongs to a service in this tenant.
+    const { data: linkRow, error: linkErr } = await sb
+      .from("service_products")
+      .select(`service_id, services!inner(tenant_id)`)
+      .eq("id", data.linkId)
+      .maybeSingle();
+    if (linkErr) throw new Error(`Couldn't verify link: ${linkErr.message}`);
+    const linkRowTyped = linkRow as unknown as { service_id: string; services: { tenant_id: string } } | null;
+    if (!linkRowTyped || linkRowTyped.services.tenant_id !== tenantId) {
+      throw new Error("Link not found in this tenant.");
+    }
+    const serviceId = linkRowTyped.service_id;
+    const { error: updErr } = await sb
+      .from("service_products")
+      .update({ quantity_per_service: data.quantityPerService })
+      .eq("id", data.linkId);
+    if (updErr) throw new Error(`Couldn't update quantity: ${updErr.message}`);
+    await syncDerivedCogsIfNeeded(sb, serviceId, tenantId);
+    const service = await loadServiceById(sb, serviceId, tenantId);
+    const links = await loadLinksForService(sb, serviceId, tenantId);
+    return { service, links };
+  });
+
+// ─── unlinkServiceProductFn ───────────────────────────────────────────────
+
+export const unlinkServiceProductFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => unlinkInput.parse(raw))
+  .handler(async ({ data }): Promise<ServiceLinkageBundle> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const { data: linkRow, error: linkErr } = await sb
+      .from("service_products")
+      .select(`service_id, services!inner(tenant_id)`)
+      .eq("id", data.linkId)
+      .maybeSingle();
+    if (linkErr) throw new Error(`Couldn't verify link: ${linkErr.message}`);
+    const linkRowTyped = linkRow as unknown as { service_id: string; services: { tenant_id: string } } | null;
+    if (!linkRowTyped || linkRowTyped.services.tenant_id !== tenantId) {
+      throw new Error("Link not found in this tenant.");
+    }
+    const serviceId = linkRowTyped.service_id;
+    const { error: delErr } = await sb
+      .from("service_products")
+      .delete()
+      .eq("id", data.linkId);
+    if (delErr) throw new Error(`Couldn't unlink: ${delErr.message}`);
+    await syncDerivedCogsIfNeeded(sb, serviceId, tenantId);
+    const service = await loadServiceById(sb, serviceId, tenantId);
+    const links = await loadLinksForService(sb, serviceId, tenantId);
+    return { service, links };
+  });
+
+// ─── setServiceCogsSourceFn ───────────────────────────────────────────────
+
+export const setServiceCogsSourceFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => setCogsSourceInput.parse(raw))
+  .handler(async ({ data }): Promise<ServiceLinkageBundle> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    if (data.cogsSource === "derived") {
+      const derived = await computeDerivedCogs(sb, data.serviceId, tenantId);
+      const { error } = await sb
+        .from("services")
+        .update({ cogs_source: "derived", cogs_per_service: derived })
+        .eq("id", data.serviceId)
+        .eq("tenant_id", tenantId);
+      if (error) throw new Error(`Couldn't switch to derived: ${error.message}`);
+    } else {
+      // Flipping to manual leaves the current cogs_per_service intact so
+      // the owner has a starting value to edit. They can clear or change
+      // it via the regular service-edit form.
+      const { error } = await sb
+        .from("services")
+        .update({ cogs_source: "manual" })
+        .eq("id", data.serviceId)
+        .eq("tenant_id", tenantId);
+      if (error) throw new Error(`Couldn't switch to manual: ${error.message}`);
+    }
+    const service = await loadServiceById(sb, data.serviceId, tenantId);
+    const links = await loadLinksForService(sb, data.serviceId, tenantId);
+    return { service, links };
+  });

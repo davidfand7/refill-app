@@ -1,17 +1,18 @@
 /**
- * /app/refill/catalog/services — Services CRUD surface (v1.29.2).
+ * /app/refill/catalog/services — Services CRUD + linkage + auto-COGS (v1.29.2 → v1.29.3).
  *
- * Mirror of v1.29.1 Products against the services table. Manual COGS at
- * v1.29.2; v1.29.3 adds the auto-derive toggle that rewrites COGS from
- * service_products linkage and flips cogs_source = 'derived'.
+ * v1.29.2 shipped the bare CRUD; v1.29.3 lights up the structural payoff:
+ * service_products linkage (which products each service consumes + how much)
+ * plus the auto-COGS toggle that rewrites cogs_per_service = SUM(product cost ×
+ * quantity) whenever linkage changes. Karen enters her products once + her
+ * services once + the math composes itself.
  *
  * Service categories differ from product categories: services have 'laser'
  * and 'facial' (treatment categories), products have 'laser_consumable'
  * (a product category). Per v1.29.0 migration.
  *
- * Deep-link only at v1.29.2 — siblings with /app/refill/catalog/products.
- * If a parent /app/refill/catalog landing is added later, it must become
- * an Outlet shell + catalog.index.tsx per feedback_tanstack_outlet_trap.
+ * Linkage UI lives inline inside the service edit form (only in edit mode —
+ * a service must exist before it can have linked products).
  */
 
 import { createFileRoute } from "@tanstack/react-router";
@@ -19,6 +20,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   ClipboardList,
+  Link2,
   Loader2,
   Pencil,
   Plus,
@@ -34,10 +36,19 @@ import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
   createServiceFn,
   deleteServiceFn,
+  linkProductToServiceFn,
+  listProductsFn,
+  listServiceProductsFn,
   listServicesFn,
+  setServiceCogsSourceFn,
+  unlinkServiceProductFn,
   updateServiceFn,
+  updateServiceProductQuantityFn,
+  type Product,
   type Service,
   type ServiceCategory,
+  type ServiceLinkageBundle,
+  type ServiceProductLink,
 } from "@/server/refill-catalog";
 import { cn } from "@/lib/utils";
 
@@ -123,10 +134,13 @@ function ServicesPage() {
 
   const [loading, setLoading] = useState(true);
   const [services, setServices] = useState<Service[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [adding, setAdding] = useState(false);
   const [addDraft, setAddDraft] = useState<ServiceDraft>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<ServiceDraft>(EMPTY_DRAFT);
+  const [linkage, setLinkage] = useState<ServiceLinkageBundle | null>(null);
+  const [linkageLoading, setLinkageLoading] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -138,13 +152,17 @@ function ServicesPage() {
         const { data: sess } = await supabase.auth.getSession();
         const token = sess.session?.access_token;
         if (!token) return;
-        const rows = await listServicesFn({
-          data: { accessToken: token, viewAsUserId },
-        });
-        if (!cancelled) setServices(rows);
+        const [svcs, prods] = await Promise.all([
+          listServicesFn({ data: { accessToken: token, viewAsUserId } }),
+          listProductsFn({ data: { accessToken: token, viewAsUserId } }),
+        ]);
+        if (!cancelled) {
+          setServices(svcs);
+          setProducts(prods);
+        }
       } catch (err) {
         if (!cancelled) {
-          toast.error(err instanceof Error ? err.message : "Couldn't load services.");
+          toast.error(err instanceof Error ? err.message : "Couldn't load catalog.");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -207,6 +225,7 @@ function ServicesPage() {
       );
       setServices((prev) => prev.map((s) => (s.id === id ? updated : s)));
       setEditingId(null);
+      setLinkage(null);
       toast.success(`Saved ${updated.name}.`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't save service.");
@@ -234,21 +253,134 @@ function ServicesPage() {
     }
   }
 
-  function startEdit(s: Service) {
+  async function startEdit(s: Service) {
     setEditingId(s.id);
     setEditDraft(serviceToDraft(s));
+    setLinkage(null);
+    setLinkageLoading(true);
+    try {
+      const bundle = await withToken((token) =>
+        listServiceProductsFn({
+          data: { accessToken: token, viewAsUserId, serviceId: s.id },
+        }),
+      );
+      setLinkage(bundle);
+      // Sync edit draft cogs with the bundle's authoritative service row
+      // (in case the server recomputed something during a prior session).
+      setEditDraft(serviceToDraft(bundle.service));
+      // Also reconcile the parent services list if the server view differs.
+      setServices((prev) => prev.map((row) => (row.id === s.id ? bundle.service : row)));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't load linkage.");
+    } finally {
+      setLinkageLoading(false);
+    }
   }
 
   function cancelEdit() {
     setEditingId(null);
     setEditDraft(EMPTY_DRAFT);
+    setLinkage(null);
+  }
+
+  function applyBundle(bundle: ServiceLinkageBundle) {
+    setLinkage(bundle);
+    setEditDraft(serviceToDraft(bundle.service));
+    setServices((prev) => prev.map((row) => (row.id === bundle.service.id ? bundle.service : row)));
+  }
+
+  async function onLinkProduct(productId: string, quantity: number) {
+    if (!editingId || busy) return;
+    setBusy(true);
+    try {
+      const bundle = await withToken((token) =>
+        linkProductToServiceFn({
+          data: {
+            accessToken: token,
+            viewAsUserId,
+            serviceId: editingId,
+            productId,
+            quantityPerService: quantity,
+          },
+        }),
+      );
+      applyBundle(bundle);
+      toast.success("Product linked.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't link product.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onUpdateQuantity(linkId: string, quantity: number) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const bundle = await withToken((token) =>
+        updateServiceProductQuantityFn({
+          data: {
+            accessToken: token,
+            viewAsUserId,
+            linkId,
+            quantityPerService: quantity,
+          },
+        }),
+      );
+      applyBundle(bundle);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't update quantity.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onUnlink(linkId: string) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const bundle = await withToken((token) =>
+        unlinkServiceProductFn({
+          data: { accessToken: token, viewAsUserId, linkId },
+        }),
+      );
+      applyBundle(bundle);
+      toast.success("Unlinked.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't unlink.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onToggleCogsSource(source: "manual" | "derived") {
+    if (!editingId || busy) return;
+    setBusy(true);
+    try {
+      const bundle = await withToken((token) =>
+        setServiceCogsSourceFn({
+          data: {
+            accessToken: token,
+            viewAsUserId,
+            serviceId: editingId,
+            cogsSource: source,
+          },
+        }),
+      );
+      applyBundle(bundle);
+      toast.success(source === "derived" ? "Auto COGS on." : "Manual COGS on.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't switch COGS source.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <div>
       <PageHeader
         title="Service catalog"
-        description="The services you offer and what each one charges. Optionally enter COGS (cost of goods per service) for margin tracking — or leave blank now and let v1.29.3 derive it automatically from the products each service consumes."
+        description="The services you offer and what each one charges. Optionally enter COGS (cost of goods per service) for margin tracking — or link products to a service and let COGS derive automatically from product cost × quantity."
         actions={
           !adding && (
             <button
@@ -294,7 +426,7 @@ function ServicesPage() {
               </div>
               <h3 className="mt-3 text-[17px] font-semibold text-ink">No services yet</h3>
               <p className="mt-1.5 text-[13px] text-ink-soft max-w-md mx-auto leading-relaxed">
-                Add the services you offer &mdash; tox per unit, filler per syringe, BBL sessions, HydraFacials. Enter the price you charge; COGS is optional now (v1.29.3 will derive it from product linkage).
+                Add the services you offer &mdash; tox per unit, filler per syringe, BBL sessions, HydraFacials. Enter the price you charge; COGS is optional (or link products to auto-derive it).
               </p>
               <button
                 type="button"
@@ -330,6 +462,13 @@ function ServicesPage() {
                         onCancel={cancelEdit}
                         onDelete={() => onDelete(s)}
                         busy={busy}
+                        linkage={linkage}
+                        linkageLoading={linkageLoading}
+                        products={products}
+                        onLinkProduct={onLinkProduct}
+                        onUpdateQuantity={onUpdateQuantity}
+                        onUnlink={onUnlink}
+                        onToggleCogsSource={onToggleCogsSource}
                       />
                     ) : (
                       <ServiceRow
@@ -363,7 +502,8 @@ function ServiceRow({ service, onEdit }: { service: Service; onEdit: () => void 
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[16px] font-semibold text-ink">{service.name}</span>
               {service.cogsSource === "derived" && (
-                <span className="text-[11px] text-emerald-ink bg-emerald-soft rounded-full px-2 py-0.5">
+                <span className="text-[11px] text-emerald-ink bg-emerald-soft rounded-full px-2 py-0.5 inline-flex items-center gap-1">
+                  <Link2 className="h-3 w-3" />
                   Auto COGS
                 </span>
               )}
@@ -375,7 +515,7 @@ function ServiceRow({ service, onEdit }: { service: Service; onEdit: () => void 
           <div className="text-right tabular-nums shrink-0">
             <div className="text-[13px] text-ink-soft">
               {hasCogs
-                ? `${fmtUsd(service.cogsPerService as number)} cost → ${fmtUsd(service.servicePrice)} sell`
+                ? `${fmtUsd(service.servicePrice)} sell · ${fmtUsd(service.cogsPerService as number)} cost`
                 : `${fmtUsd(service.servicePrice)} sell · COGS not set`}
             </div>
             <div className="text-[15px] font-semibold text-emerald mt-0.5">
@@ -404,6 +544,13 @@ function ServiceFormCard({
   onCancel,
   onDelete,
   busy,
+  linkage,
+  linkageLoading,
+  products,
+  onLinkProduct,
+  onUpdateQuantity,
+  onUnlink,
+  onToggleCogsSource,
 }: {
   mode: "add" | "edit";
   draft: ServiceDraft;
@@ -412,7 +559,17 @@ function ServiceFormCard({
   onCancel: () => void;
   onDelete?: () => void;
   busy: boolean;
+  linkage?: ServiceLinkageBundle | null;
+  linkageLoading?: boolean;
+  products?: Product[];
+  onLinkProduct?: (productId: string, quantity: number) => void;
+  onUpdateQuantity?: (linkId: string, quantity: number) => void;
+  onUnlink?: (linkId: string) => void;
+  onToggleCogsSource?: (source: "manual" | "derived") => void;
 }) {
+  const isDerived = linkage?.service.cogsSource === "derived";
+  const cogsInputDisabled = busy || isDerived;
+
   const computedMargin = useMemo(() => {
     const price = Number.parseFloat(draft.servicePrice);
     if (!Number.isFinite(price)) return null;
@@ -472,16 +629,25 @@ function ServiceFormCard({
           />
         </FormField>
 
-        <FormField label="COGS / cost ($, optional)">
+        <FormField
+          label={
+            isDerived
+              ? "COGS / cost ($, auto-derived)"
+              : "COGS / cost ($, optional)"
+          }
+        >
           <input
             type="number"
             step="0.01"
             min="0"
             value={draft.cogsPerService}
             onChange={(e) => onChange({ ...draft, cogsPerService: e.target.value })}
-            placeholder="Leave blank to auto-derive in v1.29.3"
-            disabled={busy}
-            className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums"
+            placeholder={isDerived ? "Computed from linked products" : "Leave blank or link products below"}
+            disabled={cogsInputDisabled}
+            className={cn(
+              "w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums",
+              isDerived && "bg-emerald-soft cursor-not-allowed",
+            )}
           />
         </FormField>
       </div>
@@ -496,6 +662,19 @@ function ServiceFormCard({
           className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
         />
       </FormField>
+
+      {mode === "edit" && (
+        <LinkageSection
+          linkage={linkage}
+          linkageLoading={linkageLoading ?? false}
+          products={products ?? []}
+          busy={busy}
+          onLinkProduct={onLinkProduct}
+          onUpdateQuantity={onUpdateQuantity}
+          onUnlink={onUnlink}
+          onToggleCogsSource={onToggleCogsSource}
+        />
+      )}
 
       {computedMargin && (
         <div className="rounded-md bg-emerald-soft px-3 py-2 text-[13px] text-ink">
@@ -554,6 +733,265 @@ function ServiceFormCard({
         )}
       </div>
     </form>
+  );
+}
+
+function LinkageSection({
+  linkage,
+  linkageLoading,
+  products,
+  busy,
+  onLinkProduct,
+  onUpdateQuantity,
+  onUnlink,
+  onToggleCogsSource,
+}: {
+  linkage: ServiceLinkageBundle | null | undefined;
+  linkageLoading: boolean;
+  products: Product[];
+  busy: boolean;
+  onLinkProduct?: (productId: string, quantity: number) => void;
+  onUpdateQuantity?: (linkId: string, quantity: number) => void;
+  onUnlink?: (linkId: string) => void;
+  onToggleCogsSource?: (source: "manual" | "derived") => void;
+}) {
+  const [newProductId, setNewProductId] = useState<string>("");
+  const [newQuantity, setNewQuantity] = useState<string>("1");
+
+  if (linkageLoading || !linkage) {
+    return (
+      <div className="rounded-md border border-dashed border-rule bg-bg-soft px-4 py-3 text-[12px] text-ink-soft inline-flex items-center gap-2">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Loading product linkage&hellip;
+      </div>
+    );
+  }
+
+  const isDerived = linkage.service.cogsSource === "derived";
+  const derivedSum = linkage.links.reduce((s, l) => s + l.derivedCostContribution, 0);
+
+  // Products NOT yet linked (so the picker doesn't offer duplicates).
+  const linkedProductIds = new Set(linkage.links.map((l) => l.productId));
+  const availableProducts = products.filter((p) => !linkedProductIds.has(p.id));
+
+  function onAdd() {
+    if (!newProductId) {
+      toast.error("Pick a product first.");
+      return;
+    }
+    const qty = Number.parseFloat(newQuantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      toast.error("Quantity must be greater than 0.");
+      return;
+    }
+    onLinkProduct?.(newProductId, qty);
+    setNewProductId("");
+    setNewQuantity("1");
+  }
+
+  return (
+    <section className="rounded-lg border border-rule bg-bg-soft p-4 space-y-3">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h4 className="text-[12px] uppercase tracking-wider font-semibold text-ink-faint">
+            Products consumed
+          </h4>
+          <p className="text-[12px] text-ink-soft mt-0.5">
+            Link the products this service uses. With Auto COGS on, the cost is recomputed automatically as <code className="text-[11px]">SUM(cost × quantity)</code>.
+          </p>
+        </div>
+        <div className="inline-flex items-center rounded-md border border-rule bg-white overflow-hidden text-[12px]">
+          <button
+            type="button"
+            disabled={busy || !isDerived}
+            onClick={() => onToggleCogsSource?.("manual")}
+            className={cn(
+              "px-3 py-1.5 font-semibold transition",
+              !isDerived ? "bg-emerald text-paper" : "text-ink-soft hover:text-ink",
+            )}
+          >
+            Manual
+          </button>
+          <button
+            type="button"
+            disabled={busy || isDerived || linkage.links.length === 0}
+            onClick={() => onToggleCogsSource?.("derived")}
+            className={cn(
+              "px-3 py-1.5 font-semibold transition border-l border-rule",
+              isDerived ? "bg-emerald text-paper" : "text-ink-soft hover:text-ink disabled:text-ink-faint disabled:cursor-not-allowed",
+            )}
+            title={linkage.links.length === 0 ? "Link at least one product first" : undefined}
+          >
+            Auto from products
+          </button>
+        </div>
+      </div>
+
+      {linkage.links.length === 0 ? (
+        <p className="text-[12px] text-ink-soft italic">
+          No products linked yet. Add one below to enable Auto COGS.
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {linkage.links.map((link) => (
+            <LinkRow
+              key={link.id}
+              link={link}
+              busy={busy}
+              onUpdateQuantity={onUpdateQuantity}
+              onUnlink={onUnlink}
+            />
+          ))}
+        </ul>
+      )}
+
+      {availableProducts.length > 0 && (
+        <div className="flex flex-wrap items-end gap-2 pt-1">
+          <div className="flex-1 min-w-[200px]">
+            <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+              Add product
+            </label>
+            <select
+              value={newProductId}
+              onChange={(e) => setNewProductId(e.target.value)}
+              disabled={busy}
+              className="w-full rounded-md border border-rule bg-white px-2.5 py-1.5 text-[13px] text-ink outline-none focus:border-emerald focus:ring-1 focus:ring-emerald/30"
+            >
+              <option value="">Pick a product&hellip;</option>
+              {availableProducts.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.brand} ({fmtUsd(p.costPerUnit)}/{p.unitType})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="w-[110px]">
+            <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+              Qty
+            </label>
+            <input
+              type="number"
+              step="0.0001"
+              min="0"
+              value={newQuantity}
+              onChange={(e) => setNewQuantity(e.target.value)}
+              placeholder="1"
+              disabled={busy}
+              className="w-full rounded-md border border-rule bg-white px-2.5 py-1.5 text-[13px] text-ink outline-none focus:border-emerald focus:ring-1 focus:ring-emerald/30 tabular-nums"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={onAdd}
+            disabled={busy || !newProductId}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-[13px] font-semibold transition",
+              busy || !newProductId
+                ? "bg-rule text-ink-faint cursor-not-allowed"
+                : "bg-emerald text-paper hover:opacity-95",
+            )}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Link
+          </button>
+        </div>
+      )}
+
+      {availableProducts.length === 0 && products.length === 0 && (
+        <p className="text-[11px] text-ink-soft italic">
+          No products in the catalog yet. Add some at <code>/app/refill/catalog/products</code> first.
+        </p>
+      )}
+
+      {linkage.links.length > 0 && (
+        <div className="rounded-md bg-white border border-rule px-3 py-2 text-[13px] flex items-center justify-between">
+          <span className="text-ink-soft">
+            Sum from linked products:
+          </span>
+          <span className="tabular-nums font-semibold text-ink">
+            {fmtUsd(derivedSum)}
+            {isDerived && (
+              <span className="ml-2 text-[11px] text-emerald-ink bg-emerald-soft rounded-full px-2 py-0.5">
+                Active
+              </span>
+            )}
+          </span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function LinkRow({
+  link,
+  busy,
+  onUpdateQuantity,
+  onUnlink,
+}: {
+  link: ServiceProductLink;
+  busy: boolean;
+  onUpdateQuantity?: (linkId: string, quantity: number) => void;
+  onUnlink?: (linkId: string) => void;
+}) {
+  const [qtyDraft, setQtyDraft] = useState<string>(String(link.quantityPerService));
+  const [committing, setCommitting] = useState(false);
+
+  // Sync local draft when server pushes a new value (e.g. after another mutation).
+  useEffect(() => {
+    setQtyDraft(String(link.quantityPerService));
+  }, [link.quantityPerService]);
+
+  function commit() {
+    const next = Number.parseFloat(qtyDraft);
+    if (!Number.isFinite(next) || next <= 0) {
+      setQtyDraft(String(link.quantityPerService));
+      toast.error("Quantity must be greater than 0.");
+      return;
+    }
+    if (next === link.quantityPerService) return;
+    setCommitting(true);
+    Promise.resolve(onUpdateQuantity?.(link.id, next)).finally(() => setCommitting(false));
+  }
+
+  return (
+    <li className="flex items-center gap-2 rounded-md bg-white border border-rule px-3 py-1.5">
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] text-ink font-medium truncate">
+          {link.productBrand}
+          <span className="text-[11px] text-ink-soft font-normal ml-1.5">
+            ({fmtUsd(link.productCostPerUnit)}/{link.productUnitType})
+          </span>
+        </div>
+      </div>
+      <input
+        type="number"
+        step="0.0001"
+        min="0"
+        value={qtyDraft}
+        onChange={(e) => setQtyDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+        disabled={busy || committing}
+        className="w-[88px] rounded-md border border-rule bg-white px-2 py-1 text-[12px] text-ink tabular-nums outline-none focus:border-emerald focus:ring-1 focus:ring-emerald/30"
+      />
+      <span className="text-[12px] text-ink-soft tabular-nums w-[80px] text-right">
+        {fmtUsd(link.derivedCostContribution)}
+      </span>
+      <button
+        type="button"
+        onClick={() => onUnlink?.(link.id)}
+        disabled={busy}
+        className="text-ink-faint hover:text-red-600 transition p-1"
+        title="Unlink"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </li>
   );
 }
 

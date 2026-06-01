@@ -419,7 +419,7 @@ function ProductRow({ product, onEdit }: { product: Product; onEdit: () => void 
           </div>
           <div className="text-right tabular-nums shrink-0">
             <div className="text-[13px] text-ink-soft">
-              {fmtUsd(product.costPerUnit)} cost &rarr; {fmtUsd(product.salesPricePerUnit)} sell
+              {fmtUsd(product.salesPricePerUnit)} sell &middot; {fmtUsd(product.costPerUnit)} cost
             </div>
             <div className="text-[15px] font-semibold text-emerald mt-0.5">
               {fmtUsd(product.marginPerUnit)} <span className="text-[12px] text-ink-soft font-normal">({fmtPct(product.marginPct)})</span>
@@ -531,19 +531,6 @@ function ProductFormCard({
           </select>
         </FormField>
 
-        <FormField label="Cost per unit ($)">
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={draft.costPerUnit}
-            onChange={(e) => onChange({ ...draft, costPerUnit: e.target.value })}
-            placeholder="0.00"
-            disabled={busy}
-            className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums"
-          />
-        </FormField>
-
         <FormField label="Sales price per unit ($)">
           <input
             type="number"
@@ -553,6 +540,19 @@ function ProductFormCard({
             onChange={(e) =>
               onChange({ ...draft, salesPricePerUnit: e.target.value })
             }
+            placeholder="0.00"
+            disabled={busy}
+            className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums"
+          />
+        </FormField>
+
+        <FormField label="Cost per unit ($)">
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={draft.costPerUnit}
+            onChange={(e) => onChange({ ...draft, costPerUnit: e.target.value })}
             placeholder="0.00"
             disabled={busy}
             className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums"
