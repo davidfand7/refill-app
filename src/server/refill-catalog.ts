@@ -780,20 +780,24 @@ export const unlinkServiceProductFn = createServerFn({ method: "POST" })
 export type ImportPreviewRow = {
   rowIndex: number;
   parsedName: string;
+  rawType: string | null;
   parsedCategory: ServiceCategory;
   categorySource: "csv" | "name-inferred" | "default";
   parsedPrice: number;
   parsedCogs: number | null;
   parsedDescription: string | null;
-  action: "create" | "update" | "skip-error";
+  isService: boolean;
+  action: "create" | "update" | "skip-non-service" | "skip-error";
   existingServiceId: string | null;
   warnings: string[];
 };
 
 export type ImportPreview = {
   headers: string[];
+  headerRowIndex: number;
   fieldMapping: {
     name: string | null;
+    type: string | null;
     category: string | null;
     price: string | null;
     cost: string | null;
@@ -804,8 +808,10 @@ export type ImportPreview = {
   totalRows: number;
   parseableRows: number;
   skippedRows: number;
+  nonServiceRows: number;
   willCreate: number;
   willUpdate: number;
+  willSkipNonService: number;
   withCogs: number;
   preview: ImportPreviewRow[];
   parseErrors: Array<{ rowIndex: number; reason: string }>;
@@ -850,21 +856,32 @@ export const ingestServicesCsvFn = createServerFn({ method: "POST" })
     if (data.mode === "preview") {
       let willCreate = 0;
       let willUpdate = 0;
+      let willSkipNonService = 0;
       let withCogs = 0;
       const preview: ImportPreviewRow[] = parsed.rows.map((r) => {
         const existingId = byNameLower.get(r.parsedName.trim().toLowerCase()) ?? null;
-        const action: ImportPreviewRow["action"] = existingId ? "update" : "create";
-        if (action === "create") willCreate++;
-        else willUpdate++;
+        let action: ImportPreviewRow["action"];
+        if (!r.isService) {
+          action = "skip-non-service";
+          willSkipNonService++;
+        } else if (existingId) {
+          action = "update";
+          willUpdate++;
+        } else {
+          action = "create";
+          willCreate++;
+        }
         if (r.parsedCogs !== null) withCogs++;
         return {
           rowIndex: r.rowIndex,
           parsedName: r.parsedName,
+          rawType: r.rawType,
           parsedCategory: r.parsedCategory,
           categorySource: r.categorySource,
           parsedPrice: r.parsedPrice ?? 0,
           parsedCogs: r.parsedCogs,
           parsedDescription: r.parsedDescription,
+          isService: r.isService,
           action,
           existingServiceId: existingId,
           warnings: r.warnings,
@@ -872,13 +889,16 @@ export const ingestServicesCsvFn = createServerFn({ method: "POST" })
       });
       return {
         headers: parsed.headers,
+        headerRowIndex: parsed.headerRowIndex,
         fieldMapping: parsed.fieldMapping,
         unmappedHeaders: parsed.unmappedHeaders,
         totalRows: parsed.totalRows,
         parseableRows: parsed.parseableRows,
         skippedRows: parsed.skippedRows,
+        nonServiceRows: parsed.nonServiceRows,
         willCreate,
         willUpdate,
+        willSkipNonService,
         withCogs,
         preview,
         parseErrors: parsed.parseErrors,
@@ -891,6 +911,10 @@ export const ingestServicesCsvFn = createServerFn({ method: "POST" })
     const failed: ImportReceipt["failed"] = [];
 
     for (const r of parsed.rows) {
+      // Skip non-service rows entirely on commit — they're products
+      // (retail items) and belong in a future products-CSV import path,
+      // not in the services table.
+      if (!r.isService) continue;
       const existingId = byNameLower.get(r.parsedName.trim().toLowerCase()) ?? null;
       try {
         if (existingId) {

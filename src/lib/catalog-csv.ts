@@ -27,6 +27,7 @@ import type { ServiceCategory } from "@/server/refill-catalog";
 export type ParsedServiceRow = {
   rowIndex: number; // 1-based, header is row 1
   rawName: string;
+  rawType: string | null;
   rawCategory: string | null;
   rawPrice: string;
   rawCost: string | null;
@@ -38,14 +39,23 @@ export type ParsedServiceRow = {
   parsedPrice: number | null;
   parsedCogs: number | null;
   parsedDescription: string | null;
+  // v1.29.4.2 — QB Type filter. Non-inventory / Inventory rows are
+  // actually products (retail items Karen resells), not services. They
+  // get marked as non-service at preview + skipped at commit.
+  isService: boolean;
   warnings: string[];
 };
 
 export type ParsedCatalogCsv = {
   headers: string[];
   rows: ParsedServiceRow[];
+  // headerRowIndex (0-based) — the actual header row found in the file.
+  // QB exports start with a company-name title row above the headers; we
+  // search the first few rows for a name-looking header and skip preamble.
+  headerRowIndex: number;
   fieldMapping: {
     name: string | null;
+    type: string | null;
     category: string | null;
     price: string | null;
     cost: string | null;
@@ -56,6 +66,7 @@ export type ParsedCatalogCsv = {
   totalRows: number;
   parseableRows: number;
   skippedRows: number;
+  nonServiceRows: number; // marked as Non-inventory / Inventory by Type column
   parseErrors: Array<{ rowIndex: number; reason: string }>;
 };
 
@@ -105,12 +116,19 @@ function splitCsvRows(text: string): string[] {
 // catalog source (cost-of-goods lives there). Acuity / Square / Vagaro
 // service-list exports stay as fallback header shapes.
 const NAME_HEADER_CANDIDATES = [
-  "item", "item name", "service name", "name", "title", "service",
-  "treatment", "appointment type", "product/service",
+  "product/service full name", "product/service", "item", "item name",
+  "service name", "name", "title", "service", "treatment",
+  "appointment type",
+];
+// v1.29.4.2 — Type is the service-vs-product filter (QB values: Service,
+// Non-inventory, Inventory). Distinct from Category (which is our
+// taxonomy of tox/filler/laser/etc).
+const TYPE_HEADER_CANDIDATES = [
+  "type", "item type",
 ];
 const CATEGORY_HEADER_CANDIDATES = [
-  "type", "item type", "category", "service category", "service type",
-  "group", "class", "appointment category",
+  "category", "service category", "service type", "group", "class",
+  "appointment category",
 ];
 const PRICE_HEADER_CANDIDATES = [
   "sales price", "price", "service price", "rate", "fee", "amount",
@@ -118,16 +136,18 @@ const PRICE_HEADER_CANDIDATES = [
 ];
 // QB Item List has a separate Cost column — flows straight into
 // services.cogs_per_service when present. v1.29.4 (Acuity-first) didn't
-// look for this; v1.29.4.1 does.
+// look for this; v1.29.4.1 added it. v1.29.4.2 adds QB's actual column
+// name "Purchase price" as the leading alias.
 const COST_HEADER_CANDIDATES = [
-  "cost", "item cost", "purchase cost", "cogs", "wholesale cost",
+  "purchase price", "cost", "item cost", "purchase cost", "cogs",
+  "wholesale cost",
 ];
 const DURATION_HEADER_CANDIDATES = [
   "duration", "service duration", "duration (minutes)", "minutes", "length",
 ];
 const DESCRIPTION_HEADER_CANDIDATES = [
-  "sales description", "description", "service description", "notes",
-  "purchase description", "details",
+  "memo/description", "sales description", "description",
+  "service description", "notes", "purchase description", "details",
 ];
 
 function findHeader(headers: string[], candidates: string[]): string | null {
@@ -187,6 +207,26 @@ function parsePriceString(raw: string): number | null {
   return num;
 }
 
+// ─── Title-row skip (QB Quirk) ────────────────────────────────────────────
+
+/**
+ * QB exports prepend a company-name title row before the actual headers
+ * (e.g. "REJUV SKIN SPA, LLC,,,,"). Look through the first few rows for
+ * the row that actually contains a recognizable name-column header.
+ */
+function findHeaderRowIndex(lines: string[]): number {
+  const limit = Math.min(8, lines.length);
+  for (let i = 0; i < limit; i++) {
+    const cells = parseCsvLine(lines[i]).map((c) => c.toLowerCase().trim());
+    for (const candidate of NAME_HEADER_CANDIDATES) {
+      if (cells.some((c) => c === candidate || c.includes(candidate))) {
+        return i;
+      }
+    }
+  }
+  return 0;
+}
+
 // ─── Main parser ──────────────────────────────────────────────────────────
 
 export function parseServiceListCsv(text: string): ParsedCatalogCsv {
@@ -195,18 +235,26 @@ export function parseServiceListCsv(text: string): ParsedCatalogCsv {
     return {
       headers: [],
       rows: [],
-      fieldMapping: { name: null, category: null, price: null, duration: null, description: null },
+      headerRowIndex: 0,
+      fieldMapping: { name: null, type: null, category: null, price: null, cost: null, duration: null, description: null },
       unmappedHeaders: [],
       totalRows: 0,
       parseableRows: 0,
       skippedRows: 0,
+      nonServiceRows: 0,
       parseErrors: [{ rowIndex: 0, reason: "Empty file." }],
     };
   }
 
-  const headers = parseCsvLine(lines[0]);
+  const headerRowIndex = findHeaderRowIndex(lines);
+  const headers = parseCsvLine(lines[headerRowIndex]);
   const nameHeader = findHeader(headers, NAME_HEADER_CANDIDATES);
-  const categoryHeader = findHeader(headers, CATEGORY_HEADER_CANDIDATES);
+  const typeHeader = findHeader(headers, TYPE_HEADER_CANDIDATES);
+  const categoryHeader = findHeader(
+    // If a Type column was already claimed, don't double-map it as Category
+    typeHeader ? headers.filter((h) => h !== typeHeader) : headers,
+    CATEGORY_HEADER_CANDIDATES,
+  );
   const priceHeader = findHeader(headers, PRICE_HEADER_CANDIDATES);
   const costHeader = findHeader(
     // Don't collide with the price column: if price already pointed at a
@@ -219,7 +267,7 @@ export function parseServiceListCsv(text: string): ParsedCatalogCsv {
   const descriptionHeader = findHeader(headers, DESCRIPTION_HEADER_CANDIDATES);
 
   const mappedHeaders = new Set(
-    [nameHeader, categoryHeader, priceHeader, costHeader, durationHeader, descriptionHeader].filter(
+    [nameHeader, typeHeader, categoryHeader, priceHeader, costHeader, durationHeader, descriptionHeader].filter(
       (h): h is string => h !== null,
     ),
   );
@@ -227,6 +275,7 @@ export function parseServiceListCsv(text: string): ParsedCatalogCsv {
 
   const headerIndex = (h: string | null) => (h ? headers.indexOf(h) : -1);
   const nameIdx = headerIndex(nameHeader);
+  const typeIdx = headerIndex(typeHeader);
   const categoryIdx = headerIndex(categoryHeader);
   const priceIdx = headerIndex(priceHeader);
   const costIdx = headerIndex(costHeader);
@@ -235,10 +284,12 @@ export function parseServiceListCsv(text: string): ParsedCatalogCsv {
 
   const rows: ParsedServiceRow[] = [];
   const parseErrors: Array<{ rowIndex: number; reason: string }> = [];
+  let nonServiceRows = 0;
 
-  for (let i = 1; i < lines.length; i++) {
+  for (let i = headerRowIndex + 1; i < lines.length; i++) {
     const cols = parseCsvLine(lines[i]);
     const rawName = nameIdx >= 0 ? (cols[nameIdx] ?? "") : "";
+    const rawType = typeIdx >= 0 ? (cols[typeIdx] ?? "") : "";
     const rawCategory = categoryIdx >= 0 ? (cols[categoryIdx] ?? "") : "";
     const rawPrice = priceIdx >= 0 ? (cols[priceIdx] ?? "") : "";
     const rawCost = costIdx >= 0 ? (cols[costIdx] ?? "") : "";
@@ -249,6 +300,20 @@ export function parseServiceListCsv(text: string): ParsedCatalogCsv {
     if (!parsedName) {
       parseErrors.push({ rowIndex: i + 1, reason: "Missing service name." });
       continue;
+    }
+
+    // QB Type filter: rows marked Non-inventory / Inventory are products
+    // (retail items), not services. Mark them non-service so the import
+    // path skips them. Blank Type = treat as service (Acuity / Square /
+    // Vagaro exports don't have a Type column).
+    const typeLower = rawType.trim().toLowerCase();
+    const isService =
+      typeLower === "" ||
+      typeLower === "service" ||
+      typeLower === "services" ||
+      typeLower.includes("service");
+    if (!isService) {
+      nonServiceRows++;
     }
 
     const warnings: string[] = [];
@@ -285,6 +350,7 @@ export function parseServiceListCsv(text: string): ParsedCatalogCsv {
     rows.push({
       rowIndex: i + 1,
       rawName,
+      rawType: rawType || null,
       rawCategory: rawCategory || null,
       rawPrice,
       rawCost: rawCost || null,
@@ -296,15 +362,19 @@ export function parseServiceListCsv(text: string): ParsedCatalogCsv {
       parsedPrice: parsedPrice ?? 0,
       parsedCogs,
       parsedDescription,
+      isService,
       warnings,
     });
   }
 
+  const totalDataRows = lines.length - headerRowIndex - 1;
   return {
     headers,
     rows,
+    headerRowIndex,
     fieldMapping: {
       name: nameHeader,
+      type: typeHeader,
       category: categoryHeader,
       price: priceHeader,
       cost: costHeader,
@@ -312,9 +382,10 @@ export function parseServiceListCsv(text: string): ParsedCatalogCsv {
       description: descriptionHeader,
     },
     unmappedHeaders,
-    totalRows: lines.length - 1,
+    totalRows: totalDataRows,
     parseableRows: rows.length,
-    skippedRows: lines.length - 1 - rows.length,
+    skippedRows: totalDataRows - rows.length,
+    nonServiceRows,
     parseErrors,
   };
 }

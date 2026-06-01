@@ -242,6 +242,7 @@ function CatalogImportPage() {
               <table className="w-full text-[13px]">
                 <tbody className="divide-y divide-rule">
                   <MappingRow label="Service name" header={preview.fieldMapping.name} required />
+                  <MappingRow label="Service / Product type" header={preview.fieldMapping.type} hint="QB Type column (Service / Non-inventory). Non-service rows are skipped at import — they belong in /catalog/products once that CSV path ships." />
                   <MappingRow label="Sales price" header={preview.fieldMapping.price} />
                   <MappingRow label="Cost / COGS" header={preview.fieldMapping.cost} hint="Flows into cogs_per_service on each row — margin math hot on first import." />
                   <MappingRow label="Category" header={preview.fieldMapping.category} hint="If missing, we'll infer category from the service name (e.g. 'botox' → Tox)." />
@@ -249,6 +250,12 @@ function CatalogImportPage() {
                   <MappingRow label="Duration" header={preview.fieldMapping.duration} hint="Currently ignored — duration isn't stored on services yet." />
                 </tbody>
               </table>
+              {preview.headerRowIndex > 0 && (
+                <p className="text-[12px] text-ink-soft">
+                  <span className="font-semibold">Skipped {preview.headerRowIndex} preamble row{preview.headerRowIndex > 1 ? "s" : ""}</span>{" "}
+                  before the header row (QuickBooks puts a company-name title row at the top).
+                </p>
+              )}
               {preview.unmappedHeaders.length > 0 && (
                 <p className="text-[12px] text-ink-soft">
                   <span className="font-semibold">Ignored columns:</span>{" "}
@@ -276,6 +283,9 @@ function CatalogImportPage() {
                 <SummaryChip label="Will create" value={preview.willCreate} tone="good" />
                 {preview.willUpdate > 0 && (
                   <SummaryChip label="Will update" value={preview.willUpdate} tone="info" />
+                )}
+                {preview.willSkipNonService > 0 && (
+                  <SummaryChip label="Non-service (skip)" value={preview.willSkipNonService} tone="warn" />
                 )}
                 {preview.withCogs > 0 && (
                   <SummaryChip label="With COGS" value={preview.withCogs} tone="good" />
@@ -308,6 +318,7 @@ function CatalogImportPage() {
                       <tr className="text-[11px] uppercase tracking-wider text-ink-faint border-b border-rule">
                         <th className="text-left py-2 pr-3">Row</th>
                         <th className="text-left py-2 pr-3">Name</th>
+                        <th className="text-left py-2 pr-3">Type</th>
                         <th className="text-left py-2 pr-3">Category</th>
                         <th className="text-right py-2 pr-3">Price</th>
                         <th className="text-right py-2 pr-3">COGS</th>
@@ -317,9 +328,12 @@ function CatalogImportPage() {
                     </thead>
                     <tbody className="divide-y divide-rule">
                       {preview.preview.slice(0, 30).map((r) => (
-                        <tr key={r.rowIndex}>
+                        <tr key={r.rowIndex} className={!r.isService ? "opacity-60" : ""}>
                           <td className="py-2 pr-3 text-ink-soft tabular-nums">{r.rowIndex}</td>
                           <td className="py-2 pr-3 font-medium text-ink">{r.parsedName}</td>
+                          <td className="py-2 pr-3 text-[12px] text-ink-soft">
+                            {r.rawType ?? "—"}
+                          </td>
                           <td className="py-2 pr-3">
                             <span className="inline-flex items-center gap-1">
                               {categoryLabel(r.parsedCategory)}
@@ -343,12 +357,14 @@ function CatalogImportPage() {
                             <span
                               className={cn(
                                 "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                                r.action === "create"
-                                  ? "bg-emerald-soft text-emerald-ink"
-                                  : "bg-blue-50 text-blue-700",
+                                r.action === "create" && "bg-emerald-soft text-emerald-ink",
+                                r.action === "update" && "bg-blue-50 text-blue-700",
+                                r.action === "skip-non-service" && "bg-amber-soft text-amber",
                               )}
                             >
-                              {r.action === "create" ? "Create" : "Update"}
+                              {r.action === "create" && "Create"}
+                              {r.action === "update" && "Update"}
+                              {r.action === "skip-non-service" && "Skip (product)"}
                             </span>
                           </td>
                           <td className="py-2 text-[12px] text-ink-soft">
@@ -366,10 +382,10 @@ function CatalogImportPage() {
               <button
                 type="button"
                 onClick={onCommit}
-                disabled={committing || preview.parseableRows === 0 || !preview.fieldMapping.name}
+                disabled={committing || (preview.willCreate + preview.willUpdate) === 0 || !preview.fieldMapping.name}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-md px-5 py-2.5 text-[14px] font-semibold shadow-sm transition",
-                  committing || preview.parseableRows === 0 || !preview.fieldMapping.name
+                  committing || (preview.willCreate + preview.willUpdate) === 0 || !preview.fieldMapping.name
                     ? "bg-rule text-ink-faint cursor-not-allowed"
                     : "bg-emerald text-paper hover:opacity-95",
                 )}
@@ -382,7 +398,7 @@ function CatalogImportPage() {
                 ) : (
                   <>
                     <CheckCircle2 className="h-4 w-4" />
-                    Import {preview.parseableRows} services
+                    Import {preview.willCreate + preview.willUpdate} services
                   </>
                 )}
               </button>
