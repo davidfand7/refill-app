@@ -31,6 +31,7 @@ import {
   Mail,
   Pencil,
   Phone,
+  Plus,
   Sparkles,
   Tag,
   TrendingUp,
@@ -41,9 +42,12 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  addPatientCustomTag,
   clearPatientSoftTag,
+  deletePatientCustomTag,
   getPatientById,
   setPatientSoftTag,
+  updatePatientCustomTag,
   type PatientDetail,
   type PatientListRow,
   type PatientTransactionRow,
@@ -53,6 +57,7 @@ import type {
   ProductManufacturer,
 } from "@/lib/product-manufacturer-map";
 import type {
+  PatientCustomTag,
   PatientSoftTagEntry,
   PatientSoftTagKey,
   PatientSoftTags,
@@ -604,12 +609,315 @@ function SoftTagsCard({
           onClear={() => clear("culturalNotes")}
         />
       </div>
+      <CustomTagsSection
+        patient={patient}
+        viewAsUserId={viewAsUserId}
+        onTagsChange={onTagsChange}
+      />
       {error && (
         <div className="px-5 py-3 border-t border-rose/30 bg-rose-soft text-xs text-rose">
           {error}
         </div>
       )}
     </section>
+  );
+}
+
+// ─── Custom tags (v1.31.1) ────────────────────────────────────────────────
+
+type CustomTagDraft = {
+  id: string | null;
+  name: string;
+  value: string;
+  reason: string;
+};
+
+const EMPTY_CUSTOM_DRAFT: CustomTagDraft = {
+  id: null,
+  name: "",
+  value: "",
+  reason: "",
+};
+
+function CustomTagsSection({
+  patient,
+  viewAsUserId,
+  onTagsChange,
+}: {
+  patient: PatientListRow;
+  viewAsUserId: string | undefined;
+  onTagsChange: (next: PatientSoftTags) => void;
+}) {
+  const customs: PatientCustomTag[] = patient.softTags?.custom ?? [];
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<CustomTagDraft>(EMPTY_CUSTOM_DRAFT);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const beginAdd = () => {
+    setEditingId(null);
+    setDraft(EMPTY_CUSTOM_DRAFT);
+    setAdding(true);
+  };
+  const beginEdit = (tag: PatientCustomTag) => {
+    setAdding(false);
+    setEditingId(tag.id);
+    setDraft({
+      id: tag.id,
+      name: tag.name,
+      value: tag.value,
+      reason: tag.reason ?? "",
+    });
+  };
+  const cancel = () => {
+    setAdding(false);
+    setEditingId(null);
+    setDraft(EMPTY_CUSTOM_DRAFT);
+    setError(null);
+  };
+
+  const withToken = async (
+    fn: (token: string) => Promise<{ softTags: PatientSoftTags }>,
+  ) => {
+    setError(null);
+    setBusy(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Please sign in again.");
+      const result = await fn(token);
+      onTagsChange(result.softTags);
+      cancel();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save tag.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const save = () => {
+    const name = draft.name.trim();
+    const value = draft.value.trim();
+    if (!name || !value) return;
+    if (draft.id) {
+      const id = draft.id;
+      void withToken((token) =>
+        updatePatientCustomTag({
+          data: {
+            accessToken: token,
+            viewAsUserId,
+            patientNodeId: patient.id,
+            id,
+            name,
+            value,
+            reason: draft.reason.trim() || null,
+          },
+        }),
+      );
+    } else {
+      void withToken((token) =>
+        addPatientCustomTag({
+          data: {
+            accessToken: token,
+            viewAsUserId,
+            patientNodeId: patient.id,
+            name,
+            value,
+            reason: draft.reason.trim() || null,
+          },
+        }),
+      );
+    }
+  };
+
+  const remove = (id: string) =>
+    withToken((token) =>
+      deletePatientCustomTag({
+        data: {
+          accessToken: token,
+          viewAsUserId,
+          patientNodeId: patient.id,
+          id,
+        },
+      }),
+    );
+
+  return (
+    <div className="border-t border-rule bg-rule-soft/30">
+      <div className="px-5 py-2 flex items-center gap-2">
+        <Tag className="h-3 w-3 text-ink-faint" />
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+          Custom tags
+        </div>
+        <div className="ml-auto text-[10px] text-ink-faint">
+          {customs.length} {customs.length === 1 ? "tag" : "tags"}
+        </div>
+      </div>
+      <div className="divide-y divide-rule bg-white">
+        {customs.map((tag) =>
+          editingId === tag.id ? (
+            <CustomTagForm
+              key={tag.id}
+              draft={draft}
+              setDraft={setDraft}
+              busy={busy}
+              onSave={save}
+              onCancel={cancel}
+              onDelete={() => remove(tag.id)}
+            />
+          ) : (
+            <CustomTagRow
+              key={tag.id}
+              tag={tag}
+              onEdit={() => beginEdit(tag)}
+              disabled={busy || adding || editingId !== null}
+            />
+          ),
+        )}
+        {adding && (
+          <CustomTagForm
+            draft={draft}
+            setDraft={setDraft}
+            busy={busy}
+            onSave={save}
+            onCancel={cancel}
+          />
+        )}
+        {!adding && editingId === null && (
+          <button
+            type="button"
+            onClick={beginAdd}
+            className="w-full px-5 py-3 text-left text-[12px] text-ink-soft hover:text-ink hover:bg-rule-soft/50 transition inline-flex items-center gap-1.5"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add a custom tag
+          </button>
+        )}
+      </div>
+      {error && (
+        <div className="px-5 py-2 text-[11px] text-rose">{error}</div>
+      )}
+    </div>
+  );
+}
+
+function CustomTagRow({
+  tag,
+  onEdit,
+  disabled,
+}: {
+  tag: PatientCustomTag;
+  onEdit: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="px-5 py-3 flex items-start gap-3">
+      <div className="flex-1 min-w-0">
+        <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
+          {tag.name}
+        </div>
+        <div className="mt-1 text-[13px] text-ink whitespace-pre-wrap break-words">
+          {tag.value}
+        </div>
+        {tag.reason && (
+          <div className="mt-1 text-[12px] text-ink-soft italic">
+            &ldquo;{tag.reason}&rdquo;
+          </div>
+        )}
+        <div className="mt-1 text-[10px] text-ink-faint">
+          Set {formatDate(tag.setAt.slice(0, 10))}
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onEdit}
+        disabled={disabled}
+        className="shrink-0 inline-flex items-center gap-1 rounded-md border border-rule bg-white px-2.5 py-1 text-[11px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition disabled:opacity-50"
+      >
+        <Pencil className="h-3 w-3" />
+        Edit
+      </button>
+    </div>
+  );
+}
+
+function CustomTagForm({
+  draft,
+  setDraft,
+  busy,
+  onSave,
+  onCancel,
+  onDelete,
+}: {
+  draft: CustomTagDraft;
+  setDraft: (next: CustomTagDraft) => void;
+  busy: boolean;
+  onSave: () => void;
+  onCancel: () => void;
+  onDelete?: () => void;
+}) {
+  const canSave = draft.name.trim().length > 0 && draft.value.trim().length > 0;
+  return (
+    <div className="px-5 py-3 space-y-2 bg-emerald-soft/30">
+      <input
+        type="text"
+        value={draft.name}
+        onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+        placeholder="Tag name (e.g., Allergies, Pet name, Preferred day)"
+        maxLength={80}
+        disabled={busy}
+        className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] font-medium text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
+      />
+      <textarea
+        value={draft.value}
+        onChange={(e) => setDraft({ ...draft, value: e.target.value })}
+        placeholder="Value (e.g., 'lidocaine sensitivity', 'Bella the maltese', 'Tuesdays only')"
+        maxLength={2000}
+        rows={2}
+        disabled={busy}
+        className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
+      />
+      <input
+        type="text"
+        value={draft.reason}
+        onChange={(e) => setDraft({ ...draft, reason: e.target.value })}
+        placeholder="Reason / context (optional)"
+        maxLength={500}
+        disabled={busy}
+        className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
+      />
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={busy || !canSave}
+          className="inline-flex items-center gap-1 rounded-md bg-emerald px-3 py-1.5 text-[12px] font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
+        >
+          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          className="inline-flex items-center gap-1 rounded-md border border-rule bg-white px-2.5 py-1.5 text-[11px] font-medium text-ink-soft hover:text-ink transition disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={busy}
+            className="ml-auto inline-flex items-center gap-1 text-[11px] text-rose hover:text-rose/80 transition disabled:opacity-50"
+          >
+            <X className="h-3 w-3" />
+            Delete tag
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

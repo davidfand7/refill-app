@@ -36,6 +36,7 @@ import {
   type PatientContactSummary,
   type PatientSoftTags,
   type PatientSoftTagKey,
+  type PatientCustomTag,
   type PatientIncomeTier,
   type PatientNegotiator,
   type PatientPersonality,
@@ -796,6 +797,161 @@ export const setPatientSoftTag = createServerFn({ method: "POST" })
     if (updErr) throw new Error(`Couldn't update soft-tag: ${updErr.message}`);
     return { ok: true, softTags: nextTags };
   });
+
+// ─── Custom soft-tags CRUD (v1.31.1) ──────────────────────────────────────
+//
+// Karen-defined extra tags beyond the seeded six. Same shape (value +
+// reason + provenance) but free-form name. Stored as an array on
+// softTags.custom; stable uuid id per row so updates/deletes target by id
+// rather than name (lets Karen rename a tag in place).
+
+const addCustomTagInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  patientNodeId: z.string().uuid(),
+  name: z.string().min(1).max(80),
+  value: z.string().min(1).max(2000),
+  reason: z.string().max(500).nullable().optional(),
+});
+
+const updateCustomTagInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  patientNodeId: z.string().uuid(),
+  id: z.string().uuid(),
+  name: z.string().min(1).max(80),
+  value: z.string().min(1).max(2000),
+  reason: z.string().max(500).nullable().optional(),
+});
+
+const deleteCustomTagInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  patientNodeId: z.string().uuid(),
+  id: z.string().uuid(),
+});
+
+async function mutateCustomTags(
+  args: {
+    accessToken: string;
+    viewAsUserId?: string;
+    patientNodeId: string;
+  },
+  mutate: (
+    prior: PatientCustomTag[],
+    callerUserId: string,
+  ) => PatientCustomTag[],
+): Promise<{ ok: true; softTags: PatientSoftTags }> {
+  const { effectiveUserId, callerUserId } = await resolveEffectiveUserId({
+    accessToken: args.accessToken,
+    viewAsUserId: args.viewAsUserId,
+  });
+  const sb = admin();
+  const { data: existing, error: readErr } = await sb
+    .from("knowledge_nodes")
+    .select("attachments")
+    .eq("id", args.patientNodeId)
+    .eq("user_id", effectiveUserId)
+    .eq("node_type", "patient")
+    .maybeSingle();
+  if (readErr) throw new Error(`Couldn't read patient: ${readErr.message}`);
+  if (!existing) throw new Error("Patient not found.");
+
+  const summary =
+    (existing.attachments as unknown as PatientSummary | null) ?? null;
+  const priorTags: PatientSoftTags = summary?.softTags ?? {};
+  const priorCustom: PatientCustomTag[] = priorTags.custom ?? [];
+  const nextCustom = mutate(priorCustom, callerUserId);
+  const nextTags: PatientSoftTags = { ...priorTags, custom: nextCustom };
+
+  const next: PatientSummary = {
+    ...(summary ?? ({
+      normalizedName: "",
+      displayName: "",
+      firstVisit: null,
+      lastVisit: null,
+      totalVisits: 0,
+      lifetimeUnits: 0,
+      lifetimeSpendUsd: 0,
+      netSpendUsd: 0,
+      primaryManufacturer: null,
+      productMix: {},
+      loyaltyEngagement: {},
+    } as PatientSummary)),
+    softTags: nextTags,
+  };
+  const { error: updErr } = await sb
+    .from("knowledge_nodes")
+    .update({
+      attachments: next as unknown as Json,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", args.patientNodeId)
+    .eq("user_id", effectiveUserId);
+  if (updErr) throw new Error(`Couldn't update custom tag: ${updErr.message}`);
+  return { ok: true, softTags: nextTags };
+}
+
+export const addPatientCustomTag = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => addCustomTagInput.parse(raw))
+  .handler(({ data }) =>
+    mutateCustomTags(
+      {
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+        patientNodeId: data.patientNodeId,
+      },
+      (prior, callerUserId) => [
+        ...prior,
+        {
+          id: crypto.randomUUID(),
+          name: data.name.trim(),
+          value: data.value.trim(),
+          setByUserId: callerUserId,
+          setAt: new Date().toISOString(),
+          reason: data.reason?.trim() || null,
+        },
+      ],
+    ),
+  );
+
+export const updatePatientCustomTag = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => updateCustomTagInput.parse(raw))
+  .handler(({ data }) =>
+    mutateCustomTags(
+      {
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+        patientNodeId: data.patientNodeId,
+      },
+      (prior, callerUserId) =>
+        prior.map((t) =>
+          t.id === data.id
+            ? {
+                ...t,
+                name: data.name.trim(),
+                value: data.value.trim(),
+                reason: data.reason?.trim() || null,
+                setByUserId: callerUserId,
+                setAt: new Date().toISOString(),
+              }
+            : t,
+        ),
+    ),
+  );
+
+export const deletePatientCustomTag = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => deleteCustomTagInput.parse(raw))
+  .handler(({ data }) =>
+    mutateCustomTags(
+      {
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+        patientNodeId: data.patientNodeId,
+      },
+      (prior) => prior.filter((t) => t.id !== data.id),
+    ),
+  );
 
 export const clearPatientSoftTag = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => softTagClearInput.parse(raw))

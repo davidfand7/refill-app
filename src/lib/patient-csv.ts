@@ -433,9 +433,25 @@ export type PatientSoftTags = {
   personality?: PatientSoftTagEntry<PatientPersonality> | null;
   shopperLoyalty?: PatientSoftTagEntry<PatientShopperLoyalty> | null;
   culturalNotes?: PatientSoftTagEntry<string> | null;
+  /**
+   * v1.31.1: Karen-defined custom tags (any name + free-text value).
+   * Each carries the same provenance shape as the seeded six. Stable
+   * uuid id for react keys + targeting updates/deletes. Owner-only
+   * visibility (same scoping as the rest of softTags).
+   */
+  custom?: PatientCustomTag[] | null;
 };
 
-export type PatientSoftTagKey = keyof PatientSoftTags;
+export type PatientCustomTag = {
+  id: string;
+  name: string;
+  value: string;
+  setByUserId: string;
+  setAt: string;
+  reason: string | null;
+};
+
+export type PatientSoftTagKey = Exclude<keyof PatientSoftTags, "custom">;
 
 export type PatientSummary = {
   normalizedName: string;
