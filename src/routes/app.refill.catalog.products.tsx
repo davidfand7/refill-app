@@ -17,7 +17,7 @@
  * is unrouted by design at v1.29.1; v1.29.2 ships Services alongside.
  */
 
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
@@ -28,6 +28,7 @@ import {
   Save,
   Sparkles,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 
@@ -294,7 +295,15 @@ function ProductsPage() {
         description="Per-product cost, sales price, margin, and manufacturer. Powers margin-aware patient profitability scoring + manufacturer-rebate routing for the Recognition Allocation Engine. Add the products you actually buy and resell; rough estimates are fine — refine as you go."
         actions={
           !adding && (
-            <button
+            <div className="flex items-center gap-2">
+              <Link
+                to="/app/refill/catalog/import"
+                className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-ink hover:border-emerald/40 transition"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                Import CSV
+              </Link>
+              <button
               type="button"
               onClick={() => {
                 setAdding(true);
@@ -305,6 +314,7 @@ function ProductsPage() {
               <Plus className="h-4 w-4" />
               Add product
             </button>
+            </div>
           )
         }
       />

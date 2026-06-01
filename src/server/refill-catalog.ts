@@ -1069,8 +1069,15 @@ export type ImportPreviewRow = {
   parsedCogs: number | null;
   parsedDescription: string | null;
   isService: boolean;
-  action: "create" | "update" | "skip-non-service" | "skip-error";
+  action: "create" | "update" | "create-product" | "update-product" | "skip-error";
   existingServiceId: string | null;
+  existingProductId: string | null;
+  // Product-specific fields, set when isService === false. Auto-derived
+  // from the canonical brand registry when a match is found.
+  matchedBrand: string | null;
+  productCategory: ProductCategory;
+  productManufacturer: ProductManufacturer | null;
+  productUnitType: ProductUnitType;
   warnings: string[];
 };
 
@@ -1091,19 +1098,36 @@ export type ImportPreview = {
   parseableRows: number;
   skippedRows: number;
   nonServiceRows: number;
-  willCreate: number;
-  willUpdate: number;
-  willSkipNonService: number;
+  willCreate: number;            // services to create
+  willUpdate: number;            // services to update
+  willCreateProduct: number;     // products to create (v1.30.1)
+  willUpdateProduct: number;     // products to update (v1.30.1)
   withCogs: number;
+  matchedToCanonical: number;    // product rows that hit canonical brand registry
   preview: ImportPreviewRow[];
   parseErrors: Array<{ rowIndex: number; reason: string }>;
 };
 
 export type ImportReceipt = {
-  created: number;
-  updated: number;
+  created: number;             // services created
+  updated: number;             // services updated
+  productsCreated: number;     // v1.30.1
+  productsUpdated: number;     // v1.30.1
   failed: Array<{ rowIndex: number; name: string; reason: string }>;
 };
+
+// v1.30.1 — Map canonical brand category (service-taxonomy) to product
+// category (product-taxonomy). Products have a narrower set than services.
+function canonicalToProductCategory(c: ServiceCategory): ProductCategory {
+  switch (c) {
+    case "tox": return "tox";
+    case "filler": return "filler";
+    case "laser": return "laser_consumable";
+    case "facial": return "other";
+    case "skincare": return "skincare";
+    case "other": return "other";
+  }
+}
 
 const importInput = z.object({
   accessToken: z.string().min(1),
@@ -1123,30 +1147,73 @@ export const ingestServicesCsvFn = createServerFn({ method: "POST" })
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
 
     const parsed = parseServiceListCsv(data.csv);
+    // v1.30.1 — load canonical brands once for product-row auto-routing
+    // (manufacturer / category / unit_type). Same lookup used by the
+    // recategorize sweep on /catalog/services.
+    const canonicalBrands = await loadAllCanonicalBrands(sb);
 
     // Fetch existing services for upsert-by-name matching.
-    const { data: existing, error: existingErr } = await sb
+    const { data: existingServices, error: existingServicesErr } = await sb
       .from("services")
       .select("id, name")
       .eq("tenant_id", tenantId);
-    if (existingErr) throw new Error(`Couldn't list existing services: ${existingErr.message}`);
-    const byNameLower = new Map<string, string>();
-    for (const s of existing ?? []) {
-      byNameLower.set((s.name as string).trim().toLowerCase(), s.id as string);
+    if (existingServicesErr) throw new Error(`Couldn't list existing services: ${existingServicesErr.message}`);
+    const servicesByNameLower = new Map<string, string>();
+    for (const s of existingServices ?? []) {
+      servicesByNameLower.set((s.name as string).trim().toLowerCase(), s.id as string);
+    }
+
+    // v1.30.1 — fetch existing products for upsert-by-brand matching.
+    const { data: existingProducts, error: existingProductsErr } = await sb
+      .from("products")
+      .select("id, brand")
+      .eq("tenant_id", tenantId);
+    if (existingProductsErr) throw new Error(`Couldn't list existing products: ${existingProductsErr.message}`);
+    const productsByBrandLower = new Map<string, string>();
+    for (const p of existingProducts ?? []) {
+      productsByBrandLower.set((p.brand as string).trim().toLowerCase(), p.id as string);
     }
 
     if (data.mode === "preview") {
       let willCreate = 0;
       let willUpdate = 0;
-      let willSkipNonService = 0;
+      let willCreateProduct = 0;
+      let willUpdateProduct = 0;
       let withCogs = 0;
+      let matchedToCanonical = 0;
       const preview: ImportPreviewRow[] = parsed.rows.map((r) => {
-        const existingId = byNameLower.get(r.parsedName.trim().toLowerCase()) ?? null;
+        const existingServiceId =
+          servicesByNameLower.get(r.parsedName.trim().toLowerCase()) ?? null;
+        const existingProductId =
+          productsByBrandLower.get(r.parsedName.trim().toLowerCase()) ?? null;
+
+        // Canonical brand auto-routing applies to product rows.
+        let matchedBrand: string | null = null;
+        let productCategory: ProductCategory = "other";
+        let productManufacturer: ProductManufacturer | null = null;
+        let productUnitType: ProductUnitType = "other";
+        if (!r.isService) {
+          const match = lookupCanonicalBrand(r.parsedName, canonicalBrands)
+            ?? (r.parsedDescription ? lookupCanonicalBrand(r.parsedDescription, canonicalBrands) : null);
+          if (match) {
+            matchedBrand = match.displayName;
+            productCategory = canonicalToProductCategory(match.category);
+            productManufacturer = match.manufacturer;
+            productUnitType = match.unitType;
+            matchedToCanonical++;
+          }
+        }
+
         let action: ImportPreviewRow["action"];
         if (!r.isService) {
-          action = "skip-non-service";
-          willSkipNonService++;
-        } else if (existingId) {
+          if (existingProductId) {
+            action = "update-product";
+            willUpdateProduct++;
+          } else {
+            action = "create-product";
+            willCreateProduct++;
+          }
+        } else if (existingServiceId) {
           action = "update";
           willUpdate++;
         } else {
@@ -1165,7 +1232,12 @@ export const ingestServicesCsvFn = createServerFn({ method: "POST" })
           parsedDescription: r.parsedDescription,
           isService: r.isService,
           action,
-          existingServiceId: existingId,
+          existingServiceId,
+          existingProductId,
+          matchedBrand,
+          productCategory,
+          productManufacturer,
+          productUnitType,
           warnings: r.warnings,
         };
       });
@@ -1180,8 +1252,10 @@ export const ingestServicesCsvFn = createServerFn({ method: "POST" })
         nonServiceRows: parsed.nonServiceRows,
         willCreate,
         willUpdate,
-        willSkipNonService,
+        willCreateProduct,
+        willUpdateProduct,
         withCogs,
+        matchedToCanonical,
         preview,
         parseErrors: parsed.parseErrors,
       };
@@ -1190,58 +1264,102 @@ export const ingestServicesCsvFn = createServerFn({ method: "POST" })
     // Commit path — upsert each row.
     let created = 0;
     let updated = 0;
+    let productsCreated = 0;
+    let productsUpdated = 0;
     const failed: ImportReceipt["failed"] = [];
 
     for (const r of parsed.rows) {
-      // Skip non-service rows entirely on commit — they're products
-      // (retail items) and belong in a future products-CSV import path,
-      // not in the services table.
-      if (!r.isService) continue;
-      const existingId = byNameLower.get(r.parsedName.trim().toLowerCase()) ?? null;
       try {
-        if (existingId) {
-          // On update, only set cogs_per_service if the CSV provided one
-          // AND the existing service is in 'manual' mode. Skip cogs write
-          // for derived-mode services (their cogs is auto-managed) — would
-          // be silently overwritten on next link change otherwise.
-          const updatePayload: Record<string, unknown> = {
-            category: r.parsedCategory,
-            service_price: r.parsedPrice ?? 0,
-            notes: r.parsedDescription,
-          };
-          if (r.parsedCogs !== null) {
-            const { data: existing } = await sb
-              .from("services")
-              .select("cogs_source")
-              .eq("id", existingId)
-              .eq("tenant_id", tenantId)
-              .maybeSingle();
-            if (existing?.cogs_source !== "derived") {
-              updatePayload.cogs_per_service = r.parsedCogs;
-              updatePayload.cogs_source = "manual";
-            }
-          }
-          const { error } = await sb
-            .from("services")
-            .update(updatePayload)
-            .eq("id", existingId)
-            .eq("tenant_id", tenantId);
-          if (error) throw new Error(error.message);
-          updated++;
-        } else {
-          const { error } = await sb
-            .from("services")
-            .insert({
-              tenant_id: tenantId,
-              name: r.parsedName,
+        if (r.isService) {
+          // ─── Service row ─────────────────────────────────────────────
+          const existingId = servicesByNameLower.get(r.parsedName.trim().toLowerCase()) ?? null;
+          if (existingId) {
+            // On update, only set cogs_per_service if the CSV provided one
+            // AND the existing service is in 'manual' mode. Skip cogs write
+            // for derived-mode services (their cogs is auto-managed).
+            const updatePayload: Record<string, unknown> = {
               category: r.parsedCategory,
               service_price: r.parsedPrice ?? 0,
-              cogs_per_service: r.parsedCogs,
-              cogs_source: "manual",
               notes: r.parsedDescription,
-            });
-          if (error) throw new Error(error.message);
-          created++;
+            };
+            if (r.parsedCogs !== null) {
+              const { data: existing } = await sb
+                .from("services")
+                .select("cogs_source")
+                .eq("id", existingId)
+                .eq("tenant_id", tenantId)
+                .maybeSingle();
+              if (existing?.cogs_source !== "derived") {
+                updatePayload.cogs_per_service = r.parsedCogs;
+                updatePayload.cogs_source = "manual";
+              }
+            }
+            const { error } = await sb
+              .from("services")
+              .update(updatePayload)
+              .eq("id", existingId)
+              .eq("tenant_id", tenantId);
+            if (error) throw new Error(error.message);
+            updated++;
+          } else {
+            const { error } = await sb
+              .from("services")
+              .insert({
+                tenant_id: tenantId,
+                name: r.parsedName,
+                category: r.parsedCategory,
+                service_price: r.parsedPrice ?? 0,
+                cogs_per_service: r.parsedCogs,
+                cogs_source: "manual",
+                notes: r.parsedDescription,
+              });
+            if (error) throw new Error(error.message);
+            created++;
+          }
+        } else {
+          // ─── Product row (v1.30.1) ───────────────────────────────────
+          // Auto-route manufacturer + category + unit_type via canonical
+          // brand registry; fall back to defaults if no match.
+          const match = lookupCanonicalBrand(r.parsedName, canonicalBrands)
+            ?? (r.parsedDescription ? lookupCanonicalBrand(r.parsedDescription, canonicalBrands) : null);
+          const productCategory: ProductCategory = match
+            ? canonicalToProductCategory(match.category)
+            : "other";
+          const productManufacturer: ProductManufacturer | null = match?.manufacturer ?? null;
+          const productUnitType: ProductUnitType = match?.unitType ?? "other";
+
+          const existingId = productsByBrandLower.get(r.parsedName.trim().toLowerCase()) ?? null;
+          if (existingId) {
+            const { error } = await sb
+              .from("products")
+              .update({
+                category: productCategory,
+                cost_per_unit: r.parsedCogs ?? 0,
+                sales_price_per_unit: r.parsedPrice ?? 0,
+                manufacturer: productManufacturer,
+                unit_type: productUnitType,
+                notes: r.parsedDescription,
+              })
+              .eq("id", existingId)
+              .eq("tenant_id", tenantId);
+            if (error) throw new Error(error.message);
+            productsUpdated++;
+          } else {
+            const { error } = await sb
+              .from("products")
+              .insert({
+                tenant_id: tenantId,
+                brand: r.parsedName,
+                category: productCategory,
+                unit_type: productUnitType,
+                cost_per_unit: r.parsedCogs ?? 0,
+                sales_price_per_unit: r.parsedPrice ?? 0,
+                manufacturer: productManufacturer,
+                notes: r.parsedDescription,
+              });
+            if (error) throw new Error(error.message);
+            productsCreated++;
+          }
         }
       } catch (err) {
         failed.push({
@@ -1252,7 +1370,7 @@ export const ingestServicesCsvFn = createServerFn({ method: "POST" })
       }
     }
 
-    return { created, updated, failed };
+    return { created, updated, productsCreated, productsUpdated, failed };
   });
 
 // ─── setServiceCogsSourceFn ───────────────────────────────────────────────

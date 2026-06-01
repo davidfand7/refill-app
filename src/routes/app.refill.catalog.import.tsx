@@ -42,17 +42,20 @@ import {
   type ImportReceipt,
   type ServiceCategory,
 } from "@/server/refill-catalog";
+
+type CatLabel = "tox" | "filler" | "laser" | "laser_consumable" | "facial" | "skincare" | "other";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/refill/catalog/import")({
   component: CatalogImportPage,
 });
 
-function categoryLabel(c: ServiceCategory): string {
+function categoryLabel(c: CatLabel | ServiceCategory): string {
   switch (c) {
     case "tox": return "Tox";
     case "filler": return "Filler";
     case "laser": return "Laser";
+    case "laser_consumable": return "Laser consumable";
     case "facial": return "Facial";
     case "skincare": return "Skincare";
     case "other": return "Other";
@@ -150,8 +153,8 @@ function CatalogImportPage() {
   return (
     <div>
       <PageHeader
-        title="Import services from CSV"
-        description="Drop your QuickBooks Item List export (or Acuity / Square / any CSV with a service name column). Cost-of-goods columns from QB flow straight into your margin math. Preview-then-commit — nothing writes until you confirm. Re-uploading the same file is safe: services match by name, no duplicates."
+        title="Import catalog from CSV"
+        description="Drop your QuickBooks Item List export (or Acuity / Square / any CSV). Service rows land in the Service catalog; Non-inventory rows land in the Product catalog with manufacturer auto-routed via the canonical brand registry. Cost-of-goods columns flow straight into margin math. Preview-then-commit — nothing writes until you confirm. Re-uploading the same file is safe: services match by name, products match by brand, no duplicates."
         actions={
           <Link
             to="/app/refill/catalog/services"
@@ -317,18 +320,28 @@ function CatalogImportPage() {
 
             <section className="rounded-xl border border-rule bg-white px-5 py-4 space-y-3">
               <div className="flex items-center gap-4 flex-wrap">
-                <div className="text-[14px] font-semibold text-ink">Summary</div>
-                <SummaryChip label="Total rows" value={preview.totalRows} />
-                <SummaryChip label="Parseable" value={preview.parseableRows} tone="good" />
-                {preview.skippedRows > 0 && (
-                  <SummaryChip label="Skipped" value={preview.skippedRows} tone="warn" />
-                )}
+                <div className="text-[14px] font-semibold text-ink">Services</div>
                 <SummaryChip label="Will create" value={preview.willCreate} tone="good" />
                 {preview.willUpdate > 0 && (
                   <SummaryChip label="Will update" value={preview.willUpdate} tone="info" />
                 )}
-                {preview.willSkipNonService > 0 && (
-                  <SummaryChip label="Non-service (skip)" value={preview.willSkipNonService} tone="warn" />
+              </div>
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="text-[14px] font-semibold text-ink">Products</div>
+                <SummaryChip label="Will create" value={preview.willCreateProduct} tone="good" />
+                {preview.willUpdateProduct > 0 && (
+                  <SummaryChip label="Will update" value={preview.willUpdateProduct} tone="info" />
+                )}
+                {preview.matchedToCanonical > 0 && (
+                  <SummaryChip label="Matched to brand registry" value={preview.matchedToCanonical} tone="good" />
+                )}
+              </div>
+              <div className="flex items-center gap-4 flex-wrap pt-2 border-t border-rule">
+                <div className="text-[12px] text-ink-soft">File totals</div>
+                <SummaryChip label="Total rows" value={preview.totalRows} />
+                <SummaryChip label="Parseable" value={preview.parseableRows} tone="good" />
+                {preview.skippedRows > 0 && (
+                  <SummaryChip label="Skipped" value={preview.skippedRows} tone="warn" />
                 )}
                 {preview.withCogs > 0 && (
                   <SummaryChip label="With COGS" value={preview.withCogs} tone="good" />
@@ -371,19 +384,32 @@ function CatalogImportPage() {
                     </thead>
                     <tbody className="divide-y divide-rule">
                       {preview.preview.slice(0, 30).map((r) => (
-                        <tr key={r.rowIndex} className={!r.isService ? "opacity-60" : ""}>
+                        <tr key={r.rowIndex}>
                           <td className="py-2 pr-3 text-ink-soft tabular-nums">{r.rowIndex}</td>
-                          <td className="py-2 pr-3 font-medium text-ink">{r.parsedName}</td>
+                          <td className="py-2 pr-3 font-medium text-ink">
+                            {r.parsedName}
+                            {r.matchedBrand && r.matchedBrand !== r.parsedName && (
+                              <span className="ml-2 text-[10px] text-emerald-ink bg-emerald-soft rounded px-1.5 py-0.5">
+                                → {r.matchedBrand}
+                              </span>
+                            )}
+                          </td>
                           <td className="py-2 pr-3 text-[12px] text-ink-soft">
                             {r.rawType ?? "—"}
                           </td>
                           <td className="py-2 pr-3">
                             <span className="inline-flex items-center gap-1">
-                              {categoryLabel(r.parsedCategory)}
-                              {r.categorySource === "name-inferred" && (
+                              {r.isService ? categoryLabel(r.parsedCategory) : categoryLabel(r.productCategory as ServiceCategory)}
+                              {r.isService && r.categorySource === "name-inferred" && (
                                 <span className="text-[10px] text-ink-faint italic">(from name)</span>
                               )}
-                              {r.categorySource === "default" && (
+                              {r.isService && r.categorySource === "default" && (
+                                <span className="text-[10px] text-ink-faint italic">(default)</span>
+                              )}
+                              {!r.isService && r.matchedBrand && (
+                                <span className="text-[10px] text-emerald-ink italic">(from registry)</span>
+                              )}
+                              {!r.isService && !r.matchedBrand && (
                                 <span className="text-[10px] text-ink-faint italic">(default)</span>
                               )}
                             </span>
@@ -402,12 +428,14 @@ function CatalogImportPage() {
                                 "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
                                 r.action === "create" && "bg-emerald-soft text-emerald-ink",
                                 r.action === "update" && "bg-blue-50 text-blue-700",
-                                r.action === "skip-non-service" && "bg-amber-soft text-amber",
+                                r.action === "create-product" && "bg-emerald-soft text-emerald-ink",
+                                r.action === "update-product" && "bg-blue-50 text-blue-700",
                               )}
                             >
-                              {r.action === "create" && "Create"}
-                              {r.action === "update" && "Update"}
-                              {r.action === "skip-non-service" && "Skip (product)"}
+                              {r.action === "create" && "Create svc"}
+                              {r.action === "update" && "Update svc"}
+                              {r.action === "create-product" && "Create prod"}
+                              {r.action === "update-product" && "Update prod"}
                             </span>
                           </td>
                           <td className="py-2 text-[12px] text-ink-soft">
@@ -422,29 +450,39 @@ function CatalogImportPage() {
             )}
 
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={onCommit}
-                disabled={committing || (preview.willCreate + preview.willUpdate) === 0 || !preview.fieldMapping.name}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md px-5 py-2.5 text-[14px] font-semibold shadow-sm transition",
-                  committing || (preview.willCreate + preview.willUpdate) === 0 || !preview.fieldMapping.name
-                    ? "bg-rule text-ink-faint cursor-not-allowed"
-                    : "bg-emerald text-paper hover:opacity-95",
-                )}
-              >
-                {committing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Importing&hellip;
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="h-4 w-4" />
-                    Import {preview.willCreate + preview.willUpdate} services
-                  </>
-                )}
-              </button>
+              {(() => {
+                const totalToWrite =
+                  preview.willCreate + preview.willUpdate +
+                  preview.willCreateProduct + preview.willUpdateProduct;
+                const svcCount = preview.willCreate + preview.willUpdate;
+                const prodCount = preview.willCreateProduct + preview.willUpdateProduct;
+                const blocked = committing || totalToWrite === 0 || !preview.fieldMapping.name;
+                return (
+                  <button
+                    type="button"
+                    onClick={onCommit}
+                    disabled={blocked}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md px-5 py-2.5 text-[14px] font-semibold shadow-sm transition",
+                      blocked
+                        ? "bg-rule text-ink-faint cursor-not-allowed"
+                        : "bg-emerald text-paper hover:opacity-95",
+                    )}
+                  >
+                    {committing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Importing&hellip;
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-4 w-4" />
+                        Import {svcCount} service{svcCount === 1 ? "" : "s"} + {prodCount} product{prodCount === 1 ? "" : "s"}
+                      </>
+                    )}
+                  </button>
+                );
+              })()}
               <button
                 type="button"
                 onClick={clearAll}
@@ -469,6 +507,12 @@ function CatalogImportPage() {
               </div>
               <div>
                 <span className="font-semibold tabular-nums">{receipt.updated}</span> existing services updated
+              </div>
+              <div>
+                <span className="font-semibold tabular-nums">{receipt.productsCreated}</span> new products created
+              </div>
+              <div>
+                <span className="font-semibold tabular-nums">{receipt.productsUpdated}</span> existing products updated
               </div>
               {receipt.failed.length > 0 && (
                 <div className="text-red-700">
