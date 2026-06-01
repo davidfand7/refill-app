@@ -1,13 +1,18 @@
 /**
  * RefillNav — horizontal chip nav for the Refill standalone shell (v410).
  *
- * Per [[project-refill-trojan-horse-thesis]]: stays narrow. v1.20.2 lifted
- * Patients into the chip bar as the first chip to match the RefillHome
- * quick-actions ordering (Patients leads). The chip bar is still tight
- * (5 chips) and stays anchored to the no-show-recovery loop — patients
- * are the underlying data anchor that everything else operates on, so
- * it earns its place. New chips beyond these 5 still signal platform
- * ambition and would break the stealth positioning.
+ * Per [[project-refill-trojan-horse-thesis]] the PUBLIC surfaces stay
+ * narrow forever (landing / scan / onboard). The trojan-horse thesis is
+ * about positioning to PROSPECTS who haven't logged in. Inside the
+ * authenticated shell, the spa owner needs the surfaces they'll actually
+ * use — hiding daily-use surfaces behind deep links makes them work harder.
+ *
+ * v1.29.2 added Catalog as the second chip (after Patients, before
+ * Recovery). Reason: Patients (WHO) and Catalog (WHAT) are the two data
+ * primitives every downstream engine reads from; surfacing both at the
+ * top makes the mental model match the data model. Earlier nav guidance
+ * was over-applied; the public landing pages stay narrow but the in-app
+ * nav reflects actual usage.
  *
  * Same component shape as RepNav so the visual identity reads "sibling
  * product" — Refill chrome is family with the Rep platform chrome, not
@@ -18,6 +23,7 @@ import { Link } from "@tanstack/react-router";
 
 export type RefillNavKey =
   | "patients"
+  | "catalog"
   | "recovery"
   | "inbox"
   | "settings"
@@ -32,6 +38,7 @@ type RefillNavItem = {
 
 const ITEMS: RefillNavItem[] = [
   { key: "patients", to: "/app/refill/patients",          label: "Patients", shortLabel: "Patients" },
+  { key: "catalog",  to: "/app/refill/catalog/products",  label: "Catalog",  shortLabel: "Catalog" },
   { key: "recovery", to: "/app/refill/recovery",           label: "Recovery", shortLabel: "Recovery" },
   { key: "inbox",    to: "/app/refill/inbox",              label: "Inbox",    shortLabel: "Inbox" },
   { key: "settings", to: "/app/refill/settings/scheduler", label: "Settings", shortLabel: "Settings" },

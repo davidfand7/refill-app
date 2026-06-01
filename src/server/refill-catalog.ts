@@ -277,3 +277,186 @@ export const deleteProductFn = createServerFn({ method: "POST" })
     if (error) throw new Error(`Couldn't delete product: ${error.message}`);
     return { ok: true };
   });
+
+// ══ Services (v1.29.2) ═══════════════════════════════════════════════════
+
+export type ServiceCategory = "tox" | "filler" | "laser" | "facial" | "skincare" | "other";
+
+export type ServiceCogsSource = "manual" | "derived";
+
+export type Service = {
+  id: string;
+  tenantId: string;
+  name: string;
+  category: ServiceCategory;
+  servicePrice: number;
+  cogsPerService: number | null;
+  cogsSource: ServiceCogsSource;
+  marginPerService: number | null;
+  marginPct: number | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type ServiceRow = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  category: string;
+  service_price: string | number;
+  cogs_per_service: string | number | null;
+  cogs_source: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+function rowToService(r: ServiceRow): Service {
+  const price = typeof r.service_price === "string" ? Number(r.service_price) : r.service_price;
+  const cogsRaw = r.cogs_per_service;
+  const cogs = cogsRaw === null ? null : typeof cogsRaw === "string" ? Number(cogsRaw) : cogsRaw;
+  const margin = cogs === null ? null : price - cogs;
+  const marginPct = margin === null || price <= 0 ? null : margin / price;
+  return {
+    id: r.id,
+    tenantId: r.tenant_id,
+    name: r.name,
+    category: r.category as ServiceCategory,
+    servicePrice: price,
+    cogsPerService: cogs,
+    cogsSource: r.cogs_source as ServiceCogsSource,
+    marginPerService: margin,
+    marginPct,
+    notes: r.notes,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
+}
+
+const SERVICE_CATEGORY_VALUES = ["tox", "filler", "laser", "facial", "skincare", "other"] as const;
+
+const servicePayload = z.object({
+  name: z.string().trim().min(1, "Service name is required.").max(160),
+  category: z.enum(SERVICE_CATEGORY_VALUES),
+  servicePrice: z.number().nonnegative("Price can't be negative."),
+  cogsPerService: z.number().nonnegative("COGS can't be negative.").nullable(),
+  notes: z.string().trim().max(500).nullable(),
+});
+
+const createServiceInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  service: servicePayload,
+});
+
+const updateServiceInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  id: z.string().uuid(),
+  service: servicePayload,
+});
+
+// ─── listServicesFn ───────────────────────────────────────────────────────
+
+export const listServicesFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => readInput.parse(raw))
+  .handler(async ({ data }): Promise<Service[]> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const { data: rows, error } = await sb
+      .from("services")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .order("category", { ascending: true })
+      .order("name", { ascending: true });
+    if (error) throw new Error(`Couldn't list services: ${error.message}`);
+    return (rows ?? []).map((r) => rowToService(r as ServiceRow));
+  });
+
+// ─── createServiceFn ──────────────────────────────────────────────────────
+
+export const createServiceFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => createServiceInput.parse(raw))
+  .handler(async ({ data }): Promise<Service> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const { data: row, error } = await sb
+      .from("services")
+      .insert({
+        tenant_id: tenantId,
+        name: data.service.name,
+        category: data.service.category,
+        service_price: data.service.servicePrice,
+        cogs_per_service: data.service.cogsPerService,
+        cogs_source: "manual",
+        notes: data.service.notes,
+      })
+      .select("*")
+      .single();
+    if (error || !row) {
+      throw new Error(`Couldn't create service: ${error?.message ?? "no row"}`);
+    }
+    return rowToService(row as ServiceRow);
+  });
+
+// ─── updateServiceFn ──────────────────────────────────────────────────────
+
+export const updateServiceFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => updateServiceInput.parse(raw))
+  .handler(async ({ data }): Promise<Service> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    // Editing a manual COGS field keeps cogs_source = 'manual'. v1.29.3
+    // will introduce the auto-derive path that flips it to 'derived'.
+    const { data: row, error } = await sb
+      .from("services")
+      .update({
+        name: data.service.name,
+        category: data.service.category,
+        service_price: data.service.servicePrice,
+        cogs_per_service: data.service.cogsPerService,
+        cogs_source: "manual",
+        notes: data.service.notes,
+      })
+      .eq("id", data.id)
+      .eq("tenant_id", tenantId)
+      .select("*")
+      .single();
+    if (error || !row) {
+      throw new Error(`Couldn't update service: ${error?.message ?? "no row"}`);
+    }
+    return rowToService(row as ServiceRow);
+  });
+
+// ─── deleteServiceFn ──────────────────────────────────────────────────────
+
+export const deleteServiceFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => deleteInput.parse(raw))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const { error } = await sb
+      .from("services")
+      .delete()
+      .eq("id", data.id)
+      .eq("tenant_id", tenantId);
+    if (error) throw new Error(`Couldn't delete service: ${error.message}`);
+    return { ok: true };
+  });
