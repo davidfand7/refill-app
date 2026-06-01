@@ -29,16 +29,21 @@ import {
   Gift,
   Loader2,
   Mail,
+  Pencil,
   Phone,
   Sparkles,
+  Tag,
   TrendingUp,
   Users,
   Wallet,
+  X,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  clearPatientSoftTag,
   getPatientById,
+  setPatientSoftTag,
   type PatientDetail,
   type PatientListRow,
   type PatientTransactionRow,
@@ -47,6 +52,11 @@ import type {
   ProductKind,
   ProductManufacturer,
 } from "@/lib/product-manufacturer-map";
+import type {
+  PatientSoftTagEntry,
+  PatientSoftTagKey,
+  PatientSoftTags,
+} from "@/lib/patient-csv";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 
 export const Route = createFileRoute("/app/refill/patients/$patientId")({
@@ -150,6 +160,20 @@ function PatientDetailPage() {
           <>
             <ContactCard patient={data.patient} />
             <SummaryCard patient={data.patient} />
+            <SoftTagsCard
+              patient={data.patient}
+              viewAsUserId={viewAsUserId}
+              onTagsChange={(next) =>
+                setData((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        patient: { ...prev.patient, softTags: next },
+                      }
+                    : prev,
+                )
+              }
+            />
             <ManufacturerMixCard patient={data.patient} />
             <LoyaltyCard patient={data.patient} />
             <TransactionsSection
@@ -374,6 +398,597 @@ function LoyaltyCard({ patient }: { patient: PatientListRow }) {
         ))}
       </div>
     </section>
+  );
+}
+
+// ─── Soft tags card (v1.31.0) ─────────────────────────────────────────────
+//
+// Karen-set editorial layer per Profitability Engine spec §3.2. Six tags,
+// all owner-tap-set with optional reason note. Never inferred by ML — the
+// only write path is this card. Visibility scope is owner-only by default
+// (server fn reads scope to effectiveUserId).
+
+type EnumDef<T extends string> = { value: T; label: string };
+
+const INCOME_OPTIONS: EnumDef<"high" | "mid" | "low" | "unknown">[] = [
+  { value: "high", label: "High" },
+  { value: "mid", label: "Mid" },
+  { value: "low", label: "Low" },
+  { value: "unknown", label: "Unknown" },
+];
+const NEGOTIATOR_OPTIONS: EnumDef<"never" | "occasional" | "always">[] = [
+  { value: "never", label: "Never" },
+  { value: "occasional", label: "Occasional" },
+  { value: "always", label: "Always" },
+];
+const PERSONALITY_OPTIONS: EnumDef<"easy" | "neutral" | "complainer">[] = [
+  { value: "easy", label: "Easy" },
+  { value: "neutral", label: "Neutral" },
+  { value: "complainer", label: "Complainer" },
+];
+const LOYALTY_OPTIONS: EnumDef<"loyal" | "comparison" | "unknown">[] = [
+  { value: "loyal", label: "Loyal" },
+  { value: "comparison", label: "Comparison" },
+  { value: "unknown", label: "Unknown" },
+];
+
+function SoftTagsCard({
+  patient,
+  viewAsUserId,
+  onTagsChange,
+}: {
+  patient: PatientListRow;
+  viewAsUserId: string | undefined;
+  onTagsChange: (next: PatientSoftTags) => void;
+}) {
+  const [openKey, setOpenKey] = useState<PatientSoftTagKey | null>(null);
+  const [busyKey, setBusyKey] = useState<PatientSoftTagKey | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const tags = patient.softTags ?? {};
+
+  const withToken = async (
+    fn: (token: string) => Promise<{ softTags: PatientSoftTags }>,
+    key: PatientSoftTagKey,
+  ) => {
+    setError(null);
+    setBusyKey(key);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Please sign in again to save this tag.");
+      const result = await fn(token);
+      onTagsChange(result.softTags);
+      setOpenKey(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save tag.");
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  const saveEnum = (
+    key: Exclude<PatientSoftTagKey, "specialsSeeker" | "culturalNotes">,
+    value: string,
+    reason: string,
+  ) =>
+    withToken(
+      (token) =>
+        setPatientSoftTag({
+          data: {
+            accessToken: token,
+            viewAsUserId,
+            patientNodeId: patient.id,
+            tag: { key, value } as never,
+            reason: reason.trim() || null,
+          },
+        }),
+      key,
+    );
+
+  const saveBool = (value: boolean, reason: string) =>
+    withToken(
+      (token) =>
+        setPatientSoftTag({
+          data: {
+            accessToken: token,
+            viewAsUserId,
+            patientNodeId: patient.id,
+            tag: { key: "specialsSeeker", value },
+            reason: reason.trim() || null,
+          },
+        }),
+      "specialsSeeker",
+    );
+
+  const saveText = (value: string, reason: string) =>
+    withToken(
+      (token) =>
+        setPatientSoftTag({
+          data: {
+            accessToken: token,
+            viewAsUserId,
+            patientNodeId: patient.id,
+            tag: { key: "culturalNotes", value },
+            reason: reason.trim() || null,
+          },
+        }),
+      "culturalNotes",
+    );
+
+  const clear = (key: PatientSoftTagKey) =>
+    withToken(
+      (token) =>
+        clearPatientSoftTag({
+          data: {
+            accessToken: token,
+            viewAsUserId,
+            patientNodeId: patient.id,
+            key,
+          },
+        }),
+      key,
+    );
+
+  const toggleOpen = (key: PatientSoftTagKey) =>
+    setOpenKey((prev) => (prev === key ? null : key));
+
+  return (
+    <section className="rounded-xl border border-rule bg-white overflow-hidden">
+      <div className="px-5 py-3 border-b border-rule bg-rule-soft/60 flex items-center gap-2">
+        <Sparkles className="h-3.5 w-3.5 text-ink-soft" />
+        <div className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
+          Soft tags
+        </div>
+        <div className="ml-auto text-[10px] text-ink-faint italic">
+          Karen-set · never inferred · owner-only
+        </div>
+      </div>
+      <div className="divide-y divide-rule">
+        <EnumTagRow
+          label="Income tier"
+          options={INCOME_OPTIONS}
+          entry={tags.incomeTier ?? null}
+          open={openKey === "incomeTier"}
+          busy={busyKey === "incomeTier"}
+          onToggle={() => toggleOpen("incomeTier")}
+          onSave={(v, r) => saveEnum("incomeTier", v, r)}
+          onClear={() => clear("incomeTier")}
+        />
+        <EnumTagRow
+          label="Negotiator"
+          options={NEGOTIATOR_OPTIONS}
+          entry={tags.negotiator ?? null}
+          open={openKey === "negotiator"}
+          busy={busyKey === "negotiator"}
+          onToggle={() => toggleOpen("negotiator")}
+          onSave={(v, r) => saveEnum("negotiator", v, r)}
+          onClear={() => clear("negotiator")}
+        />
+        <BoolTagRow
+          label="Specials seeker"
+          entry={tags.specialsSeeker ?? null}
+          open={openKey === "specialsSeeker"}
+          busy={busyKey === "specialsSeeker"}
+          onToggle={() => toggleOpen("specialsSeeker")}
+          onSave={saveBool}
+          onClear={() => clear("specialsSeeker")}
+        />
+        <EnumTagRow
+          label="Personality"
+          options={PERSONALITY_OPTIONS}
+          entry={tags.personality ?? null}
+          open={openKey === "personality"}
+          busy={busyKey === "personality"}
+          onToggle={() => toggleOpen("personality")}
+          onSave={(v, r) => saveEnum("personality", v, r)}
+          onClear={() => clear("personality")}
+        />
+        <EnumTagRow
+          label="Shopper loyalty"
+          options={LOYALTY_OPTIONS}
+          entry={tags.shopperLoyalty ?? null}
+          open={openKey === "shopperLoyalty"}
+          busy={busyKey === "shopperLoyalty"}
+          onToggle={() => toggleOpen("shopperLoyalty")}
+          onSave={(v, r) => saveEnum("shopperLoyalty", v, r)}
+          onClear={() => clear("shopperLoyalty")}
+        />
+        <TextTagRow
+          label="Cultural notes"
+          entry={tags.culturalNotes ?? null}
+          open={openKey === "culturalNotes"}
+          busy={busyKey === "culturalNotes"}
+          onToggle={() => toggleOpen("culturalNotes")}
+          onSave={saveText}
+          onClear={() => clear("culturalNotes")}
+        />
+      </div>
+      {error && (
+        <div className="px-5 py-3 border-t border-rose/30 bg-rose-soft text-xs text-rose">
+          {error}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function TagRowShell({
+  label,
+  entry,
+  open,
+  busy,
+  onToggle,
+  onClear,
+  valuePill,
+  editor,
+}: {
+  label: string;
+  entry: PatientSoftTagEntry<unknown> | null;
+  open: boolean;
+  busy: boolean;
+  onToggle: () => void;
+  onClear: () => void;
+  valuePill: React.ReactNode;
+  editor: React.ReactNode;
+}) {
+  return (
+    <div className="px-5 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
+            {label}
+          </div>
+          {!open && (
+            <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+              {entry ? valuePill : (
+                <span className="text-xs text-ink-faint italic">Not set</span>
+              )}
+            </div>
+          )}
+          {!open && entry?.reason && (
+            <div className="mt-1 text-[12px] text-ink-soft italic">
+              &ldquo;{entry.reason}&rdquo;
+            </div>
+          )}
+          {!open && entry?.setAt && (
+            <div className="mt-1 text-[10px] text-ink-faint">
+              Set {formatDate(entry.setAt.slice(0, 10))}
+            </div>
+          )}
+        </div>
+        {!open && (
+          <button
+            type="button"
+            onClick={onToggle}
+            disabled={busy}
+            className="shrink-0 inline-flex items-center gap-1 rounded-md border border-rule bg-white px-2.5 py-1 text-[11px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition disabled:opacity-50"
+          >
+            {entry ? (
+              <>
+                <Pencil className="h-3 w-3" />
+                Edit
+              </>
+            ) : (
+              <>
+                <Tag className="h-3 w-3" />
+                Set tag
+              </>
+            )}
+          </button>
+        )}
+      </div>
+      {open && (
+        <div className="mt-2 space-y-2">
+          {editor}
+          <div className="flex items-center gap-2 pt-1">
+            {entry && (
+              <button
+                type="button"
+                onClick={onClear}
+                disabled={busy}
+                className="ml-auto inline-flex items-center gap-1 text-[11px] text-rose hover:text-rose/80 transition disabled:opacity-50"
+              >
+                <X className="h-3 w-3" />
+                Clear tag
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onToggle}
+              disabled={busy}
+              className={
+                (entry ? "" : "ml-auto ") +
+                "inline-flex items-center gap-1 rounded-md border border-rule bg-white px-2.5 py-1 text-[11px] font-medium text-ink-soft hover:text-ink transition disabled:opacity-50"
+              }
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {busy && (
+        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-ink-faint">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Saving…
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChipButton({
+  active,
+  disabled,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={
+        "rounded-full px-3 py-1 text-[11px] font-medium border transition disabled:opacity-50 " +
+        (active
+          ? "border-emerald bg-emerald-soft text-emerald-ink"
+          : "border-rule bg-white text-ink-soft hover:border-emerald/40 hover:text-ink")
+      }
+    >
+      {children}
+    </button>
+  );
+}
+
+function EnumTagRow<T extends string>({
+  label,
+  options,
+  entry,
+  open,
+  busy,
+  onToggle,
+  onSave,
+  onClear,
+}: {
+  label: string;
+  options: EnumDef<T>[];
+  entry: PatientSoftTagEntry<T> | null;
+  open: boolean;
+  busy: boolean;
+  onToggle: () => void;
+  onSave: (value: T, reason: string) => void;
+  onClear: () => void;
+}) {
+  const [draftValue, setDraftValue] = useState<T | null>(entry?.value ?? null);
+  const [draftReason, setDraftReason] = useState<string>(entry?.reason ?? "");
+
+  useEffect(() => {
+    if (open) {
+      setDraftValue(entry?.value ?? null);
+      setDraftReason(entry?.reason ?? "");
+    }
+  }, [open, entry]);
+
+  const currentLabel = entry
+    ? options.find((o) => o.value === entry.value)?.label ?? String(entry.value)
+    : null;
+
+  return (
+    <TagRowShell
+      label={label}
+      entry={entry}
+      open={open}
+      busy={busy}
+      onToggle={onToggle}
+      onClear={onClear}
+      valuePill={
+        <span className="inline-flex items-center rounded-full bg-emerald-soft px-3 py-1 text-[11px] font-semibold text-emerald-ink">
+          {currentLabel}
+        </span>
+      }
+      editor={
+        <>
+          <div className="flex flex-wrap gap-1.5">
+            {options.map((opt) => (
+              <ChipButton
+                key={opt.value}
+                active={draftValue === opt.value}
+                disabled={busy}
+                onClick={() => setDraftValue(opt.value)}
+              >
+                {opt.label}
+              </ChipButton>
+            ))}
+          </div>
+          <input
+            type="text"
+            value={draftReason}
+            onChange={(e) => setDraftReason(e.target.value)}
+            placeholder="Reason (optional) — what tipped you off?"
+            maxLength={500}
+            disabled={busy}
+            className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
+          />
+          <button
+            type="button"
+            onClick={() => draftValue !== null && onSave(draftValue, draftReason)}
+            disabled={busy || draftValue === null}
+            className="inline-flex items-center gap-1 rounded-md bg-emerald px-3 py-1.5 text-[12px] font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
+          >
+            Save
+          </button>
+        </>
+      }
+    />
+  );
+}
+
+function BoolTagRow({
+  label,
+  entry,
+  open,
+  busy,
+  onToggle,
+  onSave,
+  onClear,
+}: {
+  label: string;
+  entry: PatientSoftTagEntry<boolean> | null;
+  open: boolean;
+  busy: boolean;
+  onToggle: () => void;
+  onSave: (value: boolean, reason: string) => void;
+  onClear: () => void;
+}) {
+  const [draftValue, setDraftValue] = useState<boolean | null>(
+    entry?.value ?? null,
+  );
+  const [draftReason, setDraftReason] = useState<string>(entry?.reason ?? "");
+
+  useEffect(() => {
+    if (open) {
+      setDraftValue(entry?.value ?? null);
+      setDraftReason(entry?.reason ?? "");
+    }
+  }, [open, entry]);
+
+  return (
+    <TagRowShell
+      label={label}
+      entry={entry}
+      open={open}
+      busy={busy}
+      onToggle={onToggle}
+      onClear={onClear}
+      valuePill={
+        <span
+          className={
+            "inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold " +
+            (entry?.value
+              ? "bg-rose-soft text-rose"
+              : "bg-emerald-soft text-emerald-ink")
+          }
+        >
+          {entry?.value ? "Yes" : "No"}
+        </span>
+      }
+      editor={
+        <>
+          <div className="flex flex-wrap gap-1.5">
+            <ChipButton
+              active={draftValue === true}
+              disabled={busy}
+              onClick={() => setDraftValue(true)}
+            >
+              Yes
+            </ChipButton>
+            <ChipButton
+              active={draftValue === false}
+              disabled={busy}
+              onClick={() => setDraftValue(false)}
+            >
+              No
+            </ChipButton>
+          </div>
+          <input
+            type="text"
+            value={draftReason}
+            onChange={(e) => setDraftReason(e.target.value)}
+            placeholder="Reason (optional)"
+            maxLength={500}
+            disabled={busy}
+            className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
+          />
+          <button
+            type="button"
+            onClick={() => draftValue !== null && onSave(draftValue, draftReason)}
+            disabled={busy || draftValue === null}
+            className="inline-flex items-center gap-1 rounded-md bg-emerald px-3 py-1.5 text-[12px] font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
+          >
+            Save
+          </button>
+        </>
+      }
+    />
+  );
+}
+
+function TextTagRow({
+  label,
+  entry,
+  open,
+  busy,
+  onToggle,
+  onSave,
+  onClear,
+}: {
+  label: string;
+  entry: PatientSoftTagEntry<string> | null;
+  open: boolean;
+  busy: boolean;
+  onToggle: () => void;
+  onSave: (value: string, reason: string) => void;
+  onClear: () => void;
+}) {
+  const [draftValue, setDraftValue] = useState<string>(entry?.value ?? "");
+  const [draftReason, setDraftReason] = useState<string>(entry?.reason ?? "");
+
+  useEffect(() => {
+    if (open) {
+      setDraftValue(entry?.value ?? "");
+      setDraftReason(entry?.reason ?? "");
+    }
+  }, [open, entry]);
+
+  return (
+    <TagRowShell
+      label={label}
+      entry={entry}
+      open={open}
+      busy={busy}
+      onToggle={onToggle}
+      onClear={onClear}
+      valuePill={
+        <span className="text-[12px] text-ink whitespace-pre-wrap">
+          {entry?.value}
+        </span>
+      }
+      editor={
+        <>
+          <textarea
+            value={draftValue}
+            onChange={(e) => setDraftValue(e.target.value)}
+            placeholder="Notes only Karen sees — language preference, family context, sensitivities, etc."
+            maxLength={2000}
+            rows={3}
+            disabled={busy}
+            className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
+          />
+          <input
+            type="text"
+            value={draftReason}
+            onChange={(e) => setDraftReason(e.target.value)}
+            placeholder="Source / context (optional)"
+            maxLength={500}
+            disabled={busy}
+            className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
+          />
+          <button
+            type="button"
+            onClick={() => draftValue.trim() && onSave(draftValue.trim(), draftReason)}
+            disabled={busy || draftValue.trim().length === 0}
+            className="inline-flex items-center gap-1 rounded-md bg-emerald px-3 py-1.5 text-[12px] font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
+          >
+            Save
+          </button>
+        </>
+      }
+    />
   );
 }
 

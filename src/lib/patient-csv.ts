@@ -396,11 +396,46 @@ export type PatientContactSummary = {
    * the summary won't blow away the spa's VIP designations.
    */
   vip: boolean;
+  /**
+   * v1.31.0: Patient Soft-Tags — Karen-set editorial layer (Profitability
+   * Engine §3.2). NEVER inferred. Each entry carries value + setByUserId
+   * + setAt + optional reason note. Lives here so re-rolls preserve them
+   * (same path as vip).
+   */
+  softTags: PatientSoftTags;
   /** Provenance — 'client-csv', 'manual', 'fuzzy-confirmed', or null. */
   contactSource: "client-csv" | "manual" | "fuzzy-confirmed" | null;
   /** ISO timestamp the contact info last changed. */
   contactLinkedAt: string | null;
 };
+
+// ─── Patient Soft-Tags (v1.31.0) ───────────────────────────────────────────
+
+export type PatientIncomeTier = "high" | "mid" | "low" | "unknown";
+export type PatientNegotiator = "never" | "occasional" | "always";
+export type PatientPersonality = "easy" | "neutral" | "complainer";
+export type PatientShopperLoyalty = "loyal" | "comparison" | "unknown";
+
+export type PatientSoftTagEntry<TValue> = {
+  value: TValue;
+  /** auth.uid of the owner who set this tag. */
+  setByUserId: string;
+  /** ISO timestamp of last write. */
+  setAt: string;
+  /** Optional free-text rationale captured at set time. */
+  reason: string | null;
+};
+
+export type PatientSoftTags = {
+  incomeTier?: PatientSoftTagEntry<PatientIncomeTier> | null;
+  negotiator?: PatientSoftTagEntry<PatientNegotiator> | null;
+  specialsSeeker?: PatientSoftTagEntry<boolean> | null;
+  personality?: PatientSoftTagEntry<PatientPersonality> | null;
+  shopperLoyalty?: PatientSoftTagEntry<PatientShopperLoyalty> | null;
+  culturalNotes?: PatientSoftTagEntry<string> | null;
+};
+
+export type PatientSoftTagKey = keyof PatientSoftTags;
 
 export type PatientSummary = {
   normalizedName: string;

@@ -56,6 +56,7 @@ import { Route as AppAdminReportsRouteImport } from './routes/app.admin.reports'
 import { Route as AppAdminRefillTrialsRouteImport } from './routes/app.admin.refill-trials'
 import { Route as AppAdminOutreachRouteImport } from './routes/app.admin.outreach'
 import { Route as AppAdminFlagsRouteImport } from './routes/app.admin.flags'
+import { Route as AppAdminCanonicalBrandsRouteImport } from './routes/app.admin.canonical-brands'
 import { Route as AppAdminAuditRouteImport } from './routes/app.admin.audit'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api.webhooks.stripe'
 import { Route as ApiTwilioInboundRouteImport } from './routes/api.twilio.inbound'
@@ -81,6 +82,9 @@ import { Route as AppRefillPatientsImportRouteImport } from './routes/app.refill
 import { Route as AppRefillPatientsContactsRouteImport } from './routes/app.refill.patients.contacts'
 import { Route as AppRefillPatientsAListRulesRouteImport } from './routes/app.refill.patients.a-list-rules'
 import { Route as AppRefillPatientsPatientIdRouteImport } from './routes/app.refill.patients.$patientId'
+import { Route as AppRefillCatalogServicesRouteImport } from './routes/app.refill.catalog.services'
+import { Route as AppRefillCatalogProductsRouteImport } from './routes/app.refill.catalog.products'
+import { Route as AppRefillCatalogImportRouteImport } from './routes/app.refill.catalog.import'
 import { Route as AppRefillCampaignsNewRouteImport } from './routes/app.refill.campaigns.new'
 import { Route as AppRefillCampaignsCampaignIdRouteImport } from './routes/app.refill.campaigns.$campaignId'
 import { Route as ApiIntegrationsAcuityOauthCallbackRouteImport } from './routes/api.integrations.acuity.oauth-callback'
@@ -323,6 +327,11 @@ const AppAdminFlagsRoute = AppAdminFlagsRouteImport.update({
   path: '/admin/flags',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminCanonicalBrandsRoute = AppAdminCanonicalBrandsRouteImport.update({
+  id: '/admin/canonical-brands',
+  path: '/admin/canonical-brands',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAdminAuditRoute = AppAdminAuditRouteImport.update({
   id: '/admin/audit',
   path: '/admin/audit',
@@ -456,6 +465,23 @@ const AppRefillPatientsPatientIdRoute =
     path: '/$patientId',
     getParentRoute: () => AppRefillPatientsRoute,
   } as any)
+const AppRefillCatalogServicesRoute =
+  AppRefillCatalogServicesRouteImport.update({
+    id: '/catalog/services',
+    path: '/catalog/services',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
+const AppRefillCatalogProductsRoute =
+  AppRefillCatalogProductsRouteImport.update({
+    id: '/catalog/products',
+    path: '/catalog/products',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
+const AppRefillCatalogImportRoute = AppRefillCatalogImportRouteImport.update({
+  id: '/catalog/import',
+  path: '/catalog/import',
+  getParentRoute: () => AppRefillRoute,
+} as any)
 const AppRefillCampaignsNewRoute = AppRefillCampaignsNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -523,6 +549,7 @@ export interface FileRoutesByFullPath {
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/admin/audit': typeof AppAdminAuditRoute
+  '/app/admin/canonical-brands': typeof AppAdminCanonicalBrandsRoute
   '/app/admin/flags': typeof AppAdminFlagsRoute
   '/app/admin/outreach': typeof AppAdminOutreachRoute
   '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
@@ -554,6 +581,9 @@ export interface FileRoutesByFullPath {
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
+  '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
+  '/app/refill/catalog/products': typeof AppRefillCatalogProductsRoute
+  '/app/refill/catalog/services': typeof AppRefillCatalogServicesRoute
   '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
   '/app/refill/patients/a-list-rules': typeof AppRefillPatientsAListRulesRoute
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
@@ -601,6 +631,7 @@ export interface FileRoutesByTo {
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/admin/audit': typeof AppAdminAuditRoute
+  '/app/admin/canonical-brands': typeof AppAdminCanonicalBrandsRoute
   '/app/admin/flags': typeof AppAdminFlagsRoute
   '/app/admin/outreach': typeof AppAdminOutreachRoute
   '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
@@ -629,6 +660,9 @@ export interface FileRoutesByTo {
   '/app/rep': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
+  '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
+  '/app/refill/catalog/products': typeof AppRefillCatalogProductsRoute
+  '/app/refill/catalog/services': typeof AppRefillCatalogServicesRoute
   '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
   '/app/refill/patients/a-list-rules': typeof AppRefillPatientsAListRulesRoute
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
@@ -679,6 +713,7 @@ export interface FileRoutesById {
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/admin/audit': typeof AppAdminAuditRoute
+  '/app/admin/canonical-brands': typeof AppAdminCanonicalBrandsRoute
   '/app/admin/flags': typeof AppAdminFlagsRoute
   '/app/admin/outreach': typeof AppAdminOutreachRoute
   '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
@@ -710,6 +745,9 @@ export interface FileRoutesById {
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
+  '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
+  '/app/refill/catalog/products': typeof AppRefillCatalogProductsRoute
+  '/app/refill/catalog/services': typeof AppRefillCatalogServicesRoute
   '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
   '/app/refill/patients/a-list-rules': typeof AppRefillPatientsAListRulesRoute
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
@@ -761,6 +799,7 @@ export interface FileRouteTypes {
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
     | '/app/admin/audit'
+    | '/app/admin/canonical-brands'
     | '/app/admin/flags'
     | '/app/admin/outreach'
     | '/app/admin/refill-trials'
@@ -792,6 +831,9 @@ export interface FileRouteTypes {
     | '/api/integrations/acuity/oauth-callback'
     | '/app/refill/campaigns/$campaignId'
     | '/app/refill/campaigns/new'
+    | '/app/refill/catalog/import'
+    | '/app/refill/catalog/products'
+    | '/app/refill/catalog/services'
     | '/app/refill/patients/$patientId'
     | '/app/refill/patients/a-list-rules'
     | '/app/refill/patients/contacts'
@@ -839,6 +881,7 @@ export interface FileRouteTypes {
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
     | '/app/admin/audit'
+    | '/app/admin/canonical-brands'
     | '/app/admin/flags'
     | '/app/admin/outreach'
     | '/app/admin/refill-trials'
@@ -867,6 +910,9 @@ export interface FileRouteTypes {
     | '/app/rep'
     | '/api/integrations/acuity/oauth-callback'
     | '/app/refill/campaigns/new'
+    | '/app/refill/catalog/import'
+    | '/app/refill/catalog/products'
+    | '/app/refill/catalog/services'
     | '/app/refill/patients/$patientId'
     | '/app/refill/patients/a-list-rules'
     | '/app/refill/patients/contacts'
@@ -916,6 +962,7 @@ export interface FileRouteTypes {
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
     | '/app/admin/audit'
+    | '/app/admin/canonical-brands'
     | '/app/admin/flags'
     | '/app/admin/outreach'
     | '/app/admin/refill-trials'
@@ -947,6 +994,9 @@ export interface FileRouteTypes {
     | '/api/integrations/acuity/oauth-callback'
     | '/app/refill/campaigns/$campaignId'
     | '/app/refill/campaigns/new'
+    | '/app/refill/catalog/import'
+    | '/app/refill/catalog/products'
+    | '/app/refill/catalog/services'
     | '/app/refill/patients/$patientId'
     | '/app/refill/patients/a-list-rules'
     | '/app/refill/patients/contacts'
@@ -1330,6 +1380,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminFlagsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/admin/canonical-brands': {
+      id: '/app/admin/canonical-brands'
+      path: '/admin/canonical-brands'
+      fullPath: '/app/admin/canonical-brands'
+      preLoaderRoute: typeof AppAdminCanonicalBrandsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/admin/audit': {
       id: '/app/admin/audit'
       path: '/admin/audit'
@@ -1505,6 +1562,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillPatientsPatientIdRouteImport
       parentRoute: typeof AppRefillPatientsRoute
     }
+    '/app/refill/catalog/services': {
+      id: '/app/refill/catalog/services'
+      path: '/catalog/services'
+      fullPath: '/app/refill/catalog/services'
+      preLoaderRoute: typeof AppRefillCatalogServicesRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/catalog/products': {
+      id: '/app/refill/catalog/products'
+      path: '/catalog/products'
+      fullPath: '/app/refill/catalog/products'
+      preLoaderRoute: typeof AppRefillCatalogProductsRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/catalog/import': {
+      id: '/app/refill/catalog/import'
+      path: '/catalog/import'
+      fullPath: '/app/refill/catalog/import'
+      preLoaderRoute: typeof AppRefillCatalogImportRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/campaigns/new': {
       id: '/app/refill/campaigns/new'
       path: '/new'
@@ -1616,6 +1694,9 @@ interface AppRefillRouteChildren {
   AppRefillRescueRoute: typeof AppRefillRescueRoute
   AppRefillSharingRoute: typeof AppRefillSharingRoute
   AppRefillIndexRoute: typeof AppRefillIndexRoute
+  AppRefillCatalogImportRoute: typeof AppRefillCatalogImportRoute
+  AppRefillCatalogProductsRoute: typeof AppRefillCatalogProductsRoute
+  AppRefillCatalogServicesRoute: typeof AppRefillCatalogServicesRoute
   AppRefillSettingsAccountRoute: typeof AppRefillSettingsAccountRoute
   AppRefillSettingsNoshowRoute: typeof AppRefillSettingsNoshowRoute
   AppRefillSettingsSchedulerRoute: typeof AppRefillSettingsSchedulerRoute
@@ -1639,6 +1720,9 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillRescueRoute: AppRefillRescueRoute,
   AppRefillSharingRoute: AppRefillSharingRoute,
   AppRefillIndexRoute: AppRefillIndexRoute,
+  AppRefillCatalogImportRoute: AppRefillCatalogImportRoute,
+  AppRefillCatalogProductsRoute: AppRefillCatalogProductsRoute,
+  AppRefillCatalogServicesRoute: AppRefillCatalogServicesRoute,
   AppRefillSettingsAccountRoute: AppRefillSettingsAccountRoute,
   AppRefillSettingsNoshowRoute: AppRefillSettingsNoshowRoute,
   AppRefillSettingsSchedulerRoute: AppRefillSettingsSchedulerRoute,
@@ -1683,6 +1767,7 @@ interface AppRouteChildren {
   AppRefillRoute: typeof AppRefillRouteWithChildren
   AppRepRoute: typeof AppRepRouteWithChildren
   AppAdminAuditRoute: typeof AppAdminAuditRoute
+  AppAdminCanonicalBrandsRoute: typeof AppAdminCanonicalBrandsRoute
   AppAdminFlagsRoute: typeof AppAdminFlagsRoute
   AppAdminOutreachRoute: typeof AppAdminOutreachRoute
   AppAdminRefillTrialsRoute: typeof AppAdminRefillTrialsRoute
@@ -1696,6 +1781,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppRefillRoute: AppRefillRouteWithChildren,
   AppRepRoute: AppRepRouteWithChildren,
   AppAdminAuditRoute: AppAdminAuditRoute,
+  AppAdminCanonicalBrandsRoute: AppAdminCanonicalBrandsRoute,
   AppAdminFlagsRoute: AppAdminFlagsRoute,
   AppAdminOutreachRoute: AppAdminOutreachRoute,
   AppAdminRefillTrialsRoute: AppAdminRefillTrialsRoute,

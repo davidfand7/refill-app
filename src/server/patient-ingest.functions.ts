@@ -34,6 +34,12 @@ import {
   type ParsedTransaction,
   type PatientSummary,
   type PatientContactSummary,
+  type PatientSoftTags,
+  type PatientSoftTagKey,
+  type PatientIncomeTier,
+  type PatientNegotiator,
+  type PatientPersonality,
+  type PatientShopperLoyalty,
 } from "@/lib/patient-csv";
 import {
   parseClientListCsv,
@@ -103,6 +109,12 @@ export type PatientListRow = {
    */
   vip: boolean;
   contactSource: "client-csv" | "manual" | "fuzzy-confirmed" | null;
+  /**
+   * v1.31.0: Patient Soft-Tags — Karen-set editorial layer (Profitability
+   * Engine §3.2). Empty object when none set. See PatientSoftTags in
+   * patient-csv.ts for the per-tag shape.
+   */
+  softTags: PatientSoftTags;
 };
 
 export type PatientTransactionRow = {
@@ -243,6 +255,7 @@ function hydratePatientListRow(node: KnowledgeNodeRow): PatientListRow {
     banned: a?.banned ?? false,
     vip: a?.vip ?? false,
     contactSource: a?.contactSource ?? null,
+    softTags: a?.softTags ?? {},
   };
 }
 
@@ -260,6 +273,8 @@ function extractContactSummary(
     email: summary.email ?? null,
     daysSinceLastAppointment: summary.daysSinceLastAppointment ?? null,
     banned: summary.banned ?? false,
+    vip: summary.vip ?? false,
+    softTags: summary.softTags ?? {},
     contactSource: summary.contactSource ?? null,
     contactLinkedAt: summary.contactLinkedAt ?? null,
   };
@@ -659,6 +674,166 @@ export const setPatientVip = createServerFn({ method: "POST" })
       .eq("user_id", userId);
     if (updErr) throw new Error(`Couldn't update VIP: ${updErr.message}`);
     return { ok: true };
+  });
+
+// ─── setPatientSoftTag (v1.31.0) ──────────────────────────────────────────
+
+/**
+ * Karen-set editorial tag on a single patient. Reads current attachments,
+ * merges softTags[key] = { value, setByUserId, setAt, reason }, writes
+ * back. Mirrors the setPatientVip JSONB-merge pattern but threads through
+ * resolveEffectiveUserId so admin viewing-as a tenant owner writes under
+ * the tenant's user_id (with the admin's auth.uid recorded as setByUserId
+ * for audit).
+ *
+ * NEVER inferred by ML — only callable from explicit one-tap UI affordances
+ * on the patient detail page. Owner-only visibility is automatic: every
+ * read path scopes by effectiveUserId, so other tenants can't see these.
+ */
+const softTagWriteInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  patientNodeId: z.string().uuid(),
+  tag: z.discriminatedUnion("key", [
+    z.object({
+      key: z.literal("incomeTier"),
+      value: z.enum(["high", "mid", "low", "unknown"]),
+    }),
+    z.object({
+      key: z.literal("negotiator"),
+      value: z.enum(["never", "occasional", "always"]),
+    }),
+    z.object({
+      key: z.literal("specialsSeeker"),
+      value: z.boolean(),
+    }),
+    z.object({
+      key: z.literal("personality"),
+      value: z.enum(["easy", "neutral", "complainer"]),
+    }),
+    z.object({
+      key: z.literal("shopperLoyalty"),
+      value: z.enum(["loyal", "comparison", "unknown"]),
+    }),
+    z.object({
+      key: z.literal("culturalNotes"),
+      value: z.string().max(2000),
+    }),
+  ]),
+  reason: z.string().max(500).nullable().optional(),
+});
+
+const softTagClearInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  patientNodeId: z.string().uuid(),
+  key: z.enum([
+    "incomeTier",
+    "negotiator",
+    "specialsSeeker",
+    "personality",
+    "shopperLoyalty",
+    "culturalNotes",
+  ]),
+});
+
+export const setPatientSoftTag = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => softTagWriteInput.parse(raw))
+  .handler(async ({ data }): Promise<{ ok: true; softTags: PatientSoftTags }> => {
+    const { effectiveUserId, callerUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const { data: existing, error: readErr } = await sb
+      .from("knowledge_nodes")
+      .select("attachments")
+      .eq("id", data.patientNodeId)
+      .eq("user_id", effectiveUserId)
+      .eq("node_type", "patient")
+      .maybeSingle();
+    if (readErr) throw new Error(`Couldn't read patient: ${readErr.message}`);
+    if (!existing) throw new Error("Patient not found.");
+
+    const summary =
+      (existing.attachments as unknown as PatientSummary | null) ?? null;
+    const priorTags: PatientSoftTags = summary?.softTags ?? {};
+    const entry = {
+      value: data.tag.value,
+      setByUserId: callerUserId,
+      setAt: new Date().toISOString(),
+      reason: data.reason ?? null,
+    };
+    const nextTags: PatientSoftTags = {
+      ...priorTags,
+      [data.tag.key]: entry,
+    };
+
+    const next: PatientSummary = {
+      ...(summary ?? ({
+        normalizedName: "",
+        displayName: "",
+        firstVisit: null,
+        lastVisit: null,
+        totalVisits: 0,
+        lifetimeUnits: 0,
+        lifetimeSpendUsd: 0,
+        netSpendUsd: 0,
+        primaryManufacturer: null,
+        productMix: {},
+        loyaltyEngagement: {},
+      } as PatientSummary)),
+      softTags: nextTags,
+    };
+    const { error: updErr } = await sb
+      .from("knowledge_nodes")
+      .update({
+        attachments: next as unknown as Json,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.patientNodeId)
+      .eq("user_id", effectiveUserId);
+    if (updErr) throw new Error(`Couldn't update soft-tag: ${updErr.message}`);
+    return { ok: true, softTags: nextTags };
+  });
+
+export const clearPatientSoftTag = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => softTagClearInput.parse(raw))
+  .handler(async ({ data }): Promise<{ ok: true; softTags: PatientSoftTags }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const { data: existing, error: readErr } = await sb
+      .from("knowledge_nodes")
+      .select("attachments")
+      .eq("id", data.patientNodeId)
+      .eq("user_id", effectiveUserId)
+      .eq("node_type", "patient")
+      .maybeSingle();
+    if (readErr) throw new Error(`Couldn't read patient: ${readErr.message}`);
+    if (!existing) throw new Error("Patient not found.");
+
+    const summary =
+      (existing.attachments as unknown as PatientSummary | null) ?? null;
+    const priorTags: PatientSoftTags = summary?.softTags ?? {};
+    const nextTags: PatientSoftTags = { ...priorTags };
+    delete nextTags[data.key];
+
+    if (!summary) return { ok: true, softTags: nextTags };
+
+    const next: PatientSummary = { ...summary, softTags: nextTags };
+    const { error: updErr } = await sb
+      .from("knowledge_nodes")
+      .update({
+        attachments: next as unknown as Json,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.patientNodeId)
+      .eq("user_id", effectiveUserId);
+    if (updErr) throw new Error(`Couldn't clear soft-tag: ${updErr.message}`);
+    return { ok: true, softTags: nextTags };
   });
 
 export const setPatientVipBulk = createServerFn({ method: "POST" })
