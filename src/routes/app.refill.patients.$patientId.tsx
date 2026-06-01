@@ -22,18 +22,24 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
+  Activity,
   ArrowLeft,
   Ban,
   Calendar,
   CalendarClock,
+  ChevronDown,
+  ChevronUp,
   Gift,
   Loader2,
   Mail,
+  Minus,
   Pencil,
   Phone,
   Plus,
+  RefreshCw,
   Sparkles,
   Tag,
+  TrendingDown,
   TrendingUp,
   Users,
   Wallet,
@@ -46,6 +52,7 @@ import {
   clearPatientSoftTag,
   deletePatientCustomTag,
   getPatientById,
+  recomputePatientPatterns,
   setPatientSoftTag,
   updatePatientCustomTag,
   type PatientDetail,
@@ -57,7 +64,9 @@ import type {
   ProductManufacturer,
 } from "@/lib/product-manufacturer-map";
 import type {
+  CadenceMetrics,
   PatientCustomTag,
+  PatientPurchasePatterns,
   PatientSoftTagEntry,
   PatientSoftTagKey,
   PatientSoftTags,
@@ -176,6 +185,15 @@ function PatientDetailPage() {
                         patient: { ...prev.patient, softTags: next },
                       }
                     : prev,
+                )
+              }
+            />
+            <PurchasePatternsCard
+              patient={data.patient}
+              viewAsUserId={viewAsUserId}
+              onPatientChange={(next) =>
+                setData((prev) =>
+                  prev ? { ...prev, patient: next } : prev,
                 )
               }
             />
@@ -1297,6 +1315,386 @@ function TextTagRow({
         </>
       }
     />
+  );
+}
+
+// ─── Purchase patterns card (v1.31.2) ─────────────────────────────────────
+//
+// THE differentiator per Grasshopper 2026-06-01: every engine downstream
+// (no-show fill, recognition allocation, combo upsell, manufacturer-
+// promoted moments, anniversary touch) targets offers against THIS
+// patient's real purchase habits, not population norms. This card
+// surfaces the substrate for human-readable verification.
+
+const KIND_PRIORITY: ProductKind[] = [
+  "toxin",
+  "filler",
+  "biostimulator",
+  "device",
+  "service",
+  "retail",
+  "reward",
+];
+
+function kindDisplayLabel(kind: ProductKind): string {
+  switch (kind) {
+    case "toxin":
+      return "Toxin";
+    case "filler":
+      return "Filler";
+    case "biostimulator":
+      return "Biostim";
+    case "device":
+      return "Device";
+    case "service":
+      return "Service";
+    case "retail":
+      return "Retail";
+    case "reward":
+      return "Reward";
+    case "payment":
+      return "Payment";
+    case "discount":
+      return "Discount";
+    case "note":
+      return "Note";
+    default:
+      return kind;
+  }
+}
+
+function PurchasePatternsCard({
+  patient,
+  viewAsUserId,
+  onPatientChange,
+}: {
+  patient: PatientListRow;
+  viewAsUserId: string | undefined;
+  onPatientChange: (next: PatientListRow) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const recompute = async () => {
+    setError(null);
+    setBusy(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Please sign in again.");
+      const result = await recomputePatientPatterns({
+        data: {
+          accessToken: token,
+          viewAsUserId,
+          patientNodeId: patient.id,
+        },
+      });
+      onPatientChange(result.patient);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't recompute.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const patterns = patient.purchasePatterns;
+
+  if (!patterns) {
+    return (
+      <section className="rounded-xl border border-rule bg-white overflow-hidden">
+        <div className="px-5 py-3 border-b border-rule bg-rule-soft/60 flex items-center gap-2">
+          <Activity className="h-3.5 w-3.5 text-ink-soft" />
+          <div className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
+            Purchase patterns
+          </div>
+          <div className="ml-auto text-[10px] text-ink-faint italic">
+            Her individual cadence — across every kind, brand, product
+          </div>
+        </div>
+        <div className="px-5 py-8 text-center">
+          <div className="text-sm text-ink-soft">
+            No purchase pattern data yet for this patient.
+          </div>
+          <div className="text-[12px] text-ink-faint mt-1">
+            Drop your latest QB CSV to populate, or recompute from existing transactions now.
+          </div>
+          <button
+            type="button"
+            onClick={recompute}
+            disabled={busy}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-emerald/40 bg-emerald-soft px-3 py-1.5 text-[12px] font-semibold text-emerald-ink hover:opacity-90 transition disabled:opacity-50"
+          >
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            Compute patterns from transactions
+          </button>
+          {error && (
+            <div className="mt-3 text-[11px] text-rose">{error}</div>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-xl border border-rule bg-white overflow-hidden">
+      <div className="px-5 py-3 border-b border-rule bg-rule-soft/60 flex items-center gap-2">
+        <Activity className="h-3.5 w-3.5 text-ink-soft" />
+        <div className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
+          Purchase patterns
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-[10px] text-ink-faint italic">
+            Her individual cadence
+          </span>
+          <button
+            type="button"
+            onClick={recompute}
+            disabled={busy}
+            title="Recompute from transactions"
+            className="inline-flex items-center gap-1 rounded-md border border-rule bg-white px-2 py-0.5 text-[10px] font-medium text-ink-faint hover:text-ink hover:border-emerald/40 transition disabled:opacity-50"
+          >
+            {busy ? (
+              <Loader2 className="h-2.5 w-2.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-2.5 w-2.5" />
+            )}
+            Refresh
+          </button>
+        </div>
+      </div>
+      <PatternBand
+        title="Clinical (per kind)"
+        rows={Object.entries(patterns.byKind)
+          .sort(
+            (a, b) =>
+              KIND_PRIORITY.indexOf(a[0] as ProductKind) -
+              KIND_PRIORITY.indexOf(b[0] as ProductKind),
+          )
+          .map(([kind, metrics]) => ({
+            key: kind,
+            label: kindDisplayLabel(kind as ProductKind),
+            metrics: metrics!,
+          }))}
+        emptyLabel="No clinical visits captured yet."
+      />
+      <PatternBand
+        title="By manufacturer"
+        rows={Object.entries(patterns.byManufacturer)
+          .sort((a, b) => b[1]!.visitCount - a[1]!.visitCount)
+          .map(([mfr, metrics]) => ({
+            key: mfr,
+            label: manufacturerLabel(mfr as ProductManufacturer),
+            metrics: metrics!,
+          }))}
+        emptyLabel="No manufacturer-tagged visits yet."
+        defaultLimit={5}
+      />
+      <PatternBand
+        title="By product"
+        rows={Object.entries(patterns.byProduct)
+          .sort((a, b) => b[1].visitCount - a[1].visitCount)
+          .map(([name, metrics]) => ({
+            key: name,
+            label: name,
+            metrics,
+          }))}
+        emptyLabel="No product detail captured yet."
+        defaultLimit={8}
+      />
+      {error && (
+        <div className="px-5 py-3 border-t border-rose/30 bg-rose-soft text-xs text-rose">
+          {error}
+        </div>
+      )}
+    </section>
+  );
+}
+
+type PatternRow = {
+  key: string;
+  label: string;
+  metrics: CadenceMetrics;
+};
+
+function PatternBand({
+  title,
+  rows,
+  emptyLabel,
+  defaultLimit,
+}: {
+  title: string;
+  rows: PatternRow[];
+  emptyLabel: string;
+  defaultLimit?: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const limit = defaultLimit ?? rows.length;
+  const truncated = rows.length > limit && !expanded;
+  const visible = truncated ? rows.slice(0, limit) : rows;
+
+  return (
+    <div className="border-b border-rule last:border-b-0">
+      <div className="px-5 py-2 bg-rule-soft/30 flex items-center justify-between">
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+          {title}
+        </div>
+        {rows.length > 0 && (
+          <div className="text-[10px] text-ink-faint">
+            {rows.length} {rows.length === 1 ? "entry" : "entries"}
+          </div>
+        )}
+      </div>
+      {rows.length === 0 ? (
+        <div className="px-5 py-3 text-xs text-ink-faint italic">{emptyLabel}</div>
+      ) : (
+        <>
+          <div className="divide-y divide-rule">
+            {visible.map((row) => (
+              <PatternRowView key={row.key} row={row} />
+            ))}
+          </div>
+          {rows.length > limit && (
+            <button
+              type="button"
+              onClick={() => setExpanded((p) => !p)}
+              className="w-full px-5 py-2 text-left text-[11px] text-ink-soft hover:text-ink hover:bg-rule-soft/40 transition inline-flex items-center gap-1.5"
+            >
+              {expanded ? (
+                <>
+                  <ChevronUp className="h-3 w-3" />
+                  Show fewer
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-3 w-3" />
+                  Show all {rows.length}
+                </>
+              )}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function PatternRowView({ row }: { row: PatternRow }) {
+  const m = row.metrics;
+  return (
+    <div className="px-5 py-2.5 flex items-start gap-3 hover:bg-rule-soft/30 transition">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="text-[13px] font-medium text-ink truncate">
+            {row.label}
+          </div>
+          <span className="text-[10px] text-ink-faint tabular-nums">
+            {m.visitCount}× visit{m.visitCount === 1 ? "" : "s"}
+          </span>
+        </div>
+        <div className="mt-0.5 text-[11px] text-ink-soft tabular-nums">
+          {m.lifetimeAvgDays !== null ? (
+            <>
+              avg <strong>{m.lifetimeAvgDays}d</strong>
+              {m.recentAvgDays !== null && m.recentAvgDays !== m.lifetimeAvgDays && (
+                <>
+                  {" · "}recent <strong>{m.recentAvgDays}d</strong>
+                </>
+              )}
+            </>
+          ) : (
+            <span className="italic text-ink-faint">single visit · no cadence yet</span>
+          )}
+          {m.daysSinceLastVisit !== null && (
+            <>
+              {" · "}last{" "}
+              <strong>
+                {m.daysSinceLastVisit === 0
+                  ? "today"
+                  : `${m.daysSinceLastVisit}d ago`}
+              </strong>
+            </>
+          )}
+          {m.lifetimeAvgDays !== null && m.daysSinceLastVisit !== null && (
+            <>
+              {" · "}
+              <span className="text-ink-faint">
+                next ~
+                {Math.max(
+                  0,
+                  (m.recentAvgDays ?? m.lifetimeAvgDays) - m.daysSinceLastVisit,
+                )}
+                d
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="shrink-0 flex flex-col items-end gap-1">
+        <StatusPill status={m.status} />
+        {m.trend && <TrendChip trend={m.trend} />}
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({ status }: { status: CadenceMetrics["status"] }) {
+  const config = {
+    "on-cadence": {
+      label: "On cadence",
+      bg: "bg-emerald-soft",
+      text: "text-emerald-ink",
+    },
+    overdue: {
+      label: "Overdue",
+      bg: "bg-amber-100",
+      text: "text-amber-700",
+    },
+    lapsed: {
+      label: "Lapsed",
+      bg: "bg-rose-soft",
+      text: "text-rose",
+    },
+    unknown: {
+      label: "—",
+      bg: "bg-rule-soft",
+      text: "text-ink-faint",
+    },
+  }[status];
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${config.bg} ${config.text}`}
+    >
+      {config.label}
+    </span>
+  );
+}
+
+function TrendChip({ trend }: { trend: NonNullable<CadenceMetrics["trend"]> }) {
+  if (trend === "accelerating") {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-ink">
+        <TrendingUp className="h-2.5 w-2.5" />
+        more often
+      </span>
+    );
+  }
+  if (trend === "slowing") {
+    return (
+      <span className="inline-flex items-center gap-0.5 text-[10px] text-rose">
+        <TrendingDown className="h-2.5 w-2.5" />
+        slowing
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-0.5 text-[10px] text-ink-faint">
+      <Minus className="h-2.5 w-2.5" />
+      steady
+    </span>
   );
 }
 

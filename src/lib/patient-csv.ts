@@ -465,7 +465,248 @@ export type PatientSummary = {
   primaryManufacturer: ProductManufacturer | null;
   productMix: Partial<Record<ProductManufacturer, number>>;
   loyaltyEngagement: Partial<Record<ProductManufacturer, number>>;
+  /**
+   * v1.31.2: Per-patient purchase patterns — the differentiator. Tracks
+   * her individual cadence across every dimension (kind, manufacturer,
+   * specific product) so downstream engines can target offers against
+   * her real habits, not population averages. Recomputed on every
+   * rollup; never editorial.
+   */
+  purchasePatterns?: PatientPurchasePatterns;
 } & Partial<PatientContactSummary>;
+
+// ─── Purchase patterns (v1.31.2) ──────────────────────────────────────────
+
+/**
+ * Per-dimension cadence metrics computed from transaction history. Each
+ * dimension key (a kind, a manufacturer, a product name) gets one of
+ * these. Computed on rollup, not editorial — pure derivation from the
+ * patient_transactions table.
+ */
+export type CadenceMetrics = {
+  /** Distinct visit-dates where this dimension key appeared. */
+  visitCount: number;
+  /** ISO date of the first visit of this dimension. */
+  firstVisit: string | null;
+  /** ISO date of the most-recent visit. */
+  lastVisit: string | null;
+  /**
+   * Average days between consecutive visits across the entire history.
+   * Null if visitCount < 2 (no intervals to average).
+   */
+  lifetimeAvgDays: number | null;
+  /**
+   * Average days between consecutive visits within the last 730 days.
+   * Falls back to lifetimeAvgDays when patient tenure < 2 years OR
+   * fewer than 2 visits land in the recent window.
+   */
+  recentAvgDays: number | null;
+  /** Days since the most-recent visit of this dimension (UTC, today-anchored). */
+  daysSinceLastVisit: number | null;
+  /**
+   * Cadence status relative to the patient&rsquo;s OWN norm (recent avg
+   * preferred, lifetime fallback). Not relative to population norms.
+   * &lsquo;unknown&rsquo; when there&rsquo;s no cadence baseline yet.
+   */
+  status: "on-cadence" | "overdue" | "lapsed" | "unknown";
+  /**
+   * Trend: recent avg vs lifetime avg. &lsquo;accelerating&rsquo; means buying
+   * more often than long-term norm; &lsquo;slowing&rsquo; means engagement
+   * dropping. Null when there&rsquo;s no meaningful comparison.
+   */
+  trend: "accelerating" | "steady" | "slowing" | null;
+};
+
+export type PatientPurchasePatterns = {
+  /** Per clinical kind (toxin / filler / biostim / device / facial / etc). */
+  byKind: Partial<Record<ProductKind, CadenceMetrics>>;
+  /** Per manufacturer (AbbVie / Galderma / Merz / Revance / etc). */
+  byManufacturer: Partial<Record<ProductManufacturer, CadenceMetrics>>;
+  /**
+   * Per specific product name. Keyed by raw product name (no
+   * normalization) so &lsquo;Botox 100u Vial&rsquo; and &lsquo;Botox Vial 100u&rsquo;
+   * are distinct entries until Karen consolidates them in catalog.
+   */
+  byProduct: Record<string, CadenceMetrics>;
+};
+
+// Product kinds excluded from cadence computation — these don't represent
+// purchase events: a payment line / discount line / clinical note isn't a
+// visit. Reward redemptions ARE visits (she came in to use Alle / Aspire).
+const CADENCE_EXCLUDED_KINDS: ReadonlySet<ProductKind> = new Set([
+  "payment",
+  "discount",
+  "note",
+]);
+
+/** Days between two ISO yyyy-mm-dd strings (UTC). Floors to whole days. */
+function daysBetween(fromIso: string, toIso: string): number {
+  const [fy, fm, fd] = fromIso.split("-").map(Number);
+  const [ty, tm, td] = toIso.split("-").map(Number);
+  if (!fy || !fm || !fd || !ty || !tm || !td) return 0;
+  const fromUtc = Date.UTC(fy, fm - 1, fd);
+  const toUtc = Date.UTC(ty, tm - 1, td);
+  return Math.floor((toUtc - fromUtc) / 86_400_000);
+}
+
+function daysSinceToday(iso: string | null): number | null {
+  if (!iso) return null;
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return null;
+  return Math.floor((Date.now() - Date.UTC(y, m - 1, d)) / 86_400_000);
+}
+
+/**
+ * Compute CadenceMetrics from a list of visit dates (one entry per visit;
+ * may include duplicates which are de-duplicated to distinct calendar
+ * dates).
+ *
+ * `nowDays` is &ldquo;today&rdquo; for status calculation, defaulted to actual now
+ * but injectable for deterministic tests.
+ */
+function computeCadenceFromDates(
+  rawDates: string[],
+  nowDays: number = Math.floor(Date.now() / 86_400_000),
+): CadenceMetrics {
+  if (rawDates.length === 0) {
+    return {
+      visitCount: 0,
+      firstVisit: null,
+      lastVisit: null,
+      lifetimeAvgDays: null,
+      recentAvgDays: null,
+      daysSinceLastVisit: null,
+      status: "unknown",
+      trend: null,
+    };
+  }
+
+  // Distinct sorted dates ascending.
+  const distinct = Array.from(new Set(rawDates)).sort();
+  const firstVisit = distinct[0]!;
+  const lastVisit = distinct[distinct.length - 1]!;
+  const visitCount = distinct.length;
+
+  // Intervals between consecutive visits in days.
+  const intervals: number[] = [];
+  for (let i = 1; i < distinct.length; i++) {
+    intervals.push(daysBetween(distinct[i - 1]!, distinct[i]!));
+  }
+
+  const lifetimeAvgDays =
+    intervals.length > 0
+      ? Math.round(intervals.reduce((s, v) => s + v, 0) / intervals.length)
+      : null;
+
+  // Recent window: visits within last 730 days (2 years) of TODAY.
+  const recentCutoffDays = nowDays - 730;
+  const recentDates = distinct.filter((iso) => {
+    const [y, m, d] = iso.split("-").map(Number);
+    if (!y || !m || !d) return false;
+    return Math.floor(Date.UTC(y, m - 1, d) / 86_400_000) >= recentCutoffDays;
+  });
+  let recentAvgDays: number | null = null;
+  if (recentDates.length >= 2) {
+    const recentIntervals: number[] = [];
+    for (let i = 1; i < recentDates.length; i++) {
+      recentIntervals.push(daysBetween(recentDates[i - 1]!, recentDates[i]!));
+    }
+    recentAvgDays = Math.round(
+      recentIntervals.reduce((s, v) => s + v, 0) / recentIntervals.length,
+    );
+  } else {
+    // Fall back to lifetime when patient tenure is short OR recent window
+    // is too sparse to be its own signal.
+    recentAvgDays = lifetimeAvgDays;
+  }
+
+  const daysSinceLastVisit = daysSinceToday(lastVisit);
+
+  // Status relative to patient&rsquo;s OWN norm. recentAvg preferred when
+  // present, lifetime fallback. Buffered: on-cadence up to 1.2x norm,
+  // overdue 1.2-1.5x, lapsed >1.5x.
+  const norm = recentAvgDays ?? lifetimeAvgDays;
+  let status: CadenceMetrics["status"] = "unknown";
+  if (norm !== null && daysSinceLastVisit !== null) {
+    const ratio = daysSinceLastVisit / Math.max(norm, 1);
+    if (ratio <= 1.2) status = "on-cadence";
+    else if (ratio <= 1.5) status = "overdue";
+    else status = "lapsed";
+  }
+
+  // Trend: recent vs lifetime. Only meaningful when both present AND
+  // they differ enough to call out (15% threshold avoids noise).
+  let trend: CadenceMetrics["trend"] = null;
+  if (
+    recentAvgDays !== null &&
+    lifetimeAvgDays !== null &&
+    recentAvgDays !== lifetimeAvgDays
+  ) {
+    const ratio = recentAvgDays / lifetimeAvgDays;
+    if (ratio < 0.85) trend = "accelerating";
+    else if (ratio > 1.15) trend = "slowing";
+    else trend = "steady";
+  }
+
+  return {
+    visitCount,
+    firstVisit,
+    lastVisit,
+    lifetimeAvgDays,
+    recentAvgDays,
+    daysSinceLastVisit,
+    status,
+    trend,
+  };
+}
+
+/**
+ * Compute the full PatientPurchasePatterns shape from a patient&rsquo;s
+ * transaction lines. Groups by kind / manufacturer / product-name, then
+ * runs computeCadenceFromDates on each group.
+ */
+export function computePurchasePatterns(
+  lines: ParsedTransaction[],
+): PatientPurchasePatterns {
+  const byKindDates = new Map<ProductKind, string[]>();
+  const byMfrDates = new Map<ProductManufacturer, string[]>();
+  const byProductDates = new Map<string, string[]>();
+
+  for (const t of lines) {
+    if (t.productKind && CADENCE_EXCLUDED_KINDS.has(t.productKind)) continue;
+
+    if (t.productKind) {
+      const arr = byKindDates.get(t.productKind) ?? [];
+      arr.push(t.transactionDate);
+      byKindDates.set(t.productKind, arr);
+    }
+    if (t.productManufacturer) {
+      const arr = byMfrDates.get(t.productManufacturer) ?? [];
+      arr.push(t.transactionDate);
+      byMfrDates.set(t.productManufacturer, arr);
+    }
+    if (t.productName) {
+      const arr = byProductDates.get(t.productName) ?? [];
+      arr.push(t.transactionDate);
+      byProductDates.set(t.productName, arr);
+    }
+  }
+
+  const byKind: Partial<Record<ProductKind, CadenceMetrics>> = {};
+  for (const [kind, dates] of byKindDates) {
+    byKind[kind] = computeCadenceFromDates(dates);
+  }
+  const byManufacturer: Partial<Record<ProductManufacturer, CadenceMetrics>> = {};
+  for (const [mfr, dates] of byMfrDates) {
+    byManufacturer[mfr] = computeCadenceFromDates(dates);
+  }
+  const byProduct: Record<string, CadenceMetrics> = {};
+  for (const [name, dates] of byProductDates) {
+    byProduct[name] = computeCadenceFromDates(dates);
+  }
+
+  return { byKind, byManufacturer, byProduct };
+}
 
 /**
  * Roll up a patient's transaction lines into the summary attachments shape
@@ -539,6 +780,7 @@ export function rollupPatientSummary(
     primaryManufacturer,
     productMix,
     loyaltyEngagement,
+    purchasePatterns: computePurchasePatterns(lines),
   };
   if (priorContact) {
     if (priorContact.phone !== undefined) summary.phone = priorContact.phone;

@@ -41,6 +41,7 @@ import {
   type PatientNegotiator,
   type PatientPersonality,
   type PatientShopperLoyalty,
+  type PatientPurchasePatterns,
 } from "@/lib/patient-csv";
 import {
   parseClientListCsv,
@@ -116,6 +117,14 @@ export type PatientListRow = {
    * patient-csv.ts for the per-tag shape.
    */
   softTags: PatientSoftTags;
+  /**
+   * v1.31.2: Per-patient purchase patterns — auto-computed cadence per
+   * kind / manufacturer / product. The differentiator: every engine
+   * downstream targets offers against THIS patient&rsquo;s real habits.
+   * Null when the patient&rsquo;s rollup predates v1.31.2 (will be
+   * populated on next QB re-upload).
+   */
+  purchasePatterns: PatientPurchasePatterns | null;
 };
 
 export type PatientTransactionRow = {
@@ -257,6 +266,7 @@ function hydratePatientListRow(node: KnowledgeNodeRow): PatientListRow {
     vip: a?.vip ?? false,
     contactSource: a?.contactSource ?? null,
     softTags: a?.softTags ?? {},
+    purchasePatterns: a?.purchasePatterns ?? null,
   };
 }
 
@@ -797,6 +807,62 @@ export const setPatientSoftTag = createServerFn({ method: "POST" })
     if (updErr) throw new Error(`Couldn't update soft-tag: ${updErr.message}`);
     return { ok: true, softTags: nextTags };
   });
+
+// ─── recomputePatientPatterns (v1.31.2) ───────────────────────────────────
+//
+// Single-patient rebuild of summary + purchasePatterns from the
+// authoritative patient_transactions table. Lets Karen / admin refresh a
+// patient on demand without re-uploading the whole QB CSV. Same engine as
+// the on-ingest refreshPatientSummary but exposed as a server fn.
+
+const recomputeInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  patientNodeId: z.string().uuid(),
+});
+
+export const recomputePatientPatterns = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => recomputeInput.parse(raw))
+  .handler(
+    async ({ data }): Promise<{ ok: true; patient: PatientListRow }> => {
+      const { effectiveUserId } = await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
+      const sb = admin();
+      const { data: node, error: nodeErr } = await sb
+        .from("knowledge_nodes")
+        .select("id, title, lookup_key, attachments")
+        .eq("id", data.patientNodeId)
+        .eq("user_id", effectiveUserId)
+        .eq("node_type", "patient")
+        .maybeSingle();
+      if (nodeErr) throw new Error(`Couldn't load patient: ${nodeErr.message}`);
+      if (!node) throw new Error("Patient not found.");
+
+      const parsedPatient: ParsedPatient = {
+        normalizedName: node.lookup_key ?? "",
+        displayName: node.title,
+      };
+
+      await refreshPatientSummary(
+        sb,
+        effectiveUserId,
+        node.id,
+        parsedPatient,
+      );
+
+      const { data: refreshed, error: refErr } = await sb
+        .from("knowledge_nodes")
+        .select("*")
+        .eq("id", node.id)
+        .eq("user_id", effectiveUserId)
+        .maybeSingle();
+      if (refErr) throw new Error(`Couldn't reload patient: ${refErr.message}`);
+      if (!refreshed) throw new Error("Patient gone after recompute.");
+      return { ok: true, patient: hydratePatientListRow(refreshed) };
+    },
+  );
 
 // ─── Custom soft-tags CRUD (v1.31.1) ──────────────────────────────────────
 //
