@@ -48,6 +48,7 @@ import {
   updateServiceFn,
   updateServiceProductQuantityFn,
   type Product,
+  type RecategorizeReceipt,
   type Service,
   type ServiceCategory,
   type ServiceLinkageBundle,
@@ -146,6 +147,11 @@ function ServicesPage() {
   const [linkageLoading, setLinkageLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [recategorizing, setRecategorizing] = useState(false);
+  const [lastRecategorize, setLastRecategorize] = useState<
+    | { ok: true; receipt: RecategorizeReceipt; at: string }
+    | { ok: false; message: string; at: string }
+    | null
+  >(null);
 
   useEffect(() => {
     if (membership.status !== "tenant") return;
@@ -360,32 +366,62 @@ function ServicesPage() {
   async function onRecategorize() {
     if (recategorizing) return;
     setRecategorizing(true);
+    // eslint-disable-next-line no-console
+    console.log("[recategorize] start");
     try {
       const result = await withToken((token) =>
         recategorizeServicesFromBrandsFn({
           data: { accessToken: token, viewAsUserId },
         }),
       );
-      if (result.recategorized === 0) {
-        toast.success(
-          result.unmatched === 0
-            ? `Scanned ${result.scanned} services — all already categorized correctly.`
-            : `Scanned ${result.scanned} services — ${result.unmatched} unmatched, no changes needed.`,
-        );
-      } else {
-        toast.success(
-          `Re-categorized ${result.recategorized} of ${result.scanned} services. ${result.unmatched} still unmatched.`,
-        );
-        // Reload services to reflect new categories.
-        const fresh = await withToken((token) =>
-          listServicesFn({ data: { accessToken: token, viewAsUserId } }),
-        );
-        setServices(fresh);
+      // eslint-disable-next-line no-console
+      console.log("[recategorize] result", result);
+      setLastRecategorize({
+        ok: true,
+        receipt: result,
+        at: new Date().toLocaleTimeString(),
+      });
+      try {
+        if (result.recategorized === 0) {
+          toast.success(
+            result.unmatched === 0
+              ? `Scanned ${result.scanned} — all categorized correctly.`
+              : `Scanned ${result.scanned} — ${result.unmatched} unmatched, no changes.`,
+            { duration: 8000 },
+          );
+        } else {
+          toast.success(
+            `Re-categorized ${result.recategorized} of ${result.scanned}. ${result.unmatched} still unmatched.`,
+            { duration: 8000 },
+          );
+          const fresh = await withToken((token) =>
+            listServicesFn({ data: { accessToken: token, viewAsUserId } }),
+          );
+          setServices(fresh);
+        }
+      } catch (toastErr) {
+        // eslint-disable-next-line no-console
+        console.error("[recategorize] toast threw", toastErr);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't re-categorize.");
+      // eslint-disable-next-line no-console
+      console.error("[recategorize] caught error", err);
+      const message = err instanceof Error ? err.message : "Couldn't re-categorize.";
+      setLastRecategorize({
+        ok: false,
+        message,
+        at: new Date().toLocaleTimeString(),
+      });
+      try {
+        toast.error(message, { duration: 10000 });
+      } catch (toastErr) {
+        // eslint-disable-next-line no-console
+        console.error("[recategorize] error-toast threw", toastErr);
+      }
     } finally {
       setRecategorizing(false);
+      // eslint-disable-next-line no-console
+      console.log("[recategorize] finally");
     }
   }
 
@@ -463,6 +499,69 @@ function ServicesPage() {
       />
 
       <div className="px-6 lg:px-10 py-6 max-w-4xl space-y-6">
+        {lastRecategorize && (
+          <div
+            className={cn(
+              "rounded-xl border px-5 py-3.5 flex items-start gap-3",
+              lastRecategorize.ok
+                ? "border-emerald/30 bg-emerald-soft"
+                : "border-red-200 bg-red-50",
+            )}
+          >
+            <Sparkles
+              className={cn(
+                "h-5 w-5 shrink-0 mt-0.5",
+                lastRecategorize.ok ? "text-emerald" : "text-red-600",
+              )}
+            />
+            <div className="flex-1 min-w-0">
+              <div
+                className={cn(
+                  "text-[14px] font-semibold",
+                  lastRecategorize.ok ? "text-emerald-ink" : "text-red-800",
+                )}
+              >
+                {lastRecategorize.ok
+                  ? lastRecategorize.receipt.recategorized > 0
+                    ? `Re-categorized ${lastRecategorize.receipt.recategorized} of ${lastRecategorize.receipt.scanned} services`
+                    : `Scanned ${lastRecategorize.receipt.scanned} — no category changes needed`
+                  : `Re-categorize failed: ${lastRecategorize.message}`}
+              </div>
+              {lastRecategorize.ok && (
+                <div className="text-[12px] text-ink-soft mt-0.5">
+                  {lastRecategorize.receipt.unchanged} already in correct category &middot;{" "}
+                  {lastRecategorize.receipt.unmatched} unmatched (no canonical brand keyword in name or notes) &middot;{" "}
+                  ran at {lastRecategorize.at}
+                </div>
+              )}
+              {lastRecategorize.ok && lastRecategorize.receipt.changes.length > 0 && (
+                <details className="mt-2">
+                  <summary className="text-[12px] text-ink-soft cursor-pointer">
+                    {lastRecategorize.receipt.changes.length} changes (click to expand)
+                  </summary>
+                  <ul className="mt-1.5 space-y-1 text-[12px] text-ink-soft">
+                    {lastRecategorize.receipt.changes.slice(0, 25).map((c) => (
+                      <li key={c.serviceId}>
+                        <span className="font-medium text-ink">{c.name}</span>{" "}
+                        — {c.oldCategory} → <span className="text-emerald-ink font-medium">{c.newCategory}</span>{" "}
+                        <span className="text-ink-faint">(via {c.matchedBrand})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setLastRecategorize(null)}
+              className="text-ink-faint hover:text-ink transition p-1"
+              title="Dismiss"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         {adding && (
           <ServiceFormCard
             mode="add"
