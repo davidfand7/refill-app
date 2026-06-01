@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.30.0.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.30.0.1 &mdash; Inline persistent banner for Re-categorize result + console diagnostics.</strong> v1.30.0&rsquo;s Re-categorize button worked correctly &mdash; the receipt came back with <code>recategorized: 0</code> because services already had correct categories from v1.29.4 regex inference, and the toast.success briefly flashed then disappeared. Easy to miss. <strong>This ship replaces fleeting toast with a persistent inline emerald banner</strong> above the services list showing scanned / recategorized / unchanged / unmatched counts + expandable changes list. Stays visible until dismissed. Toasts kept as belt-and-suspenders (now 8-10 sec duration). Each toast call wrapped in its own try/catch + console.log/error so a sonner-side failure can&rsquo;t eat the banner. Console diagnostics at every step: <code>[recategorize] start</code>, <code>[recategorize] result</code>, <code>[recategorize] finally</code>, <code>[recategorize] caught error</code>, <code>[recategorize] toast threw</code>. <strong>Self-correction note</strong>: v1.30.0.1 shipped without a changelog entry, leaving the v-pill stuck at v1.30.0 even though the code was deployed. v1.30.0.2 is this entry (changelog-only), so the v-pill now correctly reflects the deployed bundle. <strong>Touched</strong>: <code>src/routes/app.refill.catalog.services.tsx</code> (banner state + JSX + console logs in v1.30.0.1), <code>src/lib/changelog.ts</code> (this entry, retroactively in v1.30.0.2).",
+    ],
+  },
+  {
     version: "v1.30.0",
     date: "June 2026",
     items: [
