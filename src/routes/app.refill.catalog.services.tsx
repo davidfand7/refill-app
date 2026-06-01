@@ -28,6 +28,7 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  Wand2,
   X,
 } from "lucide-react";
 
@@ -41,6 +42,7 @@ import {
   listProductsFn,
   listServiceProductsFn,
   listServicesFn,
+  recategorizeServicesFromBrandsFn,
   setServiceCogsSourceFn,
   unlinkServiceProductFn,
   updateServiceFn,
@@ -143,6 +145,7 @@ function ServicesPage() {
   const [linkage, setLinkage] = useState<ServiceLinkageBundle | null>(null);
   const [linkageLoading, setLinkageLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [recategorizing, setRecategorizing] = useState(false);
 
   useEffect(() => {
     if (membership.status !== "tenant") return;
@@ -354,6 +357,38 @@ function ServicesPage() {
     }
   }
 
+  async function onRecategorize() {
+    if (recategorizing) return;
+    setRecategorizing(true);
+    try {
+      const result = await withToken((token) =>
+        recategorizeServicesFromBrandsFn({
+          data: { accessToken: token, viewAsUserId },
+        }),
+      );
+      if (result.recategorized === 0) {
+        toast.success(
+          result.unmatched === 0
+            ? `Scanned ${result.scanned} services — all already categorized correctly.`
+            : `Scanned ${result.scanned} services — ${result.unmatched} unmatched, no changes needed.`,
+        );
+      } else {
+        toast.success(
+          `Re-categorized ${result.recategorized} of ${result.scanned} services. ${result.unmatched} still unmatched.`,
+        );
+        // Reload services to reflect new categories.
+        const fresh = await withToken((token) =>
+          listServicesFn({ data: { accessToken: token, viewAsUserId } }),
+        );
+        setServices(fresh);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't re-categorize.");
+    } finally {
+      setRecategorizing(false);
+    }
+  }
+
   async function onToggleCogsSource(source: "manual" | "derived") {
     if (!editingId || busy) return;
     setBusy(true);
@@ -385,6 +420,25 @@ function ServicesPage() {
         actions={
           !adding && (
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onRecategorize}
+                disabled={recategorizing || services.length === 0}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold transition",
+                  recategorizing || services.length === 0
+                    ? "text-ink-faint cursor-not-allowed"
+                    : "text-ink-soft hover:text-ink hover:border-emerald/40",
+                )}
+                title="Sweep all services through the canonical brand registry and update categories where matched"
+              >
+                {recategorizing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Wand2 className="h-3.5 w-3.5" />
+                )}
+                Re-categorize
+              </button>
               <Link
                 to="/app/refill/catalog/import"
                 className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-ink hover:border-emerald/40 transition"

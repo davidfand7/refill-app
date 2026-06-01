@@ -442,6 +442,288 @@ export const updateServiceFn = createServerFn({ method: "POST" })
     return rowToService(row as ServiceRow);
   });
 
+// ══ Canonical Brands lookup + retroactive recategorize (v1.30.0) ═════════
+
+export type CanonicalBrand = {
+  id: string;
+  displayName: string;
+  aliases: string[];
+  category: ServiceCategory;
+  manufacturer: ProductManufacturer | null;
+  unitType: ProductUnitType;
+  notes: string | null;
+};
+
+type CanonicalBrandRow = {
+  id: string;
+  display_name: string;
+  aliases: string[] | null;
+  category: string;
+  manufacturer: string | null;
+  unit_type: string;
+  notes: string | null;
+};
+
+function rowToCanonicalBrand(r: CanonicalBrandRow): CanonicalBrand {
+  return {
+    id: r.id,
+    displayName: r.display_name,
+    aliases: r.aliases ?? [],
+    category: r.category as ServiceCategory,
+    manufacturer: (r.manufacturer as ProductManufacturer | null) ?? null,
+    unitType: r.unit_type as ProductUnitType,
+    notes: r.notes,
+  };
+}
+
+async function loadAllCanonicalBrands(sb: SupabaseAdmin): Promise<CanonicalBrand[]> {
+  const { data, error } = await sb
+    .from("canonical_brands")
+    .select("*");
+  if (error) throw new Error(`Couldn't load canonical brands: ${error.message}`);
+  return (data ?? []).map((r) => rowToCanonicalBrand(r as CanonicalBrandRow));
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Match the given input name against the canonical brand registry.
+ *
+ * Strategy: build a flat list of (alias, brand) pairs (each brand contributes
+ * its aliases + its display_name), sort by alias length descending so the
+ * MOST SPECIFIC name matches first ("Restylane Refyne" beats "Restylane"),
+ * test each as a word-boundary case-insensitive regex against the input.
+ * First match wins.
+ *
+ * Returns null when no canonical brand matches. The caller falls back to
+ * regex-based name inference (the v1.29.4.x category-keyword path).
+ */
+export function lookupCanonicalBrand(
+  name: string,
+  brands: CanonicalBrand[],
+): CanonicalBrand | null {
+  if (!name) return null;
+  const pairs: Array<{ alias: string; brand: CanonicalBrand }> = [];
+  for (const brand of brands) {
+    const seen = new Set<string>();
+    for (const alias of brand.aliases) {
+      const a = alias.trim();
+      if (!a || seen.has(a.toLowerCase())) continue;
+      seen.add(a.toLowerCase());
+      pairs.push({ alias: a, brand });
+    }
+    if (!seen.has(brand.displayName.toLowerCase())) {
+      pairs.push({ alias: brand.displayName, brand });
+    }
+  }
+  pairs.sort((a, b) => b.alias.length - a.alias.length);
+  for (const { alias, brand } of pairs) {
+    const re = new RegExp(`\\b${escapeRegex(alias)}\\b`, "i");
+    if (re.test(name)) return brand;
+  }
+  return null;
+}
+
+export type RecategorizeReceipt = {
+  scanned: number;
+  recategorized: number;
+  unchanged: number;
+  unmatched: number;
+  changes: Array<{
+    serviceId: string;
+    name: string;
+    oldCategory: ServiceCategory;
+    newCategory: ServiceCategory;
+    matchedBrand: string;
+  }>;
+};
+
+// ─── Admin CRUD for canonical_brands (system-wide reference) ──────────────
+
+const CANONICAL_CATEGORY_VALUES = ["tox", "filler", "laser", "facial", "skincare", "other"] as const;
+
+const brandPayload = z.object({
+  displayName: z.string().trim().min(1, "Display name is required.").max(120),
+  aliases: z.array(z.string().trim().min(1).max(120)).default([]),
+  category: z.enum(CANONICAL_CATEGORY_VALUES),
+  manufacturer: z.enum(MANUFACTURER_VALUES).nullable(),
+  unitType: z.enum(UNIT_VALUES),
+  notes: z.string().trim().max(500).nullable(),
+});
+
+const createBrandInput = z.object({
+  accessToken: z.string().min(1),
+  brand: brandPayload,
+});
+const updateBrandInput = z.object({
+  accessToken: z.string().min(1),
+  id: z.string().uuid(),
+  brand: brandPayload,
+});
+const deleteBrandInput = z.object({
+  accessToken: z.string().min(1),
+  id: z.string().uuid(),
+});
+const listBrandsInput = z.object({
+  accessToken: z.string().min(1),
+});
+
+// All canonical-brand mutations require admin role. The lookup-only path
+// (read) is authenticated-only via RLS; service-role writes flow through
+// these server fns which gate on app_role = 'admin'.
+async function requireAdmin(sb: SupabaseAdmin, userId: string): Promise<void> {
+  const { data, error } = await sb
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .maybeSingle();
+  if (error) throw new Error(`Role check failed: ${error.message}`);
+  if (!data) throw new Error("Admin role required.");
+}
+
+export const listCanonicalBrandsFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => listBrandsInput.parse(raw))
+  .handler(async ({ data }): Promise<CanonicalBrand[]> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+    });
+    const sb = admin();
+    // Read is admin-only via this fn (the table itself is readable by any
+    // authenticated user via RLS — the admin gate here keeps the admin
+    // CRUD surface focused).
+    await requireAdmin(sb, effectiveUserId);
+    return loadAllCanonicalBrands(sb);
+  });
+
+export const createCanonicalBrandFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => createBrandInput.parse(raw))
+  .handler(async ({ data }): Promise<CanonicalBrand> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+    });
+    const sb = admin();
+    await requireAdmin(sb, effectiveUserId);
+    const { data: row, error } = await sb
+      .from("canonical_brands")
+      .insert({
+        display_name: data.brand.displayName,
+        aliases: data.brand.aliases,
+        category: data.brand.category,
+        manufacturer: data.brand.manufacturer,
+        unit_type: data.brand.unitType,
+        notes: data.brand.notes,
+      })
+      .select("*")
+      .single();
+    if (error || !row) throw new Error(`Couldn't create brand: ${error?.message ?? "no row"}`);
+    return rowToCanonicalBrand(row as CanonicalBrandRow);
+  });
+
+export const updateCanonicalBrandFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => updateBrandInput.parse(raw))
+  .handler(async ({ data }): Promise<CanonicalBrand> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+    });
+    const sb = admin();
+    await requireAdmin(sb, effectiveUserId);
+    const { data: row, error } = await sb
+      .from("canonical_brands")
+      .update({
+        display_name: data.brand.displayName,
+        aliases: data.brand.aliases,
+        category: data.brand.category,
+        manufacturer: data.brand.manufacturer,
+        unit_type: data.brand.unitType,
+        notes: data.brand.notes,
+      })
+      .eq("id", data.id)
+      .select("*")
+      .single();
+    if (error || !row) throw new Error(`Couldn't update brand: ${error?.message ?? "no row"}`);
+    return rowToCanonicalBrand(row as CanonicalBrandRow);
+  });
+
+export const deleteCanonicalBrandFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => deleteBrandInput.parse(raw))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+    });
+    const sb = admin();
+    await requireAdmin(sb, effectiveUserId);
+    const { error } = await sb
+      .from("canonical_brands")
+      .delete()
+      .eq("id", data.id);
+    if (error) throw new Error(`Couldn't delete brand: ${error.message}`);
+    return { ok: true };
+  });
+
+export const recategorizeServicesFromBrandsFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => readInput.parse(raw))
+  .handler(async ({ data }): Promise<RecategorizeReceipt> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const brands = await loadAllCanonicalBrands(sb);
+    const { data: services, error } = await sb
+      .from("services")
+      .select("id, name, notes, category")
+      .eq("tenant_id", tenantId);
+    if (error) throw new Error(`Couldn't list services: ${error.message}`);
+    const rows = (services ?? []) as Array<{
+      id: string;
+      name: string;
+      notes: string | null;
+      category: string;
+    }>;
+    let scanned = 0;
+    let recategorized = 0;
+    let unchanged = 0;
+    let unmatched = 0;
+    const changes: RecategorizeReceipt["changes"] = [];
+    for (const r of rows) {
+      scanned++;
+      // Try the name first, then fall back to notes for a longer-text match.
+      const matchName = lookupCanonicalBrand(r.name, brands);
+      const match = matchName ?? (r.notes ? lookupCanonicalBrand(r.notes, brands) : null);
+      if (!match) {
+        unmatched++;
+        continue;
+      }
+      const oldCategory = r.category as ServiceCategory;
+      if (oldCategory === match.category) {
+        unchanged++;
+        continue;
+      }
+      const { error: updErr } = await sb
+        .from("services")
+        .update({ category: match.category })
+        .eq("id", r.id)
+        .eq("tenant_id", tenantId);
+      if (updErr) {
+        unchanged++;
+        continue;
+      }
+      recategorized++;
+      changes.push({
+        serviceId: r.id,
+        name: r.name,
+        oldCategory,
+        newCategory: match.category,
+        matchedBrand: match.displayName,
+      });
+    }
+    return { scanned, recategorized, unchanged, unmatched, changes };
+  });
+
 // ─── deleteServiceFn ──────────────────────────────────────────────────────
 
 export const deleteServiceFn = createServerFn({ method: "POST" })
