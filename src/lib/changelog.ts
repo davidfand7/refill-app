@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.28.2",
+    date: "May 2026",
+    items: [
+      "<strong>v1.28.2 &mdash; Billing unification Phase 2: decommission the emma-invoice pg_cron job.</strong> Phase 1 (v1.26.23) restored tenant-aware <code>getInvoicePreview</code> in refill-billing and repointed the Recovery page. Phase 2 turns off the legacy monthly cron that has been silently no-op&rsquo;ing since v1.9 (when the UI moved to <code>refill_pricing_plans</code> writes, leaving zero active rows for the emma writer to iterate over). <strong>Why now</strong>: SCHEDULER_SECRET rotation completed 2026-05-31 15:17. This cron was one of the 6 SCHEDULER_SECRET-bearing pg_cron jobs; decommissioning shrinks next quarter&rsquo;s rotation surface from 6 to 5. <strong>What shipped</strong>: <code>supabase/migrations/20260601010000_v1_28_2_decommission_emma_invoice_cron.sql</code> &mdash; single <code>cron.unschedule(&apos;emma-invoice&apos;)</code> wrapped in an <code>EXISTS</code> guard so re-runs are idempotent. <strong>Verification</strong>: post-run <code>SELECT jobname, schedule, active FROM cron.job</code> should show 5 SCHEDULER_SECRET crons (sweep / preshow / reliability / reconcile / recommendations) plus the unrelated refill-invoice ANON-key cron. <strong>What this unblocks</strong>: v1.28.3 deletes <code>src/server/emma-billing.functions.ts</code> + <code>src/routes/api.cron.emma-invoice.ts</code> (zero callers after Phase 2); v1.28.4 RENAMEs <code>emma_invoices</code> + <code>emma_pricing_plans</code> to <code>_archived_*</code>. <strong>What this DOESN&rsquo;T touch</strong>: <code>emma_recovery_events</code> stays put &mdash; 7 live code paths still read it. Phase 5 (tenant_id schema add) gets its own dedicated scout because v1.28.7&rsquo;s full read-path migration touches the live recovery engine. <strong>Rollback</strong>: re-paste <code>supabase/migrations/20260523010000_emma_invoice_cron.sql</code> with the current rotated secret substituted. <strong>Touched</strong>: <code>supabase/migrations/20260601010000_v1_28_2_decommission_emma_invoice_cron.sql</code> (new file), <code>src/lib/changelog.ts</code> (this entry). Pure data ship; no worker-code change.",
+    ],
+  },
+  {
     version: "v1.28.0",
     date: "May 2026",
     items: [
