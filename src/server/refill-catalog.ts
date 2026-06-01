@@ -21,6 +21,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
+import { parseServiceListCsv } from "@/lib/catalog-csv";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
 
 // ─── Public types ─────────────────────────────────────────────────────────
@@ -772,6 +773,155 @@ export const unlinkServiceProductFn = createServerFn({ method: "POST" })
     const service = await loadServiceById(sb, serviceId, tenantId);
     const links = await loadLinksForService(sb, serviceId, tenantId);
     return { service, links };
+  });
+
+// ══ CSV Import (v1.29.4) ═════════════════════════════════════════════════
+
+export type ImportPreviewRow = {
+  rowIndex: number;
+  parsedName: string;
+  parsedCategory: ServiceCategory;
+  categorySource: "csv" | "name-inferred" | "default";
+  parsedPrice: number;
+  parsedDescription: string | null;
+  action: "create" | "update" | "skip-error";
+  existingServiceId: string | null;
+  warnings: string[];
+};
+
+export type ImportPreview = {
+  headers: string[];
+  fieldMapping: {
+    name: string | null;
+    category: string | null;
+    price: string | null;
+    duration: string | null;
+    description: string | null;
+  };
+  unmappedHeaders: string[];
+  totalRows: number;
+  parseableRows: number;
+  skippedRows: number;
+  willCreate: number;
+  willUpdate: number;
+  preview: ImportPreviewRow[];
+  parseErrors: Array<{ rowIndex: number; reason: string }>;
+};
+
+export type ImportReceipt = {
+  created: number;
+  updated: number;
+  failed: Array<{ rowIndex: number; name: string; reason: string }>;
+};
+
+const importInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  csv: z.string().min(1, "CSV file is empty."),
+  mode: z.enum(["preview", "commit"]),
+});
+
+export const ingestServicesCsvFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => importInput.parse(raw))
+  .handler(async ({ data }): Promise<ImportPreview | ImportReceipt> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+
+    const parsed = parseServiceListCsv(data.csv);
+
+    // Fetch existing services for upsert-by-name matching.
+    const { data: existing, error: existingErr } = await sb
+      .from("services")
+      .select("id, name")
+      .eq("tenant_id", tenantId);
+    if (existingErr) throw new Error(`Couldn't list existing services: ${existingErr.message}`);
+    const byNameLower = new Map<string, string>();
+    for (const s of existing ?? []) {
+      byNameLower.set((s.name as string).trim().toLowerCase(), s.id as string);
+    }
+
+    if (data.mode === "preview") {
+      let willCreate = 0;
+      let willUpdate = 0;
+      const preview: ImportPreviewRow[] = parsed.rows.map((r) => {
+        const existingId = byNameLower.get(r.parsedName.trim().toLowerCase()) ?? null;
+        const action: ImportPreviewRow["action"] = existingId ? "update" : "create";
+        if (action === "create") willCreate++;
+        else willUpdate++;
+        return {
+          rowIndex: r.rowIndex,
+          parsedName: r.parsedName,
+          parsedCategory: r.parsedCategory,
+          categorySource: r.categorySource,
+          parsedPrice: r.parsedPrice ?? 0,
+          parsedDescription: r.parsedDescription,
+          action,
+          existingServiceId: existingId,
+          warnings: r.warnings,
+        };
+      });
+      return {
+        headers: parsed.headers,
+        fieldMapping: parsed.fieldMapping,
+        unmappedHeaders: parsed.unmappedHeaders,
+        totalRows: parsed.totalRows,
+        parseableRows: parsed.parseableRows,
+        skippedRows: parsed.skippedRows,
+        willCreate,
+        willUpdate,
+        preview,
+        parseErrors: parsed.parseErrors,
+      };
+    }
+
+    // Commit path — upsert each row.
+    let created = 0;
+    let updated = 0;
+    const failed: ImportReceipt["failed"] = [];
+
+    for (const r of parsed.rows) {
+      const existingId = byNameLower.get(r.parsedName.trim().toLowerCase()) ?? null;
+      try {
+        if (existingId) {
+          const { error } = await sb
+            .from("services")
+            .update({
+              category: r.parsedCategory,
+              service_price: r.parsedPrice ?? 0,
+              notes: r.parsedDescription,
+            })
+            .eq("id", existingId)
+            .eq("tenant_id", tenantId);
+          if (error) throw new Error(error.message);
+          updated++;
+        } else {
+          const { error } = await sb
+            .from("services")
+            .insert({
+              tenant_id: tenantId,
+              name: r.parsedName,
+              category: r.parsedCategory,
+              service_price: r.parsedPrice ?? 0,
+              cogs_source: "manual",
+              notes: r.parsedDescription,
+            });
+          if (error) throw new Error(error.message);
+          created++;
+        }
+      } catch (err) {
+        failed.push({
+          rowIndex: r.rowIndex,
+          name: r.parsedName,
+          reason: err instanceof Error ? err.message : "Unknown error",
+        });
+      }
+    }
+
+    return { created, updated, failed };
   });
 
 // ─── setServiceCogsSourceFn ───────────────────────────────────────────────
