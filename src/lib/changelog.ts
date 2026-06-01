@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.31.4.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.31.4.1 &mdash; Hotfix: StatusPill crash on legacy CadenceMetrics that pre-date v1.31.3.</strong> Caught immediately on the v1.31.4 dry-run: opening Debbie Donaldson&rsquo;s patient detail page crashed the entire section with the error boundary showing &ldquo;Cannot read properties of undefined (reading &lsquo;bg&rsquo;).&rdquo; <strong>Root cause</strong>: Debbie&rsquo;s <code>purchasePatterns</code> were computed and stored in her JSONB attachments during the v1.31.2 ship (when she first tapped &ldquo;Compute patterns from transactions&rdquo;) &mdash; BEFORE v1.31.3 added the <code>typicalExpectedDays</code> and <code>typicalStatus</code> fields to <code>CadenceMetrics</code>. v1.31.3 added the fields to the type and to fresh computations, but did NOT migrate existing stored metrics. When v1.31.4 loaded with the new <code>StatusPill</code> trying to render <code>m.typicalStatus</code> (undefined for her), the lookup <code>configMap[undefined]</code> returned undefined, and reading <code>.bg</code> on undefined threw. Error boundary caught it but the whole detail page was unrenderable. <strong>Patch</strong>: <code>StatusPill</code> now coerces unknown / undefined status values to the &lsquo;unknown&rsquo; config fallback (gray &ldquo;—&rdquo; pill) instead of crashing. <code>PatternRowView</code> conditional logic also tightened to check &lsquo;status &amp;&amp; status !== &ldquo;unknown&rdquo;&rsquo; (catches both undefined and the unknown sentinel) before rendering each pill. <code>typicalExpectedDays</code> existence check loosened from <code>!== null</code> to <code>!= null</code> (catches undefined too). <strong>Result</strong>: legacy patterns now render with personal-status pills only (typical fields show as nothing); tapping <strong>Refresh</strong> on the Purchase patterns card recomputes with v1.31.3 logic and populates typical baselines. <strong>What this DOESN&rsquo;T do</strong>: backfill the typical fields server-side across every existing tenant&rsquo;s stored purchasePatterns &mdash; that would require a tenant-wide rollup sweep, deferred. Each patient&rsquo;s metrics update naturally on the next Refresh / QB CSV re-upload. <strong>Touched</strong>: <code>src/routes/app.refill.patients.$patientId.tsx</code> (StatusPill defensive default to configMap.unknown + PatternRowView conditionals hardened against undefined typical/personal status values), <code>src/lib/changelog.ts</code> (this entry).",
+    ],
+  },
+  {
     version: "v1.31.4",
     date: "June 2026",
     items: [

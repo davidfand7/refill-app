@@ -1751,10 +1751,11 @@ function PatternRowView({ row }: { row: PatternRow }) {
             </>
           )}
         </div>
-        {m.typicalExpectedDays !== null && (
+        {m.typicalExpectedDays != null && (
           <div className="mt-0.5 text-[10px] text-ink-faint tabular-nums">
             typical retreat <strong>{m.typicalExpectedDays}d</strong>
             {m.daysSinceLastVisit !== null &&
+              m.typicalStatus &&
               m.typicalStatus !== "unknown" && (
                 <>
                   {" · "}
@@ -1767,16 +1768,19 @@ function PatternRowView({ row }: { row: PatternRow }) {
         )}
       </div>
       <div className="shrink-0 flex flex-col items-end gap-1">
-        {m.typicalStatus !== "unknown" ? (
+        {m.typicalStatus && m.typicalStatus !== "unknown" ? (
           <StatusPill status={m.typicalStatus} kind="typical" />
-        ) : (
+        ) : m.status && m.status !== "unknown" ? (
           <StatusPill status={m.status} kind="personal" />
-        )}
-        {m.typicalStatus !== "unknown" && m.status !== "unknown" && (
-          <span className="text-[9px] text-ink-faint">
-            personal: {personalStatusLabel(m.status)}
-          </span>
-        )}
+        ) : null}
+        {m.typicalStatus &&
+          m.typicalStatus !== "unknown" &&
+          m.status &&
+          m.status !== "unknown" && (
+            <span className="text-[9px] text-ink-faint">
+              personal: {personalStatusLabel(m.status)}
+            </span>
+          )}
         {m.trend && <TrendChip trend={m.trend} />}
       </div>
     </div>
@@ -1800,10 +1804,14 @@ function StatusPill({
   status,
   kind,
 }: {
-  status: CadenceMetrics["status"];
+  status: CadenceMetrics["status"] | undefined;
   kind: "typical" | "personal";
 }) {
-  const config = {
+  // v1.31.4.1: defensive — legacy stored CadenceMetrics from v1.31.2 (pre-
+  // v1.31.3 typical-fields ship) can have undefined typicalStatus. Falling
+  // back to 'unknown' config prevents `Cannot read properties of undefined
+  // (reading 'bg')` crashes when patient detail loads.
+  const configMap = {
     "on-cadence": {
       label: kind === "typical" ? "On typical" : "On personal",
       bg: "bg-emerald-soft",
@@ -1824,7 +1832,10 @@ function StatusPill({
       bg: "bg-rule-soft",
       text: "text-ink-faint",
     },
-  }[status];
+  } as const;
+  const config =
+    (status && configMap[status as keyof typeof configMap]) ??
+    configMap.unknown;
   return (
     <span
       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${config.bg} ${config.text}`}
