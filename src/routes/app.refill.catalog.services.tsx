@@ -803,24 +803,31 @@ function LinkageSection({
         <div className="inline-flex items-center rounded-md border border-rule bg-white overflow-hidden text-[12px]">
           <button
             type="button"
-            disabled={busy || !isDerived}
+            disabled={busy}
             onClick={() => onToggleCogsSource?.("manual")}
             className={cn(
               "px-3 py-1.5 font-semibold transition",
               !isDerived ? "bg-emerald text-paper" : "text-ink-soft hover:text-ink",
             )}
+            title={!isDerived ? "Currently in Manual mode" : "Switch to Manual COGS"}
           >
             Manual
           </button>
           <button
             type="button"
-            disabled={busy || isDerived || linkage.links.length === 0}
+            disabled={busy}
             onClick={() => onToggleCogsSource?.("derived")}
             className={cn(
               "px-3 py-1.5 font-semibold transition border-l border-rule",
-              isDerived ? "bg-emerald text-paper" : "text-ink-soft hover:text-ink disabled:text-ink-faint disabled:cursor-not-allowed",
+              isDerived ? "bg-emerald text-paper" : "text-ink-soft hover:text-ink",
             )}
-            title={linkage.links.length === 0 ? "Link at least one product first" : undefined}
+            title={
+              isDerived
+                ? "Click to re-derive COGS from current product costs"
+                : linkage.links.length === 0
+                  ? "Will set COGS to $0 — link products below to populate"
+                  : "Switch to Auto COGS from linked products"
+            }
           >
             Auto from products
           </button>

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.29.3.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.29.3.1 &mdash; Free Manual/Auto toggle: both buttons always clickable.</strong> v1.29.3 disabled the Auto button when there were zero linked products and disabled the currently-active mode button. The intent was guardrails; the effect was friction. Grasshopper&rsquo;s feedback: let me A/B freely. <strong>What changes</strong>: both Manual and Auto are now always clickable (subject only to the global busy flag during in-flight requests). Clicking Auto with zero links sets COGS to $0 &mdash; harmless and discoverable; the COGS field shows the explicit value and tooltip explains. <strong>Bonus side effect</strong>: clicking Auto a second time on an already-derived service re-runs <code>computeDerivedCogs</code> and persists the new sum. This is the manual-refresh path for the &ldquo;stale derived COGS when a product cost changes&rdquo; trade-off flagged in v1.29.3 &mdash; no separate sweep job needed; the owner re-clicks Auto after editing product costs and the value reconciles. <strong>Tooltip copy added</strong>: Manual button reads &ldquo;Currently in Manual mode&rdquo; (when active) or &ldquo;Switch to Manual COGS&rdquo; (when not). Auto button reads &ldquo;Click to re-derive COGS from current product costs&rdquo; (when active), &ldquo;Will set COGS to $0 &mdash; link products below to populate&rdquo; (when 0 links), or &ldquo;Switch to Auto COGS from linked products&rdquo; (default). <strong>Touched</strong>: <code>src/routes/app.refill.catalog.services.tsx</code> (LinkageSection toggle buttons), <code>src/lib/changelog.ts</code> (this entry).",
+    ],
+  },
+  {
     version: "v1.29.3",
     date: "June 2026",
     items: [
