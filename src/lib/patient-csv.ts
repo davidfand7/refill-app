@@ -790,6 +790,8 @@ export function rollupPatientSummary(
       summary.daysSinceLastAppointment = priorContact.daysSinceLastAppointment;
     if (priorContact.banned !== undefined) summary.banned = priorContact.banned;
     if (priorContact.vip !== undefined) summary.vip = priorContact.vip;
+    if (priorContact.softTags !== undefined)
+      summary.softTags = priorContact.softTags;
     if (priorContact.contactSource !== undefined)
       summary.contactSource = priorContact.contactSource;
     if (priorContact.contactLinkedAt !== undefined)

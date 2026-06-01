@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.31.2.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.31.2.1 &mdash; Hotfix: rollupPatientSummary now preserves softTags on re-roll.</strong> Caught immediately during the v1.31.2 dry-run: Grasshopper set Debbie Donaldson&rsquo;s income tier to High with reason &ldquo;profession,&rdquo; saved successfully, then tapped &ldquo;Compute patterns from transactions&rdquo; on the new Purchase patterns card &mdash; and the saved Income tier reset to &ldquo;Not set.&rdquo; <strong>Root cause</strong>: the v1.31.0 soft-tag preservation chain was only half-wired. <code>extractContactSummary</code> correctly pulled <code>softTags</code> out of the prior attachments and into the <code>priorContact</code> object passed to <code>rollupPatientSummary</code> &mdash; but <code>rollupPatientSummary</code>&rsquo;s priorContact-merge block (lines that say &ldquo;if priorContact.X !== undefined then summary.X = priorContact.X&rdquo; for each preserved field) was missing the line for <code>softTags</code>. So extract pulled, but rollup never restored, and the freshly rolled-up summary had no softTags field at all. This means <strong>every QB CSV re-upload since v1.31.0 would have wiped soft tags too</strong>, not just the v1.31.2 recompute path. Patched by adding the single missing merge line, mirroring the <code>vip</code> merge that&rsquo;s been there since v385.2. (The <code>extractContactSummary</code> fix in v1.31.0 also closed the parallel <code>vip</code>-was-missing-from-extract bug, so the two halves of this chain are now in full agreement for both vip and softTags.) <strong>What this fix DOESN&rsquo;T touch</strong>: customTags ride inside softTags so they&rsquo;re covered by the same one-line fix. PurchasePatterns are intentionally not preserved &mdash; they&rsquo;re recomputed fresh on every rollup, that&rsquo;s the whole point. <strong>Re-set required</strong>: any soft tags Grasshopper set between v1.31.0 and v1.31.2.1 deploy that got nuked by a Compute click or QB re-upload need to be re-entered (Debbie Donaldson&rsquo;s Income tier > High > &ldquo;profession&rdquo; specifically &mdash; but worth a sweep across any patient Grasshopper tagged during the testing window). <strong>Touched</strong>: <code>src/lib/patient-csv.ts</code> (one-line addition inside rollupPatientSummary&rsquo;s priorContact-merge block), <code>src/lib/changelog.ts</code> (this entry).",
+    ],
+  },
+  {
     version: "v1.31.2",
     date: "June 2026",
     items: [
