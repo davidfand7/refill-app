@@ -63,13 +63,14 @@ import type {
   ProductKind,
   ProductManufacturer,
 } from "@/lib/product-manufacturer-map";
-import type {
-  CadenceMetrics,
-  PatientCustomTag,
-  PatientPurchasePatterns,
-  PatientSoftTagEntry,
-  PatientSoftTagKey,
-  PatientSoftTags,
+import {
+  normalizeCustomTag,
+  type CadenceMetrics,
+  type PatientCustomTag,
+  type PatientPurchasePatterns,
+  type PatientSoftTagEntry,
+  type PatientSoftTagKey,
+  type PatientSoftTags,
 } from "@/lib/patient-csv";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 
@@ -646,16 +647,32 @@ function SoftTagsCard({
 type CustomTagDraft = {
   id: string | null;
   name: string;
-  value: string;
+  optionsText: string; // comma-separated; parsed into chips live
+  selected: string[];
   reason: string;
 };
 
 const EMPTY_CUSTOM_DRAFT: CustomTagDraft = {
   id: null,
   name: "",
-  value: "",
+  optionsText: "",
+  selected: [],
   reason: "",
 };
+
+function parseOptions(text: string): string[] {
+  // Split by comma OR newline; trim; drop empties; preserve order; dedupe
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of text.split(/[,\n]/)) {
+    const t = raw.trim();
+    if (t && !seen.has(t)) {
+      seen.add(t);
+      out.push(t);
+    }
+  }
+  return out;
+}
 
 function CustomTagsSection({
   patient,
@@ -666,7 +683,10 @@ function CustomTagsSection({
   viewAsUserId: string | undefined;
   onTagsChange: (next: PatientSoftTags) => void;
 }) {
-  const customs: PatientCustomTag[] = patient.softTags?.custom ?? [];
+  // v1.31.4: normalize legacy v1.31.1 string-shape tags on read.
+  const customs: PatientCustomTag[] = (patient.softTags?.custom ?? []).map(
+    (t) => normalizeCustomTag(t as PatientCustomTag),
+  );
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<CustomTagDraft>(EMPTY_CUSTOM_DRAFT);
@@ -684,7 +704,8 @@ function CustomTagsSection({
     setDraft({
       id: tag.id,
       name: tag.name,
-      value: tag.value,
+      optionsText: tag.options.join(", "),
+      selected: tag.selected,
       reason: tag.reason ?? "",
     });
   };
@@ -716,8 +737,12 @@ function CustomTagsSection({
 
   const save = () => {
     const name = draft.name.trim();
-    const value = draft.value.trim();
-    if (!name || !value) return;
+    const options = parseOptions(draft.optionsText);
+    if (!name || options.length === 0) return;
+    // Filter draft.selected to only those still present in options (since
+    // Karen may have edited the options text and removed a previously-
+    // selected entry).
+    const selected = draft.selected.filter((s) => options.includes(s));
     if (draft.id) {
       const id = draft.id;
       void withToken((token) =>
@@ -728,7 +753,8 @@ function CustomTagsSection({
             patientNodeId: patient.id,
             id,
             name,
-            value,
+            options,
+            selected,
             reason: draft.reason.trim() || null,
           },
         }),
@@ -741,7 +767,8 @@ function CustomTagsSection({
             viewAsUserId,
             patientNodeId: patient.id,
             name,
-            value,
+            options,
+            selected,
             reason: draft.reason.trim() || null,
           },
         }),
@@ -829,17 +856,37 @@ function CustomTagRow({
   onEdit: () => void;
   disabled: boolean;
 }) {
+  const selectedSet = new Set(tag.selected);
   return (
     <div className="px-5 py-3 flex items-start gap-3">
       <div className="flex-1 min-w-0">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
           {tag.name}
         </div>
-        <div className="mt-1 text-[13px] text-ink whitespace-pre-wrap break-words">
-          {tag.value}
-        </div>
+        {tag.options.length > 0 ? (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {tag.options.map((opt) => {
+              const active = selectedSet.has(opt);
+              return (
+                <span
+                  key={opt}
+                  className={
+                    "inline-flex items-center rounded-full px-3 py-1 text-[11px] font-medium border " +
+                    (active
+                      ? "border-emerald bg-emerald-soft text-emerald-ink"
+                      : "border-rule bg-white text-ink-faint")
+                  }
+                >
+                  {opt}
+                </span>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="mt-1 text-xs text-ink-faint italic">No options</div>
+        )}
         {tag.reason && (
-          <div className="mt-1 text-[12px] text-ink-soft italic">
+          <div className="mt-1.5 text-[12px] text-ink-soft italic">
             &ldquo;{tag.reason}&rdquo;
           </div>
         )}
@@ -875,27 +922,99 @@ function CustomTagForm({
   onCancel: () => void;
   onDelete?: () => void;
 }) {
-  const canSave = draft.name.trim().length > 0 && draft.value.trim().length > 0;
+  // Live-parse options from the text field for chip preview + toggling.
+  const parsedOptions = parseOptions(draft.optionsText);
+  const canSave = draft.name.trim().length > 0 && parsedOptions.length > 0;
+  const toggle = (opt: string) => {
+    const next = draft.selected.includes(opt)
+      ? draft.selected.filter((s) => s !== opt)
+      : [...draft.selected, opt];
+    setDraft({ ...draft, selected: next });
+  };
+  const selectAll = () =>
+    setDraft({ ...draft, selected: [...parsedOptions] });
+  const selectNone = () => setDraft({ ...draft, selected: [] });
+  const selectedSet = new Set(draft.selected);
+
   return (
-    <div className="px-5 py-3 space-y-2 bg-emerald-soft/30">
+    <div className="px-5 py-3 space-y-2.5 bg-emerald-soft/30">
       <input
         type="text"
         value={draft.name}
         onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-        placeholder="Tag name (e.g., Allergies, Pet name, Preferred day)"
+        placeholder="Tag name (e.g., Allergies, Family / Friends Pricing)"
         maxLength={80}
         disabled={busy}
         className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] font-medium text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
       />
-      <textarea
-        value={draft.value}
-        onChange={(e) => setDraft({ ...draft, value: e.target.value })}
-        placeholder="Value (e.g., 'lidocaine sensitivity', 'Bella the maltese', 'Tuesdays only')"
-        maxLength={2000}
-        rows={2}
-        disabled={busy}
-        className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
-      />
+      <div>
+        <textarea
+          value={draft.optionsText}
+          onChange={(e) =>
+            setDraft({ ...draft, optionsText: e.target.value })
+          }
+          placeholder="Options (comma-separated) — each becomes a chip below. E.g., 'Mother/Daughter, Siblings, Wife/Husband, Partner' or just 'lidocaine sensitivity' for a single chip."
+          maxLength={2000}
+          rows={2}
+          disabled={busy}
+          className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
+        />
+        <div className="mt-0.5 text-[10px] text-ink-faint">
+          Type comma-separated options above; tap chips below to mark which apply for this patient.
+        </div>
+      </div>
+      {parsedOptions.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+              Apply to this patient
+            </div>
+            <button
+              type="button"
+              onClick={selectAll}
+              disabled={busy}
+              className="text-[10px] text-ink-soft hover:text-ink underline-offset-2 hover:underline transition"
+            >
+              all
+            </button>
+            <span className="text-[10px] text-ink-faint">·</span>
+            <button
+              type="button"
+              onClick={selectNone}
+              disabled={busy}
+              className="text-[10px] text-ink-soft hover:text-ink underline-offset-2 hover:underline transition"
+            >
+              none
+            </button>
+            <span className="ml-auto text-[10px] text-ink-faint tabular-nums">
+              {draft.selected.filter((s) => parsedOptions.includes(s)).length}
+              {" of "}
+              {parsedOptions.length} selected
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {parsedOptions.map((opt) => {
+              const active = selectedSet.has(opt);
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => toggle(opt)}
+                  disabled={busy}
+                  className={
+                    "rounded-full px-3 py-1 text-[11px] font-medium border transition disabled:opacity-50 " +
+                    (active
+                      ? "border-emerald bg-emerald-soft text-emerald-ink"
+                      : "border-rule bg-white text-ink-soft hover:border-emerald/40 hover:text-ink")
+                  }
+                >
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <input
         type="text"
         value={draft.reason}

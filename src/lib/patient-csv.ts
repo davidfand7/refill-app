@@ -443,14 +443,67 @@ export type PatientSoftTags = {
   custom?: PatientCustomTag[] | null;
 };
 
+/**
+ * v1.31.4: Custom tags now match the preset-tag UX: Karen defines a list
+ * of chip options once, then taps which ones apply for THIS patient.
+ * Same shape regardless of whether she ends up with 1 chip ("Allergies:
+ * lidocaine") or 4 ("Family/Friends Pricing: Mother/Daughter, Siblings,
+ * Wife/Husband, Partner"). Backward compat: v1.31.1 tags stored as
+ * `value: string` are hydrated to `options: [...split], selected: [all]`
+ * on read.
+ */
 export type PatientCustomTag = {
   id: string;
   name: string;
-  value: string;
+  options: string[];
+  selected: string[];
   setByUserId: string;
   setAt: string;
   reason: string | null;
 };
+
+/**
+ * v1.31.1 → v1.31.4 hydration: takes any custom-tag-shaped object from
+ * the JSONB attachments and returns a normalized v1.31.4-shape tag. Old
+ * tags with `value: string` get split by comma into options + all
+ * selected by default.
+ */
+export function normalizeCustomTag(
+  raw: PatientCustomTag | { id: string; name: string; value: string; setByUserId: string; setAt: string; reason: string | null },
+): PatientCustomTag {
+  if ("options" in raw && Array.isArray(raw.options)) {
+    return {
+      id: raw.id,
+      name: raw.name,
+      options: raw.options,
+      selected: Array.isArray(raw.selected) ? raw.selected : raw.options,
+      setByUserId: raw.setByUserId,
+      setAt: raw.setAt,
+      reason: raw.reason,
+    };
+  }
+  const legacy = raw as {
+    id: string;
+    name: string;
+    value: string;
+    setByUserId: string;
+    setAt: string;
+    reason: string | null;
+  };
+  const options = legacy.value
+    .split(/,\s*/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  return {
+    id: legacy.id,
+    name: legacy.name,
+    options,
+    selected: options,
+    setByUserId: legacy.setByUserId,
+    setAt: legacy.setAt,
+    reason: legacy.reason,
+  };
+}
 
 export type PatientSoftTagKey = Exclude<keyof PatientSoftTags, "custom">;
 

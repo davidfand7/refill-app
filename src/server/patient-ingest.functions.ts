@@ -28,6 +28,7 @@ import { z } from "zod";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 import {
+  normalizeCustomTag,
   parsePatientDetailCsv,
   rollupPatientSummary,
   type ParsedPatient,
@@ -876,7 +877,8 @@ const addCustomTagInput = z.object({
   viewAsUserId: z.string().uuid().optional(),
   patientNodeId: z.string().uuid(),
   name: z.string().min(1).max(80),
-  value: z.string().min(1).max(2000),
+  options: z.array(z.string().min(1).max(200)).min(1).max(50),
+  selected: z.array(z.string().min(1).max(200)).max(50),
   reason: z.string().max(500).nullable().optional(),
 });
 
@@ -886,7 +888,8 @@ const updateCustomTagInput = z.object({
   patientNodeId: z.string().uuid(),
   id: z.string().uuid(),
   name: z.string().min(1).max(80),
-  value: z.string().min(1).max(2000),
+  options: z.array(z.string().min(1).max(200)).min(1).max(50),
+  selected: z.array(z.string().min(1).max(200)).max(50),
   reason: z.string().max(500).nullable().optional(),
 });
 
@@ -926,7 +929,11 @@ async function mutateCustomTags(
   const summary =
     (existing.attachments as unknown as PatientSummary | null) ?? null;
   const priorTags: PatientSoftTags = summary?.softTags ?? {};
-  const priorCustom: PatientCustomTag[] = priorTags.custom ?? [];
+  // v1.31.4: normalize legacy v1.31.1 tag shape (value: string) to the
+  // new options/selected shape before applying any mutation.
+  const priorCustom: PatientCustomTag[] = (priorTags.custom ?? []).map(
+    (t) => normalizeCustomTag(t as PatientCustomTag),
+  );
   const nextCustom = mutate(priorCustom, callerUserId);
   const nextTags: PatientSoftTags = { ...priorTags, custom: nextCustom };
 
@@ -972,7 +979,8 @@ export const addPatientCustomTag = createServerFn({ method: "POST" })
         {
           id: crypto.randomUUID(),
           name: data.name.trim(),
-          value: data.value.trim(),
+          options: data.options.map((o) => o.trim()).filter(Boolean),
+          selected: data.selected.map((s) => s.trim()).filter(Boolean),
           setByUserId: callerUserId,
           setAt: new Date().toISOString(),
           reason: data.reason?.trim() || null,
@@ -996,7 +1004,8 @@ export const updatePatientCustomTag = createServerFn({ method: "POST" })
             ? {
                 ...t,
                 name: data.name.trim(),
-                value: data.value.trim(),
+                options: data.options.map((o) => o.trim()).filter(Boolean),
+                selected: data.selected.map((s) => s.trim()).filter(Boolean),
                 reason: data.reason?.trim() || null,
                 setByUserId: callerUserId,
                 setAt: new Date().toISOString(),
