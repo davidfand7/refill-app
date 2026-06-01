@@ -18,6 +18,14 @@ import type { ProductKind } from "@/lib/product-manufacturer-map";
 
 /** Days after the last purchase of this kind when a patient is "overdue." */
 export type CadenceWindow = {
+  /**
+   * v1.31.3: Industry/clinical TYPICAL retreatment interval. This is the
+   * baseline Karen / rewards programs / FDA labels target. Used as the
+   * &ldquo;typical&rdquo; norm in CadenceMetrics so Refill can flag &ldquo;due for an
+   * Alle-eligible Botox treatment&rdquo; even when the patient&rsquo;s personal
+   * cadence has drifted.
+   */
+  expectedDays: number;
   /** Soft-overdue: appears in the Today card. */
   overdueDays: number;
   /**
@@ -34,9 +42,9 @@ export type CadenceWindow = {
  * Only kinds with a return-visit signal get an entry here.
  */
 export const KIND_CADENCE: Partial<Record<ProductKind, CadenceWindow>> = {
-  toxin: { overdueDays: 120, lapsedDays: 240 }, // 4mo / 8mo — Jeuveau et al
-  filler: { overdueDays: 365, lapsedDays: 730 }, // 12mo / 24mo — HA fillers
-  biostimulator: { overdueDays: 540, lapsedDays: 1095 }, // 18mo / 36mo — Sculptra/Radiesse
+  toxin: { expectedDays: 90, overdueDays: 120, lapsedDays: 240 }, // 3mo expected / 4mo soft / 8mo lapsed
+  filler: { expectedDays: 270, overdueDays: 365, lapsedDays: 730 }, // 9mo expected (6-24mo range) / 12mo soft / 24mo lapsed
+  biostimulator: { expectedDays: 540, overdueDays: 540, lapsedDays: 1095 }, // 18mo / 18mo soft / 36mo lapsed
   // Device + service + retail intentionally absent — too treatment-specific
   // to bake into a single number. Defer until a real customer asks.
 };

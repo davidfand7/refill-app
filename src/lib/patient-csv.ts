@@ -35,6 +35,7 @@
 
 import { parseCsvGrid } from "@/lib/csv-grid";
 import { normalizePatientName } from "@/lib/normalize-patient";
+import { KIND_CADENCE } from "@/lib/patient-cadence";
 import {
   resolveProduct,
   type ProductManufacturer,
@@ -515,6 +516,23 @@ export type CadenceMetrics = {
    * dropping. Null when there&rsquo;s no meaningful comparison.
    */
   trend: "accelerating" | "steady" | "slowing" | null;
+  /**
+   * v1.31.3: TYPICAL retreatment interval (industry / clinical / FDA /
+   * rewards-program norm) for this dimension. Distinct from
+   * recentAvgDays which is HER personal norm. Reward programs (Alle /
+   * Aspire / Merz Rewards) + FDA label retreatment windows key off
+   * this baseline, not her personal cadence. Null when no typical
+   * baseline is known for this dimension.
+   */
+  typicalExpectedDays: number | null;
+  /**
+   * v1.31.3: Status relative to the TYPICAL baseline (not her own
+   * cadence). This is the pill Karen acts on when deciding &ldquo;is she
+   * due for an Alle-eligible Botox touchup?&rdquo; &mdash; rewards eligibility
+   * is keyed off typical, not personal. &lsquo;unknown&rsquo; when
+   * typicalExpectedDays is null or there&rsquo;s no last visit yet.
+   */
+  typicalStatus: "on-cadence" | "overdue" | "lapsed" | "unknown";
 };
 
 export type PatientPurchasePatterns = {
@@ -566,6 +584,8 @@ function daysSinceToday(iso: string | null): number | null {
  */
 function computeCadenceFromDates(
   rawDates: string[],
+  typicalExpectedDays: number | null = null,
+  typicalLapsedDays: number | null = null,
   nowDays: number = Math.floor(Date.now() / 86_400_000),
 ): CadenceMetrics {
   if (rawDates.length === 0) {
@@ -578,6 +598,8 @@ function computeCadenceFromDates(
       daysSinceLastVisit: null,
       status: "unknown",
       trend: null,
+      typicalExpectedDays,
+      typicalStatus: "unknown",
     };
   }
 
@@ -648,6 +670,24 @@ function computeCadenceFromDates(
     else trend = "steady";
   }
 
+  // v1.31.3: status relative to TYPICAL (industry/clinical baseline),
+  // distinct from personal `status`. Buffer: on-cadence up to
+  // expectedDays, overdue between expected and lapsed, lapsed past.
+  let typicalStatus: CadenceMetrics["typicalStatus"] = "unknown";
+  if (
+    typicalExpectedDays !== null &&
+    typicalExpectedDays > 0 &&
+    daysSinceLastVisit !== null
+  ) {
+    if (daysSinceLastVisit <= typicalExpectedDays) typicalStatus = "on-cadence";
+    else if (
+      typicalLapsedDays !== null &&
+      daysSinceLastVisit > typicalLapsedDays
+    )
+      typicalStatus = "lapsed";
+    else typicalStatus = "overdue";
+  }
+
   return {
     visitCount,
     firstVisit,
@@ -657,6 +697,8 @@ function computeCadenceFromDates(
     daysSinceLastVisit,
     status,
     trend,
+    typicalExpectedDays,
+    typicalStatus,
   };
 }
 
@@ -671,6 +713,17 @@ export function computePurchasePatterns(
   const byKindDates = new Map<ProductKind, string[]>();
   const byMfrDates = new Map<ProductManufacturer, string[]>();
   const byProductDates = new Map<string, string[]>();
+  // v1.31.3: track which kinds each manufacturer / product is associated
+  // with, so we can pick the dominant kind&rsquo;s typical cadence as the
+  // typical baseline for that dimension entry.
+  const byMfrKindCounts = new Map<
+    ProductManufacturer,
+    Partial<Record<ProductKind, number>>
+  >();
+  const byProductKindCounts = new Map<
+    string,
+    Partial<Record<ProductKind, number>>
+  >();
 
   for (const t of lines) {
     if (t.productKind && CADENCE_EXCLUDED_KINDS.has(t.productKind)) continue;
@@ -684,25 +737,62 @@ export function computePurchasePatterns(
       const arr = byMfrDates.get(t.productManufacturer) ?? [];
       arr.push(t.transactionDate);
       byMfrDates.set(t.productManufacturer, arr);
+      if (t.productKind) {
+        const counts = byMfrKindCounts.get(t.productManufacturer) ?? {};
+        counts[t.productKind] = (counts[t.productKind] ?? 0) + 1;
+        byMfrKindCounts.set(t.productManufacturer, counts);
+      }
     }
     if (t.productName) {
       const arr = byProductDates.get(t.productName) ?? [];
       arr.push(t.transactionDate);
       byProductDates.set(t.productName, arr);
+      if (t.productKind) {
+        const counts = byProductKindCounts.get(t.productName) ?? {};
+        counts[t.productKind] = (counts[t.productKind] ?? 0) + 1;
+        byProductKindCounts.set(t.productName, counts);
+      }
     }
   }
 
+  const typicalForKind = (
+    kind: ProductKind | null,
+  ): { expected: number | null; lapsed: number | null } => {
+    if (!kind) return { expected: null, lapsed: null };
+    const win = KIND_CADENCE[kind];
+    if (!win) return { expected: null, lapsed: null };
+    return { expected: win.expectedDays, lapsed: win.lapsedDays };
+  };
+
+  const dominantKind = (
+    counts: Partial<Record<ProductKind, number>> | undefined,
+  ): ProductKind | null => {
+    if (!counts) return null;
+    let top: ProductKind | null = null;
+    let topCount = 0;
+    for (const [k, c] of Object.entries(counts) as [ProductKind, number][]) {
+      if (c > topCount) {
+        topCount = c;
+        top = k;
+      }
+    }
+    return top;
+  };
+
   const byKind: Partial<Record<ProductKind, CadenceMetrics>> = {};
   for (const [kind, dates] of byKindDates) {
-    byKind[kind] = computeCadenceFromDates(dates);
+    const t = typicalForKind(kind);
+    byKind[kind] = computeCadenceFromDates(dates, t.expected, t.lapsed);
   }
   const byManufacturer: Partial<Record<ProductManufacturer, CadenceMetrics>> = {};
   for (const [mfr, dates] of byMfrDates) {
-    byManufacturer[mfr] = computeCadenceFromDates(dates);
+    const t = typicalForKind(dominantKind(byMfrKindCounts.get(mfr)));
+    byManufacturer[mfr] = computeCadenceFromDates(dates, t.expected, t.lapsed);
   }
   const byProduct: Record<string, CadenceMetrics> = {};
   for (const [name, dates] of byProductDates) {
-    byProduct[name] = computeCadenceFromDates(dates);
+    const t = typicalForKind(dominantKind(byProductKindCounts.get(name)));
+    byProduct[name] = computeCadenceFromDates(dates, t.expected, t.lapsed);
   }
 
   return { byKind, byManufacturer, byProduct };

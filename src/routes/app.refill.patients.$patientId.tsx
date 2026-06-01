@@ -1632,29 +1632,71 @@ function PatternRowView({ row }: { row: PatternRow }) {
             </>
           )}
         </div>
+        {m.typicalExpectedDays !== null && (
+          <div className="mt-0.5 text-[10px] text-ink-faint tabular-nums">
+            typical retreat <strong>{m.typicalExpectedDays}d</strong>
+            {m.daysSinceLastVisit !== null &&
+              m.typicalStatus !== "unknown" && (
+                <>
+                  {" · "}
+                  {m.typicalStatus === "on-cadence"
+                    ? `${Math.max(0, m.typicalExpectedDays - m.daysSinceLastVisit)}d until eligible`
+                    : `${m.daysSinceLastVisit - m.typicalExpectedDays}d past typical`}
+                </>
+              )}
+          </div>
+        )}
       </div>
       <div className="shrink-0 flex flex-col items-end gap-1">
-        <StatusPill status={m.status} />
+        {m.typicalStatus !== "unknown" ? (
+          <StatusPill status={m.typicalStatus} kind="typical" />
+        ) : (
+          <StatusPill status={m.status} kind="personal" />
+        )}
+        {m.typicalStatus !== "unknown" && m.status !== "unknown" && (
+          <span className="text-[9px] text-ink-faint">
+            personal: {personalStatusLabel(m.status)}
+          </span>
+        )}
         {m.trend && <TrendChip trend={m.trend} />}
       </div>
     </div>
   );
 }
 
-function StatusPill({ status }: { status: CadenceMetrics["status"] }) {
+function personalStatusLabel(status: CadenceMetrics["status"]): string {
+  switch (status) {
+    case "on-cadence":
+      return "on";
+    case "overdue":
+      return "overdue";
+    case "lapsed":
+      return "lapsed";
+    default:
+      return "—";
+  }
+}
+
+function StatusPill({
+  status,
+  kind,
+}: {
+  status: CadenceMetrics["status"];
+  kind: "typical" | "personal";
+}) {
   const config = {
     "on-cadence": {
-      label: "On cadence",
+      label: kind === "typical" ? "On typical" : "On personal",
       bg: "bg-emerald-soft",
       text: "text-emerald-ink",
     },
     overdue: {
-      label: "Overdue",
+      label: kind === "typical" ? "Overdue (typical)" : "Overdue (personal)",
       bg: "bg-amber-100",
       text: "text-amber-700",
     },
     lapsed: {
-      label: "Lapsed",
+      label: kind === "typical" ? "Lapsed (typical)" : "Lapsed (personal)",
       bg: "bg-rose-soft",
       text: "text-rose",
     },
