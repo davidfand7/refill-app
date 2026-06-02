@@ -398,6 +398,14 @@ export type PatientContactSummary = {
    */
   vip: boolean;
   /**
+   * v1.34.9.3: soft-hide. Karen-toggled to remove a patient from the active
+   * list without deleting the underlying record. Re-roll preserved like
+   * banned + vip — a sales-CSV re-upload won't unhide. Hidden patients are
+   * also excluded from rescue + recognition allocation flows (cohort
+   * scoring continues to read them but suggestions/dispatches skip).
+   */
+  hidden: boolean;
+  /**
    * v1.31.0: Patient Soft-Tags — Karen-set editorial layer (Profitability
    * Engine §3.2). NEVER inferred. Each entry carries value + setByUserId
    * + setAt + optional reason note. Lives here so re-rolls preserve them

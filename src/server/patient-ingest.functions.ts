@@ -115,6 +115,8 @@ export type PatientListRow = {
    * to a proper column for indexed lookups (v386 candidate).
    */
   vip: boolean;
+  /** v1.34.9.3: soft-hide flag. See PatientContactSummary.hidden. */
+  hidden: boolean;
   contactSource: "client-csv" | "manual" | "fuzzy-confirmed" | null;
   /**
    * v1.31.0: Patient Soft-Tags — Karen-set editorial layer (Profitability
@@ -230,6 +232,8 @@ const listInput = z.object({
   /** v1.20 admin viewing-as: when set + caller is admin, fetch this
    *  user's patients instead of the caller's. See resolveEffectiveUserId. */
   viewAsUserId: z.string().uuid().optional(),
+  /** v1.34.9.3: include soft-hidden patients (default false). */
+  includeHidden: z.boolean().optional(),
 });
 
 const getInput = z.object({
@@ -282,6 +286,7 @@ function hydratePatientListRow(node: KnowledgeNodeRow): PatientListRow {
     daysSinceLastAppointment: a?.daysSinceLastAppointment ?? null,
     banned: a?.banned ?? false,
     vip: a?.vip ?? false,
+    hidden: a?.hidden ?? false,
     contactSource: a?.contactSource ?? null,
     softTags: a?.softTags ?? {},
     purchasePatterns: a?.purchasePatterns ?? null,
@@ -304,6 +309,7 @@ function extractContactSummary(
     daysSinceLastAppointment: summary.daysSinceLastAppointment ?? null,
     banned: summary.banned ?? false,
     vip: summary.vip ?? false,
+    hidden: summary.hidden ?? false,
     softTags: summary.softTags ?? {},
     lifeEvents: summary.lifeEvents ?? [],
     contactSource: summary.contactSource ?? null,
@@ -1832,7 +1838,67 @@ export const listPatients = createServerFn({ method: "POST" })
       .order("updated_at", { ascending: false })
       .limit(limit);
     if (error) throw new Error(`Couldn't list patients: ${error.message}`);
-    return (rows ?? []).map(hydratePatientListRow);
+    const all = (rows ?? []).map(hydratePatientListRow);
+    // v1.34.9.3: filter soft-hidden patients out by default. Karen toggles
+    // "Show hidden" on the patient list to include them.
+    if (data.includeHidden) return all;
+    return all.filter((p) => !p.hidden);
+  });
+
+// ─── setPatientHidden (v1.34.9.3) ─────────────────────────────────────────
+
+const setHiddenInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  patientNodeId: z.string().uuid(),
+  hidden: z.boolean(),
+});
+
+export const setPatientHidden = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => setHiddenInput.parse(raw))
+  .handler(async ({ data }): Promise<{ ok: true; hidden: boolean }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const { data: existing, error: readErr } = await sb
+      .from("knowledge_nodes")
+      .select("attachments")
+      .eq("id", data.patientNodeId)
+      .eq("user_id", effectiveUserId)
+      .eq("node_type", "patient")
+      .maybeSingle();
+    if (readErr) throw new Error(`Couldn't read patient: ${readErr.message}`);
+    if (!existing) throw new Error("Patient not found.");
+    const summary =
+      (existing.attachments as unknown as PatientSummary | null) ?? null;
+    const next: PatientSummary = {
+      ...(summary ?? ({
+        normalizedName: "",
+        displayName: "",
+        firstVisit: null,
+        lastVisit: null,
+        totalVisits: 0,
+        lifetimeUnits: 0,
+        lifetimeSpendUsd: 0,
+        netSpendUsd: 0,
+        primaryManufacturer: null,
+        productMix: {},
+        loyaltyEngagement: {},
+      } as PatientSummary)),
+      hidden: data.hidden,
+    };
+    const { error: updErr } = await sb
+      .from("knowledge_nodes")
+      .update({
+        attachments: next as unknown as Json,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.patientNodeId)
+      .eq("user_id", effectiveUserId);
+    if (updErr) throw new Error(`Couldn't update hidden: ${updErr.message}`);
+    return { ok: true, hidden: data.hidden };
   });
 
 // ─── getPatientByKey (P2 prep) ────────────────────────────────────────────

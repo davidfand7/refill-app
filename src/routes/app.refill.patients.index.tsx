@@ -20,6 +20,8 @@ import {
   Ban,
   CalendarClock,
   Check,
+  Eye,
+  EyeOff,
   Filter,
   Loader2,
   Mail,
@@ -42,6 +44,7 @@ import {
   listCustomTagDefinitions,
   listOverduePatients,
   listPatients,
+  setPatientHidden,
   setPatientVip,
   type OverduePatient,
   type PatientListRow,
@@ -221,6 +224,8 @@ function PatientsPage() {
   const [bulkApplying, setBulkApplying] = useState(false);
   const [customDefs, setCustomDefs] = useState<CustomTagDefinition[]>([]);
   const [preshowProfiles, setPreshowProfiles] = useState<PreshowProfile[]>([]);
+  // v1.34.9.3: show hidden patients (default false). Toggle pill in filter strip.
+  const [showHidden, setShowHidden] = useState(false);
   // v1.34.1 (coherency pass): multi-select soft-tag filter. Each entry is
   // a filter-key from patientTagFilterKeys() — union semantics (patient
   // matches if their tag keys intersect the active filter set).
@@ -261,7 +266,7 @@ function PatientsPage() {
         // a map keyed by patient_node_id so the row can read both in O(1).
         // v385: waitlist join is what powers the per-row waitlist toggle.
         const [list, overdue, waitlist, defs, profiles] = await Promise.all([
-          listPatients({ data: { accessToken: token, viewAsUserId } }),
+          listPatients({ data: { accessToken: token, viewAsUserId, includeHidden: showHidden } }),
           listOverduePatients({
             data: { accessToken: token, limit: 5000, viewAsUserId },
           }),
@@ -292,7 +297,7 @@ function PatientsPage() {
     return () => {
       cancelled = true;
     };
-  }, [membership.status, viewAsUserId]);
+  }, [membership.status, viewAsUserId, showHidden]);
 
   // v385: toggle a patient's waitlist membership. Optimistic UI — the
   // toggle flips immediately, the server fn fires in the background, and
@@ -395,6 +400,34 @@ function PatientsPage() {
         next.delete(patientNodeId);
         return next;
       });
+    }
+  }
+
+  // v1.34.9.3: per-row hide toggle. Optimistic UI; on failure, revert.
+  async function onToggleHidden(patientNodeId: string, currentlyHidden: boolean) {
+    if (!accessToken) return;
+    const next = !currentlyHidden;
+    // Optimistic: if hiding + we're not showing hidden, drop the row;
+    // otherwise just flip the flag so the visual treatment updates.
+    setRows((prev) =>
+      prev
+        ? showHidden
+          ? prev.map((r) => (r.id === patientNodeId ? { ...r, hidden: next } : r))
+          : prev.filter((r) => r.id !== patientNodeId)
+        : prev,
+    );
+    try {
+      await setPatientHidden({
+        data: { accessToken, viewAsUserId, patientNodeId, hidden: next },
+      });
+      toast.success(next ? "Patient hidden." : "Patient unhidden.");
+    } catch (e) {
+      // Reload on failure to get back to a consistent state.
+      toast.error(e instanceof Error ? e.message : "Couldn't update.");
+      const fresh = await listPatients({
+        data: { accessToken, viewAsUserId, includeHidden: showHidden },
+      });
+      setRows(fresh);
     }
   }
 
@@ -902,6 +935,30 @@ function PatientsPage() {
           </div>
         )}
 
+        {/* v1.34.9.3: Show hidden toggle. Always available regardless of
+            soft-tag-strip visibility. Hidden patients are excluded from
+            list + rescue + recognition by default; toggle to reveal. */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowHidden((v) => !v)}
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium border transition",
+              showHidden
+                ? "border-emerald bg-emerald-soft text-emerald-ink"
+                : "border-rule bg-white text-ink-soft hover:border-emerald/40 hover:text-ink",
+            )}
+            title={
+              showHidden
+                ? "Hide hidden patients from list"
+                : "Reveal hidden patients in list"
+            }
+          >
+            {showHidden ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+            {showHidden ? "Showing hidden" : "Show hidden"}
+          </button>
+        </div>
+
         {/* Result table */}
         {filtered && filtered.length === 0 ? (
           <div className="rounded-2xl border border-rule bg-white p-10 text-center text-sm text-ink-soft">
@@ -936,6 +993,7 @@ function PatientsPage() {
                     </th>
                     <th className="px-4 py-3 font-semibold text-center">A-list</th>
                     <th className="px-4 py-3 font-semibold text-center">Waitlist</th>
+                    <th className="px-4 py-3 font-semibold text-center">Hide</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-rule">
@@ -956,6 +1014,7 @@ function PatientsPage() {
                         selected={selectedIds.has(r.id)}
                         onToggleSelected={() => toggleSelected(r.id)}
                         customDefs={customDefs}
+                        onToggleHidden={() => void onToggleHidden(r.id, r.hidden)}
                       />
                     );
                   })}
@@ -1034,6 +1093,7 @@ function PatientRow({
   selected,
   onToggleSelected,
   customDefs,
+  onToggleHidden,
 }: {
   row: PatientListRow;
   overdue: OverduePatient | null;
@@ -1051,6 +1111,8 @@ function PatientRow({
   onToggleSelected: () => void;
   /** v385.2: fires setPatientVip with optimistic UI. */
   onToggleVip: () => void;
+  /** v1.34.9.3: fires setPatientHidden with optimistic UI. */
+  onToggleHidden: () => void;
   /** v1.34.1 (coherency pass): tenant custom tag defs for resolving the
    *  per-row tag pill labels. Passed down from the parent so we don't
    *  re-fetch per row. */
@@ -1074,6 +1136,7 @@ function PatientRow({
       className={cn(
         "hover:bg-rule-soft/40 transition cursor-pointer",
         selected && "bg-emerald-soft/30",
+        row.hidden && "opacity-60 hover:opacity-100",
       )}
     >
       {/* v1.34.0: bulk selection checkbox — clicks don't navigate */}
@@ -1227,6 +1290,29 @@ function PatientRow({
             </span>
           )}
         </div>
+      </td>
+      {/* v1.34.9.3: Hide / Unhide column */}
+      <td
+        className="px-4 py-3 text-center"
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        }}
+      >
+        <button
+          type="button"
+          onClick={onToggleHidden}
+          title={row.hidden ? "Unhide patient" : "Hide patient from list"}
+          className={cn(
+            "inline-flex items-center gap-1 rounded border bg-white px-2 py-1 text-[11px] font-medium transition",
+            row.hidden
+              ? "border-emerald/40 text-emerald-ink hover:bg-emerald hover:text-paper"
+              : "border-rule text-ink-soft hover:text-rose hover:border-rose/40",
+          )}
+        >
+          {row.hidden ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+          {row.hidden ? "Unhide" : "Hide"}
+        </button>
       </td>
     </tr>
   );
