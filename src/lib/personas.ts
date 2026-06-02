@@ -59,10 +59,33 @@ export const DEMO_PERSONA_KEYS: ReadonlySet<PersonaKey> = new Set([
 ]);
 
 /**
+ * v1.34.1.1: real-but-admin-viewable emails. These appear in the admin
+ * PersonaSwitcher dropdown but are deliberately NOT in PERSONA_EMAILS,
+ * so the public /personas magic-link mint flow (which iterates
+ * PERSONA_EMAILS via v417-persona-mint.ts) cannot expose them.
+ *
+ * Use case: admin needs to view-as a real production user (Karen's
+ * actual tenant where 1,140 real patients live) without making that
+ * account mint-able by anonymous /personas visitors.
+ *
+ * Established 2026-06-02 after the v1.28.0 rename (dormantspaowner@test.com
+ * → karen.rejuv@gmail.com) made Karen's real tenant invisible in the
+ * PersonaSwitcher dropdown. The allowlist below was checking against the
+ * now-defunct testspaowner@test.com via PERSONA_EMAILS.karen, which
+ * matches the demo seed tenant, not Karen's real one.
+ */
+export const ADMIN_VIEWABLE_REAL_EMAILS: ReadonlySet<string> = new Set([
+  "karen.rejuv@gmail.com",
+]);
+
+/**
  * Derived: the set of emails the PersonaSwitcher allowlists in its
  * client-side filter. Computed from PERSONA_EMAILS + DEMO_PERSONA_KEYS
- * so a rename in PERSONA_EMAILS automatically propagates here.
+ * + ADMIN_VIEWABLE_REAL_EMAILS so a rename in PERSONA_EMAILS automatically
+ * propagates here AND admin can view-as real prod accounts without
+ * exposing them to public mint.
  */
-export const DEMO_PERSONA_EMAILS: ReadonlySet<string> = new Set(
-  [...DEMO_PERSONA_KEYS].map((k) => PERSONA_EMAILS[k]),
-);
+export const DEMO_PERSONA_EMAILS: ReadonlySet<string> = new Set([
+  ...[...DEMO_PERSONA_KEYS].map((k) => PERSONA_EMAILS[k]),
+  ...ADMIN_VIEWABLE_REAL_EMAILS,
+]);
