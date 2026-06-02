@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.34.8.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.34.8.1 &mdash; Hotfix: Rescue Agent surface crashed on load because v1.34.6&rsquo;s getRescueAgentMetrics fn referenced <code>emma_rescue_offers.expires_at</code> &mdash; the actual column is <code>expired_at</code> (past tense; the moment the offer WAS expired). My verb-tense typo on the v1.34.6 ship. Grasshopper hit it on first preview-walk of <code>/app/refill/agents/rescue</code>: &lsquo;Couldn&rsquo;t load rescue metrics: column emma_rescue_offers.expires_at does not exist.&rsquo;</strong> <strong>The fix</strong>: rename <code>expires_at</code> → <code>expired_at</code> in the SELECT + the filter predicate. The filter logic also simplifies because <code>expired_at</code> being non-null IS the expired signal (the DB already stamped it when expiry happened) &mdash; no client-side time comparison needed. <strong>Why this didn&rsquo;t catch in CI</strong>: the generated supabase/types.ts has the correct column name, but my pre-existing &lsquo;column does not exist&rsquo; TS errors (from the v1.34.3 tables that haven&rsquo;t been regenerated into types.ts) had me skim past the type errors during the marathon. The runtime SQL is what hits. Lesson: real-walk a new agent surface on testspaowner BEFORE bundling 3 more ships on top. <strong>Touched</strong>: <code>src/server/refill-rescue-agent.functions.ts</code> (expires_at → expired_at, drop client-side time check), <code>src/lib/changelog.ts</code> (this entry). No migration; no schema change; one-line code fix.",
+    ],
+  },
+  {
     version: "v1.34.8",
     date: "June 2026",
     items: [

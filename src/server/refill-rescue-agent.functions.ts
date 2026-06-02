@@ -184,16 +184,15 @@ export const getRescueAgentMetrics = createServerFn({ method: "POST" })
 
     const { data: offers, error } = await sb
       .from("emma_rescue_offers")
-      .select("id, claimed_at, expires_at, created_at")
+      .select("id, claimed_at, expired_at, created_at")
       .eq("user_id", effectiveUserId)
       .gte("created_at", since);
     if (error) throw new Error(`Couldn't load rescue metrics: ${error.message}`);
 
     const offersSent = offers?.length ?? 0;
     const offersClaimed = (offers ?? []).filter((o) => o.claimed_at).length;
-    const nowIso = new Date().toISOString();
     const offersExpired = (offers ?? []).filter(
-      (o) => !o.claimed_at && o.expires_at && o.expires_at < nowIso,
+      (o) => !o.claimed_at && o.expired_at,
     ).length;
     const conversionRate = offersSent > 0 ? offersClaimed / offersSent : 0;
 
