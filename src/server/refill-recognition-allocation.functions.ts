@@ -64,7 +64,7 @@ export type AllocationSuggestion = {
   rebateInventoryId: string;
   score: number;
   rationale: string;
-  status: "pending" | "confirmed" | "dismissed" | "dispatched";
+  status: "pending" | "confirmed" | "dismissed" | "dispatched" | "sent";
   createdAt: string;
   updatedAt: string;
 };
@@ -238,7 +238,7 @@ type SuggestionAttachments = {
   rebateInventoryId: string;
   score: number;
   rationale: string;
-  status: "pending" | "confirmed" | "dismissed" | "dispatched";
+  status: "pending" | "confirmed" | "dismissed" | "dispatched" | "sent";
 };
 
 export const listAllocationSuggestions = createServerFn({ method: "POST" })
@@ -772,12 +772,22 @@ export const dispatchAllocationBatch = createServerFn({ method: "POST" })
           sendError = "RESEND_API_KEY missing on the worker.";
         } else {
           const subject = `${spaName} — ${drafts.length} Recognition allocation${drafts.length === 1 ? "" : "s"} ready to send`;
+          // v1.34.9.7: per-suggestion callback URL. The MCP hits this
+          // once per draft after creating the Messages.app draft so
+          // Refill can flip suggestion status from "dispatched" → "sent".
+          // Auth = unguessable UUID + tenant-scoped lookup at the
+          // endpoint. No bearer token in the email body.
+          const publicOrigin =
+            process.env.REFILL_PUBLIC_ORIGIN ?? "https://getrefill.app";
+          const callbackUrl = (suggestionId: string) =>
+            `${publicOrigin}/api/recognition/sent/${suggestionId}`;
           const draftBlocks = drafts
             .map(
               (d) =>
                 `<div style="margin:18px 0;padding:14px 16px;background:#f7f6f3;border-left:3px solid #047857;border-radius:6px;">
   <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:#222;margin-bottom:8px;"><strong>To:</strong> ${d.phone} <span style="color:#666;">(${d.patientName}, ${d.cohort.replace("_", " ")} · ${d.brand})</span></div>
   <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:#222;white-space:pre-wrap;">${d.body}</div>
+  <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:#888;margin-top:8px;">After drafting, POST: <a href="${callbackUrl(d.suggestionId)}" style="color:#047857;text-decoration:none;">${callbackUrl(d.suggestionId)}</a></div>
 </div>`,
             )
             .join("");
@@ -786,12 +796,13 @@ export const dispatchAllocationBatch = createServerFn({ method: "POST" })
     <div style="margin-bottom:20px;padding:14px 16px;background:#ecfdf5;border-left:3px solid #047857;border-radius:6px;font-size:13px;color:#064e3b;line-height:1.55;">
       <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#047857;margin-bottom:6px;">Recognition · iMessage drafts</div>
       Paste this whole email into Claude Desktop with the iMessage MCP installed. Claude will call <code>draft_imessage(recipient_phone, body)</code> for each row below — one Messages.app conversation per draft. Review each and tap Send. Recognition is identity-led: messages come from YOUR Apple ID, not a platform shortcode.
+      <div style="margin-top:8px;font-size:11px;color:#065f46;">Each draft has a "After drafting, POST" URL — Claude hits it once per draft so the Recognition queue flips Dispatched → Sent and you can see what landed.</div>
     </div>
     <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#047857;margin:24px 0 8px;">Ready-to-send drafts</div>
     ${draftBlocks}
   </div>
 </body></html>`;
-          const text = `${spaName} — Recognition allocations\n\nPaste into Claude Desktop with iMessage MCP.\n\n${drafts.map((d) => `── To: ${d.phone} (${d.patientName}, ${d.cohort}, ${d.brand}) ──\n\n${d.body}`).join("\n\n")}`;
+          const text = `${spaName} — Recognition allocations\n\nPaste into Claude Desktop with iMessage MCP.\nClaude: after drafting each iMessage, POST the URL listed below it so the queue updates.\n\n${drafts.map((d) => `── To: ${d.phone} (${d.patientName}, ${d.cohort}, ${d.brand}) ──\n\n${d.body}\n\nAfter drafting, POST: ${callbackUrl(d.suggestionId)}`).join("\n\n")}`;
 
           try {
             const res = await fetch("https://api.resend.com/emails", {

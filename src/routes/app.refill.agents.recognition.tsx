@@ -556,17 +556,20 @@ function RecognitionAgentPage() {
             <section className="rounded-xl border border-dashed border-rule bg-paper/50 px-5 py-4 text-[12px] text-ink-soft flex gap-3">
               <Sparkles className="h-4 w-4 text-emerald shrink-0 mt-0.5" />
               <div>
-                <strong className="text-ink">Two-step flow.</strong>{" "}
+                <strong className="text-ink">Three-step flow.</strong>{" "}
                 <strong className="text-ink">Confirm</strong> a suggestion to
                 lock in the allocation (decrements rebate inventory locally),
                 then tap <strong className="text-ink">Dispatch via iMessage</strong>{" "}
                 in the header to send the batch as iMessage drafts to your
-                proxy email — paste into Claude Desktop with the iMessage MCP
-                installed and review each draft before sending. Status moves
-                Pending → Confirmed → Dispatched as each step completes.
-                Karen-Mac → Refill callback for &ldquo;actually sent&rdquo; tracking
-                is queued; for now, Dispatched means &ldquo;ready to send from your
-                Apple ID.&rdquo;
+                proxy email. Paste into Claude Desktop with the iMessage MCP
+                installed; the MCP drafts each Messages.app conversation +
+                hits a per-draft callback URL that flips the suggestion to{" "}
+                <strong className="text-ink">Sent</strong>. Status moves
+                Pending → Confirmed → Dispatched → Sent as each step
+                completes. (Dispatched = batch emailed to your proxy; Sent =
+                Claude confirmed the iMessage draft was created &mdash; you
+                still tap Send in Messages.app to actually transmit, which
+                stays out of Refill&rsquo;s observability by design.)
               </div>
             </section>
           </>
@@ -682,8 +685,13 @@ function SuggestionRow({
           Confirmed
         </span>
       ) : suggestion.status === "dispatched" ? (
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald text-paper px-2 py-1 text-[10px] font-semibold shrink-0">
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-soft text-emerald-ink border border-emerald px-2 py-1 text-[10px] font-semibold shrink-0">
           Dispatched
+        </span>
+      ) : suggestion.status === "sent" ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald text-paper px-2 py-1 text-[10px] font-semibold shrink-0">
+          <CheckCircle2 className="h-3 w-3" />
+          Sent
         </span>
       ) : (
         <span className="inline-flex items-center gap-1 rounded-full bg-rule-soft text-ink-soft px-2 py-1 text-[10px] font-semibold shrink-0">

@@ -95,6 +95,7 @@ import { Route as AppRefillAgentsRescueRouteImport } from './routes/app.refill.a
 import { Route as AppRefillAgentsRecognitionRouteImport } from './routes/app.refill.agents.recognition'
 import { Route as AppRefillAgentsPreshowRouteImport } from './routes/app.refill.agents.preshow'
 import { Route as AppRefillAgentsAttributionRouteImport } from './routes/app.refill.agents.attribution'
+import { Route as ApiRecognitionSentSuggestionIdRouteImport } from './routes/api.recognition.sent.$suggestionId'
 import { Route as ApiIntegrationsAcuityOauthCallbackRouteImport } from './routes/api.integrations.acuity.oauth-callback'
 import { Route as AppRefillCampaignsCampaignIdIndexRouteImport } from './routes/app.refill.campaigns.$campaignId.index'
 import { Route as AppRefillCampaignsCampaignIdBlastRouteImport } from './routes/app.refill.campaigns.$campaignId.blast'
@@ -545,6 +546,12 @@ const AppRefillAgentsAttributionRoute =
     path: '/agents/attribution',
     getParentRoute: () => AppRefillRoute,
   } as any)
+const ApiRecognitionSentSuggestionIdRoute =
+  ApiRecognitionSentSuggestionIdRouteImport.update({
+    id: '/api/recognition/sent/$suggestionId',
+    path: '/api/recognition/sent/$suggestionId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiIntegrationsAcuityOauthCallbackRoute =
   ApiIntegrationsAcuityOauthCallbackRouteImport.update({
     id: '/api/integrations/acuity/oauth-callback',
@@ -633,6 +640,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
+  '/api/recognition/sent/$suggestionId': typeof ApiRecognitionSentSuggestionIdRoute
   '/app/refill/agents/attribution': typeof AppRefillAgentsAttributionRoute
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
   '/app/refill/agents/recognition': typeof AppRefillAgentsRecognitionRoute
@@ -721,6 +729,7 @@ export interface FileRoutesByTo {
   '/app/refill': typeof AppRefillIndexRoute
   '/app/rep': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
+  '/api/recognition/sent/$suggestionId': typeof ApiRecognitionSentSuggestionIdRoute
   '/app/refill/agents/attribution': typeof AppRefillAgentsAttributionRoute
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
   '/app/refill/agents/recognition': typeof AppRefillAgentsRecognitionRoute
@@ -813,6 +822,7 @@ export interface FileRoutesById {
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
+  '/api/recognition/sent/$suggestionId': typeof ApiRecognitionSentSuggestionIdRoute
   '/app/refill/agents/attribution': typeof AppRefillAgentsAttributionRoute
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
   '/app/refill/agents/recognition': typeof AppRefillAgentsRecognitionRoute
@@ -907,6 +917,7 @@ export interface FileRouteTypes {
     | '/app/refill/'
     | '/app/rep/'
     | '/api/integrations/acuity/oauth-callback'
+    | '/api/recognition/sent/$suggestionId'
     | '/app/refill/agents/attribution'
     | '/app/refill/agents/preshow'
     | '/app/refill/agents/recognition'
@@ -995,6 +1006,7 @@ export interface FileRouteTypes {
     | '/app/refill'
     | '/app/rep'
     | '/api/integrations/acuity/oauth-callback'
+    | '/api/recognition/sent/$suggestionId'
     | '/app/refill/agents/attribution'
     | '/app/refill/agents/preshow'
     | '/app/refill/agents/recognition'
@@ -1086,6 +1098,7 @@ export interface FileRouteTypes {
     | '/app/refill/'
     | '/app/rep/'
     | '/api/integrations/acuity/oauth-callback'
+    | '/api/recognition/sent/$suggestionId'
     | '/app/refill/agents/attribution'
     | '/app/refill/agents/preshow'
     | '/app/refill/agents/recognition'
@@ -1146,6 +1159,7 @@ export interface RootRouteChildren {
   RescueClaimTokenRoute: typeof RescueClaimTokenRoute
   WaitlistOptinTokenRoute: typeof WaitlistOptinTokenRoute
   ApiIntegrationsAcuityOauthCallbackRoute: typeof ApiIntegrationsAcuityOauthCallbackRoute
+  ApiRecognitionSentSuggestionIdRoute: typeof ApiRecognitionSentSuggestionIdRoute
   ApiWebhooksSchedulerAcuitySecretRoute: typeof ApiWebhooksSchedulerAcuitySecretRoute
 }
 
@@ -1753,6 +1767,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillAgentsAttributionRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/api/recognition/sent/$suggestionId': {
+      id: '/api/recognition/sent/$suggestionId'
+      path: '/api/recognition/sent/$suggestionId'
+      fullPath: '/api/recognition/sent/$suggestionId'
+      preLoaderRoute: typeof ApiRecognitionSentSuggestionIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/integrations/acuity/oauth-callback': {
       id: '/api/integrations/acuity/oauth-callback'
       path: '/api/integrations/acuity/oauth-callback'
@@ -1996,6 +2017,7 @@ const rootRouteChildren: RootRouteChildren = {
   WaitlistOptinTokenRoute: WaitlistOptinTokenRoute,
   ApiIntegrationsAcuityOauthCallbackRoute:
     ApiIntegrationsAcuityOauthCallbackRoute,
+  ApiRecognitionSentSuggestionIdRoute: ApiRecognitionSentSuggestionIdRoute,
   ApiWebhooksSchedulerAcuitySecretRoute: ApiWebhooksSchedulerAcuitySecretRoute,
 }
 export const routeTree = rootRouteImport
