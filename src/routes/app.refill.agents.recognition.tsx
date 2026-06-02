@@ -8,9 +8,12 @@
  *     Top-Decile Current 40% / At-Risk 20%) — Karen-adjustable
  *   - Outputs allocation suggestions Karen confirms one-by-one
  *
- * Delivery integration (iMessage MCP → Karen-Mac → patient) lands in
- * v1.34.x next. v1.34.5 surfaces the suggestion but the actual send is
- * a deferred Confirm → "noted" placeholder until then.
+ * v1.34.5 ships the engine + scoring + UI; v1.34.8 wires iMessage MCP
+ * dispatch. Two-step flow: Confirm a suggestion to lock in the allocation
+ * (decrements rebate inventory), then Dispatch via iMessage in the header
+ * to send the batch as iMessage drafts to the spa's proxy email. The
+ * Karen-Mac MCP picks up the email + drafts each in Messages.app; Karen
+ * reviews + taps Send. Status: Pending → Confirmed → Dispatched.
  */
 
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -551,13 +554,19 @@ function RecognitionAgentPage() {
             </section>
 
             <section className="rounded-xl border border-dashed border-rule bg-paper/50 px-5 py-4 text-[12px] text-ink-soft flex gap-3">
-              <AlertTriangle className="h-4 w-4 text-amber shrink-0 mt-0.5" />
+              <Sparkles className="h-4 w-4 text-emerald shrink-0 mt-0.5" />
               <div>
-                <strong className="text-ink">v1.34.5 surface only.</strong>{" "}
-                Allocation confirmation is recorded locally + decrements
-                rebate inventory, but the actual iMessage delivery to the
-                patient lands in v1.34.x via the Karen-Mac MCP bridge. Until
-                then, Confirm = "I'll reach out personally."
+                <strong className="text-ink">Two-step flow.</strong>{" "}
+                <strong className="text-ink">Confirm</strong> a suggestion to
+                lock in the allocation (decrements rebate inventory locally),
+                then tap <strong className="text-ink">Dispatch via iMessage</strong>{" "}
+                in the header to send the batch as iMessage drafts to your
+                proxy email — paste into Claude Desktop with the iMessage MCP
+                installed and review each draft before sending. Status moves
+                Pending → Confirmed → Dispatched as each step completes.
+                Karen-Mac → Refill callback for &ldquo;actually sent&rdquo; tracking
+                is queued; for now, Dispatched means &ldquo;ready to send from your
+                Apple ID.&rdquo;
               </div>
             </section>
           </>

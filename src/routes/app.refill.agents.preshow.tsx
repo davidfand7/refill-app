@@ -16,7 +16,7 @@
  * Deferred to v1.34.4: per-treatment-type cadence overrides.
  */
 
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
@@ -460,17 +460,26 @@ function PreshowAgentPage() {
           </div>
         </section>
 
-        {/* Patient assignment hint */}
+        {/* Patient assignment hint (v1.34.3.1 routing shipped) */}
         <div className="rounded-xl border border-rule bg-rule-soft/50 p-4">
           <div className="flex items-start gap-3">
             <Sparkles className="h-4 w-4 text-emerald shrink-0 mt-0.5" />
             <div className="text-xs text-ink-soft leading-relaxed">
-              <strong className="text-ink">Patient routing comes in v1.34.3.1.</strong>{" "}
-              Until then, every patient gets the Default profile's cadence.
-              Once routing lands, you'll assign patients to non-default profiles
-              via the Patient list's bulk-tag picker or inline on each patient's
-              detail page. Until then, additional profiles are configured but
-              dormant.
+              <strong className="text-ink">Route patients to specific profiles.</strong>{" "}
+              By default every patient gets the Default profile&rsquo;s cadence.
+              To route a cohort to a non-default profile (e.g. send chronic
+              reschedulers through the Chronic profile), use the{" "}
+              <Link
+                to="/app/refill/patients"
+                className="text-emerald-ink underline hover:no-underline"
+              >
+                Patient list
+              </Link>
+              &rsquo;s bulk-tag picker (select N patients &rarr; Apply soft tag
+              &rarr; Preshow profile), or pick a profile inline on any
+              individual patient&rsquo;s detail page. Dispatch reads the routing
+              on every reminder; if a routed profile is deleted, the patient
+              falls back to Default automatically.
             </div>
           </div>
         </div>

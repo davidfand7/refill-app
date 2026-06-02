@@ -74,13 +74,17 @@ export const Route = createFileRoute("/api/cron/emma-preshow-sweep")({
         //    find appointments whose scheduled_at - offset falls within
         //    the current window.
         //
-        //    v1.34.3: profiles introduced. Load union of cadence_hours
-        //    across all of this spa's profiles (Default + Chronic +
-        //    custom). Per-patient profile resolution happens inside
-        //    dispatchPreShowReminder (currently always uses default
-        //    profile until v1.34.3.1 patient-routing UI ships). Falls
-        //    back to policy.preshow_cadence_hours if no profile rows
-        //    found — defense-in-depth for pre-backfill state.
+        //    v1.34.3 / v1.34.3.1: profiles introduced + per-patient
+        //    routing wired. Load union of cadence_hours across all of
+        //    this spa's profiles (Default + Chronic + custom). Per-
+        //    patient profile resolution happens inside
+        //    dispatchPreShowReminder, which reads
+        //    patient.softTags.preshowProfileId first and falls back to
+        //    the spa's is_default=true profile. v1.34.4 also unions
+        //    per-treatment-type override hours so the sweep catches any
+        //    appointment that might be due. Falls back to
+        //    policy.preshow_cadence_hours if no profile rows found —
+        //    defense-in-depth for pre-backfill state.
         for (const policy of policies) {
           let offsets: number[] = policy.preshow_cadence_hours ?? [];
           const { data: profiles } = await sb
