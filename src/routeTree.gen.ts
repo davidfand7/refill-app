@@ -92,6 +92,7 @@ import { Route as AppRefillCampaignsNewRouteImport } from './routes/app.refill.c
 import { Route as AppRefillCampaignsCampaignIdRouteImport } from './routes/app.refill.campaigns.$campaignId'
 import { Route as AppRefillAgentsRescueRouteImport } from './routes/app.refill.agents.rescue'
 import { Route as AppRefillAgentsPreshowRouteImport } from './routes/app.refill.agents.preshow'
+import { Route as AppRefillAgentsAttributionRouteImport } from './routes/app.refill.agents.attribution'
 import { Route as ApiIntegrationsAcuityOauthCallbackRouteImport } from './routes/api.integrations.acuity.oauth-callback'
 import { Route as AppRefillCampaignsCampaignIdIndexRouteImport } from './routes/app.refill.campaigns.$campaignId.index'
 import { Route as AppRefillCampaignsCampaignIdBlastRouteImport } from './routes/app.refill.campaigns.$campaignId.blast'
@@ -524,6 +525,12 @@ const AppRefillAgentsPreshowRoute = AppRefillAgentsPreshowRouteImport.update({
   path: '/agents/preshow',
   getParentRoute: () => AppRefillRoute,
 } as any)
+const AppRefillAgentsAttributionRoute =
+  AppRefillAgentsAttributionRouteImport.update({
+    id: '/agents/attribution',
+    path: '/agents/attribution',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
 const ApiIntegrationsAcuityOauthCallbackRoute =
   ApiIntegrationsAcuityOauthCallbackRouteImport.update({
     id: '/api/integrations/acuity/oauth-callback',
@@ -612,6 +619,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
+  '/app/refill/agents/attribution': typeof AppRefillAgentsAttributionRoute
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
   '/app/refill/agents/rescue': typeof AppRefillAgentsRescueRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
@@ -697,6 +705,7 @@ export interface FileRoutesByTo {
   '/app/refill': typeof AppRefillIndexRoute
   '/app/rep': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
+  '/app/refill/agents/attribution': typeof AppRefillAgentsAttributionRoute
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
   '/app/refill/agents/rescue': typeof AppRefillAgentsRescueRoute
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
@@ -786,6 +795,7 @@ export interface FileRoutesById {
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
+  '/app/refill/agents/attribution': typeof AppRefillAgentsAttributionRoute
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
   '/app/refill/agents/rescue': typeof AppRefillAgentsRescueRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
@@ -877,6 +887,7 @@ export interface FileRouteTypes {
     | '/app/refill/'
     | '/app/rep/'
     | '/api/integrations/acuity/oauth-callback'
+    | '/app/refill/agents/attribution'
     | '/app/refill/agents/preshow'
     | '/app/refill/agents/rescue'
     | '/app/refill/campaigns/$campaignId'
@@ -962,6 +973,7 @@ export interface FileRouteTypes {
     | '/app/refill'
     | '/app/rep'
     | '/api/integrations/acuity/oauth-callback'
+    | '/app/refill/agents/attribution'
     | '/app/refill/agents/preshow'
     | '/app/refill/agents/rescue'
     | '/app/refill/campaigns/new'
@@ -1050,6 +1062,7 @@ export interface FileRouteTypes {
     | '/app/refill/'
     | '/app/rep/'
     | '/api/integrations/acuity/oauth-callback'
+    | '/app/refill/agents/attribution'
     | '/app/refill/agents/preshow'
     | '/app/refill/agents/rescue'
     | '/app/refill/campaigns/$campaignId'
@@ -1693,6 +1706,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillAgentsPreshowRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/refill/agents/attribution': {
+      id: '/app/refill/agents/attribution'
+      path: '/agents/attribution'
+      fullPath: '/app/refill/agents/attribution'
+      preLoaderRoute: typeof AppRefillAgentsAttributionRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/api/integrations/acuity/oauth-callback': {
       id: '/api/integrations/acuity/oauth-callback'
       path: '/api/integrations/acuity/oauth-callback'
@@ -1790,6 +1810,7 @@ interface AppRefillRouteChildren {
   AppRefillRescueRoute: typeof AppRefillRescueRoute
   AppRefillSharingRoute: typeof AppRefillSharingRoute
   AppRefillIndexRoute: typeof AppRefillIndexRoute
+  AppRefillAgentsAttributionRoute: typeof AppRefillAgentsAttributionRoute
   AppRefillAgentsPreshowRoute: typeof AppRefillAgentsPreshowRoute
   AppRefillAgentsRescueRoute: typeof AppRefillAgentsRescueRoute
   AppRefillCatalogImportRoute: typeof AppRefillCatalogImportRoute
@@ -1819,6 +1840,7 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillRescueRoute: AppRefillRescueRoute,
   AppRefillSharingRoute: AppRefillSharingRoute,
   AppRefillIndexRoute: AppRefillIndexRoute,
+  AppRefillAgentsAttributionRoute: AppRefillAgentsAttributionRoute,
   AppRefillAgentsPreshowRoute: AppRefillAgentsPreshowRoute,
   AppRefillAgentsRescueRoute: AppRefillAgentsRescueRoute,
   AppRefillCatalogImportRoute: AppRefillCatalogImportRoute,
