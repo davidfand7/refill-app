@@ -24,10 +24,12 @@
 import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
+  BookOpen,
   CreditCard,
   DollarSign,
   Inbox,
   Plug,
+  Sparkles,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -45,6 +47,9 @@ type QuickAction = {
   icon: LucideIcon;
 };
 
+// v1.34.1 (coherency pass): dashboard quick-actions now mirror nav chips
+// 1:1. Catalog + Promos added so the dashboard reflects the same surface
+// area Karen can reach from the chip strip. Same order as RefillNav.
 const ACTIONS: QuickAction[] = [
   {
     key: "patients",
@@ -52,6 +57,20 @@ const ACTIONS: QuickAction[] = [
     label: "Patients",
     subtitle: "Your roster, cadence, and waitlist",
     icon: Users,
+  },
+  {
+    key: "catalog",
+    to: "/app/refill/catalog/products",
+    label: "Catalog",
+    subtitle: "Services and products you offer",
+    icon: BookOpen,
+  },
+  {
+    key: "promos",
+    to: "/app/refill/promos",
+    label: "Promos",
+    subtitle: "Manufacturer offers matched to your catalog",
+    icon: Sparkles,
   },
   {
     key: "recovery",
@@ -103,7 +122,9 @@ export function RefillHome() {
         <Hero name={greetingName} />
 
         <SectionLabel>Quick actions</SectionLabel>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-10">
+        {/* v1.34.1: 7 cards mirror the 7 nav chips. lg:grid-cols-4 gives a
+            balanced 4+3 split; sm:grid-cols-2 keeps tablet two-up. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-10">
           {ACTIONS.map((a) => (
             <ActionCard key={a.key} action={a} />
           ))}

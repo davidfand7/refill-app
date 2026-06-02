@@ -46,7 +46,7 @@ import {
   type OverduePatient,
   type PatientListRow,
 } from "@/server/patient-ingest.functions";
-import type { CustomTagDefinition } from "@/lib/patient-csv";
+import type { CustomTagDefinition, PatientSoftTags } from "@/lib/patient-csv";
 import {
   listWaitlist,
   markPatientOptedIn,
@@ -91,6 +91,93 @@ const SORT_LABELS: Record<SortKey, string> = {
   firstVisit: "First visit (newest)",
 };
 
+// v1.34.1 (coherency pass): soft-tag filter + per-row indicators. Closes
+// the asymmetry between v1.34.0 bulk-apply (Karen can tag 50 patients)
+// and the list (couldn't see who was tagged, couldn't filter by tag).
+
+// Display labels for seeded soft-tag values. The patient detail page has
+// its own richer labels; this version is optimized for compact chip-style
+// rendering in the list filter strip and per-row pill cluster.
+const SEEDED_TAG_VALUE_LABELS: Record<string, Record<string, string>> = {
+  incomeTier: {
+    high: "High income",
+    mid: "Mid income",
+    low: "Low income",
+    unknown: "Income unknown",
+  },
+  negotiator: {
+    never: "Non-negotiator",
+    occasional: "Occasional negotiator",
+    always: "Always negotiates",
+  },
+  specialsSeeker: {
+    true: "Specials seeker",
+    false: "Not specials seeker",
+  },
+  personality: {
+    easy: "Easy personality",
+    neutral: "Neutral personality",
+    complainer: "Complainer",
+  },
+  shopperLoyalty: {
+    loyal: "Loyal",
+    comparison: "Comparison shopper",
+    unknown: "Loyalty unknown",
+  },
+};
+
+/**
+ * Enumerate the filter-keys a patient's softTags match. Each key is a
+ * unique "filter chip" — when any of these keys is in the active filter
+ * set, the patient passes the filter (union semantics).
+ *
+ * Keys:
+ *   - Seeded:  "seeded:<tagKey>:<value>"           e.g. "seeded:shopperLoyalty:loyal"
+ *   - Custom:  "custom:<definitionId>:<value>"     e.g. "custom:abc-123:Loyal"
+ *
+ * Cultural notes (free-text) intentionally excluded — doesn't fit
+ * chip-filter semantics. Same call the bulk-picker made in v1.34.0.
+ */
+function patientTagFilterKeys(softTags: PatientSoftTags): string[] {
+  const keys: string[] = [];
+  if (softTags.incomeTier?.value)
+    keys.push(`seeded:incomeTier:${softTags.incomeTier.value}`);
+  if (softTags.negotiator?.value)
+    keys.push(`seeded:negotiator:${softTags.negotiator.value}`);
+  if (softTags.specialsSeeker?.value !== undefined && softTags.specialsSeeker !== null)
+    keys.push(`seeded:specialsSeeker:${String(softTags.specialsSeeker.value)}`);
+  if (softTags.personality?.value)
+    keys.push(`seeded:personality:${softTags.personality.value}`);
+  if (softTags.shopperLoyalty?.value)
+    keys.push(`seeded:shopperLoyalty:${softTags.shopperLoyalty.value}`);
+  if (softTags.customSelections) {
+    for (const [defId, sel] of Object.entries(softTags.customSelections)) {
+      for (const opt of sel.selected ?? []) {
+        keys.push(`custom:${defId}:${opt}`);
+      }
+    }
+  }
+  return keys;
+}
+
+/** Resolve a filter-key to a chip display label. */
+function tagFilterKeyLabel(
+  key: string,
+  customDefs: CustomTagDefinition[],
+): string {
+  const parts = key.split(":");
+  if (parts[0] === "seeded") {
+    const [, tagKey, value] = parts;
+    return SEEDED_TAG_VALUE_LABELS[tagKey]?.[value] ?? value;
+  }
+  if (parts[0] === "custom") {
+    const [, defId, value] = parts;
+    const def = customDefs.find((d) => d.id === defId);
+    return def ? `${def.name}: ${value}` : value;
+  }
+  return key;
+}
+
 function PatientsPage() {
   const search = Route.useSearch();
   const navigate = Route.useNavigate();
@@ -129,6 +216,10 @@ function PatientsPage() {
   const [bulkPickerOpen, setBulkPickerOpen] = useState(false);
   const [bulkApplying, setBulkApplying] = useState(false);
   const [customDefs, setCustomDefs] = useState<CustomTagDefinition[]>([]);
+  // v1.34.1 (coherency pass): multi-select soft-tag filter. Each entry is
+  // a filter-key from patientTagFilterKeys() — union semantics (patient
+  // matches if their tag keys intersect the active filter set).
+  const [softTagFilter, setSoftTagFilter] = useState<Set<string>>(new Set());
   const overdueOnly = search.overdue === "1";
 
   function setOverdueOnly(next: boolean) {
@@ -384,6 +475,12 @@ function PatientsPage() {
         if (vipFilter === "on" && !r.vip) return false;
         if (vipFilter === "off" && r.vip) return false;
       }
+      // v1.34.1: soft-tag filter. Union semantics — patient passes if
+      // ANY of its filter-keys is in the active set. Empty set = no filter.
+      if (softTagFilter.size > 0) {
+        const keys = patientTagFilterKeys(r.softTags);
+        if (!keys.some((k) => softTagFilter.has(k))) return false;
+      }
       return true;
     });
     // v385.1: sort. Comparator chosen by sortKey; default descending for
@@ -416,6 +513,7 @@ function PatientsPage() {
     waitlistFilter,
     waitlistIndex,
     vipFilter,
+    softTagFilter,
     sortKey,
   ]);
 
@@ -434,6 +532,29 @@ function PatientsPage() {
     }
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   }, [rows, cutoffDate, overdueOnly, overdueIndex]);
+
+  // v1.34.1 (coherency pass): enumerate active soft-tag filter-keys across
+  // the in-window patient set. One chip per (tagKey, value) tuple that
+  // actually appears on at least one patient — strip stays scoped to what
+  // Karen has actually used. Sort by count desc so most-used surfaces first.
+  const softTagCounts = useMemo(() => {
+    if (!rows) return [];
+    const counts = new Map<string, number>();
+    for (const r of rows) {
+      if (cutoffDate && (!r.lastVisit || r.lastVisit < cutoffDate)) continue;
+      if (overdueOnly && !overdueIndex?.has(r.id)) continue;
+      for (const k of patientTagFilterKeys(r.softTags)) {
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+      }
+    }
+    return Array.from(counts.entries())
+      .map(([key, count]) => ({
+        key,
+        label: tagFilterKeyLabel(key, customDefs),
+        count,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [rows, cutoffDate, overdueOnly, overdueIndex, customDefs]);
 
   const overdueTotal = overdueIndex?.size ?? 0;
 
@@ -724,6 +845,51 @@ function PatientsPage() {
           </div>
         )}
 
+        {/* v1.34.1 (coherency pass): soft-tag filter chip strip. Renders
+            only when at least one tag has been applied in the tenant —
+            stays out of the way for tag-empty tenants. Multi-select union
+            semantics matches Karen's mental model ("show me everyone
+            tagged Loyal OR Specials-seeker"). Closes the v1.34.0 bulk-
+            apply asymmetry: she can now filter back to what she tagged. */}
+        {softTagCounts.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-ink-soft inline-flex items-center gap-1">
+              <Tag className="h-3 w-3" />
+              Tags
+            </span>
+            <Chip
+              active={softTagFilter.size === 0}
+              onClick={() => setSoftTagFilter(new Set())}
+              label="All"
+            />
+            {softTagCounts.map(({ key, label, count }) => (
+              <Chip
+                key={key}
+                active={softTagFilter.has(key)}
+                onClick={() =>
+                  setSoftTagFilter((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(key)) next.delete(key);
+                    else next.add(key);
+                    return next;
+                  })
+                }
+                label={label}
+                count={count}
+              />
+            ))}
+            {softTagFilter.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setSoftTagFilter(new Set())}
+                className="text-[11px] text-ink-soft underline hover:text-ink"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Result table */}
         {filtered && filtered.length === 0 ? (
           <div className="rounded-2xl border border-rule bg-white p-10 text-center text-sm text-ink-soft">
@@ -777,6 +943,7 @@ function PatientsPage() {
                         onToggleVip={() => toggleVip(r.id, r.vip)}
                         selected={selectedIds.has(r.id)}
                         onToggleSelected={() => toggleSelected(r.id)}
+                        customDefs={customDefs}
                       />
                     );
                   })}
@@ -853,6 +1020,7 @@ function PatientRow({
   onToggleVip,
   selected,
   onToggleSelected,
+  customDefs,
 }: {
   row: PatientListRow;
   overdue: OverduePatient | null;
@@ -870,6 +1038,10 @@ function PatientRow({
   onToggleSelected: () => void;
   /** v385.2: fires setPatientVip with optimistic UI. */
   onToggleVip: () => void;
+  /** v1.34.1 (coherency pass): tenant custom tag defs for resolving the
+   *  per-row tag pill labels. Passed down from the parent so we don't
+   *  re-fetch per row. */
+  customDefs: CustomTagDefinition[];
 }) {
   // v385: active = currently on the waitlist (not revoked / not paused).
   // Anything else renders as "off."
@@ -935,6 +1107,13 @@ function PatientRow({
               </span>
             )}
           </div>
+          {/* v1.34.1 (coherency pass): soft-tag pill cluster. Two visible
+              chips + "+N more" overflow. Closes the v1.34.0 asymmetry —
+              Karen can now see at a glance who's tagged what. */}
+          <SoftTagPillCluster
+            softTags={row.softTags}
+            customDefs={customDefs}
+          />
           {row.firstVisit && (
             <div className="text-[11px] text-ink-faint">
               first visit {formatDate(row.firstVisit)}
@@ -1037,6 +1216,93 @@ function PatientRow({
         </div>
       </td>
     </tr>
+  );
+}
+
+/**
+ * v1.34.1 (coherency pass): soft-tag pill cluster rendered inline in each
+ * patient row. Shows up to 2 chips by default + a "+N" overflow indicator.
+ * Visual style mirrors the existing emerald-soft chip palette used on the
+ * patient detail page so tags read the same in both places.
+ *
+ * Cultural notes (free-text) intentionally skipped — doesn't fit chip
+ * semantics. Same exclusion as the bulk picker + the filter strip.
+ */
+function SoftTagPillCluster({
+  softTags,
+  customDefs,
+}: {
+  softTags: PatientSoftTags;
+  customDefs: CustomTagDefinition[];
+}) {
+  const pills: string[] = [];
+
+  // Seeded — order matches the patient detail page card sequence.
+  if (softTags.shopperLoyalty?.value) {
+    pills.push(
+      SEEDED_TAG_VALUE_LABELS.shopperLoyalty[softTags.shopperLoyalty.value] ??
+        softTags.shopperLoyalty.value,
+    );
+  }
+  if (softTags.specialsSeeker?.value === true) {
+    pills.push(SEEDED_TAG_VALUE_LABELS.specialsSeeker.true);
+  }
+  if (softTags.incomeTier?.value) {
+    pills.push(
+      SEEDED_TAG_VALUE_LABELS.incomeTier[softTags.incomeTier.value] ??
+        softTags.incomeTier.value,
+    );
+  }
+  if (softTags.negotiator?.value) {
+    pills.push(
+      SEEDED_TAG_VALUE_LABELS.negotiator[softTags.negotiator.value] ??
+        softTags.negotiator.value,
+    );
+  }
+  if (softTags.personality?.value) {
+    pills.push(
+      SEEDED_TAG_VALUE_LABELS.personality[softTags.personality.value] ??
+        softTags.personality.value,
+    );
+  }
+
+  // Custom selections.
+  if (softTags.customSelections) {
+    for (const [defId, sel] of Object.entries(softTags.customSelections)) {
+      const def = customDefs.find((d) => d.id === defId);
+      for (const opt of sel.selected ?? []) {
+        pills.push(def ? `${def.name}: ${opt}` : opt);
+      }
+    }
+  }
+
+  if (pills.length === 0) return null;
+
+  const VISIBLE = 2;
+  const visible = pills.slice(0, VISIBLE);
+  const overflow = pills.length - visible.length;
+  const allLabels = pills.join(" · ");
+
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-1" title={allLabels}>
+      {visible.map((label, i) => (
+        <span
+          key={`${label}-${i}`}
+          className="inline-flex items-center rounded-full bg-emerald-soft text-emerald-ink px-1.5 py-0.5 text-[9px] font-medium"
+        >
+          <Tag className="h-2 w-2 mr-0.5" />
+          {label}
+        </span>
+      ))}
+      {overflow > 0 && (
+        <span
+          className="text-[9px] text-ink-soft font-medium"
+          title={allLabels}
+        >
+          +{overflow} more
+        </span>
+      )}
+    </div>
   );
 }
 

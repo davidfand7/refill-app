@@ -24,6 +24,7 @@ import { Link } from "@tanstack/react-router";
 export type RefillNavKey =
   | "patients"
   | "catalog"
+  | "promos"
   | "recovery"
   | "inbox"
   | "settings"
@@ -36,9 +37,15 @@ type RefillNavItem = {
   shortLabel: string;
 };
 
+// v1.34.1 (coherency pass): Promos chip promoted into nav. Sits in the
+// "data primitives" cluster (Patients = WHO, Catalog = WHAT we sell,
+// Promos = WHAT manufacturers offer us) before the action chips. The
+// /app/refill/promos route was previously deep-link-only — orphan since
+// the v341 port. Closes the discoverability gap.
 const ITEMS: RefillNavItem[] = [
   { key: "patients", to: "/app/refill/patients",          label: "Patients", shortLabel: "Patients" },
   { key: "catalog",  to: "/app/refill/catalog/products",  label: "Catalog",  shortLabel: "Catalog" },
+  { key: "promos",   to: "/app/refill/promos",            label: "Promos",   shortLabel: "Promos" },
   { key: "recovery", to: "/app/refill/recovery",           label: "Recovery", shortLabel: "Recovery" },
   { key: "inbox",    to: "/app/refill/inbox",              label: "Inbox",    shortLabel: "Inbox" },
   { key: "settings", to: "/app/refill/settings/scheduler", label: "Settings", shortLabel: "Settings" },
