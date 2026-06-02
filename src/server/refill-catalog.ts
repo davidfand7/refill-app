@@ -612,6 +612,27 @@ export type RecategorizeReceipt = {
   }>;
 };
 
+// v1.34.9.2: products recategorize receipt. Mirrors services shape but
+// also tracks manufacturer changes since products carry that column too.
+export type RecategorizeProductsReceipt = {
+  scanned: number;
+  recategorized: number;
+  unchanged: number;
+  unmatched: number;
+  changes: Array<{
+    productId: string;
+    brand: string;
+    oldCategory: ProductCategory;
+    newCategory: ProductCategory;
+    oldManufacturer: ProductManufacturer | null;
+    newManufacturer: ProductManufacturer | null;
+    matchedBrand: string;
+  }>;
+};
+
+// Note: canonicalToProductCategory helper already exists below in v1.30.1
+// CSV importer code — reusing that one for the products recategorize fn.
+
 // ─── Admin CRUD for canonical_brands (system-wide reference) ──────────────
 
 const CANONICAL_CATEGORY_VALUES = ["tox", "filler", "laser", "facial", "skincare", "other"] as const;
@@ -790,6 +811,86 @@ export const recategorizeServicesFromBrandsFn = createServerFn({ method: "POST" 
         name: r.name,
         oldCategory,
         newCategory: match.category,
+        matchedBrand: match.displayName,
+      });
+    }
+    return { scanned, recategorized, unchanged, unmatched, changes };
+  });
+
+// ─── recategorizeProductsFromBrandsFn (v1.34.9.2) ─────────────────────────
+
+export const recategorizeProductsFromBrandsFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => readInput.parse(raw))
+  .handler(async ({ data }): Promise<RecategorizeProductsReceipt> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const brands = await loadAllCanonicalBrands(sb);
+    const { data: products, error } = await sb
+      .from("products")
+      .select("id, brand, notes, category, manufacturer")
+      .eq("tenant_id", tenantId);
+    if (error) throw new Error(`Couldn't list products: ${error.message}`);
+    const rows = (products ?? []) as Array<{
+      id: string;
+      brand: string;
+      notes: string | null;
+      category: string;
+      manufacturer: string | null;
+    }>;
+    let scanned = 0;
+    let recategorized = 0;
+    let unchanged = 0;
+    let unmatched = 0;
+    const changes: RecategorizeProductsReceipt["changes"] = [];
+    for (const r of rows) {
+      scanned++;
+      const matchName = lookupCanonicalBrand(r.brand, brands);
+      const match = matchName ?? (r.notes ? lookupCanonicalBrand(r.notes, brands) : null);
+      if (!match) {
+        unmatched++;
+        continue;
+      }
+      const oldCategory = r.category as ProductCategory;
+      const oldManufacturer = (r.manufacturer as ProductManufacturer | null) ?? null;
+      const newCategory = canonicalToProductCategory(match.category);
+      // Only override manufacturer if (a) the canonical brand has one and
+      // (b) the product currently has none OR differs. Don't blow away an
+      // explicit manufacturer choice if the registry doesn't have one.
+      const newManufacturer =
+        match.manufacturer && match.manufacturer !== oldManufacturer
+          ? match.manufacturer
+          : oldManufacturer;
+      if (
+        oldCategory === newCategory &&
+        oldManufacturer === newManufacturer
+      ) {
+        unchanged++;
+        continue;
+      }
+      const updates: { category?: ProductCategory; manufacturer?: ProductManufacturer | null } = {};
+      if (oldCategory !== newCategory) updates.category = newCategory;
+      if (oldManufacturer !== newManufacturer) updates.manufacturer = newManufacturer;
+      const { error: updErr } = await sb
+        .from("products")
+        .update(updates)
+        .eq("id", r.id)
+        .eq("tenant_id", tenantId);
+      if (updErr) {
+        unchanged++;
+        continue;
+      }
+      recategorized++;
+      changes.push({
+        productId: r.id,
+        brand: r.brand,
+        oldCategory,
+        newCategory,
+        oldManufacturer,
+        newManufacturer,
         matchedBrand: match.displayName,
       });
     }

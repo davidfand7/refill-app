@@ -22,6 +22,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   Beaker,
+  CheckCircle2,
   Eye,
   EyeOff,
   Loader2,
@@ -31,6 +32,7 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  Wand2,
   X,
 } from "lucide-react";
 
@@ -41,7 +43,9 @@ import {
   createProductFn,
   deleteProductFn,
   listProductsFn,
+  recategorizeProductsFromBrandsFn,
   setProductHiddenFn,
+  type RecategorizeProductsReceipt,
   updateProductFn,
   type Product,
   type ProductCategory,
@@ -177,6 +181,13 @@ function ProductsPage() {
   const [busy, setBusy] = useState(false);
   // v1.34.9.1: show hidden rows. Default false.
   const [showHidden, setShowHidden] = useState(false);
+  // v1.34.9.2: products recategorize from canonical brand registry
+  const [recategorizing, setRecategorizing] = useState(false);
+  const [lastRecategorize, setLastRecategorize] = useState<
+    | { ok: true; receipt: RecategorizeProductsReceipt; at: string }
+    | { ok: false; message: string; at: string }
+    | null
+  >(null);
 
   useEffect(() => {
     if (membership.status !== "tenant") return;
@@ -203,6 +214,51 @@ function ProductsPage() {
       cancelled = true;
     };
   }, [membership.status, viewAsUserId, showHidden]);
+
+  async function onRecategorize() {
+    if (recategorizing) return;
+    setRecategorizing(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Not signed in.");
+      const result = await recategorizeProductsFromBrandsFn({
+        data: { accessToken: token, viewAsUserId },
+      });
+      setLastRecategorize({
+        ok: true,
+        receipt: result,
+        at: new Date().toLocaleTimeString(),
+      });
+      if (result.recategorized === 0) {
+        toast.success(
+          result.unmatched === 0
+            ? `Scanned ${result.scanned} — all categorized correctly.`
+            : `Scanned ${result.scanned} — ${result.unmatched} unmatched, no changes.`,
+          { duration: 8000 },
+        );
+      } else {
+        toast.success(
+          `Re-categorized ${result.recategorized} of ${result.scanned}. ${result.unmatched} still unmatched.`,
+          { duration: 8000 },
+        );
+        const fresh = await listProductsFn({
+          data: { accessToken: token, viewAsUserId, includeHidden: showHidden },
+        });
+        setProducts(fresh);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Couldn't re-categorize.";
+      setLastRecategorize({
+        ok: false,
+        message,
+        at: new Date().toLocaleTimeString(),
+      });
+      toast.error(message, { duration: 10000 });
+    } finally {
+      setRecategorizing(false);
+    }
+  }
 
   async function onToggleHidden(p: Product) {
     try {
@@ -353,6 +409,25 @@ function ProductsPage() {
         actions={
           !adding && (
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onRecategorize}
+                disabled={recategorizing || products.length === 0}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold transition",
+                  recategorizing || products.length === 0
+                    ? "text-ink-faint cursor-not-allowed"
+                    : "text-ink-soft hover:text-ink hover:border-emerald/40",
+                )}
+                title="Sweep all products through the canonical brand registry and update category + manufacturer where matched"
+              >
+                {recategorizing ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Wand2 className="h-3.5 w-3.5" />
+                )}
+                Recategorize
+              </button>
               <Link
                 to="/app/refill/catalog/import"
                 className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-ink hover:border-emerald/40 transition"
@@ -394,6 +469,85 @@ function ProductsPage() {
       </div>
 
       <div className="px-6 lg:px-10 py-6 max-w-4xl space-y-6">
+        {/* v1.34.9.2: recategorize receipt banner */}
+        {lastRecategorize && (
+          <div
+            className={cn(
+              "rounded-xl border px-5 py-3.5 flex items-start gap-3",
+              lastRecategorize.ok
+                ? "border-emerald/30 bg-emerald-soft/40"
+                : "border-rose/30 bg-rose-soft",
+            )}
+          >
+            {lastRecategorize.ok ? (
+              <CheckCircle2 className="h-4 w-4 text-emerald shrink-0 mt-0.5" />
+            ) : (
+              <X className="h-4 w-4 text-rose shrink-0 mt-0.5" />
+            )}
+            <div className="flex-1 text-[12px]">
+              {lastRecategorize.ok ? (
+                <>
+                  <div className="font-semibold text-emerald-ink">
+                    {lastRecategorize.receipt.recategorized > 0
+                      ? `Re-categorized ${lastRecategorize.receipt.recategorized} of ${lastRecategorize.receipt.scanned} products`
+                      : `Scanned ${lastRecategorize.receipt.scanned} products — nothing to change`}
+                  </div>
+                  <div className="text-ink-soft mt-0.5">
+                    {lastRecategorize.receipt.unchanged} already correct ·{" "}
+                    {lastRecategorize.receipt.unmatched} unmatched (no canonical brand)
+                    {" "}· {lastRecategorize.at}
+                  </div>
+                  {lastRecategorize.receipt.changes.length > 0 && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-emerald-ink hover:underline">
+                        Show {lastRecategorize.receipt.changes.length} change{lastRecategorize.receipt.changes.length === 1 ? "" : "s"}
+                      </summary>
+                      <ul className="mt-2 space-y-1 text-[11px] text-ink-soft">
+                        {lastRecategorize.receipt.changes.slice(0, 50).map((c) => (
+                          <li key={c.productId}>
+                            <strong className="text-ink">{c.brand}</strong> ({c.matchedBrand}):{" "}
+                            {c.oldCategory !== c.newCategory && (
+                              <span>
+                                <code>{c.oldCategory}</code> → <code>{c.newCategory}</code>
+                              </span>
+                            )}
+                            {c.oldCategory !== c.newCategory && c.oldManufacturer !== c.newManufacturer && " · "}
+                            {c.oldManufacturer !== c.newManufacturer && (
+                              <span>
+                                manufacturer <code>{c.oldManufacturer ?? "none"}</code> → <code>{c.newManufacturer ?? "none"}</code>
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                        {lastRecategorize.receipt.changes.length > 50 && (
+                          <li className="text-ink-faint italic">
+                            …+{lastRecategorize.receipt.changes.length - 50} more
+                          </li>
+                        )}
+                      </ul>
+                    </details>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="font-semibold text-rose">Couldn't re-categorize</div>
+                  <div className="text-ink-soft mt-0.5">
+                    {lastRecategorize.message} · {lastRecategorize.at}
+                  </div>
+                </>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setLastRecategorize(null)}
+              className="text-ink-soft hover:text-ink transition shrink-0"
+              title="Dismiss"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* v1.34.9: category filter chips */}
         {products.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
