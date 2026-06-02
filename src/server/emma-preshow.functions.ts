@@ -354,6 +354,14 @@ export async function dispatchPreShowReminder(args: {
     email?: string;
     banned?: boolean;
     opted_out?: boolean;
+    softTags?: {
+      preshowProfileId?: {
+        value: string;
+        setByUserId: string;
+        setAt: string;
+        reason: string | null;
+      } | null;
+    } | null;
   } | null;
 
   if (patientAttachments?.banned) {
@@ -391,16 +399,36 @@ export async function dispatchPreShowReminder(args: {
     };
   }
 
-  // 3.5) v1.34.3: resolve the patient's cadence profile + custom message
-  //      template. Until v1.34.3.1 ships patient routing UI, ALL patients
-  //      use the spa's default profile (is_default=true). v1.34.3.1 will
-  //      read patient.softTags.preshowProfileId to override.
-  const { data: profileRow } = await sb
-    .from("emma_preshow_profiles")
-    .select("id, tone, channel")
-    .eq("user_id", userId)
-    .eq("is_default", true)
-    .maybeSingle();
+  // 3.5) v1.34.3 / v1.34.3.1: resolve the patient's cadence profile +
+  //      custom message template. If Karen routed THIS patient to a
+  //      named profile (via softTags.preshowProfileId — set per-patient
+  //      on the detail page OR via bulk-tag on the list page), resolve
+  //      that profile by id. Otherwise fall back to the spa's default
+  //      profile (is_default=true). If the patient-routed profile was
+  //      deleted since the override was written, we silently fall back
+  //      to the default — defense-in-depth so a stale route never blocks
+  //      the reminder.
+  const patientRoutedProfileId =
+    patientAttachments?.softTags?.preshowProfileId?.value ?? null;
+  let profileRow: { id: string; tone: string; channel: string } | null = null;
+  if (patientRoutedProfileId) {
+    const { data: routedRow } = await sb
+      .from("emma_preshow_profiles")
+      .select("id, tone, channel")
+      .eq("user_id", userId)
+      .eq("id", patientRoutedProfileId)
+      .maybeSingle();
+    profileRow = routedRow ?? null;
+  }
+  if (!profileRow) {
+    const { data: defaultRow } = await sb
+      .from("emma_preshow_profiles")
+      .select("id, tone, channel")
+      .eq("user_id", userId)
+      .eq("is_default", true)
+      .maybeSingle();
+    profileRow = defaultRow ?? null;
+  }
 
   // Resolve effective tone + channel: profile wins over policy. Fallback
   // to policy values if profile missing (shouldn't happen after backfill,

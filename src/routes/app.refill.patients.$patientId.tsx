@@ -69,6 +69,10 @@ import {
   type PatientListRow,
   type PatientTransactionRow,
 } from "@/server/patient-ingest.functions";
+import {
+  listPreshowProfiles,
+  type PreshowProfile,
+} from "@/server/refill-preshow-agent.functions";
 import type {
   ProductKind,
   ProductManufacturer,
@@ -100,6 +104,7 @@ type Window = "12mo" | "all";
 function PatientDetailPage() {
   const { patientId } = Route.useParams();
   const [data, setData] = useState<PatientDetail | null>(null);
+  const [preshowProfiles, setPreshowProfiles] = useState<PreshowProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [windowMode, setWindowMode] = useState<Window>("12mo");
@@ -123,11 +128,17 @@ function PatientDetailPage() {
           }
           return;
         }
-        const detail = await getPatientById({
-          data: { accessToken: token, patientId, viewAsUserId },
-        });
+        const [detail, profiles] = await Promise.all([
+          getPatientById({
+            data: { accessToken: token, patientId, viewAsUserId },
+          }),
+          listPreshowProfiles({
+            data: { accessToken: token, viewAsUserId },
+          }).catch(() => [] as PreshowProfile[]),
+        ]);
         if (!cancelled) {
           setData(detail);
+          setPreshowProfiles(profiles);
           setLoading(false);
           if (!detail) setLoadError("Patient not found.");
         }
@@ -195,6 +206,7 @@ function PatientDetailPage() {
             <SoftTagsCard
               patient={data.patient}
               definitions={data.customTagDefinitions}
+              preshowProfiles={preshowProfiles}
               viewAsUserId={viewAsUserId}
               onTagsChange={(next) =>
                 setData((prev) =>
@@ -496,12 +508,14 @@ const LOYALTY_OPTIONS: EnumDef<"loyal" | "comparison" | "unknown">[] = [
 function SoftTagsCard({
   patient,
   definitions,
+  preshowProfiles,
   viewAsUserId,
   onTagsChange,
   onDefinitionsChange,
 }: {
   patient: PatientListRow;
   definitions: CustomTagDefinition[];
+  preshowProfiles: PreshowProfile[];
   viewAsUserId: string | undefined;
   onTagsChange: (next: PatientSoftTags) => void;
   onDefinitionsChange: (next: CustomTagDefinition[]) => void;
@@ -610,6 +624,21 @@ function SoftTagsCard({
         </div>
       </div>
       <div className="divide-y divide-rule">
+        {preshowProfiles.length > 0 && (
+          <EnumTagRow
+            label="Preshow profile"
+            options={preshowProfiles.map((p) => ({
+              value: p.id,
+              label: p.isDefault ? `${p.name} · default` : p.name,
+            }))}
+            entry={tags.preshowProfileId ?? null}
+            open={openKey === "preshowProfileId"}
+            busy={busyKey === "preshowProfileId"}
+            onToggle={() => toggleOpen("preshowProfileId")}
+            onSave={(v, r) => saveEnum("preshowProfileId", v, r)}
+            onClear={() => clear("preshowProfileId")}
+          />
+        )}
         <EnumTagRow
           label="Income tier"
           options={INCOME_OPTIONS}

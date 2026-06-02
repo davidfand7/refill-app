@@ -440,6 +440,16 @@ export type PatientSoftTags = {
   shopperLoyalty?: PatientSoftTagEntry<PatientShopperLoyalty> | null;
   culturalNotes?: PatientSoftTagEntry<string> | null;
   /**
+   * v1.34.3.1: per-patient routing override for the Preshow Agent. UUID
+   * of an emma_preshow_profiles row under this tenant. When set,
+   * dispatchPreShowReminder resolves THIS profile; when null/absent
+   * (Karen never set it OR profile was deleted), falls back to the
+   * spa's is_default=true profile. Lets Karen route the Chronic-cohort
+   * profile to her chronic-reschedule patients without changing the
+   * spa-wide default.
+   */
+  preshowProfileId?: PatientSoftTagEntry<string> | null;
+  /**
    * v1.31.1 LEGACY: per-patient custom tags. v1.31.5 introduces
    * tenant-wide custom tag definitions (see customSelections) — new
    * tags use that shape. Old entries continue to render in a

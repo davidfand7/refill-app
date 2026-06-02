@@ -750,6 +750,10 @@ const softTagWriteInput = z.object({
       key: z.literal("culturalNotes"),
       value: z.string().max(2000),
     }),
+    z.object({
+      key: z.literal("preshowProfileId"),
+      value: z.string().uuid(),
+    }),
   ]),
   reason: z.string().max(500).nullable().optional(),
 });
@@ -765,6 +769,7 @@ const softTagClearInput = z.object({
     "personality",
     "shopperLoyalty",
     "culturalNotes",
+    "preshowProfileId",
   ]),
 });
 
@@ -1408,6 +1413,7 @@ const bulkApplyInput = z.object({
         "personality",
         "shopperLoyalty",
         "culturalNotes",
+        "preshowProfileId",
       ]),
       // Preset tag values vary by key. Validation is loose here because
       // the discriminated union per-key validation already happens on

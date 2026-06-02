@@ -59,6 +59,7 @@ import { Route as AppAdminOutreachRouteImport } from './routes/app.admin.outreac
 import { Route as AppAdminFlagsRouteImport } from './routes/app.admin.flags'
 import { Route as AppAdminCanonicalBrandsRouteImport } from './routes/app.admin.canonical-brands'
 import { Route as AppAdminAuditRouteImport } from './routes/app.admin.audit'
+import { Route as AppAdminAgentsRouteImport } from './routes/app.admin.agents'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api.webhooks.stripe'
 import { Route as ApiTwilioInboundRouteImport } from './routes/api.twilio.inbound'
 import { Route as ApiCronRefillTrialDripRouteImport } from './routes/api.cron.refill-trial-drip'
@@ -79,6 +80,7 @@ import { Route as AppRefillSettingsSenderRouteImport } from './routes/app.refill
 import { Route as AppRefillSettingsSchedulerRouteImport } from './routes/app.refill.settings.scheduler'
 import { Route as AppRefillSettingsNoshowRouteImport } from './routes/app.refill.settings.noshow'
 import { Route as AppRefillSettingsAccountRouteImport } from './routes/app.refill.settings.account'
+import { Route as AppRefillRecognitionInventoryRouteImport } from './routes/app.refill.recognition.inventory'
 import { Route as AppRefillPatientsImportRouteImport } from './routes/app.refill.patients.import'
 import { Route as AppRefillPatientsContactsRouteImport } from './routes/app.refill.patients.contacts'
 import { Route as AppRefillPatientsAListRulesRouteImport } from './routes/app.refill.patients.a-list-rules'
@@ -88,6 +90,7 @@ import { Route as AppRefillCatalogProductsRouteImport } from './routes/app.refil
 import { Route as AppRefillCatalogImportRouteImport } from './routes/app.refill.catalog.import'
 import { Route as AppRefillCampaignsNewRouteImport } from './routes/app.refill.campaigns.new'
 import { Route as AppRefillCampaignsCampaignIdRouteImport } from './routes/app.refill.campaigns.$campaignId'
+import { Route as AppRefillAgentsPreshowRouteImport } from './routes/app.refill.agents.preshow'
 import { Route as ApiIntegrationsAcuityOauthCallbackRouteImport } from './routes/api.integrations.acuity.oauth-callback'
 import { Route as AppRefillCampaignsCampaignIdIndexRouteImport } from './routes/app.refill.campaigns.$campaignId.index'
 import { Route as AppRefillCampaignsCampaignIdBlastRouteImport } from './routes/app.refill.campaigns.$campaignId.blast'
@@ -343,6 +346,11 @@ const AppAdminAuditRoute = AppAdminAuditRouteImport.update({
   path: '/admin/audit',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminAgentsRoute = AppAdminAgentsRouteImport.update({
+  id: '/admin/agents',
+  path: '/admin/agents',
+  getParentRoute: () => AppRoute,
+} as any)
 const ApiWebhooksStripeRoute = ApiWebhooksStripeRouteImport.update({
   id: '/api/webhooks/stripe',
   path: '/api/webhooks/stripe',
@@ -448,6 +456,12 @@ const AppRefillSettingsAccountRoute =
     path: '/settings/account',
     getParentRoute: () => AppRefillRoute,
   } as any)
+const AppRefillRecognitionInventoryRoute =
+  AppRefillRecognitionInventoryRouteImport.update({
+    id: '/recognition/inventory',
+    path: '/recognition/inventory',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
 const AppRefillPatientsImportRoute = AppRefillPatientsImportRouteImport.update({
   id: '/import',
   path: '/import',
@@ -499,6 +513,11 @@ const AppRefillCampaignsCampaignIdRoute =
     path: '/$campaignId',
     getParentRoute: () => AppRefillCampaignsRoute,
   } as any)
+const AppRefillAgentsPreshowRoute = AppRefillAgentsPreshowRouteImport.update({
+  id: '/agents/preshow',
+  path: '/agents/preshow',
+  getParentRoute: () => AppRefillRoute,
+} as any)
 const ApiIntegrationsAcuityOauthCallbackRoute =
   ApiIntegrationsAcuityOauthCallbackRouteImport.update({
     id: '/api/integrations/acuity/oauth-callback',
@@ -554,6 +573,7 @@ export interface FileRoutesByFullPath {
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
+  '/app/admin/agents': typeof AppAdminAgentsRoute
   '/app/admin/audit': typeof AppAdminAuditRoute
   '/app/admin/canonical-brands': typeof AppAdminCanonicalBrandsRoute
   '/app/admin/flags': typeof AppAdminFlagsRoute
@@ -586,6 +606,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
+  '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
   '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
@@ -595,6 +616,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/patients/a-list-rules': typeof AppRefillPatientsAListRulesRoute
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
   '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
+  '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
@@ -637,6 +659,7 @@ export interface FileRoutesByTo {
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
+  '/app/admin/agents': typeof AppAdminAgentsRoute
   '/app/admin/audit': typeof AppAdminAuditRoute
   '/app/admin/canonical-brands': typeof AppAdminCanonicalBrandsRoute
   '/app/admin/flags': typeof AppAdminFlagsRoute
@@ -667,6 +690,7 @@ export interface FileRoutesByTo {
   '/app/refill': typeof AppRefillIndexRoute
   '/app/rep': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
+  '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
   '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
   '/app/refill/catalog/products': typeof AppRefillCatalogProductsRoute
@@ -675,6 +699,7 @@ export interface FileRoutesByTo {
   '/app/refill/patients/a-list-rules': typeof AppRefillPatientsAListRulesRoute
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
   '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
+  '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
@@ -720,6 +745,7 @@ export interface FileRoutesById {
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
+  '/app/admin/agents': typeof AppAdminAgentsRoute
   '/app/admin/audit': typeof AppAdminAuditRoute
   '/app/admin/canonical-brands': typeof AppAdminCanonicalBrandsRoute
   '/app/admin/flags': typeof AppAdminFlagsRoute
@@ -752,6 +778,7 @@ export interface FileRoutesById {
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
+  '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
   '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
@@ -761,6 +788,7 @@ export interface FileRoutesById {
   '/app/refill/patients/a-list-rules': typeof AppRefillPatientsAListRulesRoute
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
   '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
+  '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
@@ -807,6 +835,7 @@ export interface FileRouteTypes {
     | '/api/cron/refill-trial-drip'
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
+    | '/app/admin/agents'
     | '/app/admin/audit'
     | '/app/admin/canonical-brands'
     | '/app/admin/flags'
@@ -839,6 +868,7 @@ export interface FileRouteTypes {
     | '/app/refill/'
     | '/app/rep/'
     | '/api/integrations/acuity/oauth-callback'
+    | '/app/refill/agents/preshow'
     | '/app/refill/campaigns/$campaignId'
     | '/app/refill/campaigns/new'
     | '/app/refill/catalog/import'
@@ -848,6 +878,7 @@ export interface FileRouteTypes {
     | '/app/refill/patients/a-list-rules'
     | '/app/refill/patients/contacts'
     | '/app/refill/patients/import'
+    | '/app/refill/recognition/inventory'
     | '/app/refill/settings/account'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
@@ -890,6 +921,7 @@ export interface FileRouteTypes {
     | '/api/cron/refill-trial-drip'
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
+    | '/app/admin/agents'
     | '/app/admin/audit'
     | '/app/admin/canonical-brands'
     | '/app/admin/flags'
@@ -920,6 +952,7 @@ export interface FileRouteTypes {
     | '/app/refill'
     | '/app/rep'
     | '/api/integrations/acuity/oauth-callback'
+    | '/app/refill/agents/preshow'
     | '/app/refill/campaigns/new'
     | '/app/refill/catalog/import'
     | '/app/refill/catalog/products'
@@ -928,6 +961,7 @@ export interface FileRouteTypes {
     | '/app/refill/patients/a-list-rules'
     | '/app/refill/patients/contacts'
     | '/app/refill/patients/import'
+    | '/app/refill/recognition/inventory'
     | '/app/refill/settings/account'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
@@ -972,6 +1006,7 @@ export interface FileRouteTypes {
     | '/api/cron/refill-trial-drip'
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
+    | '/app/admin/agents'
     | '/app/admin/audit'
     | '/app/admin/canonical-brands'
     | '/app/admin/flags'
@@ -1004,6 +1039,7 @@ export interface FileRouteTypes {
     | '/app/refill/'
     | '/app/rep/'
     | '/api/integrations/acuity/oauth-callback'
+    | '/app/refill/agents/preshow'
     | '/app/refill/campaigns/$campaignId'
     | '/app/refill/campaigns/new'
     | '/app/refill/catalog/import'
@@ -1013,6 +1049,7 @@ export interface FileRouteTypes {
     | '/app/refill/patients/a-list-rules'
     | '/app/refill/patients/contacts'
     | '/app/refill/patients/import'
+    | '/app/refill/recognition/inventory'
     | '/app/refill/settings/account'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
@@ -1413,6 +1450,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppAdminAuditRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/admin/agents': {
+      id: '/app/admin/agents'
+      path: '/admin/agents'
+      fullPath: '/app/admin/agents'
+      preLoaderRoute: typeof AppAdminAgentsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/api/webhooks/stripe': {
       id: '/api/webhooks/stripe'
       path: '/api/webhooks/stripe'
@@ -1553,6 +1597,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillSettingsAccountRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/refill/recognition/inventory': {
+      id: '/app/refill/recognition/inventory'
+      path: '/recognition/inventory'
+      fullPath: '/app/refill/recognition/inventory'
+      preLoaderRoute: typeof AppRefillRecognitionInventoryRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/patients/import': {
       id: '/app/refill/patients/import'
       path: '/import'
@@ -1615,6 +1666,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/refill/campaigns/$campaignId'
       preLoaderRoute: typeof AppRefillCampaignsCampaignIdRouteImport
       parentRoute: typeof AppRefillCampaignsRoute
+    }
+    '/app/refill/agents/preshow': {
+      id: '/app/refill/agents/preshow'
+      path: '/agents/preshow'
+      fullPath: '/app/refill/agents/preshow'
+      preLoaderRoute: typeof AppRefillAgentsPreshowRouteImport
+      parentRoute: typeof AppRefillRoute
     }
     '/api/integrations/acuity/oauth-callback': {
       id: '/api/integrations/acuity/oauth-callback'
@@ -1713,9 +1771,11 @@ interface AppRefillRouteChildren {
   AppRefillRescueRoute: typeof AppRefillRescueRoute
   AppRefillSharingRoute: typeof AppRefillSharingRoute
   AppRefillIndexRoute: typeof AppRefillIndexRoute
+  AppRefillAgentsPreshowRoute: typeof AppRefillAgentsPreshowRoute
   AppRefillCatalogImportRoute: typeof AppRefillCatalogImportRoute
   AppRefillCatalogProductsRoute: typeof AppRefillCatalogProductsRoute
   AppRefillCatalogServicesRoute: typeof AppRefillCatalogServicesRoute
+  AppRefillRecognitionInventoryRoute: typeof AppRefillRecognitionInventoryRoute
   AppRefillSettingsAccountRoute: typeof AppRefillSettingsAccountRoute
   AppRefillSettingsNoshowRoute: typeof AppRefillSettingsNoshowRoute
   AppRefillSettingsSchedulerRoute: typeof AppRefillSettingsSchedulerRoute
@@ -1739,9 +1799,11 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillRescueRoute: AppRefillRescueRoute,
   AppRefillSharingRoute: AppRefillSharingRoute,
   AppRefillIndexRoute: AppRefillIndexRoute,
+  AppRefillAgentsPreshowRoute: AppRefillAgentsPreshowRoute,
   AppRefillCatalogImportRoute: AppRefillCatalogImportRoute,
   AppRefillCatalogProductsRoute: AppRefillCatalogProductsRoute,
   AppRefillCatalogServicesRoute: AppRefillCatalogServicesRoute,
+  AppRefillRecognitionInventoryRoute: AppRefillRecognitionInventoryRoute,
   AppRefillSettingsAccountRoute: AppRefillSettingsAccountRoute,
   AppRefillSettingsNoshowRoute: AppRefillSettingsNoshowRoute,
   AppRefillSettingsSchedulerRoute: AppRefillSettingsSchedulerRoute,
@@ -1785,6 +1847,7 @@ interface AppRouteChildren {
   AppBillingRoute: typeof AppBillingRoute
   AppRefillRoute: typeof AppRefillRouteWithChildren
   AppRepRoute: typeof AppRepRouteWithChildren
+  AppAdminAgentsRoute: typeof AppAdminAgentsRoute
   AppAdminAuditRoute: typeof AppAdminAuditRoute
   AppAdminCanonicalBrandsRoute: typeof AppAdminCanonicalBrandsRoute
   AppAdminFlagsRoute: typeof AppAdminFlagsRoute
@@ -1800,6 +1863,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppBillingRoute: AppBillingRoute,
   AppRefillRoute: AppRefillRouteWithChildren,
   AppRepRoute: AppRepRouteWithChildren,
+  AppAdminAgentsRoute: AppAdminAgentsRoute,
   AppAdminAuditRoute: AppAdminAuditRoute,
   AppAdminCanonicalBrandsRoute: AppAdminCanonicalBrandsRoute,
   AppAdminFlagsRoute: AppAdminFlagsRoute,

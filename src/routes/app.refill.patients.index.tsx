@@ -53,6 +53,10 @@ import {
   markPatientOptedOut,
   type WaitlistEntry,
 } from "@/server/emma-waitlist.functions";
+import {
+  listPreshowProfiles,
+  type PreshowProfile,
+} from "@/server/refill-preshow-agent.functions";
 import type { ProductManufacturer } from "@/lib/product-manufacturer-map";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { cn } from "@/lib/utils";
@@ -216,6 +220,7 @@ function PatientsPage() {
   const [bulkPickerOpen, setBulkPickerOpen] = useState(false);
   const [bulkApplying, setBulkApplying] = useState(false);
   const [customDefs, setCustomDefs] = useState<CustomTagDefinition[]>([]);
+  const [preshowProfiles, setPreshowProfiles] = useState<PreshowProfile[]>([]);
   // v1.34.1 (coherency pass): multi-select soft-tag filter. Each entry is
   // a filter-key from patientTagFilterKeys() — union semantics (patient
   // matches if their tag keys intersect the active filter set).
@@ -255,7 +260,7 @@ function PatientsPage() {
         // parallel. overdue is a map keyed by patient id; waitlist is
         // a map keyed by patient_node_id so the row can read both in O(1).
         // v385: waitlist join is what powers the per-row waitlist toggle.
-        const [list, overdue, waitlist, defs] = await Promise.all([
+        const [list, overdue, waitlist, defs, profiles] = await Promise.all([
           listPatients({ data: { accessToken: token, viewAsUserId } }),
           listOverduePatients({
             data: { accessToken: token, limit: 5000, viewAsUserId },
@@ -265,6 +270,11 @@ function PatientsPage() {
           listCustomTagDefinitions({
             data: { accessToken: token, viewAsUserId },
           }),
+          // v1.34.3.1: preshow profiles for the bulk picker's
+          //   "Set preshow profile" section.
+          listPreshowProfiles({
+            data: { accessToken: token, viewAsUserId },
+          }).catch(() => [] as PreshowProfile[]),
         ]);
         if (!cancelled) {
           setRows(list);
@@ -272,6 +282,7 @@ function PatientsPage() {
           setWaitlistIndex(new Map(waitlist.map((w) => [w.patientNodeId, w])));
           setAccessToken(token);
           setCustomDefs(defs);
+          setPreshowProfiles(profiles);
         }
       } catch (e) {
         if (!cancelled)
@@ -411,7 +422,8 @@ function PatientsPage() {
             | "specialsSeeker"
             | "personality"
             | "shopperLoyalty"
-            | "culturalNotes";
+            | "culturalNotes"
+            | "preshowProfileId";
           value: string | boolean;
         }
       | { kind: "custom"; definitionId: string; selected: string[] },
@@ -1001,6 +1013,7 @@ function PatientsPage() {
         <BulkTagPickerModal
           selectedCount={selectedIds.size}
           customDefs={customDefs}
+          preshowProfiles={preshowProfiles}
           busy={bulkApplying}
           onCancel={() => setBulkPickerOpen(false)}
           onApply={bulkApply}
@@ -1498,7 +1511,8 @@ type PresetTagKey =
   | "specialsSeeker"
   | "personality"
   | "shopperLoyalty"
-  | "culturalNotes";
+  | "culturalNotes"
+  | "preshowProfileId";
 
 type PresetTagDef = {
   key: PresetTagKey;
@@ -1567,12 +1581,14 @@ type BulkPickerSelection =
 function BulkTagPickerModal({
   selectedCount,
   customDefs,
+  preshowProfiles,
   busy,
   onCancel,
   onApply,
 }: {
   selectedCount: number;
   customDefs: CustomTagDefinition[];
+  preshowProfiles: PreshowProfile[];
   busy: boolean;
   onCancel: () => void;
   onApply: (
@@ -1593,10 +1609,21 @@ function BulkTagPickerModal({
   const apply = () => {
     if (!pick) return;
     if (pick.kind === "preset") {
+      // v1.34.3.1: preshow-profile value is a UUID — resolve to the
+      // human profile name for the toast/audit label.
+      const valueLabel =
+        pick.key === "preshowProfileId"
+          ? preshowProfiles.find((p) => p.id === pick.value)?.name ??
+            "Unknown profile"
+          : pick.label === "Specials seeker"
+            ? pick.value
+              ? "Yes"
+              : "No"
+            : String(pick.value);
       onApply(
         { kind: "preset", key: pick.key, value: pick.value },
         reason,
-        `${pick.label}: ${pick.label === "Specials seeker" ? (pick.value ? "Yes" : "No") : String(pick.value)}`,
+        `${pick.label}: ${valueLabel}`,
       );
     } else {
       onApply(
@@ -1677,6 +1704,61 @@ function BulkTagPickerModal({
               </div>
             ))}
           </div>
+
+          {/* v1.34.3.1: preshow profile routing — route N selected patients
+              to a named cadence profile (e.g., the Chronic profile for
+              chronic-reschedulers). One chip per profile; mutually
+              exclusive. */}
+          {preshowProfiles.length > 0 && (
+            <div className="space-y-3 pt-2 border-t border-rule">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+                Preshow profile (Agents · routes reminders)
+              </div>
+              <div>
+                <div className="text-[11px] font-medium text-ink mb-1.5">
+                  Set preshow profile
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {preshowProfiles.map((profile) => {
+                    const active =
+                      pick?.kind === "preset" &&
+                      pick.key === "preshowProfileId" &&
+                      pick.value === profile.id;
+                    return (
+                      <button
+                        key={profile.id}
+                        type="button"
+                        onClick={() =>
+                          setPick({
+                            kind: "preset",
+                            key: "preshowProfileId",
+                            value: profile.id,
+                            label: "Preshow profile",
+                          })
+                        }
+                        disabled={busy}
+                        className={cn(
+                          "rounded-full px-3 py-1 text-[11px] font-medium border transition disabled:opacity-50",
+                          active
+                            ? "border-emerald bg-emerald-soft text-emerald-ink"
+                            : "border-rule bg-white text-ink-soft hover:border-emerald/40 hover:text-ink",
+                        )}
+                      >
+                        {active && <Check className="h-2.5 w-2.5 inline mr-1" />}
+                        {profile.name}
+                        {profile.isDefault && (
+                          <span className="ml-1 text-ink-faint">· default</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-1 text-[10px] text-ink-faint">
+                  Override the spa-wide default for these patients only. The Preshow Agent reads this routing on every reminder.
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Custom tag definitions */}
           {customDefs.length > 0 && (
