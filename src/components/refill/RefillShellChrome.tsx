@@ -20,6 +20,7 @@ import { Sparkles } from "lucide-react";
 
 import { DemoBanner } from "@/components/DemoBanner";
 import { RefillNav, type RefillNavKey } from "@/components/refill/RefillNav";
+import { WishlistWidget } from "@/components/WishlistWidget";
 import { type MyTenant } from "@/server/refill-tenants";
 
 function deriveActiveKey(pathname: string): RefillNavKey | undefined {
@@ -105,6 +106,10 @@ export function RefillShellChrome({
         </div>
       )}
       <RefillNav active={activeKey} />
+      {/* v1.33.0 — floating wishlist widget renders fixed-position so it
+          appears on every /app/refill/* page but stays out of marketing
+          + admin surfaces (admin gate is inside the widget). */}
+      <WishlistWidget />
     </div>
   );
 }

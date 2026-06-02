@@ -24,6 +24,7 @@ import {
   BarChart3,
   FlaskConical,
   History,
+  Lightbulb,
   Loader2,
   Mail,
   ToggleLeft,
@@ -88,6 +89,13 @@ const ADMIN_SURFACES: AdminSurface[] = [
     description:
       "Every tenant in the Refill funnel — drip state, day-number, trial end, incentive offers, ad-hoc sends.",
     icon: FlaskConical,
+  },
+  {
+    path: "/app/admin/wishlist",
+    label: "Wishlist inbox",
+    description:
+      "Every feature request from every spa with the 48h SLA workflow. Status, reply thread, mark shipped in vX.Y.Z. Per project_wishlist_thesis: this loop IS the moat.",
+    icon: Lightbulb,
   },
 ];
 

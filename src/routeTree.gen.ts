@@ -51,6 +51,7 @@ import { Route as AppRefillHealthRouteImport } from './routes/app.refill.health'
 import { Route as AppRefillCampaignsRouteImport } from './routes/app.refill.campaigns'
 import { Route as AppRefillBillingRouteImport } from './routes/app.refill.billing'
 import { Route as AppRefillAppointmentsRouteImport } from './routes/app.refill.appointments'
+import { Route as AppAdminWishlistRouteImport } from './routes/app.admin.wishlist'
 import { Route as AppAdminUsersRouteImport } from './routes/app.admin.users'
 import { Route as AppAdminReportsRouteImport } from './routes/app.admin.reports'
 import { Route as AppAdminRefillTrialsRouteImport } from './routes/app.admin.refill-trials'
@@ -301,6 +302,11 @@ const AppRefillAppointmentsRoute = AppRefillAppointmentsRouteImport.update({
   id: '/appointments',
   path: '/appointments',
   getParentRoute: () => AppRefillRoute,
+} as any)
+const AppAdminWishlistRoute = AppAdminWishlistRouteImport.update({
+  id: '/admin/wishlist',
+  path: '/admin/wishlist',
+  getParentRoute: () => AppRoute,
 } as any)
 const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
   id: '/admin/users',
@@ -555,6 +561,7 @@ export interface FileRoutesByFullPath {
   '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
   '/app/admin/reports': typeof AppAdminReportsRoute
   '/app/admin/users': typeof AppAdminUsersRoute
+  '/app/admin/wishlist': typeof AppAdminWishlistRoute
   '/app/refill/appointments': typeof AppRefillAppointmentsRoute
   '/app/refill/billing': typeof AppRefillBillingRoute
   '/app/refill/campaigns': typeof AppRefillCampaignsRouteWithChildren
@@ -637,6 +644,7 @@ export interface FileRoutesByTo {
   '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
   '/app/admin/reports': typeof AppAdminReportsRoute
   '/app/admin/users': typeof AppAdminUsersRoute
+  '/app/admin/wishlist': typeof AppAdminWishlistRoute
   '/app/refill/appointments': typeof AppRefillAppointmentsRoute
   '/app/refill/billing': typeof AppRefillBillingRoute
   '/app/refill/health': typeof AppRefillHealthRoute
@@ -719,6 +727,7 @@ export interface FileRoutesById {
   '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
   '/app/admin/reports': typeof AppAdminReportsRoute
   '/app/admin/users': typeof AppAdminUsersRoute
+  '/app/admin/wishlist': typeof AppAdminWishlistRoute
   '/app/refill/appointments': typeof AppRefillAppointmentsRoute
   '/app/refill/billing': typeof AppRefillBillingRoute
   '/app/refill/campaigns': typeof AppRefillCampaignsRouteWithChildren
@@ -805,6 +814,7 @@ export interface FileRouteTypes {
     | '/app/admin/refill-trials'
     | '/app/admin/reports'
     | '/app/admin/users'
+    | '/app/admin/wishlist'
     | '/app/refill/appointments'
     | '/app/refill/billing'
     | '/app/refill/campaigns'
@@ -887,6 +897,7 @@ export interface FileRouteTypes {
     | '/app/admin/refill-trials'
     | '/app/admin/reports'
     | '/app/admin/users'
+    | '/app/admin/wishlist'
     | '/app/refill/appointments'
     | '/app/refill/billing'
     | '/app/refill/health'
@@ -968,6 +979,7 @@ export interface FileRouteTypes {
     | '/app/admin/refill-trials'
     | '/app/admin/reports'
     | '/app/admin/users'
+    | '/app/admin/wishlist'
     | '/app/refill/appointments'
     | '/app/refill/billing'
     | '/app/refill/campaigns'
@@ -1344,6 +1356,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/refill/appointments'
       preLoaderRoute: typeof AppRefillAppointmentsRouteImport
       parentRoute: typeof AppRefillRoute
+    }
+    '/app/admin/wishlist': {
+      id: '/app/admin/wishlist'
+      path: '/admin/wishlist'
+      fullPath: '/app/admin/wishlist'
+      preLoaderRoute: typeof AppAdminWishlistRouteImport
+      parentRoute: typeof AppRoute
     }
     '/app/admin/users': {
       id: '/app/admin/users'
@@ -1773,6 +1792,7 @@ interface AppRouteChildren {
   AppAdminRefillTrialsRoute: typeof AppAdminRefillTrialsRoute
   AppAdminReportsRoute: typeof AppAdminReportsRoute
   AppAdminUsersRoute: typeof AppAdminUsersRoute
+  AppAdminWishlistRoute: typeof AppAdminWishlistRoute
   AppAdminIndexRoute: typeof AppAdminIndexRoute
 }
 
@@ -1787,6 +1807,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminRefillTrialsRoute: AppAdminRefillTrialsRoute,
   AppAdminReportsRoute: AppAdminReportsRoute,
   AppAdminUsersRoute: AppAdminUsersRoute,
+  AppAdminWishlistRoute: AppAdminWishlistRoute,
   AppAdminIndexRoute: AppAdminIndexRoute,
 }
 
