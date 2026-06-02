@@ -29,7 +29,9 @@ import {
   CalendarClock,
   ChevronDown,
   ChevronUp,
+  Clock,
   Gift,
+  Heart,
   Loader2,
   Mail,
   Minus,
@@ -49,17 +51,20 @@ import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/integrations/supabase/client";
 import {
   addPatientCustomTag,
+  addPatientLifeEvent,
   clearPatientCustomSelection,
   clearPatientSoftTag,
   createCustomTagDefinition,
   deleteCustomTagDefinition,
   deletePatientCustomTag,
+  deletePatientLifeEvent,
   getPatientById,
   recomputePatientPatterns,
   setPatientCustomSelection,
   setPatientSoftTag,
   updateCustomTagDefinition,
   updatePatientCustomTag,
+  updatePatientLifeEvent,
   type PatientDetail,
   type PatientListRow,
   type PatientTransactionRow,
@@ -69,11 +74,16 @@ import type {
   ProductManufacturer,
 } from "@/lib/product-manufacturer-map";
 import {
+  computeActiveModifiers,
+  isLifeEventActive,
+  LIFE_EVENT_DEFAULTS,
   normalizeCustomTag,
   type CadenceMetrics,
   type CustomTagDefinition,
   type PatientCustomTag,
   type PatientCustomTagValue,
+  type PatientLifeEvent,
+  type PatientLifeEventType,
   type PatientPurchasePatterns,
   type PatientSoftTagEntry,
   type PatientSoftTagKey,
@@ -199,6 +209,20 @@ function PatientDetailPage() {
               onDefinitionsChange={(next) =>
                 setData((prev) =>
                   prev ? { ...prev, customTagDefinitions: next } : prev,
+                )
+              }
+            />
+            <LifeEventsCard
+              patient={data.patient}
+              viewAsUserId={viewAsUserId}
+              onEventsChange={(next) =>
+                setData((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        patient: { ...prev.patient, lifeEvents: next },
+                      }
+                    : prev,
                 )
               }
             />
@@ -1956,6 +1980,613 @@ function TextTagRow({
         </>
       }
     />
+  );
+}
+
+// ─── Life Events card (v1.32.0, Profitability Engine §3.3) ───────────────
+//
+// Karen-set timestamped real-world events that modulate WTP/ATP scores
+// for a TTL window. Never inferred — only callable from explicit
+// one-tap UI affordances. Auto-decay surfaces on the active-modifier
+// summary pill.
+
+const LIFE_EVENT_ORDER: Exclude<PatientLifeEventType, "custom">[] = [
+  "job_loss",
+  "promotion",
+  "engagement",
+  "marriage",
+  "divorce",
+  "new_baby",
+  "milestone_birthday",
+  "retirement",
+  "vacation",
+  "health_event",
+  "relocation",
+  "graduation",
+  "bereavement",
+];
+
+function eventLabel(event: PatientLifeEvent): string {
+  if (event.eventType === "custom") return event.customLabel ?? "Custom event";
+  return LIFE_EVENT_DEFAULTS[event.eventType].label;
+}
+
+type LifeEventDraft = {
+  id: string | null;
+  eventType: PatientLifeEventType;
+  customLabel: string;
+  eventDate: string;
+  wtpModifier: number;
+  atpModifier: number;
+  ttlDays: number | null;
+  reason: string;
+};
+
+function todayIso(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function emptyLifeEventDraft(): LifeEventDraft {
+  return {
+    id: null,
+    eventType: "custom",
+    customLabel: "",
+    eventDate: todayIso(),
+    wtpModifier: 0,
+    atpModifier: 0,
+    ttlDays: 180,
+    reason: "",
+  };
+}
+
+function eventToDraft(event: PatientLifeEvent): LifeEventDraft {
+  return {
+    id: event.id,
+    eventType: event.eventType,
+    customLabel: event.customLabel ?? "",
+    eventDate: event.eventDate,
+    wtpModifier: event.wtpModifier,
+    atpModifier: event.atpModifier,
+    ttlDays: event.ttlDays,
+    reason: event.reason ?? "",
+  };
+}
+
+function LifeEventsCard({
+  patient,
+  viewAsUserId,
+  onEventsChange,
+}: {
+  patient: PatientListRow;
+  viewAsUserId: string | undefined;
+  onEventsChange: (next: PatientLifeEvent[]) => void;
+}) {
+  const events = patient.lifeEvents ?? [];
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<LifeEventDraft>(emptyLifeEventDraft());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+
+  const modifiers = computeActiveModifiers(events);
+
+  // Sort: active events first (most-recent first), then archived (most-recent first).
+  const sorted = [...events].sort((a, b) => {
+    const aActive = isLifeEventActive(a);
+    const bActive = isLifeEventActive(b);
+    if (aActive !== bActive) return aActive ? -1 : 1;
+    return b.eventDate.localeCompare(a.eventDate);
+  });
+  const activeEvents = sorted.filter((e) => isLifeEventActive(e));
+  const archivedEvents = sorted.filter((e) => !isLifeEventActive(e));
+
+  const beginAdd = () => {
+    setEditingId(null);
+    setDraft(emptyLifeEventDraft());
+    setAdding(true);
+  };
+  const beginEdit = (event: PatientLifeEvent) => {
+    setAdding(false);
+    setEditingId(event.id);
+    setDraft(eventToDraft(event));
+  };
+  const cancel = () => {
+    setAdding(false);
+    setEditingId(null);
+    setDraft(emptyLifeEventDraft());
+    setError(null);
+  };
+
+  const withToken = async <T,>(
+    fn: (token: string) => Promise<T>,
+  ): Promise<T | null> => {
+    setError(null);
+    setBusy(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Please sign in again.");
+      return await fn(token);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save event.");
+      return null;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const save = async () => {
+    if (draft.eventType === "custom" && !draft.customLabel.trim()) {
+      setError("Custom events need a label.");
+      return;
+    }
+    const payload = {
+      eventType: draft.eventType,
+      customLabel: draft.customLabel.trim() || null,
+      eventDate: draft.eventDate,
+      wtpModifier: draft.wtpModifier,
+      atpModifier: draft.atpModifier,
+      ttlDays: draft.ttlDays,
+      reason: draft.reason.trim() || null,
+    };
+    if (draft.id) {
+      const id = draft.id;
+      const result = await withToken((token) =>
+        updatePatientLifeEvent({
+          data: {
+            accessToken: token,
+            viewAsUserId,
+            patientNodeId: patient.id,
+            id,
+            ...payload,
+          },
+        }),
+      );
+      if (result) {
+        onEventsChange(result.lifeEvents);
+        cancel();
+      }
+    } else {
+      const result = await withToken((token) =>
+        addPatientLifeEvent({
+          data: {
+            accessToken: token,
+            viewAsUserId,
+            patientNodeId: patient.id,
+            ...payload,
+          },
+        }),
+      );
+      if (result) {
+        onEventsChange(result.lifeEvents);
+        cancel();
+      }
+    }
+  };
+
+  const remove = async (id: string) => {
+    const result = await withToken((token) =>
+      deletePatientLifeEvent({
+        data: {
+          accessToken: token,
+          viewAsUserId,
+          patientNodeId: patient.id,
+          id,
+        },
+      }),
+    );
+    if (result) {
+      onEventsChange(result.lifeEvents);
+      cancel();
+    }
+  };
+
+  const applySeededDefaults = (eventType: PatientLifeEventType) => {
+    if (eventType === "custom") {
+      setDraft((d) => ({ ...d, eventType, customLabel: d.customLabel }));
+      return;
+    }
+    const defaults = LIFE_EVENT_DEFAULTS[eventType];
+    setDraft((d) => ({
+      ...d,
+      eventType,
+      customLabel: "",
+      wtpModifier: defaults.wtpModifier,
+      atpModifier: defaults.atpModifier,
+      ttlDays: defaults.ttlDays,
+    }));
+  };
+
+  return (
+    <section className="rounded-xl border border-rule bg-white overflow-hidden">
+      <div className="px-5 py-3 border-b border-rule bg-rule-soft/60 flex items-center gap-2">
+        <Heart className="h-3.5 w-3.5 text-ink-soft" />
+        <div className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
+          Life events
+        </div>
+        <div className="ml-auto text-[10px] text-ink-faint italic">
+          Karen-set · modulates her score for a window · auto-decays
+        </div>
+      </div>
+      {modifiers.activeCount > 0 && (
+        <div className="px-5 py-2.5 bg-emerald-soft/30 border-b border-rule flex items-center gap-3 flex-wrap text-[12px]">
+          <span className="font-semibold text-emerald-ink">
+            {modifiers.activeCount} active{" "}
+            {modifiers.activeCount === 1 ? "event" : "events"}
+          </span>
+          <span className="text-ink-soft tabular-nums">
+            WTP <strong className={modifiers.wtpModifier >= 0 ? "text-emerald-ink" : "text-rose"}>
+              {modifiers.wtpModifier >= 0 ? "+" : ""}
+              {modifiers.wtpModifier}%
+            </strong>
+          </span>
+          <span className="text-ink-soft tabular-nums">
+            ATP <strong className={modifiers.atpModifier >= 0 ? "text-emerald-ink" : "text-rose"}>
+              {modifiers.atpModifier >= 0 ? "+" : ""}
+              {modifiers.atpModifier}%
+            </strong>
+          </span>
+          {modifiers.nextDecayDays !== null && (
+            <span className="text-ink-faint text-[10px] tabular-nums inline-flex items-center gap-1">
+              <Clock className="h-2.5 w-2.5" />
+              next decay in {modifiers.nextDecayDays}d
+            </span>
+          )}
+        </div>
+      )}
+      <div className="divide-y divide-rule">
+        {activeEvents.length === 0 && !adding && (
+          <div className="px-5 py-6 text-center text-xs text-ink-faint italic">
+            No active life events captured for this patient.
+          </div>
+        )}
+        {activeEvents.map((event) =>
+          editingId === event.id ? (
+            <LifeEventForm
+              key={event.id}
+              draft={draft}
+              setDraft={setDraft}
+              busy={busy}
+              onSeededType={applySeededDefaults}
+              onSave={save}
+              onCancel={cancel}
+              onDelete={() => remove(event.id)}
+            />
+          ) : (
+            <LifeEventRow
+              key={event.id}
+              event={event}
+              active={true}
+              onEdit={() => beginEdit(event)}
+              disabled={busy || adding || editingId !== null}
+            />
+          ),
+        )}
+        {adding && (
+          <LifeEventForm
+            draft={draft}
+            setDraft={setDraft}
+            busy={busy}
+            onSeededType={applySeededDefaults}
+            onSave={save}
+            onCancel={cancel}
+          />
+        )}
+        {!adding && editingId === null && (
+          <button
+            type="button"
+            onClick={beginAdd}
+            disabled={busy}
+            className="w-full px-5 py-3 text-left text-[12px] text-ink-soft hover:text-ink hover:bg-rule-soft/50 transition inline-flex items-center gap-1.5 disabled:opacity-50"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add a life event
+          </button>
+        )}
+      </div>
+      {archivedEvents.length > 0 && (
+        <div className="border-t border-rule bg-rule-soft/20">
+          <button
+            type="button"
+            onClick={() => setShowArchived((p) => !p)}
+            className="w-full px-5 py-2 text-left text-[11px] text-ink-soft hover:text-ink transition inline-flex items-center gap-1.5"
+          >
+            {showArchived ? (
+              <ChevronUp className="h-3 w-3" />
+            ) : (
+              <ChevronDown className="h-3 w-3" />
+            )}
+            Archived (auto-decayed) · {archivedEvents.length}
+          </button>
+          {showArchived && (
+            <div className="divide-y divide-rule">
+              {archivedEvents.map((event) =>
+                editingId === event.id ? (
+                  <LifeEventForm
+                    key={event.id}
+                    draft={draft}
+                    setDraft={setDraft}
+                    busy={busy}
+                    onSeededType={applySeededDefaults}
+                    onSave={save}
+                    onCancel={cancel}
+                    onDelete={() => remove(event.id)}
+                  />
+                ) : (
+                  <LifeEventRow
+                    key={event.id}
+                    event={event}
+                    active={false}
+                    onEdit={() => beginEdit(event)}
+                    disabled={busy || adding || editingId !== null}
+                  />
+                ),
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      {error && (
+        <div className="px-5 py-2 border-t border-rose/30 bg-rose-soft text-[11px] text-rose">
+          {error}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function LifeEventRow({
+  event,
+  active,
+  onEdit,
+  disabled,
+}: {
+  event: PatientLifeEvent;
+  active: boolean;
+  onEdit: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className={"px-5 py-3 flex items-start gap-3 " + (active ? "" : "opacity-60")}>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="text-[13px] font-medium text-ink">
+            {eventLabel(event)}
+          </div>
+          <span className="text-[10px] text-ink-faint">
+            {formatDate(event.eventDate)}
+          </span>
+          {!active && (
+            <span className="text-[9px] uppercase tracking-wider text-ink-faint">
+              decayed
+            </span>
+          )}
+        </div>
+        <div className="mt-0.5 text-[11px] text-ink-soft tabular-nums">
+          WTP{" "}
+          <strong
+            className={
+              event.wtpModifier > 0
+                ? "text-emerald-ink"
+                : event.wtpModifier < 0
+                  ? "text-rose"
+                  : "text-ink-faint"
+            }
+          >
+            {event.wtpModifier >= 0 ? "+" : ""}
+            {event.wtpModifier}%
+          </strong>{" "}
+          · ATP{" "}
+          <strong
+            className={
+              event.atpModifier > 0
+                ? "text-emerald-ink"
+                : event.atpModifier < 0
+                  ? "text-rose"
+                  : "text-ink-faint"
+            }
+          >
+            {event.atpModifier >= 0 ? "+" : ""}
+            {event.atpModifier}%
+          </strong>
+          {event.ttlDays !== null && (
+            <>
+              {" · "}
+              <span className="text-ink-faint">
+                {event.ttlDays}d window
+              </span>
+            </>
+          )}
+        </div>
+        {event.reason && (
+          <div className="mt-1 text-[12px] text-ink-soft italic">
+            &ldquo;{event.reason}&rdquo;
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onEdit}
+        disabled={disabled}
+        className="shrink-0 inline-flex items-center gap-1 rounded-md border border-rule bg-white px-2.5 py-1 text-[11px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition disabled:opacity-50"
+      >
+        <Pencil className="h-3 w-3" />
+        Edit
+      </button>
+    </div>
+  );
+}
+
+function LifeEventForm({
+  draft,
+  setDraft,
+  busy,
+  onSeededType,
+  onSave,
+  onCancel,
+  onDelete,
+}: {
+  draft: LifeEventDraft;
+  setDraft: React.Dispatch<React.SetStateAction<LifeEventDraft>>;
+  busy: boolean;
+  onSeededType: (eventType: PatientLifeEventType) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  onDelete?: () => void;
+}) {
+  return (
+    <div className="px-5 py-3 space-y-2.5 bg-emerald-soft/30">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+        {draft.id ? "Edit life event" : "Add life event"}
+      </div>
+      <div>
+        <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-soft mb-1">
+          Event type
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {LIFE_EVENT_ORDER.map((type) => (
+            <ChipButton
+              key={type}
+              active={draft.eventType === type}
+              disabled={busy}
+              onClick={() => onSeededType(type)}
+            >
+              {LIFE_EVENT_DEFAULTS[type].label}
+            </ChipButton>
+          ))}
+          <ChipButton
+            active={draft.eventType === "custom"}
+            disabled={busy}
+            onClick={() => onSeededType("custom")}
+          >
+            + Custom
+          </ChipButton>
+        </div>
+      </div>
+      {draft.eventType === "custom" && (
+        <input
+          type="text"
+          value={draft.customLabel}
+          onChange={(e) => setDraft((d) => ({ ...d, customLabel: e.target.value }))}
+          placeholder="Custom event label (e.g., Adopted a puppy, Bought first home)"
+          maxLength={80}
+          disabled={busy}
+          className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
+        />
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-soft mb-1">
+            Event date
+          </div>
+          <input
+            type="date"
+            value={draft.eventDate}
+            onChange={(e) => setDraft((d) => ({ ...d, eventDate: e.target.value }))}
+            disabled={busy}
+            className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] text-ink focus:border-emerald focus:outline-none disabled:opacity-50"
+          />
+        </label>
+        <label className="block">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-soft mb-1">
+            TTL (days, blank = no decay)
+          </div>
+          <input
+            type="number"
+            min={0}
+            max={3650}
+            value={draft.ttlDays ?? ""}
+            onChange={(e) =>
+              setDraft((d) => ({
+                ...d,
+                ttlDays: e.target.value === "" ? null : Number(e.target.value),
+              }))
+            }
+            disabled={busy}
+            className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] text-ink focus:border-emerald focus:outline-none disabled:opacity-50"
+          />
+        </label>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <label className="block">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-soft mb-1">
+            WTP modifier ({draft.wtpModifier >= 0 ? "+" : ""}
+            {draft.wtpModifier}%)
+          </div>
+          <input
+            type="range"
+            min={-100}
+            max={100}
+            step={5}
+            value={draft.wtpModifier}
+            onChange={(e) =>
+              setDraft((d) => ({ ...d, wtpModifier: Number(e.target.value) }))
+            }
+            disabled={busy}
+            className="w-full"
+          />
+        </label>
+        <label className="block">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-soft mb-1">
+            ATP modifier ({draft.atpModifier >= 0 ? "+" : ""}
+            {draft.atpModifier}%)
+          </div>
+          <input
+            type="range"
+            min={-100}
+            max={100}
+            step={5}
+            value={draft.atpModifier}
+            onChange={(e) =>
+              setDraft((d) => ({ ...d, atpModifier: Number(e.target.value) }))
+            }
+            disabled={busy}
+            className="w-full"
+          />
+        </label>
+      </div>
+      <input
+        type="text"
+        value={draft.reason}
+        onChange={(e) => setDraft((d) => ({ ...d, reason: e.target.value }))}
+        placeholder="Reason / context (optional) — what Karen heard or noticed"
+        maxLength={500}
+        disabled={busy}
+        className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
+      />
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={busy}
+          className="inline-flex items-center gap-1 rounded-md bg-emerald px-3 py-1.5 text-[12px] font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
+        >
+          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+          {draft.id ? "Save changes" : "Add event"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          className="inline-flex items-center gap-1 rounded-md border border-rule bg-white px-2.5 py-1.5 text-[11px] font-medium text-ink-soft hover:text-ink transition disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        {onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={busy}
+            className="ml-auto inline-flex items-center gap-1 text-[11px] text-rose hover:text-rose/80 transition disabled:opacity-50"
+          >
+            <X className="h-3 w-3" />
+            Delete event
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 

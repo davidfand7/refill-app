@@ -404,6 +404,11 @@ export type PatientContactSummary = {
    * (same path as vip).
    */
   softTags: PatientSoftTags;
+  /**
+   * v1.32.0: Life-Event Log entries. Same preservation path as softTags —
+   * re-rolls don't blow away Karen's captured events.
+   */
+  lifeEvents: PatientLifeEvent[];
   /** Provenance — 'client-csv', 'manual', 'fuzzy-confirmed', or null. */
   contactSource: "client-csv" | "manual" | "fuzzy-confirmed" | null;
   /** ISO timestamp the contact info last changed. */
@@ -476,6 +481,164 @@ export type CustomTagDefinition = {
   options: string[];
   createdByUserId: string;
   createdAt: string;
+};
+
+// ─── Life-Event Log (v1.32.0, Profitability Engine §3.3) ─────────────────
+
+/**
+ * Seeded event types. Karen can also pick &lsquo;custom&rsquo; and type a
+ * free-form label. Each seed has sensible default WTP/ATP modifier
+ * directions + TTL that Karen can override per event. Choice of
+ * seeded list comes from Grasshopper&rsquo;s 16-year front-desk
+ * synthesis (the events that actually modulate spending behavior).
+ */
+export type PatientLifeEventType =
+  | "job_loss"
+  | "promotion"
+  | "engagement"
+  | "marriage"
+  | "divorce"
+  | "new_baby"
+  | "milestone_birthday"
+  | "retirement"
+  | "vacation"
+  | "health_event"
+  | "relocation"
+  | "graduation"
+  | "bereavement"
+  | "custom";
+
+/**
+ * A single life event Karen captured for a patient. WTP / ATP modifiers
+ * are percentage shifts (-100 to +100) relative to that patient&rsquo;s
+ * baseline. TTL controls how long the modifier stays active before
+ * the event is &lsquo;preserved&rsquo; (archived but no longer modulating
+ * scores). null TTL means the modifier never decays automatically.
+ */
+export type PatientLifeEvent = {
+  id: string;
+  eventType: PatientLifeEventType;
+  /** When this seed is &lsquo;custom&rsquo;, the Karen-typed label. */
+  customLabel: string | null;
+  /** ISO yyyy-mm-dd date when the event happened (not when logged). */
+  eventDate: string;
+  /**
+   * Willingness-to-pay modifier as a percentage shift. Negative =
+   * less willing to pay full price; positive = more willing. E.g.,
+   * &lsquo;engagement&rsquo; might be +20 (looking-her-best motivation),
+   * &lsquo;divorce&rsquo; might be -15 (cost-cutting mindset).
+   */
+  wtpModifier: number;
+  /**
+   * Ability-to-pay modifier as a percentage shift. Distinct from
+   * WTP: a patient may still WANT the treatment but have fewer
+   * dollars (job loss = ATP -30%). Recognition / discount calibration
+   * uses the lower of the two when deciding to upsell vs. discount.
+   */
+  atpModifier: number;
+  /**
+   * Days the modifier stays active before the event auto-archives.
+   * Null = never decays automatically (Karen marks resolved manually).
+   * E.g., job loss might be 180d, vacation 14d, engagement 365d.
+   */
+  ttlDays: number | null;
+  /** Karen&rsquo;s free-text rationale captured at set time. */
+  reason: string | null;
+  /** auth.uid of the human who logged it. */
+  setByUserId: string;
+  /** ISO timestamp when logged (distinct from eventDate). */
+  setAt: string;
+};
+
+/**
+ * Computed live: is this event still modulating scores? An event is
+ * active when (now - eventDate) &le; ttlDays, OR when ttlDays is null
+ * and the event hasn&rsquo;t been manually archived. Use this in any
+ * scoring path that needs to know whether to apply WTP/ATP shifts.
+ */
+export function isLifeEventActive(
+  event: PatientLifeEvent,
+  nowDate: Date = new Date(),
+): boolean {
+  if (event.ttlDays === null) return true;
+  const [y, m, d] = event.eventDate.split("-").map(Number);
+  if (!y || !m || !d) return false;
+  const eventMs = Date.UTC(y, m - 1, d);
+  const daysElapsed = Math.floor((nowDate.getTime() - eventMs) / 86_400_000);
+  return daysElapsed <= event.ttlDays;
+}
+
+/**
+ * Aggregate WTP/ATP modifier from all active events on a patient.
+ * Modifiers are summed (not multiplied) so two active +10 events
+ * stack to +20. Clamped to [-100, +100] at the boundary.
+ */
+export type ActiveLifeEventModifier = {
+  wtpModifier: number;
+  atpModifier: number;
+  activeCount: number;
+  /** Days until the next event decays (for surface display). */
+  nextDecayDays: number | null;
+};
+
+export function computeActiveModifiers(
+  events: PatientLifeEvent[],
+  nowDate: Date = new Date(),
+): ActiveLifeEventModifier {
+  let wtp = 0;
+  let atp = 0;
+  let activeCount = 0;
+  let nextDecayDays: number | null = null;
+  for (const e of events) {
+    if (!isLifeEventActive(e, nowDate)) continue;
+    wtp += e.wtpModifier;
+    atp += e.atpModifier;
+    activeCount += 1;
+    if (e.ttlDays !== null) {
+      const [y, m, d] = e.eventDate.split("-").map(Number);
+      if (y && m && d) {
+        const eventMs = Date.UTC(y, m - 1, d);
+        const daysElapsed = Math.floor(
+          (nowDate.getTime() - eventMs) / 86_400_000,
+        );
+        const remaining = e.ttlDays - daysElapsed;
+        if (nextDecayDays === null || remaining < nextDecayDays) {
+          nextDecayDays = remaining;
+        }
+      }
+    }
+  }
+  return {
+    wtpModifier: Math.max(-100, Math.min(100, wtp)),
+    atpModifier: Math.max(-100, Math.min(100, atp)),
+    activeCount,
+    nextDecayDays,
+  };
+}
+
+/**
+ * Default WTP / ATP / TTL per seeded event type. Karen can override
+ * any of these per event. The defaults encode Grasshopper&rsquo;s
+ * 16-year front-desk synthesis (e.g., engagement raises WTP without
+ * touching ATP; job loss tanks ATP without changing WTP).
+ */
+export const LIFE_EVENT_DEFAULTS: Record<
+  Exclude<PatientLifeEventType, "custom">,
+  { wtpModifier: number; atpModifier: number; ttlDays: number | null; label: string }
+> = {
+  job_loss: { wtpModifier: 0, atpModifier: -30, ttlDays: 180, label: "Job loss" },
+  promotion: { wtpModifier: +10, atpModifier: +15, ttlDays: 365, label: "Promotion / raise" },
+  engagement: { wtpModifier: +25, atpModifier: 0, ttlDays: 365, label: "Engagement" },
+  marriage: { wtpModifier: +20, atpModifier: 0, ttlDays: 180, label: "Marriage / wedding" },
+  divorce: { wtpModifier: -10, atpModifier: -20, ttlDays: 270, label: "Divorce" },
+  new_baby: { wtpModifier: -15, atpModifier: -10, ttlDays: 365, label: "New baby" },
+  milestone_birthday: { wtpModifier: +30, atpModifier: 0, ttlDays: 90, label: "Milestone birthday" },
+  retirement: { wtpModifier: -5, atpModifier: -15, ttlDays: null, label: "Retirement" },
+  vacation: { wtpModifier: +20, atpModifier: 0, ttlDays: 60, label: "Vacation coming up" },
+  health_event: { wtpModifier: -20, atpModifier: 0, ttlDays: 180, label: "Health event" },
+  relocation: { wtpModifier: -10, atpModifier: 0, ttlDays: 120, label: "Relocation" },
+  graduation: { wtpModifier: +15, atpModifier: 0, ttlDays: 90, label: "Graduation" },
+  bereavement: { wtpModifier: -15, atpModifier: 0, ttlDays: 180, label: "Bereavement" },
 };
 
 /**
@@ -970,6 +1133,8 @@ export function rollupPatientSummary(
     if (priorContact.vip !== undefined) summary.vip = priorContact.vip;
     if (priorContact.softTags !== undefined)
       summary.softTags = priorContact.softTags;
+    if (priorContact.lifeEvents !== undefined)
+      summary.lifeEvents = priorContact.lifeEvents;
     if (priorContact.contactSource !== undefined)
       summary.contactSource = priorContact.contactSource;
     if (priorContact.contactLinkedAt !== undefined)

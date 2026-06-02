@@ -45,6 +45,8 @@ import {
   type PatientPersonality,
   type PatientShopperLoyalty,
   type PatientPurchasePatterns,
+  type PatientLifeEvent,
+  type PatientLifeEventType,
 } from "@/lib/patient-csv";
 import {
   parseClientListCsv,
@@ -128,6 +130,12 @@ export type PatientListRow = {
    * populated on next QB re-upload).
    */
   purchasePatterns: PatientPurchasePatterns | null;
+  /**
+   * v1.32.0: Life-Event Log — Karen-set timestamped events that
+   * modulate WTP/ATP scores for a TTL window. Empty array when none
+   * captured. Active vs archived is computed live via isLifeEventActive.
+   */
+  lifeEvents: PatientLifeEvent[];
 };
 
 export type PatientTransactionRow = {
@@ -277,6 +285,7 @@ function hydratePatientListRow(node: KnowledgeNodeRow): PatientListRow {
     contactSource: a?.contactSource ?? null,
     softTags: a?.softTags ?? {},
     purchasePatterns: a?.purchasePatterns ?? null,
+    lifeEvents: a?.lifeEvents ?? [],
   };
 }
 
@@ -296,6 +305,7 @@ function extractContactSummary(
     banned: summary.banned ?? false,
     vip: summary.vip ?? false,
     softTags: summary.softTags ?? {},
+    lifeEvents: summary.lifeEvents ?? [],
     contactSource: summary.contactSource ?? null,
     contactLinkedAt: summary.contactLinkedAt ?? null,
   };
@@ -1126,6 +1136,191 @@ export const clearPatientCustomSelection = createServerFn({ method: "POST" })
         delete next[data.definitionId];
         return next;
       },
+    ),
+  );
+
+// ─── Life-Event Log CRUD (v1.32.0) ────────────────────────────────────────
+//
+// Karen captures timestamped real-world events that modulate the static
+// soft-tag profile. WTP/ATP modifiers + TTL drive auto-decay; isLifeEventActive
+// at read time determines whether each event still contributes. NEVER inferred.
+
+const lifeEventTypeEnum = z.enum([
+  "job_loss",
+  "promotion",
+  "engagement",
+  "marriage",
+  "divorce",
+  "new_baby",
+  "milestone_birthday",
+  "retirement",
+  "vacation",
+  "health_event",
+  "relocation",
+  "graduation",
+  "bereavement",
+  "custom",
+]);
+
+const addLifeEventInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  patientNodeId: z.string().uuid(),
+  eventType: lifeEventTypeEnum,
+  customLabel: z.string().max(80).nullable().optional(),
+  eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  wtpModifier: z.number().int().min(-100).max(100),
+  atpModifier: z.number().int().min(-100).max(100),
+  ttlDays: z.number().int().min(0).max(3650).nullable(),
+  reason: z.string().max(500).nullable().optional(),
+});
+
+const updateLifeEventInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  patientNodeId: z.string().uuid(),
+  id: z.string().uuid(),
+  eventType: lifeEventTypeEnum,
+  customLabel: z.string().max(80).nullable().optional(),
+  eventDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  wtpModifier: z.number().int().min(-100).max(100),
+  atpModifier: z.number().int().min(-100).max(100),
+  ttlDays: z.number().int().min(0).max(3650).nullable(),
+  reason: z.string().max(500).nullable().optional(),
+});
+
+const deleteLifeEventInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  patientNodeId: z.string().uuid(),
+  id: z.string().uuid(),
+});
+
+async function mutateLifeEvents(
+  args: {
+    accessToken: string;
+    viewAsUserId?: string;
+    patientNodeId: string;
+  },
+  mutate: (
+    prior: PatientLifeEvent[],
+    callerUserId: string,
+  ) => PatientLifeEvent[],
+): Promise<{ ok: true; lifeEvents: PatientLifeEvent[] }> {
+  const { effectiveUserId, callerUserId } = await resolveEffectiveUserId({
+    accessToken: args.accessToken,
+    viewAsUserId: args.viewAsUserId,
+  });
+  const sb = admin();
+  const { data: existing, error: readErr } = await sb
+    .from("knowledge_nodes")
+    .select("attachments")
+    .eq("id", args.patientNodeId)
+    .eq("user_id", effectiveUserId)
+    .eq("node_type", "patient")
+    .maybeSingle();
+  if (readErr) throw new Error(`Couldn't read patient: ${readErr.message}`);
+  if (!existing) throw new Error("Patient not found.");
+
+  const summary =
+    (existing.attachments as unknown as PatientSummary | null) ?? null;
+  const priorEvents: PatientLifeEvent[] = summary?.lifeEvents ?? [];
+  const nextEvents = mutate(priorEvents, callerUserId);
+
+  const next: PatientSummary = {
+    ...(summary ?? ({
+      normalizedName: "",
+      displayName: "",
+      firstVisit: null,
+      lastVisit: null,
+      totalVisits: 0,
+      lifetimeUnits: 0,
+      lifetimeSpendUsd: 0,
+      netSpendUsd: 0,
+      primaryManufacturer: null,
+      productMix: {},
+      loyaltyEngagement: {},
+    } as PatientSummary)),
+    lifeEvents: nextEvents,
+  };
+  const { error: updErr } = await sb
+    .from("knowledge_nodes")
+    .update({
+      attachments: next as unknown as Json,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", args.patientNodeId)
+    .eq("user_id", effectiveUserId);
+  if (updErr) throw new Error(`Couldn't update life events: ${updErr.message}`);
+  return { ok: true, lifeEvents: nextEvents };
+}
+
+export const addPatientLifeEvent = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => addLifeEventInput.parse(raw))
+  .handler(({ data }) =>
+    mutateLifeEvents(
+      {
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+        patientNodeId: data.patientNodeId,
+      },
+      (prior, callerUserId) => [
+        ...prior,
+        {
+          id: crypto.randomUUID(),
+          eventType: data.eventType,
+          customLabel: data.customLabel?.trim() || null,
+          eventDate: data.eventDate,
+          wtpModifier: data.wtpModifier,
+          atpModifier: data.atpModifier,
+          ttlDays: data.ttlDays,
+          reason: data.reason?.trim() || null,
+          setByUserId: callerUserId,
+          setAt: new Date().toISOString(),
+        },
+      ],
+    ),
+  );
+
+export const updatePatientLifeEvent = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => updateLifeEventInput.parse(raw))
+  .handler(({ data }) =>
+    mutateLifeEvents(
+      {
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+        patientNodeId: data.patientNodeId,
+      },
+      (prior, callerUserId) =>
+        prior.map((e) =>
+          e.id === data.id
+            ? {
+                ...e,
+                eventType: data.eventType,
+                customLabel: data.customLabel?.trim() || null,
+                eventDate: data.eventDate,
+                wtpModifier: data.wtpModifier,
+                atpModifier: data.atpModifier,
+                ttlDays: data.ttlDays,
+                reason: data.reason?.trim() || null,
+                setByUserId: callerUserId,
+                setAt: new Date().toISOString(),
+              }
+            : e,
+        ),
+    ),
+  );
+
+export const deletePatientLifeEvent = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => deleteLifeEventInput.parse(raw))
+  .handler(({ data }) =>
+    mutateLifeEvents(
+      {
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+        patientNodeId: data.patientNodeId,
+      },
+      (prior) => prior.filter((e) => e.id !== data.id),
     ),
   );
 
