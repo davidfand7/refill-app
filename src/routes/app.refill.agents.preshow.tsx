@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { AgentsTabStrip } from "@/components/refill/AgentsTabStrip";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -319,6 +320,7 @@ function PreshowAgentPage() {
         title="Preshow"
         description="Reminders before every appointment. Tune the cadence, customize the messages, route different patient cohorts to different schedules. Most spas use one profile; some use two or three."
       />
+      <AgentsTabStrip active="preshow" />
 
       <div className="px-6 lg:px-10 py-6 space-y-6 max-w-5xl mx-auto">
         {loadError && (

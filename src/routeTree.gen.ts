@@ -90,6 +90,7 @@ import { Route as AppRefillCatalogProductsRouteImport } from './routes/app.refil
 import { Route as AppRefillCatalogImportRouteImport } from './routes/app.refill.catalog.import'
 import { Route as AppRefillCampaignsNewRouteImport } from './routes/app.refill.campaigns.new'
 import { Route as AppRefillCampaignsCampaignIdRouteImport } from './routes/app.refill.campaigns.$campaignId'
+import { Route as AppRefillAgentsRescueRouteImport } from './routes/app.refill.agents.rescue'
 import { Route as AppRefillAgentsPreshowRouteImport } from './routes/app.refill.agents.preshow'
 import { Route as ApiIntegrationsAcuityOauthCallbackRouteImport } from './routes/api.integrations.acuity.oauth-callback'
 import { Route as AppRefillCampaignsCampaignIdIndexRouteImport } from './routes/app.refill.campaigns.$campaignId.index'
@@ -513,6 +514,11 @@ const AppRefillCampaignsCampaignIdRoute =
     path: '/$campaignId',
     getParentRoute: () => AppRefillCampaignsRoute,
   } as any)
+const AppRefillAgentsRescueRoute = AppRefillAgentsRescueRouteImport.update({
+  id: '/agents/rescue',
+  path: '/agents/rescue',
+  getParentRoute: () => AppRefillRoute,
+} as any)
 const AppRefillAgentsPreshowRoute = AppRefillAgentsPreshowRouteImport.update({
   id: '/agents/preshow',
   path: '/agents/preshow',
@@ -607,6 +613,7 @@ export interface FileRoutesByFullPath {
   '/app/rep/': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
+  '/app/refill/agents/rescue': typeof AppRefillAgentsRescueRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
   '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
@@ -691,6 +698,7 @@ export interface FileRoutesByTo {
   '/app/rep': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
+  '/app/refill/agents/rescue': typeof AppRefillAgentsRescueRoute
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
   '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
   '/app/refill/catalog/products': typeof AppRefillCatalogProductsRoute
@@ -779,6 +787,7 @@ export interface FileRoutesById {
   '/app/rep/': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
+  '/app/refill/agents/rescue': typeof AppRefillAgentsRescueRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
   '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
@@ -869,6 +878,7 @@ export interface FileRouteTypes {
     | '/app/rep/'
     | '/api/integrations/acuity/oauth-callback'
     | '/app/refill/agents/preshow'
+    | '/app/refill/agents/rescue'
     | '/app/refill/campaigns/$campaignId'
     | '/app/refill/campaigns/new'
     | '/app/refill/catalog/import'
@@ -953,6 +963,7 @@ export interface FileRouteTypes {
     | '/app/rep'
     | '/api/integrations/acuity/oauth-callback'
     | '/app/refill/agents/preshow'
+    | '/app/refill/agents/rescue'
     | '/app/refill/campaigns/new'
     | '/app/refill/catalog/import'
     | '/app/refill/catalog/products'
@@ -1040,6 +1051,7 @@ export interface FileRouteTypes {
     | '/app/rep/'
     | '/api/integrations/acuity/oauth-callback'
     | '/app/refill/agents/preshow'
+    | '/app/refill/agents/rescue'
     | '/app/refill/campaigns/$campaignId'
     | '/app/refill/campaigns/new'
     | '/app/refill/catalog/import'
@@ -1667,6 +1679,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillCampaignsCampaignIdRouteImport
       parentRoute: typeof AppRefillCampaignsRoute
     }
+    '/app/refill/agents/rescue': {
+      id: '/app/refill/agents/rescue'
+      path: '/agents/rescue'
+      fullPath: '/app/refill/agents/rescue'
+      preLoaderRoute: typeof AppRefillAgentsRescueRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/agents/preshow': {
       id: '/app/refill/agents/preshow'
       path: '/agents/preshow'
@@ -1772,6 +1791,7 @@ interface AppRefillRouteChildren {
   AppRefillSharingRoute: typeof AppRefillSharingRoute
   AppRefillIndexRoute: typeof AppRefillIndexRoute
   AppRefillAgentsPreshowRoute: typeof AppRefillAgentsPreshowRoute
+  AppRefillAgentsRescueRoute: typeof AppRefillAgentsRescueRoute
   AppRefillCatalogImportRoute: typeof AppRefillCatalogImportRoute
   AppRefillCatalogProductsRoute: typeof AppRefillCatalogProductsRoute
   AppRefillCatalogServicesRoute: typeof AppRefillCatalogServicesRoute
@@ -1800,6 +1820,7 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillSharingRoute: AppRefillSharingRoute,
   AppRefillIndexRoute: AppRefillIndexRoute,
   AppRefillAgentsPreshowRoute: AppRefillAgentsPreshowRoute,
+  AppRefillAgentsRescueRoute: AppRefillAgentsRescueRoute,
   AppRefillCatalogImportRoute: AppRefillCatalogImportRoute,
   AppRefillCatalogProductsRoute: AppRefillCatalogProductsRoute,
   AppRefillCatalogServicesRoute: AppRefillCatalogServicesRoute,
