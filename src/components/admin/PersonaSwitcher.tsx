@@ -123,9 +123,20 @@ export function PersonaSwitcher() {
   function onChange(value: string) {
     if (!callerUserId) return;
     if (value === callerUserId) {
-      // Revert to admin. Stay on current URL — admin keeps full
-      // privileges so /app/admin/* still works post-revert.
-      setAdminViewAsUserId(null);
+      // v1.34.2.1: smart-route on revert too. If admin is on a
+      // spa-owner URL (/app/refill, /app/billing) or rep URL (/app/rep)
+      // when reverting to admin, redirect to /app so auto-dispatch
+      // lands them in the admin shell home. Pre-fix: revert stayed in
+      // place; admin then saw the "Defaulted to first tenant" fall-
+      // through (RefillShell) or the "Your account isn't set up as a
+      // rep yet" empty state (RepShell). Reverting while ALREADY on an
+      // /app/admin/* URL still stays — pickRedirectForPersonaSwitch
+      // returns undefined when urlKind === target.
+      const redirectTo =
+        typeof window !== "undefined"
+          ? pickRedirectForPersonaSwitch(window.location.pathname, "admin")
+          : undefined;
+      setAdminViewAsUserId(null, redirectTo);
       return;
     }
     // v1.24.3: generalized smart-routing. If the current URL's shell-

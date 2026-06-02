@@ -75,10 +75,16 @@ function shellKindForPathname(pathname: string): UrlShellKind {
  *   - If the current URL serves a shell-kind that DIFFERS from the
  *     target persona's shell, redirect to /app so auto-dispatch routes
  *     them to that persona's home.
- *   - If they match (cross-rep, cross-spa-owner, or any non-shell URL
- *     like /scan) → undefined → reload in place so admin can compare
- *     the same surface across personas.
- *   - Reverting to admin (caller's own shell) → undefined → stay.
+ *   - If they match (cross-rep, cross-spa-owner, OR reverting to admin
+ *     while already on /app/admin/*, OR any non-shell URL like /scan)
+ *     → undefined → reload in place so admin can compare the same
+ *     surface across personas (or stay where they were on revert).
+ *
+ * v1.34.2.1: PersonaSwitcher now also calls this on revert-to-admin
+ * (was pre-fix: revert stayed in place unconditionally, landing admin
+ * on a spa-owner or rep URL they can't render). The function logic
+ * already handled "admin" as a target shell — only the caller needed
+ * to invoke it.
  */
 export function pickRedirectForPersonaSwitch(
   pathname: string,
