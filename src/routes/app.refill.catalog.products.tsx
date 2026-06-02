@@ -199,15 +199,43 @@ function ProductsPage() {
     };
   }, [membership.status, viewAsUserId]);
 
+  // v1.34.9: category filter chips. Multi-select, union semantics —
+  // empty set = show all.
+  const [categoryFilter, setCategoryFilter] = useState<Set<ProductCategory>>(
+    new Set(),
+  );
+
+  function toggleCategory(c: ProductCategory) {
+    setCategoryFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
+      return next;
+    });
+  }
+
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<ProductCategory, number>();
+    for (const p of products) {
+      counts.set(p.category, (counts.get(p.category) ?? 0) + 1);
+    }
+    return counts;
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    if (categoryFilter.size === 0) return products;
+    return products.filter((p) => categoryFilter.has(p.category));
+  }, [products, categoryFilter]);
+
   const byCategory = useMemo(() => {
     const groups = new Map<ProductCategory, Product[]>();
-    for (const p of products) {
+    for (const p of filteredProducts) {
       const arr = groups.get(p.category) ?? [];
       arr.push(p);
       groups.set(p.category, arr);
     }
     return groups;
-  }, [products]);
+  }, [filteredProducts]);
 
   async function withToken<T>(fn: (token: string) => Promise<T>): Promise<T> {
     const { data: sess } = await supabase.auth.getSession();
@@ -337,6 +365,47 @@ function ProductsPage() {
       </div>
 
       <div className="px-6 lg:px-10 py-6 max-w-4xl space-y-6">
+        {/* v1.34.9: category filter chips */}
+        {products.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-ink-faint">
+              Filter
+            </span>
+            {(["tox", "filler", "laser_consumable", "skincare", "other"] as ProductCategory[]).map((c) => {
+              const count = categoryCounts.get(c) ?? 0;
+              if (count === 0) return null;
+              const active = categoryFilter.has(c);
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => toggleCategory(c)}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium border transition",
+                    active
+                      ? "border-emerald bg-emerald-soft text-emerald-ink"
+                      : "border-rule bg-white text-ink-soft hover:border-emerald/40 hover:text-ink",
+                  )}
+                >
+                  {categoryLabel(c)}
+                  <span className={cn(active ? "text-emerald-ink" : "text-ink-faint")}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+            {categoryFilter.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setCategoryFilter(new Set())}
+                className="text-[11px] text-ink-soft hover:text-rose transition"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+
         {adding && (
           <ProductFormCard
             mode="add"

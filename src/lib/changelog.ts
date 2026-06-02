@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.34.9",
+    date: "June 2026",
+    items: [
+      "<strong>v1.34.9 &mdash; Category filter chips on Catalog Products + Services pages.</strong> Grasshopper asked for filter for product &amp; service categories while walking. Pure UI on top of the existing <code>category</code> column on both <code>products</code> and <code>services</code> tables &mdash; no migration. <strong>UI</strong>: filter chip strip rendered above the list on each catalog page. One chip per category that has at least one row (so empty categories don&rsquo;t take up space). Multi-select with union semantics &mdash; click multiple chips to show all matching categories. Count badge per chip shows row count in that category. Active chips render emerald-soft; inactive chips muted with hover state. &lsquo;Clear&rsquo; affordance appears when any filter is active. Products supports tox / filler / laser_consumable / skincare / other; Services supports tox / filler / laser / facial / skincare / other (per the existing CHECK constraints). <strong>Filter logic</strong>: extracted into a <code>filteredProducts</code> / <code>filteredServices</code> useMemo before the existing <code>byCategory</code> grouping useMemo, so the per-category group renderer naturally only shows selected categories. Empty filter set = show all. <strong>What this DOESN&rsquo;T ship (queued v1.34.9.1)</strong>: Hide affordance next to Edit on each row (Grasshopper&rsquo;s other ask). Needs a <code>hidden_at timestamptz</code> column added to both tables — migration file written at <code>supabase/migrations/20260624000000_v1_34_9_catalog_hidden.sql</code>, awaits Grasshopper paste via Supabase dashboard per [[feedback-migrations-via-dashboard]]. Once pasted, v1.34.9.1 ships the Hide / Unhide buttons + &lsquo;Show hidden&rsquo; toggle. <strong>Touched</strong>: <code>src/routes/app.refill.catalog.products.tsx</code> (categoryFilter state + toggleCategory + categoryCounts useMemo + filteredProducts useMemo + chip strip render), <code>src/routes/app.refill.catalog.services.tsx</code> (same pattern with ServiceCategory enum), <code>src/lib/changelog.ts</code> (this entry), <code>supabase/migrations/20260624000000_v1_34_9_catalog_hidden.sql</code> (new, queued for paste). No new dependencies.",
+    ],
+  },
+  {
     version: "v1.34.8.3",
     date: "June 2026",
     items: [

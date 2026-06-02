@@ -183,15 +183,42 @@ function ServicesPage() {
     };
   }, [membership.status, viewAsUserId]);
 
+  // v1.34.9: category filter chips
+  const [categoryFilter, setCategoryFilter] = useState<Set<ServiceCategory>>(
+    new Set(),
+  );
+
+  function toggleCategory(c: ServiceCategory) {
+    setCategoryFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
+      return next;
+    });
+  }
+
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<ServiceCategory, number>();
+    for (const s of services) {
+      counts.set(s.category, (counts.get(s.category) ?? 0) + 1);
+    }
+    return counts;
+  }, [services]);
+
+  const filteredServices = useMemo(() => {
+    if (categoryFilter.size === 0) return services;
+    return services.filter((s) => categoryFilter.has(s.category));
+  }, [services, categoryFilter]);
+
   const byCategory = useMemo(() => {
     const groups = new Map<ServiceCategory, Service[]>();
-    for (const s of services) {
+    for (const s of filteredServices) {
       const arr = groups.get(s.category) ?? [];
       arr.push(s);
       groups.set(s.category, arr);
     }
     return groups;
-  }, [services]);
+  }, [filteredServices]);
 
   async function withToken<T>(fn: (token: string) => Promise<T>): Promise<T> {
     const { data: sess } = await supabase.auth.getSession();
@@ -516,6 +543,47 @@ function ServicesPage() {
       </div>
 
       <div className="px-6 lg:px-10 py-6 max-w-4xl space-y-6">
+        {/* v1.34.9: category filter chips */}
+        {services.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-ink-faint">
+              Filter
+            </span>
+            {(["tox", "filler", "laser", "facial", "skincare", "other"] as ServiceCategory[]).map((c) => {
+              const count = categoryCounts.get(c) ?? 0;
+              if (count === 0) return null;
+              const active = categoryFilter.has(c);
+              return (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => toggleCategory(c)}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium border transition",
+                    active
+                      ? "border-emerald bg-emerald-soft text-emerald-ink"
+                      : "border-rule bg-white text-ink-soft hover:border-emerald/40 hover:text-ink",
+                  )}
+                >
+                  {categoryLabel(c)}
+                  <span className={cn(active ? "text-emerald-ink" : "text-ink-faint")}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+            {categoryFilter.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setCategoryFilter(new Set())}
+                className="text-[11px] text-ink-soft hover:text-rose transition"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+
         {lastRecategorize && (
           <div
             className={cn(
