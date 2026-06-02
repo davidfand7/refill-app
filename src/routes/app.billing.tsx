@@ -127,8 +127,13 @@ function BillingPage() {
   }, [viewAsUserId]);
 
   useEffect(() => {
+    // v1.34.8.2: wait for tenant-membership before firing the load —
+    // same race as the Recovery page. Without this gate, admin viewers
+    // briefly hit getInvoicePreview without viewAsUserId and flash the
+    // "No Refill tenant" error before the real data renders.
+    if (membership.status === "loading") return;
     void load();
-  }, [load]);
+  }, [load, membership.status]);
 
   // Handle return from Stripe Checkout setup-mode flow. The success_url in
   // api.refill-checkout.ts pins ?upgrade=success&plan=… on the URL; we

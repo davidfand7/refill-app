@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.34.8.2",
+    date: "June 2026",
+    items: [
+      "<strong>v1.34.8.2 &mdash; Hotfix: &lsquo;No Refill tenant&rsquo; flash error on Recovery + Billing pages during initial load. Grasshopper hit it walking <code>/app/refill/recovery</code> and then <code>/app/billing</code> as admin viewing-as Karen.</strong> Pre-fix: both pages&rsquo; load useEffects fired immediately on first render, BEFORE <code>useTenantMembership()</code> resolved. During the ~1s loading window, <code>viewAsUserId</code> was undefined, so <code>getInvoicePreview</code> ran with no viewAsUserId. Server-side, when admin@refill.platform hits getInvoicePreview without viewAsUserId, refill-billing.ts throws &lsquo;No Refill tenant — finish onboarding before viewing billing.&rsquo; The error rendered briefly in the page&rsquo;s loadError banner, then the membership hook resolved, the real data loaded, and the error went away &mdash; ugly flash. Same exact bug on both pages because they both hit getInvoicePreview. <strong>The fix</strong>: gate each load useEffect on <code>membership.status !== &quot;loading&quot;</code>. This is the same canonical pattern <code>app.refill.catalog.products.tsx</code> + <code>app.refill.catalog.services.tsx</code> already use (with the stricter <code>!== &quot;tenant&quot;</code> variant); Recovery + Billing were the two pages in the Refill shell that missed it. <strong>Sweep verified</strong>: appointments + health pages don&rsquo;t call any no-tenant-throwing fn (refill-billing / refill-catalog / wishlist.functions) so they don&rsquo;t have the same surface bug. The new v1.34.6/v1.34.7/v1.34.5 agent pages I built also already gate via the canonical pattern. <strong>Touched</strong>: <code>src/routes/app.refill.recovery.tsx</code> (useEffect adds membership.status loading guard), <code>src/routes/app.billing.tsx</code> (same), <code>src/lib/changelog.ts</code> (this entry). Two-line code fix.",
+    ],
+  },
+  {
     version: "v1.34.8.1",
     date: "June 2026",
     items: [

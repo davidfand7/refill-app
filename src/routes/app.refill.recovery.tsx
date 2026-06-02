@@ -145,8 +145,13 @@ function RecoveryDashboard() {
   }
 
   useEffect(() => {
+    // v1.34.8.2: wait for tenant-membership to resolve before firing the
+    // load — otherwise an admin viewer briefly hits getInvoicePreview
+    // without viewAsUserId and the server throws the "No Refill tenant"
+    // flash error before the real data renders.
+    if (membership.status === "loading") return;
     void load();
-  }, [load]);
+  }, [load, membership.status]);
 
   async function confirm(eventId: string, amount: number) {
     setConfirmingId(eventId);
