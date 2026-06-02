@@ -19,6 +19,7 @@ import {
   ArrowUpDown,
   Ban,
   CalendarClock,
+  Check,
   Filter,
   Loader2,
   Mail,
@@ -26,20 +27,26 @@ import {
   Search,
   Sparkles,
   Star,
+  Tag,
   Upload,
   Users,
   Wand2,
+  X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  bulkApplyPatientSoftTag,
+  listCustomTagDefinitions,
   listOverduePatients,
   listPatients,
   setPatientVip,
   type OverduePatient,
   type PatientListRow,
 } from "@/server/patient-ingest.functions";
+import type { CustomTagDefinition } from "@/lib/patient-csv";
 import {
   listWaitlist,
   markPatientOptedIn,
@@ -116,6 +123,12 @@ function PatientsPage() {
   // v385.2: pending state for in-flight VIP toggles (separate from
   // waitlist's pending set so the two toggles don't interfere).
   const [pendingVipIds, setPendingVipIds] = useState<Set<string>>(new Set());
+  // v1.34.0: bulk soft-tag apply — selection state + picker modal + tenant
+  // custom tag defs loaded once for the picker (preset tags are hardcoded).
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkPickerOpen, setBulkPickerOpen] = useState(false);
+  const [bulkApplying, setBulkApplying] = useState(false);
+  const [customDefs, setCustomDefs] = useState<CustomTagDefinition[]>([]);
   const overdueOnly = search.overdue === "1";
 
   function setOverdueOnly(next: boolean) {
@@ -151,18 +164,23 @@ function PatientsPage() {
         // parallel. overdue is a map keyed by patient id; waitlist is
         // a map keyed by patient_node_id so the row can read both in O(1).
         // v385: waitlist join is what powers the per-row waitlist toggle.
-        const [list, overdue, waitlist] = await Promise.all([
+        const [list, overdue, waitlist, defs] = await Promise.all([
           listPatients({ data: { accessToken: token, viewAsUserId } }),
           listOverduePatients({
             data: { accessToken: token, limit: 5000, viewAsUserId },
           }),
           listWaitlist({ data: { accessToken: token, viewAsUserId } }),
+          // v1.34.0: tenant-wide custom tag defs for the bulk picker
+          listCustomTagDefinitions({
+            data: { accessToken: token, viewAsUserId },
+          }),
         ]);
         if (!cancelled) {
           setRows(list);
           setOverdueIndex(new Map(overdue.map((o) => [o.patientId, o])));
           setWaitlistIndex(new Map(waitlist.map((w) => [w.patientNodeId, w])));
           setAccessToken(token);
+          setCustomDefs(defs);
         }
       } catch (e) {
         if (!cancelled)
@@ -278,6 +296,65 @@ function PatientsPage() {
     }
   }
 
+  // v1.34.0: bulk soft-tag selection helpers.
+  const toggleSelected = (patientNodeId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(patientNodeId)) next.delete(patientNodeId);
+      else next.add(patientNodeId);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  // v1.34.0: bulk apply handler — server fn + toast + clear selection.
+  // Reuses tenant scoping via accessToken/viewAsUserId.
+  async function bulkApply(
+    tag:
+      | {
+          kind: "preset";
+          key:
+            | "incomeTier"
+            | "negotiator"
+            | "specialsSeeker"
+            | "personality"
+            | "shopperLoyalty"
+            | "culturalNotes";
+          value: string | boolean;
+        }
+      | { kind: "custom"; definitionId: string; selected: string[] },
+    reason: string,
+    tagDisplayLabel: string,
+  ) {
+    if (!accessToken) return;
+    if (selectedIds.size === 0) return;
+    setBulkApplying(true);
+    try {
+      const result = await bulkApplyPatientSoftTag({
+        data: {
+          accessToken,
+          viewAsUserId,
+          patientNodeIds: Array.from(selectedIds),
+          tag,
+          reason: reason.trim() || null,
+        },
+      });
+      const total = result.touched + result.skipped;
+      toast.success(
+        result.skipped === 0
+          ? `${tagDisplayLabel} applied to ${result.touched} patient${result.touched === 1 ? "" : "s"}.`
+          : `${tagDisplayLabel} applied to ${result.touched} patient${result.touched === 1 ? "" : "s"} (${result.skipped} already had it).`,
+      );
+      clearSelection();
+      setBulkPickerOpen(false);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Bulk apply failed.");
+    } finally {
+      setBulkApplying(false);
+    }
+  }
+
   const cutoffDate = useMemo(() => {
     if (windowMode === "all") return null;
     const d = new Date();
@@ -359,6 +436,37 @@ function PatientsPage() {
   }, [rows, cutoffDate, overdueOnly, overdueIndex]);
 
   const overdueTotal = overdueIndex?.size ?? 0;
+
+  // v1.34.0: selection helpers derived from current filter — only "visible"
+  // patients participate in select-all + count badges.
+  const visibleIds = useMemo(
+    () => (filtered ?? []).map((r) => r.id),
+    [filtered],
+  );
+  const selectedVisibleCount = useMemo(
+    () => visibleIds.filter((id) => selectedIds.has(id)).length,
+    [visibleIds, selectedIds],
+  );
+  const allVisibleSelected =
+    visibleIds.length > 0 && selectedVisibleCount === visibleIds.length;
+  const someVisibleSelected =
+    selectedVisibleCount > 0 && selectedVisibleCount < visibleIds.length;
+  const toggleSelectAllVisible = () => {
+    if (allVisibleSelected) {
+      // Clear only visible ones (preserve any out-of-filter selections).
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of visibleIds) next.delete(id);
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of visibleIds) next.add(id);
+        return next;
+      });
+    }
+  };
 
   if (rows === null && !error) {
     return (
@@ -627,6 +735,19 @@ function PatientsPage() {
               <table className="w-full text-sm">
                 <thead className="bg-rule/50">
                   <tr className="text-left text-[10px] uppercase tracking-wider text-ink-soft">
+                    {/* v1.34.0: select-all-visible checkbox */}
+                    <th className="pl-4 pr-1 py-3 w-8">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all visible patients"
+                        checked={allVisibleSelected}
+                        ref={(el) => {
+                          if (el) el.indeterminate = someVisibleSelected;
+                        }}
+                        onChange={toggleSelectAllVisible}
+                        className="h-3.5 w-3.5 rounded border-rule accent-emerald cursor-pointer"
+                      />
+                    </th>
                     <th className="px-4 py-3 font-semibold">Patient</th>
                     <th className="px-4 py-3 font-semibold">Contact</th>
                     <th className="px-4 py-3 font-semibold">Last visit</th>
@@ -654,6 +775,8 @@ function PatientsPage() {
                         }
                         vipPending={pendingVipIds.has(r.id)}
                         onToggleVip={() => toggleVip(r.id, r.vip)}
+                        selected={selectedIds.has(r.id)}
+                        onToggleSelected={() => toggleSelected(r.id)}
                       />
                     );
                   })}
@@ -674,6 +797,48 @@ function PatientsPage() {
           </div>
         )}
       </div>
+
+      {/* v1.34.0: floating bulk-action toolbar — appears when 1+ selected */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 rounded-full border border-rule bg-white shadow-2xl px-4 py-2">
+          <div className="text-[12px] font-medium text-ink">
+            <span className="font-semibold text-emerald-ink">
+              {selectedIds.size}
+            </span>{" "}
+            patient{selectedIds.size === 1 ? "" : "s"} selected
+          </div>
+          <div className="h-4 w-px bg-rule" />
+          <button
+            type="button"
+            onClick={() => setBulkPickerOpen(true)}
+            disabled={bulkApplying}
+            className="inline-flex items-center gap-1.5 rounded-full bg-emerald px-3 py-1.5 text-[12px] font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
+          >
+            <Tag className="h-3 w-3" />
+            Apply soft tag
+          </button>
+          <button
+            type="button"
+            onClick={clearSelection}
+            disabled={bulkApplying}
+            className="inline-flex items-center gap-1 rounded-full border border-rule px-2.5 py-1 text-[11px] font-medium text-ink-soft hover:text-ink transition disabled:opacity-50"
+          >
+            <X className="h-3 w-3" />
+            Clear
+          </button>
+        </div>
+      )}
+
+      {/* v1.34.0: bulk soft-tag picker modal */}
+      {bulkPickerOpen && (
+        <BulkTagPickerModal
+          selectedCount={selectedIds.size}
+          customDefs={customDefs}
+          busy={bulkApplying}
+          onCancel={() => setBulkPickerOpen(false)}
+          onApply={bulkApply}
+        />
+      )}
     </div>
   );
 }
@@ -686,6 +851,8 @@ function PatientRow({
   onToggleWaitlist,
   vipPending,
   onToggleVip,
+  selected,
+  onToggleSelected,
 }: {
   row: PatientListRow;
   overdue: OverduePatient | null;
@@ -697,6 +864,10 @@ function PatientRow({
   onToggleWaitlist: () => void;
   /** v385.2: true while the VIP toggle's async server fn is in flight. */
   vipPending: boolean;
+  /** v1.34.0: row is in the bulk-action selection set. */
+  selected: boolean;
+  /** v1.34.0: toggle this row in/out of the bulk-action selection. */
+  onToggleSelected: () => void;
   /** v385.2: fires setPatientVip with optimistic UI. */
   onToggleVip: () => void;
 }) {
@@ -714,7 +885,23 @@ function PatientRow({
       : "user";
 
   return (
-    <tr className="hover:bg-rule-soft/40 transition cursor-pointer">
+    <tr
+      className={cn(
+        "hover:bg-rule-soft/40 transition cursor-pointer",
+        selected && "bg-emerald-soft/30",
+      )}
+    >
+      {/* v1.34.0: bulk selection checkbox — clicks don't navigate */}
+      <td className="pl-4 pr-1 py-3 w-8">
+        <input
+          type="checkbox"
+          aria-label={`Select ${row.displayName}`}
+          checked={selected}
+          onChange={onToggleSelected}
+          onClick={(e) => e.stopPropagation()}
+          className="h-3.5 w-3.5 rounded border-rule accent-emerald cursor-pointer"
+        />
+      </td>
       <td className="px-4 py-3">
         <Link
           to="/app/refill/patients/$patientId"
@@ -1035,4 +1222,301 @@ function formatDate(iso: string): string {
     year: "numeric",
     timeZone: "UTC",
   });
+}
+
+// ─── Bulk soft-tag picker modal (v1.34.0) ─────────────────────────────────
+
+type PresetTagKey =
+  | "incomeTier"
+  | "negotiator"
+  | "specialsSeeker"
+  | "personality"
+  | "shopperLoyalty"
+  | "culturalNotes";
+
+type PresetTagDef = {
+  key: PresetTagKey;
+  label: string;
+  options: Array<{ value: string | boolean; label: string }>;
+};
+
+const PRESET_TAGS: PresetTagDef[] = [
+  {
+    key: "incomeTier",
+    label: "Income tier",
+    options: [
+      { value: "high", label: "High" },
+      { value: "mid", label: "Mid" },
+      { value: "low", label: "Low" },
+      { value: "unknown", label: "Unknown" },
+    ],
+  },
+  {
+    key: "negotiator",
+    label: "Negotiator",
+    options: [
+      { value: "never", label: "Never" },
+      { value: "occasional", label: "Occasional" },
+      { value: "always", label: "Always" },
+    ],
+  },
+  {
+    key: "specialsSeeker",
+    label: "Specials seeker",
+    options: [
+      { value: true, label: "Yes" },
+      { value: false, label: "No" },
+    ],
+  },
+  {
+    key: "personality",
+    label: "Personality",
+    options: [
+      { value: "easy", label: "Easy" },
+      { value: "neutral", label: "Neutral" },
+      { value: "complainer", label: "Complainer" },
+    ],
+  },
+  {
+    key: "shopperLoyalty",
+    label: "Shopper loyalty",
+    options: [
+      { value: "loyal", label: "Loyal" },
+      { value: "comparison", label: "Comparison" },
+      { value: "unknown", label: "Unknown" },
+    ],
+  },
+];
+// Cultural notes is free-text only; skipped in bulk picker (per-patient still).
+
+type BulkPickerSelection =
+  | { kind: "preset"; key: PresetTagKey; value: string | boolean; label: string }
+  | {
+      kind: "custom";
+      definitionId: string;
+      selected: string[];
+      label: string;
+    };
+
+function BulkTagPickerModal({
+  selectedCount,
+  customDefs,
+  busy,
+  onCancel,
+  onApply,
+}: {
+  selectedCount: number;
+  customDefs: CustomTagDefinition[];
+  busy: boolean;
+  onCancel: () => void;
+  onApply: (
+    tag:
+      | {
+          kind: "preset";
+          key: PresetTagKey;
+          value: string | boolean;
+        }
+      | { kind: "custom"; definitionId: string; selected: string[] },
+    reason: string,
+    tagDisplayLabel: string,
+  ) => void;
+}) {
+  const [pick, setPick] = useState<BulkPickerSelection | null>(null);
+  const [reason, setReason] = useState("");
+
+  const apply = () => {
+    if (!pick) return;
+    if (pick.kind === "preset") {
+      onApply(
+        { kind: "preset", key: pick.key, value: pick.value },
+        reason,
+        `${pick.label}: ${pick.label === "Specials seeker" ? (pick.value ? "Yes" : "No") : String(pick.value)}`,
+      );
+    } else {
+      onApply(
+        {
+          kind: "custom",
+          definitionId: pick.definitionId,
+          selected: pick.selected,
+        },
+        reason,
+        `${pick.label} (${pick.selected.length} chip${pick.selected.length === 1 ? "" : "s"})`,
+      );
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-lg max-h-[calc(100vh-2rem)] flex flex-col rounded-2xl border border-rule bg-white shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="px-5 py-3 border-b border-rule bg-emerald-soft/40 flex items-center gap-2">
+          <Tag className="h-4 w-4 text-emerald-ink" />
+          <div className="text-[13px] font-semibold text-emerald-ink">
+            Apply soft tag to {selectedCount} patient{selectedCount === 1 ? "" : "s"}
+          </div>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="ml-auto text-ink-soft hover:text-ink transition disabled:opacity-50"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Body — scrollable */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {/* Preset tag groups */}
+          <div className="space-y-3">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+              Preset tags
+            </div>
+            {PRESET_TAGS.map((tag) => (
+              <div key={tag.key}>
+                <div className="text-[11px] font-medium text-ink mb-1.5">
+                  {tag.label}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {tag.options.map((opt) => {
+                    const active =
+                      pick?.kind === "preset" &&
+                      pick.key === tag.key &&
+                      pick.value === opt.value;
+                    return (
+                      <button
+                        key={String(opt.value)}
+                        type="button"
+                        onClick={() =>
+                          setPick({
+                            kind: "preset",
+                            key: tag.key,
+                            value: opt.value,
+                            label: tag.label,
+                          })
+                        }
+                        disabled={busy}
+                        className={cn(
+                          "rounded-full px-3 py-1 text-[11px] font-medium border transition disabled:opacity-50",
+                          active
+                            ? "border-emerald bg-emerald-soft text-emerald-ink"
+                            : "border-rule bg-white text-ink-soft hover:border-emerald/40 hover:text-ink",
+                        )}
+                      >
+                        {active && <Check className="h-2.5 w-2.5 inline mr-1" />}
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Custom tag definitions */}
+          {customDefs.length > 0 && (
+            <div className="space-y-3 pt-2 border-t border-rule">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+                Custom tags (tenant-wide)
+              </div>
+              {customDefs.map((def) => {
+                const isActive =
+                  pick?.kind === "custom" && pick.definitionId === def.id;
+                const selected =
+                  isActive && pick.kind === "custom" ? pick.selected : [];
+                return (
+                  <div key={def.id}>
+                    <div className="text-[11px] font-medium text-ink mb-1.5">
+                      {def.name}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {def.options.map((opt: string) => {
+                        const active = selected.includes(opt);
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => {
+                              const nextSelected = active
+                                ? selected.filter((s) => s !== opt)
+                                : [...selected, opt];
+                              setPick({
+                                kind: "custom",
+                                definitionId: def.id,
+                                selected: nextSelected,
+                                label: def.name,
+                              });
+                            }}
+                            disabled={busy}
+                            className={cn(
+                              "rounded-full px-3 py-1 text-[11px] font-medium border transition disabled:opacity-50",
+                              active
+                                ? "border-emerald bg-emerald-soft text-emerald-ink"
+                                : "border-rule bg-white text-ink-soft hover:border-emerald/40 hover:text-ink",
+                            )}
+                          >
+                            {active && (
+                              <Check className="h-2.5 w-2.5 inline mr-1" />
+                            )}
+                            {opt}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Reason note */}
+          <div className="pt-2 border-t border-rule">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint mb-1">
+              Reason (optional)
+            </div>
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g., snowbird season prep, filler-loyalist promo cohort"
+              maxLength={500}
+              disabled={busy}
+              className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
+            />
+            <div className="mt-0.5 text-[10px] text-ink-faint">
+              Applied to every selected patient's tag history.
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-rule bg-rule-soft/30 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={apply}
+            disabled={
+              busy ||
+              !pick ||
+              (pick.kind === "custom" && pick.selected.length === 0)
+            }
+            className="inline-flex items-center justify-center gap-1.5 rounded-md bg-emerald px-4 py-2 text-[13px] font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
+          >
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+            Apply to {selectedCount} patient{selectedCount === 1 ? "" : "s"}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="inline-flex items-center gap-1 rounded-md border border-rule bg-white px-3 py-2 text-[12px] font-medium text-ink-soft hover:text-ink transition disabled:opacity-50"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

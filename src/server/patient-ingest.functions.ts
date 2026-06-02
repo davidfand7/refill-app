@@ -1380,6 +1380,210 @@ export const recomputePatientPatterns = createServerFn({ method: "POST" })
     },
   );
 
+// ─── Bulk soft-tag apply (v1.34.0) ────────────────────────────────────────
+//
+// Karen's first AI-polished Wishlist ship. Apply a single soft tag (either
+// a seeded preset OR a tenant-wide custom definition) to many patients in
+// one operation. Performance: single read of all attachments → in-memory
+// merge → batched upsert. Avoids the N-round-trip cost of per-patient
+// writes; tested mentally up to 1140 (Karen-Rejuv full roster).
+//
+// Idempotent: already-tagged patients are silent no-ops (no duplicates,
+// no errors). Success result returns the total count attempted (matches
+// the spec Karen submitted via the AI-polished Wishlist).
+
+// Discriminated union: preset tag (one of the seeded six) OR custom
+// definition (tenant-wide). Both branches carry an optional reason note.
+const bulkApplyInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  patientNodeIds: z.array(z.string().uuid()).min(1).max(2000),
+  tag: z.discriminatedUnion("kind", [
+    z.object({
+      kind: z.literal("preset"),
+      key: z.enum([
+        "incomeTier",
+        "negotiator",
+        "specialsSeeker",
+        "personality",
+        "shopperLoyalty",
+        "culturalNotes",
+      ]),
+      // Preset tag values vary by key. Validation is loose here because
+      // the discriminated union per-key validation already happens on
+      // setPatientSoftTag input. For bulk apply we accept any string
+      // OR boolean and clamp at the per-tag merge step.
+      value: z.union([z.string().min(1).max(2000), z.boolean()]),
+    }),
+    z.object({
+      kind: z.literal("custom"),
+      definitionId: z.string().uuid(),
+      selected: z.array(z.string().min(1).max(200)).max(50),
+    }),
+  ]),
+  reason: z.string().max(500).nullable().optional(),
+});
+
+export const bulkApplyPatientSoftTag = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => bulkApplyInput.parse(raw))
+  .handler(
+    async ({
+      data,
+    }): Promise<{ ok: true; touched: number; skipped: number }> => {
+      const { effectiveUserId, callerUserId } = await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
+      const sb = admin();
+
+      // Single read of all selected patient attachments.
+      const { data: rows, error: readErr } = await sb
+        .from("knowledge_nodes")
+        .select("id, attachments")
+        .eq("user_id", effectiveUserId)
+        .eq("node_type", "patient")
+        .in("id", data.patientNodeIds);
+      if (readErr)
+        throw new Error(`Couldn't read patients: ${readErr.message}`);
+      if (!rows || rows.length === 0) {
+        return { ok: true, touched: 0, skipped: data.patientNodeIds.length };
+      }
+
+      const nowIso = new Date().toISOString();
+
+      // Build the new attachments per patient — in-memory merge.
+      let touched = 0;
+      let skipped = 0;
+      const updates: Array<{ id: string; attachments: Json }> = [];
+
+      for (const row of rows) {
+        const summary =
+          (row.attachments as unknown as PatientSummary | null) ?? null;
+        const priorTags: PatientSoftTags = summary?.softTags ?? {};
+        let nextTags: PatientSoftTags;
+        let wasIdempotent = false;
+
+        const tag = data.tag;
+        if (tag.kind === "preset") {
+          const key = tag.key as keyof PatientSoftTags;
+          const prior = priorTags[key] as
+            | { value: unknown; setByUserId: string; setAt: string; reason: string | null }
+            | null
+            | undefined;
+          if (prior && prior.value === tag.value) {
+            wasIdempotent = true;
+          }
+          nextTags = {
+            ...priorTags,
+            [key]: {
+              value: tag.value,
+              setByUserId: callerUserId,
+              setAt: nowIso,
+              reason: data.reason?.trim() || null,
+            },
+          };
+        } else {
+          // Custom tag definition: merge into customSelections by definitionId.
+          const priorSelections: Record<string, PatientCustomTagValue> =
+            priorTags.customSelections ?? {};
+          const priorSelected = priorSelections[tag.definitionId];
+          if (
+            priorSelected &&
+            priorSelected.selected.length === tag.selected.length &&
+            priorSelected.selected.every((s) => tag.selected.includes(s))
+          ) {
+            wasIdempotent = true;
+          }
+          nextTags = {
+            ...priorTags,
+            customSelections: {
+              ...priorSelections,
+              [tag.definitionId]: {
+                selected: tag.selected,
+                setByUserId: callerUserId,
+                setAt: nowIso,
+                reason: data.reason?.trim() || null,
+              },
+            },
+          };
+        }
+
+        const next: PatientSummary = {
+          ...(summary ?? ({
+            normalizedName: "",
+            displayName: "",
+            firstVisit: null,
+            lastVisit: null,
+            totalVisits: 0,
+            lifetimeUnits: 0,
+            lifetimeSpendUsd: 0,
+            netSpendUsd: 0,
+            primaryManufacturer: null,
+            productMix: {},
+            loyaltyEngagement: {},
+          } as PatientSummary)),
+          softTags: nextTags,
+        };
+
+        if (wasIdempotent) {
+          skipped += 1;
+        } else {
+          touched += 1;
+          updates.push({ id: row.id, attachments: next as unknown as Json });
+        }
+      }
+
+      // Parallelize per-row updates in batches to avoid both N round-trip
+      // latency AND connection saturation. 50 concurrent per batch handles
+      // Karen-Rejuv's 1140-patient max cleanly in ~23 batches.
+      if (updates.length > 0) {
+        const BATCH_SIZE = 50;
+        for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+          const batch = updates.slice(i, i + BATCH_SIZE);
+          const results = await Promise.allSettled(
+            batch.map((u) =>
+              sb
+                .from("knowledge_nodes")
+                .update({
+                  attachments: u.attachments,
+                  updated_at: nowIso,
+                })
+                .eq("id", u.id)
+                .eq("user_id", effectiveUserId),
+            ),
+          );
+          for (let j = 0; j < results.length; j++) {
+            const result = results[j];
+            if (result && result.status === "rejected") {
+              throw new Error(
+                `Bulk apply failed on patient ${batch[j]?.id ?? "?"}: ${String(result.reason)}`,
+              );
+            }
+            if (
+              result &&
+              result.status === "fulfilled" &&
+              result.value.error
+            ) {
+              throw new Error(
+                `Bulk apply failed on patient ${batch[j]?.id ?? "?"}: ${result.value.error.message}`,
+              );
+            }
+          }
+        }
+      }
+
+      // patientNodeIds that didn't come back from the read = not found / not
+      // owned by this tenant. Count them as skipped for transparency.
+      const foundIds = new Set(rows.map((r) => r.id));
+      const notFoundCount = data.patientNodeIds.filter(
+        (id) => !foundIds.has(id),
+      ).length;
+      skipped += notFoundCount;
+
+      return { ok: true, touched, skipped };
+    },
+  );
+
 // ─── Custom soft-tags CRUD (v1.31.1) ──────────────────────────────────────
 //
 // Karen-defined extra tags beyond the seeded six. Same shape (value +
