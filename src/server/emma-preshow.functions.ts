@@ -78,6 +78,68 @@ type SupabaseAdmin = ReturnType<typeof admin>;
 // ─── Composition ──────────────────────────────────────────────────────────
 
 /**
+ * v1.34.3: render a custom SMS template with variable substitution.
+ * Used when the spa's default profile has a custom template for this
+ * specific offset. Variables match the chip set Karen sees in the
+ * Preshow agent UI:
+ *   {{patient.firstName}}  → first name or "there"
+ *   {{appt.dateTime}}      → full formatted date+time
+ *   {{appt.time}}          → time only
+ *   {{appt.treatmentType}} → treatment_type or "your appointment"
+ *   {{appt.providerName}}  → provider_name or "your provider"
+ *   {{spa.name}}           → spa.name
+ *
+ * Footer + STOP are appended automatically — Karen doesn't need to
+ * include them in the template.
+ */
+function renderPreshowTemplate(
+  template: string,
+  vars: {
+    patientFirstName: string | null;
+    spaName: string;
+    treatmentType: string | null;
+    providerName: string | null;
+    scheduledAt: string;
+  },
+): string {
+  return template
+    .replace(/\{\{patient\.firstName\}\}/g, vars.patientFirstName ?? "there")
+    .replace(/\{\{appt\.dateTime\}\}/g, formatLocalDateTime(vars.scheduledAt))
+    .replace(/\{\{appt\.time\}\}/g, formatLocalTime(vars.scheduledAt))
+    .replace(
+      /\{\{appt\.treatmentType\}\}/g,
+      vars.treatmentType ?? "your appointment",
+    )
+    .replace(
+      /\{\{appt\.providerName\}\}/g,
+      vars.providerName ?? "your provider",
+    )
+    .replace(/\{\{spa\.name\}\}/g, vars.spaName);
+}
+
+/**
+ * v1.34.3: append the universal opt-in footer + STOP footer to a
+ * template-rendered body. Matches the footer logic in
+ * composePreShowSmsBody so custom-templated messages behave the same as
+ * code-composed defaults.
+ */
+function appendPreshowFooters(
+  body: string,
+  args: {
+    optinFooterEnabled: boolean;
+    optinFooterText: string;
+    optinListUrl: string | null;
+  },
+): string {
+  let result = body.trimEnd();
+  if (args.optinFooterEnabled && args.optinListUrl) {
+    result += `\n\n${args.optinFooterText} ${args.optinListUrl}`;
+  }
+  result += `\nReply STOP to opt out.`;
+  return result;
+}
+
+/**
  * Compose the SMS body for a pre-show reminder. Code-composed not
  * LLM-composed for v1 — the message structure is simple enough that
  * deterministic templating beats LLM variance, and we want predictable
@@ -329,9 +391,44 @@ export async function dispatchPreShowReminder(args: {
     };
   }
 
+  // 3.5) v1.34.3: resolve the patient's cadence profile + custom message
+  //      template. Until v1.34.3.1 ships patient routing UI, ALL patients
+  //      use the spa's default profile (is_default=true). v1.34.3.1 will
+  //      read patient.softTags.preshowProfileId to override.
+  const { data: profileRow } = await sb
+    .from("emma_preshow_profiles")
+    .select("id, tone, channel")
+    .eq("user_id", userId)
+    .eq("is_default", true)
+    .maybeSingle();
+
+  // Resolve effective tone + channel: profile wins over policy. Fallback
+  // to policy values if profile missing (shouldn't happen after backfill,
+  // defense-in-depth).
+  const effectiveTone = (profileRow?.tone ?? policy.preshow_tone) as
+    | "warm"
+    | "professional"
+    | "casual";
+  const effectiveChannel = (profileRow?.channel ?? policy.preshow_channel) as
+    | "sms"
+    | "email"
+    | "auto";
+
+  // Look up a custom template for THIS profile×offset, if exists.
+  let customTemplateBody: string | null = null;
+  if (profileRow) {
+    const { data: tmplRow } = await sb
+      .from("emma_preshow_message_templates")
+      .select("body_template")
+      .eq("profile_id", profileRow.id)
+      .eq("offset_hours", offsetHours)
+      .maybeSingle();
+    customTemplateBody = tmplRow?.body_template ?? null;
+  }
+
   // 4) Choose channel
   let channel: "sms" | "email";
-  if (policy.preshow_channel === "sms") {
+  if (effectiveChannel === "sms") {
     if (!patientAttachments?.phone) {
       return {
         ok: false,
@@ -340,7 +437,7 @@ export async function dispatchPreShowReminder(args: {
       };
     }
     channel = "sms";
-  } else if (policy.preshow_channel === "email") {
+  } else if (effectiveChannel === "email") {
     if (!patientAttachments?.email) {
       return {
         ok: false,
@@ -390,7 +487,8 @@ export async function dispatchPreShowReminder(args: {
     providerName: apt.provider_name,
     scheduledAt: apt.scheduled_at,
     offsetHours,
-    tone: policy.preshow_tone as "warm" | "professional" | "casual",
+    // v1.34.3: tone comes from the profile (fallback to policy).
+    tone: effectiveTone,
     optinFooterEnabled: policy.optin_footer_enabled,
     optinFooterText: policy.optin_footer_text,
     optinListUrl,
@@ -411,7 +509,26 @@ export async function dispatchPreShowReminder(args: {
         message: "Spa has no provisioned SMS number.",
       };
     } else {
-      composedBody = composePreShowSmsBody(composeArgs);
+      // v1.34.3: render custom template if Karen has saved one for this
+      // profile×offset; otherwise fall back to code-composed default.
+      // Email channel stays code-composed in v1.34.3 — template support
+      // there ships in a follow-on.
+      if (customTemplateBody) {
+        const rendered = renderPreshowTemplate(customTemplateBody, {
+          patientFirstName,
+          spaName,
+          treatmentType: apt.treatment_type,
+          providerName: apt.provider_name,
+          scheduledAt: apt.scheduled_at,
+        });
+        composedBody = appendPreshowFooters(rendered, {
+          optinFooterEnabled: policy.optin_footer_enabled,
+          optinFooterText: policy.optin_footer_text,
+          optinListUrl,
+        });
+      } else {
+        composedBody = composePreShowSmsBody(composeArgs);
+      }
       try {
         const resp = await sendSms({
           from: fromNumber,

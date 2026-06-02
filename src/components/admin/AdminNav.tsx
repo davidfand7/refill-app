@@ -32,9 +32,13 @@ const ITEMS: AdminNavItem[] = [
     match: (p) => p.startsWith("/app/admin/users"),
   },
   {
-    to: "/app/admin/flags",
-    label: "Flags",
-    match: (p) => p.startsWith("/app/admin/flags"),
+    // v1.34.3: renamed from "/app/admin/flags" / "Flags" — old URL
+    // redirects here. Match-fn covers both paths so the chip highlights
+    // during the redirect grace period.
+    to: "/app/admin/agents",
+    label: "Agents",
+    match: (p) =>
+      p.startsWith("/app/admin/agents") || p.startsWith("/app/admin/flags"),
   },
   {
     to: "/app/admin/reports",

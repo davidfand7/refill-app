@@ -56,10 +56,11 @@ const ADMIN_SURFACES: AdminSurface[] = [
     icon: Users,
   },
   {
-    path: "/app/admin/flags",
-    label: "Feature flags",
+    // v1.34.3: renamed from "Feature flags" + path moved to /agents.
+    path: "/app/admin/agents",
+    label: "Agents & overrides",
     description:
-      "Global / tenant / user / rep scopes. Toggle features without a code ship. First-hit wins on the read API.",
+      "Refill's agents (Preshow / Rescue / Attribution / Recognition Allocation) + global defaults + per-tenant overrides. Toggle behaviors without a code ship.",
     icon: ToggleLeft,
   },
   {

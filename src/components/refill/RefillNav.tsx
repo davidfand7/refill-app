@@ -26,6 +26,7 @@ export type RefillNavKey =
   | "catalog"
   | "promos"
   | "recognition"
+  | "agents"
   | "recovery"
   | "inbox"
   | "settings"
@@ -52,6 +53,12 @@ const ITEMS: RefillNavItem[] = [
   // (Promos = offers from manufacturers TO spa; Recognition = inventory
   // deployed FROM spa TO patients).
   { key: "recognition", to: "/app/refill/recognition/inventory", label: "Recognition", shortLabel: "Recognition" },
+  // v1.34.3: Agents & overrides. Lives between Recognition and Recovery —
+  // adjacent to the data-primitives cluster (Patients/Catalog/Promos/
+  // Recognition) but before the action cluster (Recovery/Inbox).
+  // Preshow lives here for now; Rescue + Attribution agents land in
+  // follow-on ships under the same parent.
+  { key: "agents",   to: "/app/refill/agents/preshow",       label: "Agents",   shortLabel: "Agents" },
   { key: "recovery", to: "/app/refill/recovery",           label: "Recovery", shortLabel: "Recovery" },
   { key: "inbox",    to: "/app/refill/inbox",              label: "Inbox",    shortLabel: "Inbox" },
   { key: "settings", to: "/app/refill/settings/scheduler", label: "Settings", shortLabel: "Settings" },

@@ -25,6 +25,7 @@ import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
   Award,
+  Bell,
   BookOpen,
   CreditCard,
   DollarSign,
@@ -79,6 +80,13 @@ const ACTIONS: QuickAction[] = [
     label: "Recognition",
     subtitle: "Rebate inventory to deploy to your best patients",
     icon: Award,
+  },
+  {
+    key: "agents",
+    to: "/app/refill/agents/preshow",
+    label: "Agents",
+    subtitle: "Preshow reminders + cadence profiles",
+    icon: Bell,
   },
   {
     key: "recovery",
