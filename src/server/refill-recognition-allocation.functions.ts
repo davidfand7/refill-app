@@ -44,6 +44,12 @@ export type AllocationSettings = {
   cooldownMonths: number;
   /** Karen must explicitly confirm before a suggestion is delivered. */
   requireManualConfirm: boolean;
+  /** v1.34.x: per-cohort message templates with variable substitution. */
+  templates: {
+    loyal_vintage: string;
+    top_decile_current: string;
+    at_risk: string;
+  };
   updatedAt: string | null;
 };
 
@@ -58,7 +64,7 @@ export type AllocationSuggestion = {
   rebateInventoryId: string;
   score: number;
   rationale: string;
-  status: "pending" | "confirmed" | "dismissed";
+  status: "pending" | "confirmed" | "dismissed" | "dispatched";
   createdAt: string;
   updatedAt: string;
 };
@@ -84,6 +90,14 @@ const DEFAULTS: AllocationSettings = {
   splitAtRiskPct: 20,
   cooldownMonths: 12,
   requireManualConfirm: true,
+  templates: {
+    loyal_vintage:
+      "Hi {{firstName}} — Karen here. I was looking at the spa and realized you've been coming since {{tenureYears}} years ago — that means a lot. Wanted to send you {{units}} units of {{brand}} just because. Want to come in this month to use it?",
+    top_decile_current:
+      "Hey {{firstName}} — Karen at {{spaName}}. You've been one of our favorite people to take care of this year. I set aside {{units}} units of {{brand}} for you — let me know if you want to come in to use it.",
+    at_risk:
+      "Hi {{firstName}} — Karen here. Realized it's been a minute since we've seen you. Wanted to send you {{units}} units of {{brand}} as my way of saying come back when you're ready. No pressure. Reply if you want to grab a time.",
+  },
   updatedAt: null,
 };
 
@@ -100,6 +114,17 @@ const updateSettingsInput = accessInput.extend({
   splitAtRiskPct: z.number().int().min(0).max(100).optional(),
   cooldownMonths: z.number().int().min(0).max(36).optional(),
   requireManualConfirm: z.boolean().optional(),
+  templates: z
+    .object({
+      loyal_vintage: z.string().min(1).max(1000),
+      top_decile_current: z.string().min(1).max(1000),
+      at_risk: z.string().min(1).max(1000),
+    })
+    .optional(),
+});
+
+const dispatchBatchInput = accessInput.extend({
+  suggestionIds: z.array(z.string().uuid()).min(1).max(50),
 });
 
 const idInput = accessInput.extend({
@@ -128,6 +153,12 @@ async function loadSettings(
     splitAtRiskPct: s.splitAtRiskPct ?? DEFAULTS.splitAtRiskPct,
     cooldownMonths: s.cooldownMonths ?? DEFAULTS.cooldownMonths,
     requireManualConfirm: s.requireManualConfirm ?? DEFAULTS.requireManualConfirm,
+    templates: {
+      loyal_vintage: s.templates?.loyal_vintage ?? DEFAULTS.templates.loyal_vintage,
+      top_decile_current:
+        s.templates?.top_decile_current ?? DEFAULTS.templates.top_decile_current,
+      at_risk: s.templates?.at_risk ?? DEFAULTS.templates.at_risk,
+    },
     updatedAt: row.updated_at,
   };
 }
@@ -161,6 +192,7 @@ export const updateAllocationSettings = createServerFn({ method: "POST" })
       cooldownMonths: data.cooldownMonths ?? prior.cooldownMonths,
       requireManualConfirm:
         data.requireManualConfirm ?? prior.requireManualConfirm,
+      templates: data.templates ?? prior.templates,
       updatedAt: new Date().toISOString(),
     };
 
@@ -206,7 +238,7 @@ type SuggestionAttachments = {
   rebateInventoryId: string;
   score: number;
   rationale: string;
-  status: "pending" | "confirmed" | "dismissed";
+  status: "pending" | "confirmed" | "dismissed" | "dispatched";
 };
 
 export const listAllocationSuggestions = createServerFn({ method: "POST" })
@@ -617,6 +649,206 @@ export const runAllocation = createServerFn({ method: "POST" })
         generated: suggestions.length,
         perCohort: cohortGenerated,
         inventoryUsed,
+      };
+    },
+  );
+
+// ─── Dispatch batch via iMessage MCP email bridge (v1.34.x) ──────────────
+
+function renderTemplate(
+  template: string,
+  vars: Record<string, string>,
+): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_m, k) => vars[k] ?? `{{${k}}}`);
+}
+
+export const dispatchAllocationBatch = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => dispatchBatchInput.parse(raw))
+  .handler(
+    async ({
+      data,
+    }): Promise<{
+      drafted: number;
+      skipped: number;
+      proxyEmailMessageId: string | null;
+      sendError: string | null;
+    }> => {
+      const { effectiveUserId } = await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
+      const sb = admin();
+      const settings = await loadSettings(sb, effectiveUserId);
+
+      // Load each suggestion + patient phone.
+      const { data: rows, error: readErr } = await sb
+        .from("knowledge_nodes")
+        .select("id, attachments")
+        .eq("user_id", effectiveUserId)
+        .eq("node_type", "allocation_suggestion")
+        .in("id", data.suggestionIds);
+      if (readErr) {
+        throw new Error(`Couldn't load suggestions: ${readErr.message}`);
+      }
+
+      // Load proxy email + spa name + from address.
+      const [{ data: policy }, { data: spaProfile }] = await Promise.all([
+        sb
+          .from("emma_noshow_policies")
+          .select("rescue_proxy_email")
+          .eq("user_id", effectiveUserId)
+          .maybeSingle(),
+        sb
+          .from("knowledge_nodes")
+          .select("title")
+          .eq("user_id", effectiveUserId)
+          .eq("node_type", "spa_profile")
+          .maybeSingle(),
+      ]);
+      const proxyEmail = policy?.rescue_proxy_email?.trim() || null;
+      const spaName = spaProfile?.title?.trim() || "Your spa";
+
+      // Compose per-suggestion drafts.
+      type DraftLine = {
+        suggestionId: string;
+        patientName: string;
+        phone: string;
+        cohort: Cohort;
+        brand: string;
+        body: string;
+      };
+      const drafts: DraftLine[] = [];
+      const skippedNoPhone: string[] = [];
+      for (const row of rows ?? []) {
+        const a = (row.attachments ?? {}) as SuggestionAttachments;
+        if (a.status !== "confirmed") continue;
+        // Load patient phone.
+        const { data: patient } = await sb
+          .from("knowledge_nodes")
+          .select("attachments")
+          .eq("id", a.patientNodeId)
+          .eq("user_id", effectiveUserId)
+          .maybeSingle();
+        const phone =
+          (patient?.attachments as { phone?: string } | null)?.phone?.trim() ||
+          null;
+        if (!phone) {
+          skippedNoPhone.push(a.patientDisplayName);
+          continue;
+        }
+        const firstName = a.patientDisplayName.split(/\s+/)[0] ?? a.patientDisplayName;
+        const template = settings.templates[a.cohort];
+        const body = renderTemplate(template, {
+          firstName,
+          fullName: a.patientDisplayName,
+          brand: a.brand,
+          units: String(a.units),
+          spaName,
+          manufacturer: a.manufacturer ?? "",
+          tenureYears: "several",
+        });
+        drafts.push({
+          suggestionId: row.id,
+          patientName: a.patientDisplayName,
+          phone,
+          cohort: a.cohort,
+          brand: a.brand,
+          body,
+        });
+      }
+
+      let proxyEmailMessageId: string | null = null;
+      let sendError: string | null = null;
+
+      if (drafts.length > 0 && proxyEmail) {
+        const resendKey = process.env.RESEND_API_KEY;
+        if (!resendKey) {
+          sendError = "RESEND_API_KEY missing on the worker.";
+        } else {
+          const subject = `${spaName} — ${drafts.length} Recognition allocation${drafts.length === 1 ? "" : "s"} ready to send`;
+          const draftBlocks = drafts
+            .map(
+              (d) =>
+                `<div style="margin:18px 0;padding:14px 16px;background:#f7f6f3;border-left:3px solid #047857;border-radius:6px;">
+  <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:#222;margin-bottom:8px;"><strong>To:</strong> ${d.phone} <span style="color:#666;">(${d.patientName}, ${d.cohort.replace("_", " ")} · ${d.brand})</span></div>
+  <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:#222;white-space:pre-wrap;">${d.body}</div>
+</div>`,
+            )
+            .join("");
+          const html = `<!doctype html><html><body style="margin:0;padding:32px;background:#fafaf7;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Inter,sans-serif;color:#1a1a1a;">
+  <div style="max-width:640px;margin:0 auto;">
+    <div style="margin-bottom:20px;padding:14px 16px;background:#ecfdf5;border-left:3px solid #047857;border-radius:6px;font-size:13px;color:#064e3b;line-height:1.55;">
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#047857;margin-bottom:6px;">Recognition · iMessage drafts</div>
+      Paste this whole email into Claude Desktop with the iMessage MCP installed. Claude will call <code>draft_imessage(recipient_phone, body)</code> for each row below — one Messages.app conversation per draft. Review each and tap Send. Recognition is identity-led: messages come from YOUR Apple ID, not a platform shortcode.
+    </div>
+    <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#047857;margin:24px 0 8px;">Ready-to-send drafts</div>
+    ${draftBlocks}
+  </div>
+</body></html>`;
+          const text = `${spaName} — Recognition allocations\n\nPaste into Claude Desktop with iMessage MCP.\n\n${drafts.map((d) => `── To: ${d.phone} (${d.patientName}, ${d.cohort}, ${d.brand}) ──\n\n${d.body}`).join("\n\n")}`;
+
+          try {
+            const res = await fetch("https://api.resend.com/emails", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${resendKey}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                from: process.env.REFILL_FROM_EMAIL ?? "recognition@getrefill.app",
+                to: [proxyEmail],
+                subject,
+                text,
+                html,
+                tags: [
+                  { name: "type", value: "refill-recognition-dispatch" },
+                  { name: "tenant", value: effectiveUserId },
+                ],
+              }),
+              signal: AbortSignal.timeout(20_000),
+            });
+            if (res.ok) {
+              const json = (await res.json().catch(() => ({}))) as { id?: string };
+              proxyEmailMessageId = json.id ?? null;
+            } else {
+              sendError = `Resend ${res.status}: ${await res.text().catch(() => "")}`;
+            }
+          } catch (e) {
+            sendError = e instanceof Error ? e.message : String(e);
+          }
+        }
+      } else if (drafts.length > 0 && !proxyEmail) {
+        sendError =
+          "Set a rescue_proxy_email on this spa's policy so dispatch can route via your Mac.";
+      }
+
+      // Flip status → dispatched for the drafts we just emailed.
+      if (proxyEmailMessageId) {
+        const nowIso = new Date().toISOString();
+        for (const d of drafts) {
+          const { data: row } = await sb
+            .from("knowledge_nodes")
+            .select("attachments")
+            .eq("id", d.suggestionId)
+            .eq("user_id", effectiveUserId)
+            .maybeSingle();
+          if (!row) continue;
+          const a = { ...(row.attachments as SuggestionAttachments), status: "dispatched" as const };
+          await sb
+            .from("knowledge_nodes")
+            .update({
+              attachments: a as unknown as Json,
+              updated_at: nowIso,
+            })
+            .eq("id", d.suggestionId);
+        }
+      }
+
+      return {
+        drafted: drafts.length,
+        skipped: skippedNoPhone.length,
+        proxyEmailMessageId,
+        sendError,
       };
     },
   );

@@ -22,8 +22,10 @@ import {
   CheckCircle2,
   Heart,
   Loader2,
+  MessageSquareText,
   Play,
   Save,
+  Send,
   Sparkles,
   TrendingDown,
   X,
@@ -36,6 +38,7 @@ import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
   confirmAllocationSuggestion,
   dismissAllocationSuggestion,
+  dispatchAllocationBatch,
   getAllocationSettings,
   listAllocationSuggestions,
   runAllocation,
@@ -84,6 +87,13 @@ function RecognitionAgentPage() {
   const [draftTopDecile, setDraftTopDecile] = useState("");
   const [draftAtRisk, setDraftAtRisk] = useState("");
   const [draftCooldown, setDraftCooldown] = useState("");
+  const [draftTpls, setDraftTpls] = useState({
+    loyal_vintage: "",
+    top_decile_current: "",
+    at_risk: "",
+  });
+  const [savingTemplates, setSavingTemplates] = useState(false);
+  const [dispatching, setDispatching] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -106,6 +116,11 @@ function RecognitionAgentPage() {
       setDraftTopDecile(String(s.splitTopDecileCurrentPct));
       setDraftAtRisk(String(s.splitAtRiskPct));
       setDraftCooldown(String(s.cooldownMonths));
+      setDraftTpls({
+        loyal_vintage: s.templates.loyal_vintage,
+        top_decile_current: s.templates.top_decile_current,
+        at_risk: s.templates.at_risk,
+      });
       setLoadError(null);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Couldn't load.");
@@ -226,6 +241,67 @@ function RecognitionAgentPage() {
     }
   }
 
+  async function saveTemplates() {
+    if (!accessToken) return;
+    setSavingTemplates(true);
+    try {
+      const updated = await updateAllocationSettings({
+        data: {
+          accessToken,
+          viewAsUserId,
+          templates: draftTpls,
+        },
+      });
+      setSettings(updated);
+      toast.success("Templates saved.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed.");
+    } finally {
+      setSavingTemplates(false);
+    }
+  }
+
+  async function dispatchConfirmed() {
+    if (!accessToken) return;
+    const confirmedIds = suggestions
+      .filter((s) => s.status === "confirmed")
+      .map((s) => s.id);
+    if (confirmedIds.length === 0) {
+      toast.warning("Confirm at least one suggestion to dispatch.");
+      return;
+    }
+    setDispatching(true);
+    try {
+      const result = await dispatchAllocationBatch({
+        data: {
+          accessToken,
+          viewAsUserId,
+          suggestionIds: confirmedIds.slice(0, 50),
+        },
+      });
+      if (result.sendError) {
+        toast.error(`Dispatch failed: ${result.sendError}`);
+      } else {
+        toast.success(
+          `${result.drafted} iMessage draft${result.drafted === 1 ? "" : "s"} sent to your proxy email${result.skipped > 0 ? ` (${result.skipped} skipped — no phone)` : ""}.`,
+        );
+        const list = await listAllocationSuggestions({
+          data: { accessToken, viewAsUserId },
+        });
+        setSuggestions(list);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Dispatch failed.");
+    } finally {
+      setDispatching(false);
+    }
+  }
+
+  const confirmedCount = useMemo(
+    () => suggestions.filter((s) => s.status === "confirmed").length,
+    [suggestions],
+  );
+
   return (
     <div className="flex flex-col min-h-screen bg-white">
       <PageHeader
@@ -238,19 +314,36 @@ function RecognitionAgentPage() {
           { label: "Recognition" },
         ]}
         actions={
-          <button
-            type="button"
-            onClick={() => void handleRunAllocation()}
-            disabled={running || !accessToken}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald px-3 py-1.5 text-xs font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
-          >
-            {running ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Play className="h-3.5 w-3.5" />
+          <div className="flex items-center gap-2">
+            {confirmedCount > 0 && (
+              <button
+                type="button"
+                onClick={() => void dispatchConfirmed()}
+                disabled={dispatching || !accessToken}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald/30 bg-emerald-soft text-emerald-ink px-3 py-1.5 text-xs font-semibold hover:bg-emerald hover:text-paper transition disabled:opacity-50"
+              >
+                {dispatching ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Send className="h-3.5 w-3.5" />
+                )}
+                Dispatch {confirmedCount} via iMessage
+              </button>
             )}
-            {running ? "Allocating…" : "Run allocation"}
-          </button>
+            <button
+              type="button"
+              onClick={() => void handleRunAllocation()}
+              disabled={running || !accessToken}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald px-3 py-1.5 text-xs font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
+            >
+              {running ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Play className="h-3.5 w-3.5" />
+              )}
+              {running ? "Allocating…" : "Run allocation"}
+            </button>
+          </div>
         }
       />
       <AgentsTabStrip active="recognition" />
@@ -374,6 +467,55 @@ function RecognitionAgentPage() {
                     Save split
                   </button>
                 </div>
+              </div>
+            </section>
+
+            {/* v1.34.x: Per-cohort iMessage templates */}
+            <section className="rounded-2xl border border-rule bg-white">
+              <header className="px-5 py-3 border-b border-rule bg-rule-soft/60 flex items-center gap-2">
+                <MessageSquareText className="h-3.5 w-3.5 text-ink-soft" />
+                <div className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
+                  iMessage templates per cohort
+                </div>
+                <div className="ml-auto text-[10px] text-ink-faint italic">
+                  Karen-voice; variable substitution
+                </div>
+              </header>
+              <div className="px-5 py-4 space-y-3">
+                {(Object.keys(COHORT_LABELS) as Cohort[]).map((c) => (
+                  <div key={c}>
+                    <label className="block text-[10px] font-semibold uppercase tracking-wider text-ink-soft mb-1">
+                      {COHORT_LABELS[c]}
+                    </label>
+                    <textarea
+                      value={draftTpls[c]}
+                      onChange={(e) =>
+                        setDraftTpls((prev) => ({ ...prev, [c]: e.target.value }))
+                      }
+                      className="w-full h-20 rounded border border-rule bg-white px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-emerald/30"
+                    />
+                  </div>
+                ))}
+                <p className="text-[10px] text-ink-faint">
+                  Variables: <code>{"{{firstName}}"}</code> /{" "}
+                  <code>{"{{brand}}"}</code> / <code>{"{{units}}"}</code> /{" "}
+                  <code>{"{{spaName}}"}</code> / <code>{"{{manufacturer}}"}</code>.
+                  Templates compose into iMessage drafts that route via your
+                  proxy email → Claude Desktop iMessage MCP → Messages.app.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void saveTemplates()}
+                  disabled={savingTemplates}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-emerald px-3 py-1.5 text-[12px] font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
+                >
+                  {savingTemplates ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Save className="h-3 w-3" />
+                  )}
+                  Save templates
+                </button>
               </div>
             </section>
 
@@ -529,6 +671,10 @@ function SuggestionRow({
         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-soft text-emerald-ink px-2 py-1 text-[10px] font-semibold shrink-0">
           <CheckCircle2 className="h-3 w-3" />
           Confirmed
+        </span>
+      ) : suggestion.status === "dispatched" ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald text-paper px-2 py-1 text-[10px] font-semibold shrink-0">
+          Dispatched
         </span>
       ) : (
         <span className="inline-flex items-center gap-1 rounded-full bg-rule-soft text-ink-soft px-2 py-1 text-[10px] font-semibold shrink-0">
