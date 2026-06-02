@@ -6,7 +6,7 @@
  */
 
 import { Link } from "@tanstack/react-router";
-import { Bell, Sparkles, Target } from "lucide-react";
+import { Award, Bell, Sparkles, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type AgentTab = "preshow" | "rescue" | "attribution" | "recognition";
@@ -20,6 +20,7 @@ const TABS: Array<{
   { key: "preshow", to: "/app/refill/agents/preshow", label: "Preshow", icon: Bell },
   { key: "rescue", to: "/app/refill/agents/rescue", label: "Rescue", icon: Sparkles },
   { key: "attribution", to: "/app/refill/agents/attribution", label: "Attribution", icon: Target },
+  { key: "recognition", to: "/app/refill/agents/recognition", label: "Recognition", icon: Award },
 ];
 
 export function AgentsTabStrip({ active }: { active: AgentTab }) {
