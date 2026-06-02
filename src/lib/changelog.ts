@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.34.9.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.34.9.1 &mdash; Hide affordance on Catalog Products + Services rows. Grasshopper&rsquo;s ask: a soft-delete that lets him remove products/services from the active list without nuking history.</strong> Built on the <code>hidden_at timestamptz</code> column added in the v1.34.9 migration (pasted via Supabase dashboard per [[feedback-migrations-via-dashboard]]). <strong>Server side</strong>: <code>Product.hiddenAt</code> + <code>Service.hiddenAt</code> on the public types and row mappers; <code>readInput</code> gains <code>includeHidden</code> bool (default false &mdash; list fns now filter <code>.is(\"hidden_at\", null)</code> unless caller asks for hidden too); new <code>setProductHiddenFn</code> + <code>setServiceHiddenFn</code> server fns that flip the column (toggling = pass <code>hidden: !current</code>). <strong>UI</strong>: each Product / Service row gets a vertical button stack on the right with Edit + Hide / Unhide (Eye / EyeOff icons). Hidden rows render at 60% opacity with a small &lsquo;hidden&rsquo; pill chip next to the brand name &mdash; visible only when &lsquo;Show hidden&rsquo; is toggled on. <strong>Show hidden toggle</strong>: a pill chip on the right edge of the category-filter strip (ml-auto), pairs with the v1.34.9 category chips visually. Tap to reveal hidden rows; tap again to hide. Re-fires the list query with includeHidden=true so the data refreshes. <strong>Row click</strong>: the per-row main click area (brand/name + notes) still triggers Edit. Button stack on the right is the dedicated action group. <strong>What this DOESN&rsquo;T ship</strong>: bulk hide / unhide (one at a time); confirmation dialog before hide (just toasts); separate &lsquo;Archived&rsquo; URL; per-tenant default for showing-hidden; preservation of hidden state across CSV re-import. <strong>Touched</strong>: <code>src/server/refill-catalog.ts</code> (Product + Service types + ProductRow + ServiceRow shapes + rowToProduct / rowToService + includeHidden in readInput + setHiddenInput zod + setProductHiddenFn + setServiceHiddenFn + filter in list fns), <code>src/routes/app.refill.catalog.products.tsx</code> (Eye/EyeOff imports + showHidden state + onToggleHidden + Show hidden chip + ProductRow refactor with action stack + hidden visual treatment), <code>src/routes/app.refill.catalog.services.tsx</code> (same pattern), <code>src/lib/changelog.ts</code> (this entry). No new dependencies. <strong>Migration applied</strong>: 20260624000000_v1_34_9_catalog_hidden.sql.",
+    ],
+  },
+  {
     version: "v1.34.9",
     date: "June 2026",
     items: [

@@ -58,6 +58,8 @@ export type Product = {
   marginPct: number | null;
   manufacturer: ProductManufacturer | null;
   notes: string | null;
+  /** v1.34.9.1: soft-hide. null = active, ISO timestamp = hidden at that moment. */
+  hiddenAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -104,6 +106,7 @@ type ProductRow = {
   sales_price_per_unit: string | number;
   manufacturer: string | null;
   notes: string | null;
+  hidden_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -125,6 +128,7 @@ function rowToProduct(r: ProductRow): Product {
     marginPct,
     manufacturer: (r.manufacturer as ProductManufacturer | null) ?? null,
     notes: r.notes,
+    hiddenAt: r.hidden_at ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -144,6 +148,15 @@ const MANUFACTURER_VALUES = [
 const readInput = z.object({
   accessToken: z.string().min(1),
   viewAsUserId: z.string().uuid().optional(),
+  /** v1.34.9.1: include soft-hidden rows. Default false. */
+  includeHidden: z.boolean().optional(),
+});
+
+const setHiddenInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  id: z.string().uuid(),
+  hidden: z.boolean(),
 });
 
 const productPayload = z.object({
@@ -186,14 +199,42 @@ export const listProductsFn = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
-    const { data: rows, error } = await sb
+    let query = sb
       .from("products")
       .select("*")
-      .eq("tenant_id", tenantId)
+      .eq("tenant_id", tenantId);
+    if (!data.includeHidden) {
+      query = query.is("hidden_at", null);
+    }
+    const { data: rows, error } = await query
       .order("category", { ascending: true })
       .order("brand", { ascending: true });
     if (error) throw new Error(`Couldn't list products: ${error.message}`);
     return (rows ?? []).map((r) => rowToProduct(r as ProductRow));
+  });
+
+// ─── setProductHiddenFn (v1.34.9.1) ───────────────────────────────────────
+
+export const setProductHiddenFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => setHiddenInput.parse(raw))
+  .handler(async ({ data }): Promise<Product> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const { data: row, error } = await sb
+      .from("products")
+      .update({ hidden_at: data.hidden ? new Date().toISOString() : null })
+      .eq("id", data.id)
+      .eq("tenant_id", tenantId)
+      .select("*")
+      .single();
+    if (error || !row) {
+      throw new Error(`Couldn't update product: ${error?.message ?? "no row"}`);
+    }
+    return rowToProduct(row as ProductRow);
   });
 
 // ─── createProductFn ──────────────────────────────────────────────────────
@@ -296,6 +337,7 @@ export type Service = {
   marginPerService: number | null;
   marginPct: number | null;
   notes: string | null;
+  hiddenAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -309,6 +351,7 @@ type ServiceRow = {
   cogs_per_service: string | number | null;
   cogs_source: string;
   notes: string | null;
+  hidden_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -330,6 +373,7 @@ function rowToService(r: ServiceRow): Service {
     marginPerService: margin,
     marginPct,
     notes: r.notes,
+    hiddenAt: r.hidden_at ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -369,14 +413,42 @@ export const listServicesFn = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
-    const { data: rows, error } = await sb
+    let query = sb
       .from("services")
       .select("*")
-      .eq("tenant_id", tenantId)
+      .eq("tenant_id", tenantId);
+    if (!data.includeHidden) {
+      query = query.is("hidden_at", null);
+    }
+    const { data: rows, error } = await query
       .order("category", { ascending: true })
       .order("name", { ascending: true });
     if (error) throw new Error(`Couldn't list services: ${error.message}`);
     return (rows ?? []).map((r) => rowToService(r as ServiceRow));
+  });
+
+// ─── setServiceHiddenFn (v1.34.9.1) ───────────────────────────────────────
+
+export const setServiceHiddenFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => setHiddenInput.parse(raw))
+  .handler(async ({ data }): Promise<Service> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const { data: row, error } = await sb
+      .from("services")
+      .update({ hidden_at: data.hidden ? new Date().toISOString() : null })
+      .eq("id", data.id)
+      .eq("tenant_id", tenantId)
+      .select("*")
+      .single();
+    if (error || !row) {
+      throw new Error(`Couldn't update service: ${error?.message ?? "no row"}`);
+    }
+    return rowToService(row as ServiceRow);
   });
 
 // ─── createServiceFn ──────────────────────────────────────────────────────

@@ -22,6 +22,8 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   Beaker,
+  Eye,
+  EyeOff,
   Loader2,
   Pencil,
   Plus,
@@ -39,6 +41,7 @@ import {
   createProductFn,
   deleteProductFn,
   listProductsFn,
+  setProductHiddenFn,
   updateProductFn,
   type Product,
   type ProductCategory,
@@ -172,6 +175,8 @@ function ProductsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<ProductDraft>(EMPTY_DRAFT);
   const [busy, setBusy] = useState(false);
+  // v1.34.9.1: show hidden rows. Default false.
+  const [showHidden, setShowHidden] = useState(false);
 
   useEffect(() => {
     if (membership.status !== "tenant") return;
@@ -183,7 +188,7 @@ function ProductsPage() {
         const token = sess.session?.access_token;
         if (!token) return;
         const rows = await listProductsFn({
-          data: { accessToken: token, viewAsUserId },
+          data: { accessToken: token, viewAsUserId, includeHidden: showHidden },
         });
         if (!cancelled) setProducts(rows);
       } catch (err) {
@@ -197,7 +202,31 @@ function ProductsPage() {
     return () => {
       cancelled = true;
     };
-  }, [membership.status, viewAsUserId]);
+  }, [membership.status, viewAsUserId, showHidden]);
+
+  async function onToggleHidden(p: Product) {
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Not signed in.");
+      const updated = await setProductHiddenFn({
+        data: {
+          accessToken: token,
+          viewAsUserId,
+          id: p.id,
+          hidden: p.hiddenAt === null,
+        },
+      });
+      setProducts((prev) =>
+        showHidden
+          ? prev.map((x) => (x.id === p.id ? updated : x))
+          : prev.filter((x) => x.id !== p.id),
+      );
+      toast.success(p.hiddenAt === null ? `${p.brand} hidden.` : `${p.brand} unhidden.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't update.");
+    }
+  }
 
   // v1.34.9: category filter chips. Multi-select, union semantics —
   // empty set = show all.
@@ -403,6 +432,21 @@ function ProductsPage() {
                 Clear
               </button>
             )}
+            <div className="ml-auto">
+              <button
+                type="button"
+                onClick={() => setShowHidden((v) => !v)}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium border transition",
+                  showHidden
+                    ? "border-emerald bg-emerald-soft text-emerald-ink"
+                    : "border-rule bg-white text-ink-soft hover:border-emerald/40 hover:text-ink",
+                )}
+              >
+                {showHidden ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                {showHidden ? "Showing hidden" : "Show hidden"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -475,6 +519,7 @@ function ProductsPage() {
                         key={p.id}
                         product={p}
                         onEdit={() => startEdit(p)}
+                        onToggleHidden={() => void onToggleHidden(p)}
                       />
                     ),
                   )}
@@ -488,42 +533,81 @@ function ProductsPage() {
   );
 }
 
-function ProductRow({ product, onEdit }: { product: Product; onEdit: () => void }) {
+function ProductRow({
+  product,
+  onEdit,
+  onToggleHidden,
+}: {
+  product: Product;
+  onEdit: () => void;
+  onToggleHidden: () => void;
+}) {
+  const isHidden = product.hiddenAt !== null;
   return (
     <li>
-      <button
-        type="button"
-        onClick={onEdit}
-        className="w-full text-left rounded-xl border border-rule bg-white px-5 py-4 hover:border-emerald/40 hover:shadow-sm transition group"
+      <div
+        className={cn(
+          "w-full rounded-xl border bg-white px-5 py-4 transition group flex items-start gap-4",
+          isHidden
+            ? "border-rule/60 opacity-60 hover:opacity-100"
+            : "border-rule hover:border-emerald/40 hover:shadow-sm",
+        )}
       >
-        <div className="flex items-start gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[16px] font-semibold text-ink">{product.brand}</span>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="flex-1 min-w-0 text-left"
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[16px] font-semibold text-ink">{product.brand}</span>
+            <span className="text-[11px] text-ink-soft bg-bg-soft rounded-full px-2 py-0.5">
+              {unitLabel(product.unitType)}
+            </span>
+            {product.manufacturer && (
               <span className="text-[11px] text-ink-soft bg-bg-soft rounded-full px-2 py-0.5">
-                {unitLabel(product.unitType)}
+                {manufacturerLabel(product.manufacturer)}
               </span>
-              {product.manufacturer && (
-                <span className="text-[11px] text-ink-soft bg-bg-soft rounded-full px-2 py-0.5">
-                  {manufacturerLabel(product.manufacturer)}
-                </span>
-              )}
-            </div>
-            {product.notes && (
-              <p className="mt-1 text-[12px] text-ink-soft leading-snug">{product.notes}</p>
+            )}
+            {isHidden && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-rule-soft text-ink-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
+                <EyeOff className="h-2.5 w-2.5" />
+                hidden
+              </span>
             )}
           </div>
-          <div className="text-right tabular-nums shrink-0">
-            <div className="text-[13px] text-ink-soft">
-              {fmtUsd(product.salesPricePerUnit)} sell &middot; {fmtUsd(product.costPerUnit)} cost
-            </div>
-            <div className="text-[15px] font-semibold text-emerald mt-0.5">
-              {fmtUsd(product.marginPerUnit)} <span className="text-[12px] text-ink-soft font-normal">({fmtPct(product.marginPct)})</span>
-            </div>
+          {product.notes && (
+            <p className="mt-1 text-[12px] text-ink-soft leading-snug">{product.notes}</p>
+          )}
+        </button>
+        <div className="text-right tabular-nums shrink-0">
+          <div className="text-[13px] text-ink-soft">
+            {fmtUsd(product.salesPricePerUnit)} sell &middot; {fmtUsd(product.costPerUnit)} cost
           </div>
-          <Pencil className="h-4 w-4 text-ink-faint group-hover:text-emerald shrink-0 mt-1" />
+          <div className="text-[15px] font-semibold text-emerald mt-0.5">
+            {fmtUsd(product.marginPerUnit)} <span className="text-[12px] text-ink-soft font-normal">({fmtPct(product.marginPct)})</span>
+          </div>
         </div>
-      </button>
+        <div className="flex flex-col gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={onEdit}
+            title="Edit"
+            className="inline-flex items-center gap-1 rounded border border-rule bg-white px-2 py-1 text-[11px] font-medium text-ink-soft hover:text-emerald hover:border-emerald/40 transition"
+          >
+            <Pencil className="h-3 w-3" />
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={onToggleHidden}
+            title={isHidden ? "Unhide" : "Hide from list"}
+            className="inline-flex items-center gap-1 rounded border border-rule bg-white px-2 py-1 text-[11px] font-medium text-ink-soft hover:text-rose hover:border-rose/40 transition"
+          >
+            {isHidden ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+            {isHidden ? "Unhide" : "Hide"}
+          </button>
+        </div>
+      </div>
     </li>
   );
 }

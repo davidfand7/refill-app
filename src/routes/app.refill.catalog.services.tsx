@@ -20,6 +20,8 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   ClipboardList,
+  Eye,
+  EyeOff,
   Link2,
   Loader2,
   Pencil,
@@ -44,6 +46,7 @@ import {
   listServicesFn,
   recategorizeServicesFromBrandsFn,
   setServiceCogsSourceFn,
+  setServiceHiddenFn,
   unlinkServiceProductFn,
   updateServiceFn,
   updateServiceProductQuantityFn,
@@ -152,6 +155,8 @@ function ServicesPage() {
     | { ok: false; message: string; at: string }
     | null
   >(null);
+  // v1.34.9.1: show hidden services
+  const [showHidden, setShowHidden] = useState(false);
 
   useEffect(() => {
     if (membership.status !== "tenant") return;
@@ -163,7 +168,7 @@ function ServicesPage() {
         const token = sess.session?.access_token;
         if (!token) return;
         const [svcs, prods] = await Promise.all([
-          listServicesFn({ data: { accessToken: token, viewAsUserId } }),
+          listServicesFn({ data: { accessToken: token, viewAsUserId, includeHidden: showHidden } }),
           listProductsFn({ data: { accessToken: token, viewAsUserId } }),
         ]);
         if (!cancelled) {
@@ -181,7 +186,31 @@ function ServicesPage() {
     return () => {
       cancelled = true;
     };
-  }, [membership.status, viewAsUserId]);
+  }, [membership.status, viewAsUserId, showHidden]);
+
+  async function onToggleHidden(s: Service) {
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Not signed in.");
+      const updated = await setServiceHiddenFn({
+        data: {
+          accessToken: token,
+          viewAsUserId,
+          id: s.id,
+          hidden: s.hiddenAt === null,
+        },
+      });
+      setServices((prev) =>
+        showHidden
+          ? prev.map((x) => (x.id === s.id ? updated : x))
+          : prev.filter((x) => x.id !== s.id),
+      );
+      toast.success(s.hiddenAt === null ? `${s.name} hidden.` : `${s.name} unhidden.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't update.");
+    }
+  }
 
   // v1.34.9: category filter chips
   const [categoryFilter, setCategoryFilter] = useState<Set<ServiceCategory>>(
@@ -581,6 +610,21 @@ function ServicesPage() {
                 Clear
               </button>
             )}
+            <div className="ml-auto">
+              <button
+                type="button"
+                onClick={() => setShowHidden((v) => !v)}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium border transition",
+                  showHidden
+                    ? "border-emerald bg-emerald-soft text-emerald-ink"
+                    : "border-rule bg-white text-ink-soft hover:border-emerald/40 hover:text-ink",
+                )}
+              >
+                {showHidden ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                {showHidden ? "Showing hidden" : "Show hidden"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -723,6 +767,7 @@ function ServicesPage() {
                         key={s.id}
                         service={s}
                         onEdit={() => startEdit(s)}
+                        onToggleHidden={() => void onToggleHidden(s)}
                       />
                     ),
                   )}
@@ -736,50 +781,89 @@ function ServicesPage() {
   );
 }
 
-function ServiceRow({ service, onEdit }: { service: Service; onEdit: () => void }) {
+function ServiceRow({
+  service,
+  onEdit,
+  onToggleHidden,
+}: {
+  service: Service;
+  onEdit: () => void;
+  onToggleHidden: () => void;
+}) {
   const hasCogs = service.cogsPerService !== null;
+  const isHidden = service.hiddenAt !== null;
   return (
     <li>
-      <button
-        type="button"
-        onClick={onEdit}
-        className="w-full text-left rounded-xl border border-rule bg-white px-5 py-4 hover:border-emerald/40 hover:shadow-sm transition group"
+      <div
+        className={cn(
+          "w-full rounded-xl border bg-white px-5 py-4 transition group flex items-start gap-4",
+          isHidden
+            ? "border-rule/60 opacity-60 hover:opacity-100"
+            : "border-rule hover:border-emerald/40 hover:shadow-sm",
+        )}
       >
-        <div className="flex items-start gap-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[16px] font-semibold text-ink">{service.name}</span>
-              {service.cogsSource === "derived" && (
-                <span className="text-[11px] text-emerald-ink bg-emerald-soft rounded-full px-2 py-0.5 inline-flex items-center gap-1">
-                  <Link2 className="h-3 w-3" />
-                  Auto COGS
-                </span>
-              )}
-            </div>
-            {service.notes && (
-              <p className="mt-1 text-[12px] text-ink-soft leading-snug">{service.notes}</p>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="flex-1 min-w-0 text-left"
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[16px] font-semibold text-ink">{service.name}</span>
+            {service.cogsSource === "derived" && (
+              <span className="text-[11px] text-emerald-ink bg-emerald-soft rounded-full px-2 py-0.5 inline-flex items-center gap-1">
+                <Link2 className="h-3 w-3" />
+                Auto COGS
+              </span>
+            )}
+            {isHidden && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-rule-soft text-ink-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
+                <EyeOff className="h-2.5 w-2.5" />
+                hidden
+              </span>
             )}
           </div>
-          <div className="text-right tabular-nums shrink-0">
-            <div className="text-[13px] text-ink-soft">
-              {hasCogs
-                ? `${fmtUsd(service.servicePrice)} sell · ${fmtUsd(service.cogsPerService as number)} cost`
-                : `${fmtUsd(service.servicePrice)} sell · COGS not set`}
-            </div>
-            <div className="text-[15px] font-semibold text-emerald mt-0.5">
-              {service.marginPerService !== null ? (
-                <>
-                  {fmtUsd(service.marginPerService)}{" "}
-                  <span className="text-[12px] text-ink-soft font-normal">({fmtPct(service.marginPct)})</span>
-                </>
-              ) : (
-                <span className="text-ink-faint text-[13px] font-normal">Set COGS for margin</span>
-              )}
-            </div>
+          {service.notes && (
+            <p className="mt-1 text-[12px] text-ink-soft leading-snug">{service.notes}</p>
+          )}
+        </button>
+        <div className="text-right tabular-nums shrink-0">
+          <div className="text-[13px] text-ink-soft">
+            {hasCogs
+              ? `${fmtUsd(service.servicePrice)} sell · ${fmtUsd(service.cogsPerService as number)} cost`
+              : `${fmtUsd(service.servicePrice)} sell · COGS not set`}
           </div>
-          <Pencil className="h-4 w-4 text-ink-faint group-hover:text-emerald shrink-0 mt-1" />
+          <div className="text-[15px] font-semibold text-emerald mt-0.5">
+            {service.marginPerService !== null ? (
+              <>
+                {fmtUsd(service.marginPerService)}{" "}
+                <span className="text-[12px] text-ink-soft font-normal">({fmtPct(service.marginPct)})</span>
+              </>
+            ) : (
+              <span className="text-ink-faint text-[13px] font-normal">Set COGS for margin</span>
+            )}
+          </div>
         </div>
-      </button>
+        <div className="flex flex-col gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={onEdit}
+            title="Edit"
+            className="inline-flex items-center gap-1 rounded border border-rule bg-white px-2 py-1 text-[11px] font-medium text-ink-soft hover:text-emerald hover:border-emerald/40 transition"
+          >
+            <Pencil className="h-3 w-3" />
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={onToggleHidden}
+            title={isHidden ? "Unhide" : "Hide from list"}
+            className="inline-flex items-center gap-1 rounded border border-rule bg-white px-2 py-1 text-[11px] font-medium text-ink-soft hover:text-rose hover:border-rose/40 transition"
+          >
+            {isHidden ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+            {isHidden ? "Unhide" : "Hide"}
+          </button>
+        </div>
+      </div>
     </li>
   );
 }
