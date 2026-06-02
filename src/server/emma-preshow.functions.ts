@@ -58,7 +58,8 @@ export type PreShowSkipReason =
   | "appointment_not_pending"
   | "no_phone_number"
   | "from_unavailable"
-  | "send_failed";
+  | "send_failed"
+  | "outside_treatment_cadence";
 
 // ─── Admin client ─────────────────────────────────────────────────────────
 
@@ -410,24 +411,49 @@ export async function dispatchPreShowReminder(args: {
   //      the reminder.
   const patientRoutedProfileId =
     patientAttachments?.softTags?.preshowProfileId?.value ?? null;
-  let profileRow: { id: string; tone: string; channel: string } | null = null;
+  let profileRow: {
+    id: string;
+    tone: string;
+    channel: string;
+    cadence_hours: number[] | null;
+    cadence_by_treatment_type: Record<string, number[]> | null;
+  } | null = null;
   if (patientRoutedProfileId) {
     const { data: routedRow } = await sb
       .from("emma_preshow_profiles")
-      .select("id, tone, channel")
+      .select("id, tone, channel, cadence_hours, cadence_by_treatment_type")
       .eq("user_id", userId)
       .eq("id", patientRoutedProfileId)
       .maybeSingle();
-    profileRow = routedRow ?? null;
+    profileRow = (routedRow as typeof profileRow) ?? null;
   }
   if (!profileRow) {
     const { data: defaultRow } = await sb
       .from("emma_preshow_profiles")
-      .select("id, tone, channel")
+      .select("id, tone, channel, cadence_hours, cadence_by_treatment_type")
       .eq("user_id", userId)
       .eq("is_default", true)
       .maybeSingle();
-    profileRow = defaultRow ?? null;
+    profileRow = (defaultRow as typeof profileRow) ?? null;
+  }
+
+  // v1.34.4: per-treatment-type cadence override. If this profile has
+  // an override entry for this appointment's treatment_type, ONLY those
+  // offsets are valid for this appointment — skip if offsetHours not in
+  // the override list. Treatment-type match is case-insensitive against
+  // the JSONB key (we always store lowercase via the UI).
+  if (profileRow?.cadence_by_treatment_type && apt.treatment_type) {
+    const overrideKey = apt.treatment_type.toLowerCase().trim();
+    const overrideHours = profileRow.cadence_by_treatment_type[overrideKey];
+    if (Array.isArray(overrideHours) && overrideHours.length > 0) {
+      if (!overrideHours.includes(offsetHours)) {
+        return {
+          ok: false,
+          skipReason: "outside_treatment_cadence",
+          message: `Treatment-type override for '${overrideKey}' doesn't include T-${offsetHours}h.`,
+        };
+      }
+    }
   }
 
   // Resolve effective tone + channel: profile wins over policy. Fallback

@@ -28,6 +28,7 @@ import {
   ChevronRight,
   Clock,
   Edit2,
+  Layers,
   Loader2,
   MessageSquareText,
   Plus,
@@ -652,6 +653,7 @@ function ProfileCard({
   onUpdate: (patch: {
     name?: string;
     cadenceHours?: number[];
+    cadenceByTreatmentType?: Record<string, number[]>;
     tone?: PreshowTone;
     channel?: PreshowChannel;
   }) => Promise<void>;
@@ -664,6 +666,53 @@ function ProfileCard({
   const [nameDraft, setNameDraft] = useState(profile.name);
   const [showMessages, setShowMessages] = useState(false);
   const [newOffset, setNewOffset] = useState("");
+  // v1.34.4: per-treatment-type cadence overrides
+  const [showOverrides, setShowOverrides] = useState(false);
+  const [newTreatmentType, setNewTreatmentType] = useState("");
+  const [newTreatmentHours, setNewTreatmentHours] = useState("");
+
+  const treatmentOverrideEntries = useMemo(
+    () => Object.entries(profile.cadenceByTreatmentType ?? {}),
+    [profile.cadenceByTreatmentType],
+  );
+
+  function parseCadenceCsv(raw: string): number[] | null {
+    const parts = raw
+      .split(/[,\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (parts.length === 0) return null;
+    const out: number[] = [];
+    for (const p of parts) {
+      const n = parseInt(p, 10);
+      if (!Number.isFinite(n) || n < 0 || n > 8760) return null;
+      if (!out.includes(n)) out.push(n);
+    }
+    return out.sort((a, b) => b - a);
+  }
+
+  function addTreatmentOverride() {
+    const type = newTreatmentType.trim().toLowerCase();
+    if (!type) {
+      toast.error("Enter a treatment type (e.g., botox, filler, laser).");
+      return;
+    }
+    const hours = parseCadenceCsv(newTreatmentHours);
+    if (!hours || hours.length === 0) {
+      toast.error("Enter cadence hours like: 72, 24, 12");
+      return;
+    }
+    const next = { ...(profile.cadenceByTreatmentType ?? {}), [type]: hours };
+    void onUpdate({ cadenceByTreatmentType: next });
+    setNewTreatmentType("");
+    setNewTreatmentHours("");
+  }
+
+  function removeTreatmentOverride(type: string) {
+    const next = { ...(profile.cadenceByTreatmentType ?? {}) };
+    delete next[type];
+    void onUpdate({ cadenceByTreatmentType: next });
+  }
 
   useEffect(() => setNameDraft(profile.name), [profile.name]);
 
@@ -862,6 +911,103 @@ function ProfileCard({
               ))}
             </div>
           </FieldGroup>
+        </div>
+
+        {/* v1.34.4: Per-treatment-type cadence overrides */}
+        <div>
+          <button
+            type="button"
+            onClick={() => setShowOverrides((v) => !v)}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink hover:text-emerald transition"
+          >
+            {showOverrides ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+            <Layers className="h-3.5 w-3.5" />
+            Per-treatment-type cadence overrides
+            <span className="text-[10px] font-normal text-ink-soft">
+              ({treatmentOverrideEntries.length} custom)
+            </span>
+          </button>
+          {showOverrides && (
+            <div className="mt-3 space-y-2.5 rounded-lg border border-rule bg-paper/50 p-3">
+              {treatmentOverrideEntries.length === 0 && (
+                <p className="text-[11px] text-ink-faint italic">
+                  No overrides yet. Treatments not listed here use the
+                  spa-wide cadence above.
+                </p>
+              )}
+              {treatmentOverrideEntries.map(([type, hours]) => (
+                <div
+                  key={type}
+                  className="flex items-center gap-2 flex-wrap"
+                >
+                  <span className="inline-flex items-center rounded-md bg-emerald-soft text-emerald-ink px-2 py-0.5 text-[11px] font-semibold capitalize">
+                    {type}
+                  </span>
+                  <div className="flex flex-wrap items-center gap-1">
+                    {hours.map((h) => (
+                      <span
+                        key={h}
+                        className="inline-flex items-center rounded-full border border-rule bg-white text-ink-soft px-2 py-0.5 text-[10px] font-medium"
+                      >
+                        {h}h
+                      </span>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeTreatmentOverride(type)}
+                    className="ml-auto inline-flex items-center gap-1 text-[10px] font-medium text-rose hover:underline"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <div className="pt-2 mt-2 border-t border-rule space-y-2">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-soft">
+                  Add override
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={newTreatmentType}
+                    onChange={(e) => setNewTreatmentType(e.target.value)}
+                    placeholder="treatment type (e.g., botox)"
+                    maxLength={80}
+                    className="flex-1 min-w-[140px] rounded border border-rule bg-white px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald/30"
+                  />
+                  <input
+                    type="text"
+                    value={newTreatmentHours}
+                    onChange={(e) => setNewTreatmentHours(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addTreatmentOverride();
+                      }
+                    }}
+                    placeholder="hours: 72, 24, 12"
+                    className="flex-1 min-w-[140px] rounded border border-rule bg-white px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald/30"
+                  />
+                  <button
+                    type="button"
+                    onClick={addTreatmentOverride}
+                    className="inline-flex items-center gap-1 rounded border border-emerald/30 bg-emerald-soft text-emerald-ink px-2 py-1 text-[11px] font-medium hover:bg-emerald hover:text-paper transition"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add
+                  </button>
+                </div>
+                <p className="text-[10px] text-ink-faint">
+                  Treatment types match against <code>appointment.treatment_type</code> case-insensitive. Example: <code>botox</code> → <code>72, 24, 12</code> overrides the spa-wide cadence for any Botox appointment.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Messages expander */}

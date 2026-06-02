@@ -85,13 +85,26 @@ export const Route = createFileRoute("/api/cron/emma-preshow-sweep")({
           let offsets: number[] = policy.preshow_cadence_hours ?? [];
           const { data: profiles } = await sb
             .from("emma_preshow_profiles")
-            .select("cadence_hours")
+            .select("cadence_hours, cadence_by_treatment_type")
             .eq("user_id", policy.user_id);
           if (profiles && profiles.length > 0) {
+            // v1.34.3 + v1.34.4: union of (a) every profile's spa-wide
+            // cadence_hours AND (b) every per-treatment-type override
+            // hours, so the sweep catches ANY appointment that might be
+            // due. dispatchPreShowReminder enforces per-treatment scoping
+            // (skip-with-reason if offset not in this treatment's
+            // override list).
             const unioned = new Set<number>();
             for (const p of profiles) {
               for (const h of (p.cadence_hours ?? []) as number[]) {
                 unioned.add(h);
+              }
+              const byType = (p.cadence_by_treatment_type ?? {}) as Record<
+                string,
+                number[]
+              >;
+              for (const arr of Object.values(byType)) {
+                for (const h of arr) unioned.add(h);
               }
             }
             offsets = Array.from(unioned);

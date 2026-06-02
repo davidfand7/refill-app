@@ -104,6 +104,12 @@ const createProfileInput = accessInput.extend({
 const updateProfileInput = profileIdInput.extend({
   name: z.string().min(1).max(80).optional(),
   cadenceHours: z.array(z.number().int().min(0).max(8760)).max(20).optional(),
+  // v1.34.4: per-treatment-type cadence overrides. Map of normalized
+  // treatment-type string → cadence_hours array. Set entry to empty
+  // array to remove (avoids sending {} to clear a single key).
+  cadenceByTreatmentType: z
+    .record(z.string(), z.array(z.number().int().min(0).max(8760)).max(20))
+    .optional(),
   tone: z.enum(["warm", "professional", "casual"]).optional(),
   channel: z.enum(["sms", "email", "auto"]).optional(),
 });
@@ -292,6 +298,14 @@ export const updatePreshowProfile = createServerFn({ method: "POST" })
     };
     if (data.name !== undefined) updates.name = data.name.trim();
     if (data.cadenceHours !== undefined) updates.cadence_hours = data.cadenceHours;
+    if (data.cadenceByTreatmentType !== undefined) {
+      // Drop empty arrays — treat them as remove-this-treatment-override.
+      const filtered: Record<string, number[]> = {};
+      for (const [k, v] of Object.entries(data.cadenceByTreatmentType)) {
+        if (v.length > 0) filtered[k] = v;
+      }
+      updates.cadence_by_treatment_type = filtered;
+    }
     if (data.tone !== undefined) updates.tone = data.tone;
     if (data.channel !== undefined) updates.channel = data.channel;
 
