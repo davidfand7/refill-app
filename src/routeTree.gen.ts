@@ -80,6 +80,7 @@ import { Route as AppRefillSettingsSenderRouteImport } from './routes/app.refill
 import { Route as AppRefillSettingsSchedulerRouteImport } from './routes/app.refill.settings.scheduler'
 import { Route as AppRefillSettingsNoshowRouteImport } from './routes/app.refill.settings.noshow'
 import { Route as AppRefillSettingsAccountRouteImport } from './routes/app.refill.settings.account'
+import { Route as AppRefillRecognitionManufacturersRouteImport } from './routes/app.refill.recognition.manufacturers'
 import { Route as AppRefillRecognitionInventoryRouteImport } from './routes/app.refill.recognition.inventory'
 import { Route as AppRefillPatientsImportRouteImport } from './routes/app.refill.patients.import'
 import { Route as AppRefillPatientsContactsRouteImport } from './routes/app.refill.patients.contacts'
@@ -458,6 +459,12 @@ const AppRefillSettingsAccountRoute =
     path: '/settings/account',
     getParentRoute: () => AppRefillRoute,
   } as any)
+const AppRefillRecognitionManufacturersRoute =
+  AppRefillRecognitionManufacturersRouteImport.update({
+    id: '/recognition/manufacturers',
+    path: '/recognition/manufacturers',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
 const AppRefillRecognitionInventoryRoute =
   AppRefillRecognitionInventoryRouteImport.update({
     id: '/recognition/inventory',
@@ -632,6 +639,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
   '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
+  '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
@@ -717,6 +725,7 @@ export interface FileRoutesByTo {
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
   '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
+  '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
@@ -808,6 +817,7 @@ export interface FileRoutesById {
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
   '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
+  '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
@@ -900,6 +910,7 @@ export interface FileRouteTypes {
     | '/app/refill/patients/contacts'
     | '/app/refill/patients/import'
     | '/app/refill/recognition/inventory'
+    | '/app/refill/recognition/manufacturers'
     | '/app/refill/settings/account'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
@@ -985,6 +996,7 @@ export interface FileRouteTypes {
     | '/app/refill/patients/contacts'
     | '/app/refill/patients/import'
     | '/app/refill/recognition/inventory'
+    | '/app/refill/recognition/manufacturers'
     | '/app/refill/settings/account'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
@@ -1075,6 +1087,7 @@ export interface FileRouteTypes {
     | '/app/refill/patients/contacts'
     | '/app/refill/patients/import'
     | '/app/refill/recognition/inventory'
+    | '/app/refill/recognition/manufacturers'
     | '/app/refill/settings/account'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
@@ -1622,6 +1635,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillSettingsAccountRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/refill/recognition/manufacturers': {
+      id: '/app/refill/recognition/manufacturers'
+      path: '/recognition/manufacturers'
+      fullPath: '/app/refill/recognition/manufacturers'
+      preLoaderRoute: typeof AppRefillRecognitionManufacturersRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/recognition/inventory': {
       id: '/app/refill/recognition/inventory'
       path: '/recognition/inventory'
@@ -1817,6 +1837,7 @@ interface AppRefillRouteChildren {
   AppRefillCatalogProductsRoute: typeof AppRefillCatalogProductsRoute
   AppRefillCatalogServicesRoute: typeof AppRefillCatalogServicesRoute
   AppRefillRecognitionInventoryRoute: typeof AppRefillRecognitionInventoryRoute
+  AppRefillRecognitionManufacturersRoute: typeof AppRefillRecognitionManufacturersRoute
   AppRefillSettingsAccountRoute: typeof AppRefillSettingsAccountRoute
   AppRefillSettingsNoshowRoute: typeof AppRefillSettingsNoshowRoute
   AppRefillSettingsSchedulerRoute: typeof AppRefillSettingsSchedulerRoute
@@ -1847,6 +1868,8 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillCatalogProductsRoute: AppRefillCatalogProductsRoute,
   AppRefillCatalogServicesRoute: AppRefillCatalogServicesRoute,
   AppRefillRecognitionInventoryRoute: AppRefillRecognitionInventoryRoute,
+  AppRefillRecognitionManufacturersRoute:
+    AppRefillRecognitionManufacturersRoute,
   AppRefillSettingsAccountRoute: AppRefillSettingsAccountRoute,
   AppRefillSettingsNoshowRoute: AppRefillSettingsNoshowRoute,
   AppRefillSettingsSchedulerRoute: AppRefillSettingsSchedulerRoute,

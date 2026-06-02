@@ -177,6 +177,7 @@ export const updateAttributionSettings = createServerFn({ method: "POST" })
         node_type: "attribution_settings",
         title: "Attribution settings",
         context: "agent_config",
+        content: "",
         attachments: next as unknown as Json,
       });
       if (error) {
