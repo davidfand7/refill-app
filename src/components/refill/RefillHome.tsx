@@ -24,6 +24,7 @@
 import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
+  Award,
   BookOpen,
   CreditCard,
   DollarSign,
@@ -71,6 +72,13 @@ const ACTIONS: QuickAction[] = [
     label: "Promos",
     subtitle: "Manufacturer offers matched to your catalog",
     icon: Sparkles,
+  },
+  {
+    key: "recognition",
+    to: "/app/refill/recognition/inventory",
+    label: "Recognition",
+    subtitle: "Rebate inventory to deploy to your best patients",
+    icon: Award,
   },
   {
     key: "recovery",

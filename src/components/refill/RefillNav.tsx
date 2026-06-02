@@ -25,6 +25,7 @@ export type RefillNavKey =
   | "patients"
   | "catalog"
   | "promos"
+  | "recognition"
   | "recovery"
   | "inbox"
   | "settings"
@@ -46,6 +47,11 @@ const ITEMS: RefillNavItem[] = [
   { key: "patients", to: "/app/refill/patients",          label: "Patients", shortLabel: "Patients" },
   { key: "catalog",  to: "/app/refill/catalog/products",  label: "Catalog",  shortLabel: "Catalog" },
   { key: "promos",   to: "/app/refill/promos",            label: "Promos",   shortLabel: "Promos" },
+  // v1.34.2: Recognition Allocation Engine. Lives between Promos and Recovery —
+  // adjacent to Promos (both are manufacturer-rebate concepts) but distinct
+  // (Promos = offers from manufacturers TO spa; Recognition = inventory
+  // deployed FROM spa TO patients).
+  { key: "recognition", to: "/app/refill/recognition/inventory", label: "Recognition", shortLabel: "Recognition" },
   { key: "recovery", to: "/app/refill/recovery",           label: "Recovery", shortLabel: "Recovery" },
   { key: "inbox",    to: "/app/refill/inbox",              label: "Inbox",    shortLabel: "Inbox" },
   { key: "settings", to: "/app/refill/settings/scheduler", label: "Settings", shortLabel: "Settings" },

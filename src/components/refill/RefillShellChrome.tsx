@@ -27,6 +27,7 @@ function deriveActiveKey(pathname: string): RefillNavKey | undefined {
   if (pathname.startsWith("/app/refill/patients")) return "patients";
   if (pathname.startsWith("/app/refill/catalog")) return "catalog";
   if (pathname.startsWith("/app/refill/promos")) return "promos";
+  if (pathname.startsWith("/app/refill/recognition")) return "recognition";
   if (pathname.startsWith("/app/refill/recovery")) return "recovery";
   if (pathname.startsWith("/app/refill/inbox")) return "inbox";
   if (pathname.startsWith("/app/refill/settings")) return "settings";
