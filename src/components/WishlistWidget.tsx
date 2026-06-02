@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { MarkdownLight } from "@/components/MarkdownLight";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -260,8 +261,13 @@ export function WishlistWidget() {
 
   const sendReply = async (requestId: string) => {
     const body = replyDraft.trim();
-    if (!body) return;
+    // v1.34.0.1: guard against double-click duplicates. Bail if already
+    // sending OR if body empty. Also OPTIMISTICALLY clear the draft on
+    // click so a second click before React renders the busy state sees
+    // an empty draft and disables the Send button.
+    if (!body || replyBusy) return;
     setReplyBusy(true);
+    setReplyDraft("");
     try {
       const { data: sess } = await supabase.auth.getSession();
       const token = sess.session?.access_token;
@@ -279,9 +285,10 @@ export function WishlistWidget() {
           ? prior.map((r) => (r.id === updated.id ? updated : r))
           : [updated],
       );
-      setReplyDraft("");
       toast.success("Reply sent.");
     } catch (e) {
+      // Restore draft on failure so user can retry
+      setReplyDraft(body);
       toast.error(e instanceof Error ? e.message : "Couldn't send reply.");
     } finally {
       setReplyBusy(false);
@@ -716,9 +723,10 @@ function MyRequestRow({
       </button>
       {expanded && (
         <div className="border-t border-rule bg-rule-soft/30 px-3 py-2 space-y-2">
-          <div className="text-[11px] text-ink whitespace-pre-wrap">
-            {request.description}
-          </div>
+          <MarkdownLight
+            text={request.description}
+            className="text-[11px] text-ink"
+          />
           {request.adminNotes && (
             <div className="rounded bg-emerald-soft/50 px-2 py-1.5 text-[11px] text-emerald-ink">
               <div className="text-[9px] uppercase font-semibold tracking-wider opacity-70 mb-0.5">

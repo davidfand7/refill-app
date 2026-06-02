@@ -15,10 +15,12 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
+  ArrowRight,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
   Clock,
+  Filter,
   Lightbulb,
   Loader2,
   Send,
@@ -27,6 +29,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { MarkdownLight } from "@/components/MarkdownLight";
 import { supabase } from "@/integrations/supabase/client";
 import {
   addReplyToWishlistRequest,
@@ -60,11 +63,18 @@ function AdminWishlistPage() {
   const [requests, setRequests] = useState<AdminWishlistRequest[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // v1.34.0.1: default to "show all" so newly-landed admin sees the full
+  // picture. Empty set = no filter applied = show everything; user
+  // narrows by tapping chips to add status filters.
   const [statusFilter, setStatusFilter] = useState<Set<WishlistStatus>>(
-    new Set(["submitted", "reviewing", "in_progress"]),
+    new Set(),
   );
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // v1.34.0.1: always load ALL wishes (no server-side status filter) so
+  // chip counts reflect TRUE DB totals, not just the current filtered view.
+  // Volume is small (~100s of wishes max per tenant); client-side filter
+  // is cheap and lets the counts stay honest.
   const load = async () => {
     setError(null);
     setLoading(true);
@@ -73,13 +83,7 @@ function AdminWishlistPage() {
       const token = sess.session?.access_token;
       if (!token) throw new Error("Sign in required.");
       const rows = await listAllWishlistRequests({
-        data: {
-          accessToken: token,
-          statusFilter:
-            statusFilter.size === STATUS_ORDER.length
-              ? undefined
-              : Array.from(statusFilter),
-        },
+        data: { accessToken: token },
       });
       setRequests(rows);
     } catch (e) {
@@ -91,8 +95,7 @@ function AdminWishlistPage() {
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [Array.from(statusFilter).sort().join(",")]);
+  }, []);
 
   const counts = useMemo(() => {
     const c: Record<WishlistStatus, number> = {
@@ -106,6 +109,13 @@ function AdminWishlistPage() {
     return c;
   }, [requests]);
 
+  // v1.34.0.1: client-side filtering. Empty filter = show all.
+  const visibleRequests = useMemo(() => {
+    if (!requests) return null;
+    if (statusFilter.size === 0) return requests;
+    return requests.filter((r) => statusFilter.has(r.status));
+  }, [requests, statusFilter]);
+
   const toggleStatus = (s: WishlistStatus) => {
     setStatusFilter((prev) => {
       const next = new Set(prev);
@@ -114,6 +124,8 @@ function AdminWishlistPage() {
       return next;
     });
   };
+
+  const clearFilters = () => setStatusFilter(new Set());
 
   const onRequestUpdated = (next: AdminWishlistRequest) => {
     setRequests((prior) =>
@@ -138,10 +150,14 @@ function AdminWishlistPage() {
       />
 
       <div className="flex-1 px-4 py-6 lg:px-10 max-w-5xl w-full mx-auto space-y-4">
-        {/* Status filter chips */}
+        {/* v1.34.0.1: Filter chips with TRUE DB counts + explicit
+            "Filter:" label + Show-all/Clear toggle. Distinct from the
+            move-status chips inside each row (which use a different
+            shape + "Move status:" label). */}
         <div className="flex flex-wrap gap-1.5 items-center">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint mr-1">
-            Show
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint mr-1 inline-flex items-center gap-1">
+            <Filter className="h-2.5 w-2.5" />
+            Filter
           </span>
           {STATUS_ORDER.map((s) => {
             const active = statusFilter.has(s);
@@ -166,6 +182,20 @@ function AdminWishlistPage() {
               </button>
             );
           })}
+          {statusFilter.size > 0 && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="ml-1 text-[10px] text-ink-soft hover:text-ink underline-offset-2 hover:underline transition"
+            >
+              Show all
+            </button>
+          )}
+          {requests && (
+            <span className="ml-auto text-[10px] text-ink-faint tabular-nums">
+              {visibleRequests?.length ?? 0} of {requests.length} shown
+            </span>
+          )}
         </div>
 
         {/* Body */}
@@ -180,20 +210,34 @@ function AdminWishlistPage() {
             {error}
           </div>
         )}
-        {requests && requests.length === 0 && (
+        {visibleRequests && visibleRequests.length === 0 && requests && requests.length === 0 && (
           <div className="rounded-xl border border-rule bg-white px-5 py-12 text-center">
             <Sparkles className="h-6 w-6 text-ink-faint mx-auto mb-2" />
             <div className="text-sm text-ink-soft">
-              No requests matching the current filter.
+              No requests yet.
             </div>
             <div className="text-[11px] text-ink-faint mt-1">
               Once spa-owners start submitting, they'll show up here.
             </div>
           </div>
         )}
-        {requests && requests.length > 0 && (
+        {visibleRequests && visibleRequests.length === 0 && requests && requests.length > 0 && (
+          <div className="rounded-xl border border-rule bg-white px-5 py-8 text-center">
+            <div className="text-sm text-ink-soft">
+              No requests match the current filter.
+            </div>
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="mt-2 text-[12px] text-emerald-ink hover:underline"
+            >
+              Show all {requests.length}
+            </button>
+          </div>
+        )}
+        {visibleRequests && visibleRequests.length > 0 && (
           <div className="space-y-2">
-            {requests.map((r) => (
+            {visibleRequests.map((r) => (
               <AdminRequestRow
                 key={r.id}
                 request={r}
@@ -295,7 +339,12 @@ function AdminRequestRow({
 
   const sendReply = async () => {
     const body = replyDraft.trim();
-    if (!body) return;
+    // v1.34.0.1: guard against double-click duplicates (admin-side
+    // mirror of the WishlistWidget fix). Bail if already sending OR
+    // body empty. Optimistically clear the draft so a fast second
+    // click sees empty textarea = disabled Send button.
+    if (!body || busy) return;
+    setReplyDraft("");
     const result = await withToken((token) =>
       addReplyToWishlistRequest({
         data: {
@@ -312,8 +361,10 @@ function AdminRequestRow({
         tenantName: request.tenantName,
         submitterEmail: request.submitterEmail,
       });
-      setReplyDraft("");
       toast.success("Reply sent.");
+    } else {
+      // Restore draft on failure (withToken already toasted the error)
+      setReplyDraft(body);
     }
   };
 
@@ -358,23 +409,30 @@ function AdminRequestRow({
       </button>
       {expanded && (
         <div className="border-t border-rule bg-rule-soft/20 p-5 space-y-4">
-          {/* Description */}
+          {/* Description — v1.34.0.1: renders markdown (bold + bullets)
+             so the AI-polished spec format reads cleanly instead of
+             showing literal **bold** syntax. */}
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint mb-1">
               Description
             </div>
-            <div className="text-[13px] text-ink whitespace-pre-wrap bg-white rounded-md border border-rule px-3 py-2">
-              {request.description}
-            </div>
+            <MarkdownLight
+              text={request.description}
+              className="text-[13px] text-ink bg-white rounded-md border border-rule px-3 py-2"
+            />
           </div>
 
-          {/* Workflow */}
+          {/* v1.34.0.1: Workflow — visually distinct from filter chips.
+             Square corners + arrow icon + "Move status:" label make it
+             clear these MUTATE the wish, vs the filter chips at the top
+             which only NARROW the view. */}
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint mb-1">
-              Move status
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint mb-1 inline-flex items-center gap-1">
+              <ArrowRight className="h-2.5 w-2.5" />
+              Move status:
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {STATUS_ORDER.map((s) => {
+            <div className="inline-flex flex-wrap rounded-md border border-rule bg-white overflow-hidden">
+              {STATUS_ORDER.map((s, i) => {
                 const active = request.status === s;
                 return (
                   <button
@@ -383,10 +441,11 @@ function AdminRequestRow({
                     onClick={() => void setStatus(s)}
                     disabled={busy || active}
                     className={
-                      "inline-flex items-center gap-1 rounded-full px-3 py-1 text-[11px] font-medium border transition disabled:opacity-50 " +
+                      "inline-flex items-center gap-1 px-3 py-1.5 text-[11px] font-medium transition disabled:opacity-50 disabled:cursor-default " +
+                      (i > 0 ? "border-l border-rule " : "") +
                       (active
-                        ? "border-emerald bg-emerald-soft text-emerald-ink"
-                        : "border-rule bg-white text-ink-soft hover:border-emerald/40 hover:text-ink")
+                        ? "bg-emerald-soft text-emerald-ink font-semibold"
+                        : "bg-white text-ink-soft hover:bg-rule-soft hover:text-ink")
                     }
                   >
                     {s === "shipped" && <CheckCircle2 className="h-3 w-3" />}
