@@ -56,6 +56,7 @@ export const Route = createFileRoute("/api/cron/emma-reconcile")({
 
         let totalMatched = 0;
         let totalScanned = 0;
+        let totalQueuedForReview = 0;
         const errors: string[] = [];
 
         for (const userId of userIds) {
@@ -63,6 +64,7 @@ export const Route = createFileRoute("/api/cron/emma-reconcile")({
             const r = await reconcileRecoveryEventsForUser({ sb, userId });
             totalMatched += r.matched;
             totalScanned += r.scanned;
+            totalQueuedForReview += r.queuedForReview;
           } catch (e) {
             errors.push(
               `${userId}: ${e instanceof Error ? e.message : "unknown"}`,
@@ -75,6 +77,10 @@ export const Route = createFileRoute("/api/cron/emma-reconcile")({
           spas_with_unverified: userIds.length,
           scanned: totalScanned,
           matched: totalMatched,
+          // v1.34.9.5: matches at/above the spa's auto-confirm threshold
+          // that got proposed amounts written but stayed unverified for
+          // Karen to review on /app/refill/recovery.
+          queued_for_review: totalQueuedForReview,
           errors: errors.slice(0, 20),
         });
       },

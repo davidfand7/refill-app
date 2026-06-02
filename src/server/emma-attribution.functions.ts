@@ -16,6 +16,14 @@
  *   3. Verified rows flow into the v366 invoice computation.
  *
  * Two surfaces:
+ *   v1.34.9.5: reconcileRecoveryEventsForUser now reads the tenant's
+ *   AttributionSettings (windowHours / autoConfirmThresholdUsd / enabled)
+ *   from refill-attribution-agent.functions.ts on every pass instead of
+ *   using hardcoded defaults. Below-threshold matches auto-confirm as
+ *   before; at/above-threshold matches write proposed amount + matched
+ *   transaction but leave verified_at NULL so Karen reviews on the
+ *   Recovery surface.
+ *
  *   recordRecoveryEvent          — internal helper used by agents
  *   reconcileRecoveryEventsForUser — cron + sweep helper
  *   manualConfirmRecovery        — spa-owner dashboard action
@@ -31,6 +39,7 @@ import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import { loadAttributionSettings } from "@/server/refill-attribution-agent.functions";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -158,8 +167,23 @@ export async function recordRecoveryEvent(args: {
 export async function reconcileRecoveryEventsForUser(args: {
   sb: SupabaseAdmin;
   userId: string;
-}): Promise<{ matched: number; scanned: number }> {
+}): Promise<{ matched: number; scanned: number; queuedForReview: number }> {
   const { sb, userId } = args;
+
+  // v1.34.9.5: load tenant's AttributionSettings + enforce them in dispatch.
+  // Pre-v1.34.9.5 this fn used a hardcoded 14-day window and auto-confirmed
+  // every match. Now: master toggle gates the whole pass, windowHours
+  // replaces the 14-day, autoConfirmThresholdUsd gates auto-confirm vs
+  // queue-for-manual-review on the Recovery surface.
+  const settings = await loadAttributionSettings(
+    sb as unknown as Parameters<typeof loadAttributionSettings>[0],
+    userId,
+  );
+  if (!settings.enabled) {
+    return { matched: 0, scanned: 0, queuedForReview: 0 };
+  }
+  const windowMs = settings.windowHours * 60 * 60 * 1000;
+  const threshold = settings.autoConfirmThresholdUsd;
 
   const { data: unverified } = await sb
     .from("emma_recovery_events")
@@ -167,13 +191,16 @@ export async function reconcileRecoveryEventsForUser(args: {
     .eq("user_id", userId)
     .is("verified_at", null)
     .not("patient_node_id", "is", null);
-  if (!unverified || unverified.length === 0) return { matched: 0, scanned: 0 };
+  if (!unverified || unverified.length === 0) {
+    return { matched: 0, scanned: 0, queuedForReview: 0 };
+  }
 
   let matched = 0;
+  let queuedForReview = 0;
   for (const ev of unverified) {
     if (!ev.patient_node_id) continue;
     const windowEnd = new Date(
-      new Date(ev.created_at).getTime() + 14 * 24 * 60 * 60 * 1000,
+      new Date(ev.created_at).getTime() + windowMs,
     ).toISOString();
     const windowStart = ev.created_at;
 
@@ -191,20 +218,37 @@ export async function reconcileRecoveryEventsForUser(args: {
     const best = txns?.[0];
     if (!best) continue;
 
+    // v1.34.9.5: threshold gate. Below threshold = auto-confirm (stamp
+    // verified_at + amount). At/above threshold = leave verified_at NULL
+    // (so it shows on the Recovery surface as "Awaiting verification"),
+    // but DO write the matched_transaction_id + attributed_revenue_usd
+    // so Karen sees the proposed amount + which transaction the engine
+    // tagged. Threshold of 0 = always auto-confirm (the default behavior
+    // pre-v1.34.9.5).
+    const shouldAutoConfirm = Number(best.amount_usd) < threshold || threshold === 0;
+    const updateFields = shouldAutoConfirm
+      ? {
+          verified_at: new Date().toISOString(),
+          verification_source: "qbo",
+          attributed_revenue_usd: best.amount_usd,
+          matched_transaction_id: best.id,
+        }
+      : {
+          attributed_revenue_usd: best.amount_usd,
+          matched_transaction_id: best.id,
+        };
     const { error: upErr } = await sb
       .from("emma_recovery_events")
-      .update({
-        verified_at: new Date().toISOString(),
-        verification_source: "qbo",
-        attributed_revenue_usd: best.amount_usd,
-        matched_transaction_id: best.id,
-      })
+      .update(updateFields)
       .eq("id", ev.id)
       .is("verified_at", null); // Race-safe — first writer wins.
-    if (!upErr) matched++;
+    if (!upErr) {
+      if (shouldAutoConfirm) matched++;
+      else queuedForReview++;
+    }
   }
 
-  return { matched, scanned: unverified.length };
+  return { matched, scanned: unverified.length, queuedForReview };
 }
 
 // ─── Zod ──────────────────────────────────────────────────────────────────

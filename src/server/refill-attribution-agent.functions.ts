@@ -95,6 +95,19 @@ const metricsInput = accessInput.extend({
 
 // ─── Read settings ────────────────────────────────────────────────────────
 
+/**
+ * v1.34.9.5: exported so emma-attribution.functions.ts dispatch can read
+ * the settings at reconcile time. Takes any admin-style supabase client
+ * (the dispatch path has its own client; reusing the loader keeps the
+ * default-fallback logic single-sourced).
+ */
+export async function loadAttributionSettings(
+  sb: ReturnType<typeof admin>,
+  userId: string,
+): Promise<AttributionSettings> {
+  return loadSettings(sb, userId);
+}
+
 async function loadSettings(
   sb: ReturnType<typeof admin>,
   userId: string,
