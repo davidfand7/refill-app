@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.34.8.3",
+    date: "June 2026",
+    items: [
+      "<strong>v1.34.8.3 &mdash; UX gap: Catalog had a Services route but no UI to navigate to it. Grasshopper caught it walking <code>/app/refill/catalog/products</code>: the nav chip drops you on Products, Services is one route over but the only way to reach it was URL-typing.</strong> Same gap I&rsquo;d already fixed for Recognition (Inventory ↔ Manufacturers tab strip, v1.34.2.2) and Agents (AgentsTabStrip, v1.34.6), but Catalog didn&rsquo;t get the treatment because both routes pre-existed v1.34. <strong>The fix</strong>: matching Products ↔ Services tab strip rendered below the PageHeader on both pages. Same chrome as the Recognition tab strip — emerald underline on active, muted on inactive, hover-state. <strong>Touched</strong>: <code>src/routes/app.refill.catalog.products.tsx</code> (insert tab strip below PageHeader), <code>src/routes/app.refill.catalog.services.tsx</code> (same, with Services active), <code>src/lib/changelog.ts</code> (this entry). Three-line UI fix per route.",
+    ],
+  },
+  {
     version: "v1.34.8.2",
     date: "June 2026",
     items: [
