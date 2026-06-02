@@ -465,3 +465,298 @@ export const updateWishlistRequestStatus = createServerFn({ method: "POST" })
     if (!updated) throw new Error("Update returned no row.");
     return hydrate(updated);
   });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// v1.33.1 — AI-assist (Claude Sonnet 4.6) for Wishlist authoring
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Three server fns that wrap the Anthropic SDK to help Karen turn a brief
+// title into a buildable spec without writing it all herself:
+//
+//   aiDraftWishlistDescription  — Title → 3-5 sentence draft in Karen's voice
+//   aiPolishWishlistDescription — Karen-edited description → structured spec
+//                                  (WHAT/WHY/WHERE/acceptance criteria)
+//   aiEstimateWishlistBuild     — Polished spec → one-line dev cost preview
+//                                  ("~45 min build · scoped for v1.34.0")
+//
+// All three:
+//   - Use Sonnet 4.6 (interactive UX latency + spec-writing quality sweet spot)
+//   - Are gated through resolveEffectiveUserId + tenant check (cost protection)
+//   - Surface typed Anthropic errors as toast-friendly messages
+//   - Skip prompt caching (system prompts too short to clear the 2K token min)
+//
+// Requires `wrangler secret put ANTHROPIC_API_KEY` server-side.
+
+import Anthropic from "@anthropic-ai/sdk";
+
+// JSON schema for the polished spec format — passed to Claude's structured
+// output system. Mirrors PolishedSpecSchema below but kept hand-written
+// because @anthropic-ai/sdk's zodOutputFormat helper requires Zod v4 and
+// the project is on Zod v3. We still validate the API response at runtime
+// via PolishedSpecSchema.parse(), so we get the same safety either way.
+const POLISHED_SPEC_JSON_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    what: {
+      type: "string",
+      description: "1-2 sentences naming the feature/change concretely",
+    },
+    why: {
+      type: "string",
+      description:
+        "The spa owner's use case in her voice — preserve her framing and examples",
+    },
+    where: {
+      type: "string",
+      description: "Which Refill surface/page/flow this affects",
+    },
+    acceptanceCriteria: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Testable bullets defining done — concrete enough to build without re-asking",
+    },
+  },
+  required: ["what", "why", "where", "acceptanceCriteria"],
+  additionalProperties: false,
+};
+
+const REFILL_CONTEXT = `Refill is a no-show recovery + patient profitability platform for med-spas, built on TanStack Start + Supabase + Cloudflare Workers. Spa owners use it to fill canceled appointment slots, soft-tag patients with editorial signals (income tier, negotiator stance, family relationships, etc.), track per-patient purchase cadence (toxin/filler/etc.), and request platform features via the Wishlist. The engineering team ships customer-requested features in 48 hours or less — that 48h SLA is the platform's competitive moat.`;
+
+const KAREN_VOICE_SYSTEM_PROMPT = `You are drafting a Wishlist feature description on behalf of a med-spa owner using Refill.
+
+${REFILL_CONTEXT}
+
+Your job: take a brief feature title the spa owner typed, and draft a 3-5 sentence description in HER voice — first-person ("I"/"my spa"/"my patients"), concrete examples from her actual front-desk experience (real patient scenarios, real workflows), no developer jargon, no "as a user" templates. Write the way she would write if she had 5 minutes to flesh out the thought.
+
+She'll edit the draft before submitting, so optimize for "good starting point" not "perfect final text."
+
+Output ONLY the description text — no preamble, no headers, no quotation marks.`;
+
+const BUILDABLE_SPEC_SYSTEM_PROMPT = `You are polishing a med-spa owner's feature Wishlist request into a buildable spec for the Refill engineering team.
+
+${REFILL_CONTEXT}
+
+The polished spec has four parts:
+- what: 1-2 sentences naming the feature/change concretely. Engineering-direct.
+- why: the spa owner's use case in HER voice. Preserve her framing and examples — her real-world motivation IS the requirement.
+- where: which Refill surface/page/flow this affects (patient detail, soft tags card, recovery dashboard, admin tools, etc.). Be specific.
+- acceptanceCriteria: 3-5 testable bullets defining "done" — concrete enough that an engineer can implement without re-asking the spa owner.
+
+Don't expand scope beyond what she asked. If her description is ambiguous, the acceptance criteria should call out the ambiguity rather than guess.`;
+
+const COST_ESTIMATE_SYSTEM_PROMPT = `You are estimating dev cost for a Refill Wishlist feature.
+
+${REFILL_CONTEXT}
+
+The Refill engineering pace (Po = Claude Opus working with Grasshopper, the CTO):
+- Copy / layout tweaks: <30 min
+- New form/card on existing page: 30-90 min
+- New table + CRUD server fns + UI: 2-4 hours
+- New cross-page workflow + admin tools: half-day to full-day
+- Schema migration + complex business logic + multi-surface UI: full-day to multi-day
+
+Return ONE LINE only, in this exact shape:
+"~<duration> build · scoped for <vX.Y.Z>"
+
+Examples:
+"~45 min build · scoped for v1.34.0"
+"~3 hours build · scoped for v1.34.0"
+"~half-day build · scoped for v1.34.0"
+
+Err toward "scoped for v1.X+1.0" if the spec has any non-trivial complexity. The next available pill after v1.33.x is v1.34.0.
+
+Output ONLY the one-line estimate — no preamble, no headers, no quotation marks.`;
+
+function getAnthropicClient(): Anthropic {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "AI assist not configured — ANTHROPIC_API_KEY missing. Set it via `wrangler secret put ANTHROPIC_API_KEY`.",
+    );
+  }
+  return new Anthropic({ apiKey });
+}
+
+function translateAnthropicError(e: unknown): never {
+  if (e instanceof Anthropic.RateLimitError) {
+    throw new Error("AI assist is rate-limited right now — try again in 30s.");
+  }
+  if (e instanceof Anthropic.AuthenticationError) {
+    throw new Error(
+      "AI assist not configured — admin needs to set ANTHROPIC_API_KEY.",
+    );
+  }
+  if (e instanceof Anthropic.APIError) {
+    throw new Error(`AI assist failed: ${e.message}`);
+  }
+  throw e;
+}
+
+// ─── Public types for AI-assist ───────────────────────────────────────────
+
+export const PolishedSpecSchema = z.object({
+  what: z
+    .string()
+    .describe("1-2 sentences naming the feature/change concretely"),
+  why: z
+    .string()
+    .describe(
+      "The spa owner's use case in her voice — preserve her framing and examples",
+    ),
+  where: z
+    .string()
+    .describe("Which Refill surface/page/flow this affects"),
+  acceptanceCriteria: z
+    .array(z.string())
+    .min(2)
+    .max(8)
+    .describe(
+      "Testable bullets defining done — concrete enough to build without re-asking",
+    ),
+});
+export type PolishedSpec = z.infer<typeof PolishedSpecSchema>;
+
+// ─── Zod input validators ─────────────────────────────────────────────────
+
+const aiDraftInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  title: z.string().min(1).max(140),
+});
+
+const aiPolishInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  title: z.string().min(1).max(140),
+  description: z.string().min(1).max(5000),
+});
+
+const aiEstimateInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  polished: PolishedSpecSchema,
+});
+
+// ─── Fn 1: Draft description from title ───────────────────────────────────
+
+export const aiDraftWishlistDescription = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => aiDraftInput.parse(raw))
+  .handler(async ({ data }): Promise<{ description: string }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    await getTenantIdForUser(sb, effectiveUserId); // tenant-gate the AI cost
+
+    try {
+      const response = await getAnthropicClient().messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        thinking: { type: "disabled" },
+        output_config: { effort: "low" },
+        system: KAREN_VOICE_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: `Tag title from spa owner: "${data.title}"\n\nDraft a 3-5 sentence wishlist description in HER voice — first-person, concrete front-desk examples, no jargon. Output the description text only.`,
+          },
+        ],
+      });
+
+      const text = response.content
+        .find((b): b is Anthropic.TextBlock => b.type === "text")
+        ?.text?.trim();
+      if (!text) throw new Error("AI returned no description.");
+      return { description: text };
+    } catch (e) {
+      translateAnthropicError(e);
+    }
+  });
+
+// ─── Fn 2: Polish edited description into buildable spec ──────────────────
+
+export const aiPolishWishlistDescription = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => aiPolishInput.parse(raw))
+  .handler(async ({ data }): Promise<{ polished: PolishedSpec }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    await getTenantIdForUser(sb, effectiveUserId);
+
+    try {
+      const response = await getAnthropicClient().messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2048,
+        thinking: { type: "adaptive" },
+        output_config: {
+          effort: "medium",
+          format: {
+            type: "json_schema",
+            schema: POLISHED_SPEC_JSON_SCHEMA,
+          },
+        },
+        system: BUILDABLE_SPEC_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: `Polish this wishlist request into a buildable spec.\n\nTitle: ${data.title}\n\nSpa owner's description:\n${data.description}`,
+          },
+        ],
+      });
+
+      const text = response.content
+        .find((b): b is Anthropic.TextBlock => b.type === "text")
+        ?.text?.trim();
+      if (!text) {
+        throw new Error(
+          "AI polish returned no content — try editing your description and resubmitting, or skip polish and submit as-is.",
+        );
+      }
+      const parsed: unknown = JSON.parse(text);
+      const validated = PolishedSpecSchema.parse(parsed);
+      return { polished: validated };
+    } catch (e) {
+      translateAnthropicError(e);
+    }
+  });
+
+// ─── Fn 3: Dev-cost estimate from polished spec ───────────────────────────
+
+export const aiEstimateWishlistBuild = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => aiEstimateInput.parse(raw))
+  .handler(async ({ data }): Promise<{ estimate: string }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    await getTenantIdForUser(sb, effectiveUserId);
+
+    try {
+      const response = await getAnthropicClient().messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 128,
+        thinking: { type: "disabled" },
+        output_config: { effort: "low" },
+        system: COST_ESTIMATE_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: `Estimate dev cost for this Wishlist spec:\n${JSON.stringify(data.polished, null, 2)}`,
+          },
+        ],
+      });
+
+      const text = response.content
+        .find((b): b is Anthropic.TextBlock => b.type === "text")
+        ?.text?.trim();
+      if (!text) throw new Error("AI estimate returned empty.");
+      return { estimate: text };
+    } catch (e) {
+      translateAnthropicError(e);
+    }
+  });

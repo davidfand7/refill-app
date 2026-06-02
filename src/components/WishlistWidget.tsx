@@ -23,6 +23,7 @@ import {
   MessageCircle,
   Plus,
   Send,
+  Sparkles,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -31,8 +32,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
   addReplyToWishlistRequest,
+  aiDraftWishlistDescription,
+  aiEstimateWishlistBuild,
+  aiPolishWishlistDescription,
   listMyWishlistRequests,
   submitWishlistRequest,
+  type PolishedSpec,
   type WishlistPriority,
   type WishlistRequest,
   type WishlistStatus,
@@ -81,6 +86,13 @@ export function WishlistWidget() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [replyDraft, setReplyDraft] = useState<string>("");
   const [replyBusy, setReplyBusy] = useState(false);
+
+  // v1.33.1 AI-assist state
+  const [aiDrafting, setAiDrafting] = useState(false);
+  const [aiPolishing, setAiPolishing] = useState(false);
+  const [aiEstimating, setAiEstimating] = useState(false);
+  const [polish, setPolish] = useState<PolishedSpec | null>(null);
+  const [estimate, setEstimate] = useState<string | null>(null);
 
   const areaContext = useMemo(() => {
     // Auto-capture the route Karen was on when she opened the widget —
@@ -140,6 +152,8 @@ export function WishlistWidget() {
       });
       toast.success("Wishlist request submitted — we'll respond in 48 hours or less.");
       setDraft(EMPTY_DRAFT);
+      setPolish(null);
+      setEstimate(null);
       // Prepend to local list so the "My requests" tab feels instant.
       setRequests((prior) => (prior ? [created, ...prior] : [created]));
       setTab("my-requests");
@@ -149,6 +163,99 @@ export function WishlistWidget() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // v1.33.1 — AI-assist: title → draft description in Karen's voice
+  const aiDraft = async () => {
+    const title = draft.title.trim();
+    if (!title) return;
+    setAiDrafting(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Please sign in again.");
+      const result = await aiDraftWishlistDescription({
+        data: { accessToken: token, viewAsUserId, title },
+      });
+      setDraft((d) => ({ ...d, description: result.description }));
+      // Stale polish + estimate from any prior cycle — clear so user re-polishes
+      setPolish(null);
+      setEstimate(null);
+      toast.success("Description drafted — edit as you like, then polish before submit.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "AI draft failed.");
+    } finally {
+      setAiDrafting(false);
+    }
+  };
+
+  // v1.33.1 — AI-assist: description → buildable spec + dev-cost preview
+  const aiPolish = async () => {
+    const title = draft.title.trim();
+    const description = draft.description.trim();
+    if (!title || !description) return;
+    setAiPolishing(true);
+    setEstimate(null);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Please sign in again.");
+      const polishResult = await aiPolishWishlistDescription({
+        data: { accessToken: token, viewAsUserId, title, description },
+      });
+      setPolish(polishResult.polished);
+      // Kick off estimate immediately — non-blocking for UI render
+      setAiEstimating(true);
+      try {
+        const estResult = await aiEstimateWishlistBuild({
+          data: {
+            accessToken: token,
+            viewAsUserId,
+            polished: polishResult.polished,
+          },
+        });
+        setEstimate(estResult.estimate);
+      } catch (e) {
+        // Estimate is best-effort — don't block polish on its failure
+        toast.error(
+          e instanceof Error
+            ? `Estimate failed (polish still usable): ${e.message}`
+            : "Estimate failed.",
+        );
+      } finally {
+        setAiEstimating(false);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "AI polish failed.");
+    } finally {
+      setAiPolishing(false);
+    }
+  };
+
+  const acceptPolish = () => {
+    if (!polish) return;
+    // Replace description with the polished spec as a formatted text block,
+    // preserving structure. Submit fn ships description as-is; the polished
+    // shape becomes part of the submission body via the description field.
+    const polishedText = [
+      `**What**: ${polish.what}`,
+      ``,
+      `**Why**: ${polish.why}`,
+      ``,
+      `**Where**: ${polish.where}`,
+      ``,
+      `**Acceptance criteria**:`,
+      ...polish.acceptanceCriteria.map((c) => `- ${c}`),
+    ].join("\n");
+    setDraft((d) => ({ ...d, description: polishedText }));
+    setPolish(null);
+    // Keep estimate visible above submit button as the "Po's reading" preview
+    toast.success("Polish accepted — review the full description below before submitting.");
+  };
+
+  const rejectPolish = () => {
+    setPolish(null);
+    setEstimate(null);
   };
 
   const sendReply = async (requestId: string) => {
@@ -264,6 +371,43 @@ export function WishlistWidget() {
                     disabled={submitting}
                     className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[13px] text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
                   />
+                  {/* v1.33.1: AI-draft from title — appears once title has
+                     enough to riff on; "skip" link preserves the bare-text
+                     path for users who already know what they want to write */}
+                  {draft.title.trim().length >= 5 &&
+                    !draft.description.trim() && (
+                      <div className="mt-1.5 flex items-center gap-2 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={aiDraft}
+                          disabled={aiDrafting || submitting}
+                          className="inline-flex items-center gap-1 rounded-md border border-emerald/40 bg-emerald-soft/60 px-2.5 py-1 font-medium text-emerald-ink hover:bg-emerald-soft transition disabled:opacity-50"
+                        >
+                          {aiDrafting ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Sparkles className="h-3 w-3" />
+                          )}
+                          {aiDrafting ? "Drafting…" : "AI-assist description"}
+                        </button>
+                        <span className="text-ink-faint">·</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // Treat as "skip" — focus the description so the
+                            // user can start typing. Just a no-op on UI state.
+                            const ta = document.querySelector<HTMLTextAreaElement>(
+                              "textarea[placeholder*='Walk us through']",
+                            );
+                            ta?.focus();
+                          }}
+                          disabled={aiDrafting || submitting}
+                          className="text-ink-faint hover:text-ink-soft underline-offset-2 hover:underline transition"
+                        >
+                          Skip — I'll write my own
+                        </button>
+                      </div>
+                    )}
                 </div>
                 <div>
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-soft mb-1">
@@ -280,6 +424,37 @@ export function WishlistWidget() {
                     disabled={submitting}
                     className="w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[12px] text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50"
                   />
+                  {/* v1.33.1: Polish to buildable spec — appears once
+                     description has substance. Polish panel renders below
+                     when state is set; preserves her voice via side-by-side. */}
+                  {draft.description.trim().length >= 20 && !polish && (
+                    <div className="mt-1.5">
+                      <button
+                        type="button"
+                        onClick={aiPolish}
+                        disabled={aiPolishing || submitting}
+                        className="inline-flex items-center gap-1 rounded-md border border-emerald/40 bg-emerald-soft/60 px-2.5 py-1 text-[11px] font-medium text-emerald-ink hover:bg-emerald-soft transition disabled:opacity-50"
+                      >
+                        {aiPolishing ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-3 w-3" />
+                        )}
+                        {aiPolishing
+                          ? "Polishing…"
+                          : "Polish into buildable spec"}
+                      </button>
+                    </div>
+                  )}
+                  {polish && (
+                    <PolishComparePanel
+                      original={draft.description}
+                      polish={polish}
+                      onAccept={acceptPolish}
+                      onReject={rejectPolish}
+                      busy={submitting}
+                    />
+                  )}
                 </div>
                 <div>
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-soft mb-1">
@@ -312,6 +487,27 @@ export function WishlistWidget() {
                   </div>
                   <div className="font-mono truncate">{areaContext}</div>
                 </div>
+                {/* v1.33.1: Po's dev-cost preview — visible once an estimate
+                   is computed (during or after polish accept) so Karen builds
+                   intuition for what a feature costs before submitting. */}
+                {(estimate || aiEstimating) && (
+                  <div className="rounded-md border border-emerald/30 bg-emerald-soft/40 px-3 py-2 text-[11px]">
+                    <div className="font-semibold uppercase tracking-wider text-emerald-ink mb-0.5 inline-flex items-center gap-1">
+                      <Sparkles className="h-2.5 w-2.5" />
+                      Po's reading
+                    </div>
+                    {aiEstimating ? (
+                      <div className="inline-flex items-center gap-1 text-ink-soft">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Sizing up the build…
+                      </div>
+                    ) : (
+                      <div className="text-emerald-ink font-medium">
+                        {estimate}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={submit}
@@ -365,6 +561,92 @@ export function WishlistWidget() {
         </div>
       )}
     </>
+  );
+}
+
+function PolishComparePanel({
+  original,
+  polish,
+  onAccept,
+  onReject,
+  busy,
+}: {
+  original: string;
+  polish: PolishedSpec;
+  onAccept: () => void;
+  onReject: () => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="mt-3 rounded-md border border-emerald/30 bg-emerald-soft/20 p-3 space-y-2.5">
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-ink">
+        <Sparkles className="h-2.5 w-2.5" />
+        AI polish — review before accepting
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {/* Original — preserves her voice */}
+        <div className="rounded border border-rule bg-white p-2 max-h-48 overflow-y-auto">
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-ink-faint mb-1">
+            Your words
+          </div>
+          <div className="text-[11px] text-ink-soft whitespace-pre-wrap">
+            {original}
+          </div>
+        </div>
+        {/* Polished — buildable spec shape */}
+        <div className="rounded border border-emerald/40 bg-white p-2 max-h-48 overflow-y-auto space-y-1.5">
+          <div className="text-[9px] font-semibold uppercase tracking-wider text-emerald-ink mb-1">
+            Polished spec
+          </div>
+          <div>
+            <div className="text-[9px] uppercase tracking-wider text-ink-faint">
+              What
+            </div>
+            <div className="text-[11px] text-ink">{polish.what}</div>
+          </div>
+          <div>
+            <div className="text-[9px] uppercase tracking-wider text-ink-faint">
+              Why
+            </div>
+            <div className="text-[11px] text-ink italic">{polish.why}</div>
+          </div>
+          <div>
+            <div className="text-[9px] uppercase tracking-wider text-ink-faint">
+              Where
+            </div>
+            <div className="text-[11px] text-ink">{polish.where}</div>
+          </div>
+          <div>
+            <div className="text-[9px] uppercase tracking-wider text-ink-faint">
+              Acceptance criteria
+            </div>
+            <ul className="text-[11px] text-ink list-disc list-inside space-y-0.5">
+              {polish.acceptanceCriteria.map((c, i) => (
+                <li key={i}>{c}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 pt-0.5">
+        <button
+          type="button"
+          onClick={onAccept}
+          disabled={busy}
+          className="inline-flex items-center gap-1 rounded-md bg-emerald px-3 py-1 text-[11px] font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
+        >
+          Use polish
+        </button>
+        <button
+          type="button"
+          onClick={onReject}
+          disabled={busy}
+          className="inline-flex items-center gap-1 rounded-md border border-rule bg-white px-2.5 py-1 text-[11px] font-medium text-ink-soft hover:text-ink transition disabled:opacity-50"
+        >
+          Keep mine
+        </button>
+      </div>
+    </div>
   );
 }
 
