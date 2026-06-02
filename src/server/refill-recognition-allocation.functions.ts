@@ -522,11 +522,17 @@ export const runAllocation = createServerFn({ method: "POST" })
       const spendDecileCutoff = spendValues[decileIdx] ?? 1;
 
       // 4) Score every patient → classify into cohort.
+      // v1.34.9.6: skip soft-hidden patients. Hidden = Karen explicitly
+      // removed this patient from active flows; Recognition shouldn't
+      // surface them as allocation candidates regardless of cohort fit.
+      // Same for banned + opted_out (already-existing compliance filters).
       const now = Date.now();
       const scored: PatientScored[] = [];
       for (const row of ptRows ?? []) {
         const summary = row.attachments as unknown as PatientSummary | null;
         if (!summary) continue;
+        if (summary.hidden) continue;
+        if (summary.banned) continue;
         const s = classifyPatient(summary, spendDecileCutoff, row.id, now);
         if (s) scored.push(s);
       }

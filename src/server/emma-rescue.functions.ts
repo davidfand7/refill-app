@@ -184,6 +184,7 @@ async function selectFitPatients(
       lifetimeSpend: number;
       banned: boolean;
       optedOut: boolean;
+      hidden: boolean;
     }
   >();
   for (const p of patients ?? []) {
@@ -192,12 +193,14 @@ async function selectFitPatients(
       lifetimeSpendUsd?: number;
       banned?: boolean;
       opted_out?: boolean;
+      hidden?: boolean;
     } | null;
     patientById.set(p.id, {
       phone: a?.phone ?? null,
       lifetimeSpend: Number(a?.lifetimeSpendUsd ?? 0),
       banned: !!a?.banned,
       optedOut: !!a?.opted_out,
+      hidden: !!a?.hidden,
     });
   }
 
@@ -211,6 +214,9 @@ async function selectFitPatients(
     const p = patientById.get(c.patient_node_id);
     if (!p || !p.phone) continue;
     if (p.banned || p.optedOut) continue;
+    // v1.34.9.6: skip soft-hidden patients. Hidden = Karen explicitly
+    // removed this patient from active flows; rescue shouldn't text them.
+    if (p.hidden) continue;
     fit.push({
       waitlistId: c.id,
       patientNodeId: c.patient_node_id,
