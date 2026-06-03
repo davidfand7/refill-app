@@ -194,6 +194,11 @@ export async function exchangeSquareCodeForToken(args: {
   code: string;
   credentials: SquareOAuthCredentials;
 }): Promise<SquareTokenResponse> {
+  // v1.35.5: Square's /oauth2/token returned 401 service.not_authorized
+  // because the redirect_uri wasn't echoed back in the token-exchange
+  // body. Even though our authorize URL doesn't include redirect_uri
+  // explicitly (Square uses the registered one from app config), the
+  // token endpoint requires the value to be passed back for verification.
   const resp = await fetch(`${apiBase(args.credentials.env)}/oauth2/token`, {
     method: "POST",
     headers: {
@@ -205,6 +210,7 @@ export async function exchangeSquareCodeForToken(args: {
       client_secret: args.credentials.clientSecret,
       code: args.code,
       grant_type: "authorization_code",
+      redirect_uri: args.credentials.redirectUri,
     }),
   });
   if (!resp.ok) {
