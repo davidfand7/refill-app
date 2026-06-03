@@ -14,6 +14,15 @@
     "SUPABASE_URL": "https://pxgzbibcmbxxqycuplga.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4Z3piaWJjbWJ4eHF5Y3VwbGdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2Mjg5MTEsImV4cCI6MjA5NTIwNDkxMX0.bi65GEEz_3maHXswJ_fv3MayEKn4Wh_WBPSi02dFTQU",
     "SQUARE_ENV": "sandbox"
+  },
+  // Observability logs — added so `npm run deploy` doesn't wipe the
+  // dashboard-side enable (same lesson as SQUARE_ENV migration in v1.35.3).
+  // Required for the Square OAuth debug + general production observability.
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    }
   }
   // Secrets (SUPABASE_*, RESEND_*, TWILIO_*, STRIPE_*, ACUITY_*) set via
   // `wrangler secret put <NAME>` — they do NOT live in this file.
