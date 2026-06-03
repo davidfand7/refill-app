@@ -12,7 +12,8 @@
     "REFILL_FROM_ENABLED": "1",
     "REFILL_PUBLIC_ORIGIN": "https://getrefill.app",
     "SUPABASE_URL": "https://pxgzbibcmbxxqycuplga.supabase.co",
-    "SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4Z3piaWJjbWJ4eHF5Y3VwbGdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2Mjg5MTEsImV4cCI6MjA5NTIwNDkxMX0.bi65GEEz_3maHXswJ_fv3MayEKn4Wh_WBPSi02dFTQU"
+    "SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4Z3piaWJjbWJ4eHF5Y3VwbGdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2Mjg5MTEsImV4cCI6MjA5NTIwNDkxMX0.bi65GEEz_3maHXswJ_fv3MayEKn4Wh_WBPSi02dFTQU",
+    "SQUARE_ENV": "sandbox"
   }
   // Secrets (SUPABASE_*, RESEND_*, TWILIO_*, STRIPE_*, ACUITY_*) set via
   // `wrangler secret put <NAME>` — they do NOT live in this file.
