@@ -75,17 +75,26 @@ export const Route = createFileRoute("/api/integrations/square/oauth-callback")(
         if (state.returnTo) errReturnPath = state.returnTo;
 
         const env: SquareEnv = resolveSquareEnv();
-        console.log(
-          `[square/oauth-callback] SQUARE_ENV raw="${process.env.SQUARE_ENV}" resolved="${env}"`,
-        );
-        const CLIENT_ID =
+        // v1.35.4: defensive whitespace strip on credentials. CF dashboard's
+        // secret input field wraps long values visually and can leak embedded
+        // newlines/tabs/spaces into the stored value. Square credentials are
+        // alphanumeric + hyphens — no legitimate whitespace possible — so
+        // stripping all whitespace is safe and defends against multi-line
+        // copy/paste artifacts in addition to leading/trailing whitespace.
+        const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+        const CLIENT_ID = stripWs(
           env === "sandbox"
             ? process.env.SQUARE_SANDBOX_APP_ID
-            : process.env.SQUARE_APP_ID;
-        const CLIENT_SECRET =
+            : process.env.SQUARE_APP_ID,
+        );
+        const CLIENT_SECRET = stripWs(
           env === "sandbox"
             ? process.env.SQUARE_SANDBOX_APP_SECRET
-            : process.env.SQUARE_APP_SECRET;
+            : process.env.SQUARE_APP_SECRET,
+        );
+        console.log(
+          `[square/oauth-callback] SQUARE_ENV raw="${process.env.SQUARE_ENV}" resolved="${env}" client_id_len=${CLIENT_ID?.length ?? 0} client_secret_len=${CLIENT_SECRET?.length ?? 0}`,
+        );
         const SUPABASE_URL = process.env.SUPABASE_URL;
         const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
         if (!CLIENT_ID || !CLIENT_SECRET || !SUPABASE_URL || !SERVICE_KEY) {
@@ -108,8 +117,15 @@ export const Route = createFileRoute("/api/integrations/square/oauth-callback")(
             },
           });
         } catch (e) {
-          console.error("[square/callback] token exchange failed", e);
-          return errReturn("token_exchange");
+          // v1.35.4: bubble Square's actual error detail into the redirect
+          // URL so it's visible in the browser Network panel without needing
+          // a wrangler tail. Sanitize to URL-safe chars.
+          const msg = e instanceof Error ? e.message : String(e);
+          console.error("[square/callback] token exchange failed:", msg);
+          const safeMsg = msg
+            .slice(0, 180)
+            .replace(/[^a-zA-Z0-9_\-:.()]/g, "_");
+          return errReturn(`token_exchange__${safeMsg}`);
         }
 
         // ── Step 2: identify the merchant (business name + currency, mostly)

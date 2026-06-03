@@ -203,13 +203,16 @@ export const initiateSquareOAuth = createServerFn({ method: "POST" })
     }
 
     const env: SquareEnv = resolveSquareEnv();
-    console.log(
-      `[square/oauth-start] SQUARE_ENV raw="${process.env.SQUARE_ENV}" resolved="${env}"`,
-    );
-    const CLIENT_ID =
+    // v1.35.4: defensive whitespace strip mirrors the callback. CF input
+    // fields wrap long values visually + can leak embedded whitespace.
+    const CLIENT_ID = (
       env === "sandbox"
         ? process.env.SQUARE_SANDBOX_APP_ID
-        : process.env.SQUARE_APP_ID;
+        : process.env.SQUARE_APP_ID
+    )?.replace(/\s+/g, "");
+    console.log(
+      `[square/oauth-start] SQUARE_ENV raw="${process.env.SQUARE_ENV}" resolved="${env}" client_id_len=${CLIENT_ID?.length ?? 0}`,
+    );
     if (!CLIENT_ID) {
       throw new Error(
         `Square OAuth is not configured on the server. ${env === "sandbox" ? "SQUARE_SANDBOX_APP_ID" : "SQUARE_APP_ID"} is missing.`,
