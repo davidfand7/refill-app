@@ -269,7 +269,14 @@ export const Route = createFileRoute("/api/integrations/square/oauth-callback")(
           tier = "unknown";
         }
 
-        // ── Step 6: backfill bookings
+        // ── Step 6: backfill bookings (FAIL-DEGRADED in v1.35.8). Some
+        //    sellers haven't onboarded to Square Appointments yet — their
+        //    /v2/bookings calls return 401 "not onboarded to Appointments".
+        //    That's a seller-config state, not a credential failure. The
+        //    connection still lands; backfill will retry whenever the
+        //    seller hits Re-sync after enabling Appointments on their
+        //    Square dashboard.
+        let backfillWarning: string | null = null;
         try {
           await backfillSquareBookings({
             sb,
@@ -277,24 +284,25 @@ export const Route = createFileRoute("/api/integrations/square/oauth-callback")(
             accessToken: tokenResp.accessToken,
           });
         } catch (e) {
-          console.error("[square/callback] backfill failed", e);
-          await sbAny
-            .from("emma_scheduler_connections")
-            .update({
-              status: "error",
-              last_error: `Backfill failed: ${e instanceof Error ? e.message : "unknown"}`,
-            })
-            .eq("id", connectionId);
-          return errReturn("backfill");
+          const msg = e instanceof Error ? e.message : String(e);
+          console.warn(
+            "[square/callback] backfill failed (non-fatal):",
+            msg,
+          );
+          backfillWarning = msg.includes("not onboarded to Appointments")
+            ? "Square Appointments not enabled on this seller. Enable it on your Square dashboard, then hit Re-sync."
+            : `Initial backfill failed (${msg.slice(0, 200)}). Hit Re-sync to retry.`;
         }
 
-        // ── Step 7: mark connected (tier + webhook-warning baked into
-        //          last_error as a non-fatal banner the settings page
-        //          can render)
+        // ── Step 7: mark connected — tier + webhook-warning + backfill-warning
+        //          all baked into last_error as a non-fatal banner the
+        //          settings page can render. Tier takes priority since it
+        //          blocks writeback; webhook/backfill warnings are reads-only
+        //          degradations.
         const lastError =
           tier === "read_only"
             ? "tier_gate: Square Appointments Free tier detected. Sync + Rescue work; claim writeback will fail until you upgrade to Appointments Plus or Premium."
-            : webhookWarning ?? null;
+            : backfillWarning ?? webhookWarning ?? null;
         await sbAny
           .from("emma_scheduler_connections")
           .update({
