@@ -202,24 +202,26 @@ export async function exchangeSquareCodeForToken(args: {
   code: string;
   credentials: SquareOAuthCredentials;
 }): Promise<SquareTokenResponse> {
-  // v1.35.5: Square's /oauth2/token returned 401 service.not_authorized
-  // because the redirect_uri wasn't echoed back in the token-exchange
-  // body. Even though our authorize URL doesn't include redirect_uri
-  // explicitly (Square uses the registered one from app config), the
-  // token endpoint requires the value to be passed back for verification.
+  // v1.35.7: switch to application/x-www-form-urlencoded body per OAuth 2.0
+  // RFC 6749 Section 4.1.3. Square's docs say JSON works but sandbox
+  // /oauth2/token has returned persistent 401 service.not_authorized with
+  // JSON body across v1.35.4-6 debug iterations. Form-encoded is the
+  // OAuth 2.0 spec-compliant format and what every major OAuth server
+  // accepts unambiguously.
+  const body = new URLSearchParams({
+    client_id: args.credentials.clientId,
+    client_secret: args.credentials.clientSecret,
+    code: args.code,
+    grant_type: "authorization_code",
+    redirect_uri: args.credentials.redirectUri,
+  });
   const resp = await fetch(`${apiBase(args.credentials.env)}/oauth2/token`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
       "Square-Version": SQUARE_API_VERSION,
     },
-    body: JSON.stringify({
-      client_id: args.credentials.clientId,
-      client_secret: args.credentials.clientSecret,
-      code: args.code,
-      grant_type: "authorization_code",
-      redirect_uri: args.credentials.redirectUri,
-    }),
+    body: body.toString(),
   });
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
@@ -234,18 +236,20 @@ export async function refreshSquareAccessToken(args: {
   refreshToken: string;
   credentials: SquareOAuthCredentials;
 }): Promise<SquareTokenResponse> {
+  // v1.35.7: same form-encoded switch as exchangeSquareCodeForToken.
+  const body = new URLSearchParams({
+    client_id: args.credentials.clientId,
+    client_secret: args.credentials.clientSecret,
+    refresh_token: args.refreshToken,
+    grant_type: "refresh_token",
+  });
   const resp = await fetch(`${apiBase(args.credentials.env)}/oauth2/token`, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
       "Square-Version": SQUARE_API_VERSION,
     },
-    body: JSON.stringify({
-      client_id: args.credentials.clientId,
-      client_secret: args.credentials.clientSecret,
-      refresh_token: args.refreshToken,
-      grant_type: "refresh_token",
-    }),
+    body: body.toString(),
   });
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.35.7",
+    date: "June 2026",
+    items: [
+      "<strong>v1.35.7 &mdash; Square token exchange switched to application/x-www-form-urlencoded body per OAuth 2.0 RFC 6749. Square&rsquo;s docs claim both JSON and form-encoded work but sandbox /oauth2/token returned persistent 401 service.not_authorized with JSON body across every variation tried in v1.35.4-6. Form-encoded is the OAuth 2.0 spec-compliant default and the format every major OAuth server accepts unambiguously, so eliminating the JSON-vs-form variable rules out content-type as the cause regardless of whether Square&rsquo;s docs are technically correct.</strong> Same change applied to <code>exchangeSquareCodeForToken</code> and <code>refreshSquareAccessToken</code> for consistency. Body construction uses <code>URLSearchParams</code> with all required params (<code>client_id</code>, <code>client_secret</code>, <code>code</code>/<code>refresh_token</code>, <code>grant_type</code>, <code>redirect_uri</code> for authorization_code grant); Content-Type header flipped from <code>application/json</code> to <code>application/x-www-form-urlencoded</code>; Square-Version header retained. If v1.35.7 token exchange still 401s, the issue is definitively not request-format-related and we need to look at app-level config in Square (sandbox app may need explicit OAuth enablement, or credentials genuinely mismatch despite repeated re-paste cycles &mdash; Worker Logs in CF dashboard would reveal the latter via the v1.35.4 client_id_len/client_secret_len console output). <strong>Touched</strong>: <code>src/lib/schedulers/square.ts</code> (both OAuth-flow fns updated), <code>src/lib/changelog.ts</code> (this entry). No schema change; no new dependencies; no Worker secret changes.",
+    ],
+  },
+  {
     version: "v1.35.6",
     date: "June 2026",
     items: [
