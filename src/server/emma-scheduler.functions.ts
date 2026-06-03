@@ -794,21 +794,57 @@ export async function backfillSquareBookings(args: {
   const startAtMin = new Date(now.getTime() - 30 * 86400000).toISOString();
   const startAtMax = new Date(now.getTime() + 90 * 86400000).toISOString();
 
+  // v1.35.9: Square's /v2/bookings requires AT LEAST ONE of location_id,
+  // team_member_id, or customer_id in the query string. Without any of
+  // them the call returns 400 BAD_REQUEST. Fetch the seller's locations
+  // first, then iterate /v2/bookings per location_id.
+  const apiBaseUrl =
+    env === "sandbox"
+      ? "https://connect.squareupsandbox.com"
+      : "https://connect.squareup.com";
+  type LocResp = { locations?: { id?: string }[] };
+  const locResp = await fetch(`${apiBaseUrl}/v2/locations`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Square-Version": "2024-12-18",
+    },
+  });
+  if (!locResp.ok) {
+    const text = await locResp.text().catch(() => "");
+    throw new Error(
+      `Square /v2/locations ${locResp.status}: ${text.slice(0, 500)}`,
+    );
+  }
+  const locJson = (await locResp.json()) as LocResp;
+  const locationIds = (locJson.locations ?? [])
+    .map((l) => l.id)
+    .filter((id): id is string => !!id);
+
+  if (locationIds.length === 0) {
+    // No locations = no bookings to pull. Not an error; legitimately
+    // empty state for a brand-new seller.
+    return { totalAppointments: 0, resolvedPatientNames: 0 };
+  }
+
   const all: SquareBooking[] = [];
-  let cursor: string | null = null;
-  // Hard cap to avoid runaway pagination on degenerate seller accounts.
-  for (let page = 0; page < 50; page++) {
-    const { bookings, cursor: next } = await listSquareBookings({
-      accessToken,
-      env,
-      startAtMin,
-      startAtMax,
-      limit: 200,
-      cursor: cursor ?? undefined,
-    });
-    all.push(...bookings);
-    if (!next) break;
-    cursor = next;
+  for (const locationId of locationIds) {
+    let cursor: string | null = null;
+    // Hard cap per location to avoid runaway pagination on degenerate
+    // seller accounts.
+    for (let page = 0; page < 50; page++) {
+      const { bookings, cursor: next } = await listSquareBookings({
+        accessToken,
+        env,
+        locationId,
+        startAtMin,
+        startAtMax,
+        limit: 200,
+        cursor: cursor ?? undefined,
+      });
+      all.push(...bookings);
+      if (!next) break;
+      cursor = next;
+    }
   }
 
   // Pre-migrate any leftover csv-square-sourced rows so the upsert

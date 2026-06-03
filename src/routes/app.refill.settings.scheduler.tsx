@@ -212,7 +212,11 @@ function SchedulerSettingsPage() {
   }, [load]);
 
   const handleDisconnect = useCallback(async () => {
-    if (!confirm(`Disconnect Acuity? ${brandName} will stop receiving real-time appointment updates from your scheduler.`)) {
+    // v1.35.9: platform-aware confirm dialog (was hardcoded to Acuity).
+    const platformName = connection
+      ? platformLabel(connection.platform)
+      : "this scheduler";
+    if (!confirm(`Disconnect ${platformName}? ${brandName} will stop receiving real-time appointment updates from your scheduler.`)) {
       return;
     }
     setDisconnecting(true);
@@ -232,7 +236,7 @@ function SchedulerSettingsPage() {
       });
       toast.success(
         webhooksRemoved > 0
-          ? `Disconnected · removed ${webhooksRemoved} webhook${webhooksRemoved === 1 ? "" : "s"} from Acuity`
+          ? `Disconnected · removed ${webhooksRemoved} webhook${webhooksRemoved === 1 ? "" : "s"} from ${platformName}`
           : "Disconnected.",
       );
       await load();
@@ -366,9 +370,25 @@ function ConnectedCard({
           </div>
         )}
         {connection.lastError && (
+          // v1.35.9: split UI between "real error" (status=error) and
+          // "informational warning" (status=connected but lastError set
+          // for tier_gate / backfill / webhook degradations). Real errors
+          // render destructive-red; warnings render amber.
           <div className="sm:col-span-2">
-            <dt className="text-xs text-destructive uppercase tracking-wide">Last error</dt>
-            <dd className="text-destructive text-xs mt-1 font-mono">
+            <dt
+              className={cn(
+                "text-xs uppercase tracking-wide",
+                isConnected ? "text-amber-700" : "text-destructive",
+              )}
+            >
+              {isConnected ? "Note" : "Last error"}
+            </dt>
+            <dd
+              className={cn(
+                "text-xs mt-1 font-mono",
+                isConnected ? "text-amber-700" : "text-destructive",
+              )}
+            >
               {connection.lastError}
             </dd>
           </div>

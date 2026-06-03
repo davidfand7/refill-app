@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.35.9",
+    date: "June 2026",
+    items: [
+      "<strong>v1.35.9 &mdash; Square backfill location_id fix + UI polish from v1.35.x debug arc. Grasshopper&rsquo;s re-sync after enabling Appointments on the Default Test Account sandbox seller surfaced the next layer of bug: Square&rsquo;s /v2/bookings returned 400 INVALID_REQUEST_ERROR BAD_REQUEST with empty detail. Square&rsquo;s ListBookings spec requires AT LEAST ONE of location_id, team_member_id, or customer_id in the query string — none specified = 400. My <code>backfillSquareBookings</code> sent only start_at_min + start_at_max + limit, so Square rejected.</strong> <strong>Fix</strong>: <code>backfillSquareBookings</code> now fetches the seller&rsquo;s /v2/locations first, then iterates /v2/bookings per location_id. Zero-location response treated as legitimate empty state (no error, just returns 0). 50-page hard cap retained per location. <strong>UI polish from arc retrospective</strong>: (1) <strong>Disconnect dialog</strong> &mdash; was hardcoded <code>&quot;Disconnect Acuity?&quot;</code> even when disconnecting Square. Now uses <code>platformLabel(connection.platform)</code> for both the confirm text and the success toast. Will work for Mindbody / Boulevard / Jane on future ships. (2) <strong>Last error vs Note UI split</strong> &mdash; the connection card previously rendered ALL lastError values in red &lsquo;LAST ERROR&rsquo; styling regardless of severity. v1.35.6 (webhook degrade) + v1.35.8 (backfill degrade) populate lastError with WARNINGS on status=connected rows, not real errors. Now: if <code>status === &quot;connected&quot;</code> the lastError renders as &lsquo;NOTE&rsquo; in amber (informational); if <code>status === &quot;error&quot;</code> it renders as &lsquo;LAST ERROR&rsquo; in destructive-red (action required). The visual cue now matches semantic severity. <strong>Touched</strong>: <code>src/server/emma-scheduler.functions.ts</code> (backfillSquareBookings fetches /v2/locations + iterates per location), <code>src/routes/app.refill.settings.scheduler.tsx</code> (platform-aware disconnect confirm + warning vs error UI split), <code>src/lib/changelog.ts</code> (this entry). No schema change; no new dependencies; no Worker secret changes.",
+    ],
+  },
+  {
     version: "v1.35.8",
     date: "June 2026",
     items: [
