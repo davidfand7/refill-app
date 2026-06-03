@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.35.10",
+    date: "June 2026",
+    items: [
+      "<strong>v1.35.10 &mdash; Square backfill 30-day window chunking. v1.35.9 location_id fix unblocked /v2/bookings auth but Square&rsquo;s spec has another constraint: the duration between <code>start_at_min</code> and <code>start_at_max</code> must be <strong>less than 31 days</strong>. The 120-day backfill window (30 back + 90 forward) violates this and returns 400 INVALID_REQUEST_ERROR.</strong> <strong>Fix</strong>: backfill now chunks the 120-day window into ≤30-day slices and iterates per (location, slice). Per location, the loop walks 4&ndash;5 slices each making a paginated /v2/bookings call. All slice results combined into the single backfill upsert. 50-page hard cap retained per slice (so per location). The chunking adds 3-4x API calls per backfill but each call returns ≤200 bookings; total network cost stays under the daily Square sandbox quota by orders of magnitude. <strong>What this doesn&rsquo;t change</strong>: window total stays at 30 days back + 90 days forward (mirrors Acuity); slice size set to 30 days (just under Square&rsquo;s 31-day cap). If Square ever expands the date-range constraint, just bump <code>SLICE_DAYS</code>. <strong>Touched</strong>: <code>src/server/emma-scheduler.functions.ts</code> (slice builder + nested loop over locations × slices), <code>src/lib/changelog.ts</code> (this entry). No schema change; no new dependencies; no Worker secret changes.",
+    ],
+  },
+  {
     version: "v1.35.9",
     date: "June 2026",
     items: [

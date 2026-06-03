@@ -791,13 +791,12 @@ export async function backfillSquareBookings(args: {
     resolveSquareEnv();
 
   const now = new Date();
-  const startAtMin = new Date(now.getTime() - 30 * 86400000).toISOString();
-  const startAtMax = new Date(now.getTime() + 90 * 86400000).toISOString();
+  const windowStart = new Date(now.getTime() - 30 * 86400000);
+  const windowEnd = new Date(now.getTime() + 90 * 86400000);
 
   // v1.35.9: Square's /v2/bookings requires AT LEAST ONE of location_id,
-  // team_member_id, or customer_id in the query string. Without any of
-  // them the call returns 400 BAD_REQUEST. Fetch the seller's locations
-  // first, then iterate /v2/bookings per location_id.
+  // team_member_id, or customer_id. Fetch /v2/locations first then
+  // iterate per location_id.
   const apiBaseUrl =
     env === "sandbox"
       ? "https://connect.squareupsandbox.com"
@@ -821,29 +820,44 @@ export async function backfillSquareBookings(args: {
     .filter((id): id is string => !!id);
 
   if (locationIds.length === 0) {
-    // No locations = no bookings to pull. Not an error; legitimately
-    // empty state for a brand-new seller.
     return { totalAppointments: 0, resolvedPatientNames: 0 };
+  }
+
+  // v1.35.10: Square's /v2/bookings additionally constrains the window
+  // between start_at_min and start_at_max to <31 days. Chunk the
+  // 120-day backfill window (30 back + 90 forward) into ≤30-day slices
+  // and iterate per (location, slice).
+  const SLICE_DAYS = 30;
+  const slices: { startAtMin: string; startAtMax: string }[] = [];
+  let sliceCursor = windowStart;
+  while (sliceCursor < windowEnd) {
+    const sliceNext = new Date(sliceCursor.getTime() + SLICE_DAYS * 86400000);
+    const sliceEnd = sliceNext < windowEnd ? sliceNext : windowEnd;
+    slices.push({
+      startAtMin: sliceCursor.toISOString(),
+      startAtMax: sliceEnd.toISOString(),
+    });
+    sliceCursor = sliceEnd;
   }
 
   const all: SquareBooking[] = [];
   for (const locationId of locationIds) {
-    let cursor: string | null = null;
-    // Hard cap per location to avoid runaway pagination on degenerate
-    // seller accounts.
-    for (let page = 0; page < 50; page++) {
-      const { bookings, cursor: next } = await listSquareBookings({
-        accessToken,
-        env,
-        locationId,
-        startAtMin,
-        startAtMax,
-        limit: 200,
-        cursor: cursor ?? undefined,
-      });
-      all.push(...bookings);
-      if (!next) break;
-      cursor = next;
+    for (const slice of slices) {
+      let cursor: string | null = null;
+      for (let page = 0; page < 50; page++) {
+        const { bookings, cursor: next } = await listSquareBookings({
+          accessToken,
+          env,
+          locationId,
+          startAtMin: slice.startAtMin,
+          startAtMax: slice.startAtMax,
+          limit: 200,
+          cursor: cursor ?? undefined,
+        });
+        all.push(...bookings);
+        if (!next) break;
+        cursor = next;
+      }
     }
   }
 
