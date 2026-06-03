@@ -30,6 +30,7 @@ import {
   createSquareWebhookSubscription,
   getSquareMerchant,
   probeSquareBookingsTier,
+  resolveSquareEnv,
   type SquareEnv,
 } from "@/lib/schedulers/square";
 import {
@@ -73,8 +74,10 @@ export const Route = createFileRoute("/api/integrations/square/oauth-callback")(
         }
         if (state.returnTo) errReturnPath = state.returnTo;
 
-        const env: SquareEnv =
-          process.env.SQUARE_ENV === "sandbox" ? "sandbox" : "production";
+        const env: SquareEnv = resolveSquareEnv();
+        console.log(
+          `[square/oauth-callback] SQUARE_ENV raw="${process.env.SQUARE_ENV}" resolved="${env}"`,
+        );
         const CLIENT_ID =
           env === "sandbox"
             ? process.env.SQUARE_SANDBOX_APP_ID

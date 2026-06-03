@@ -32,6 +32,7 @@ import type { Database } from "@/integrations/supabase/types";
 import {
   getSquareBooking,
   parseSquareWebhookBody,
+  resolveSquareEnv,
   squareStatusToRefillStatus,
   verifySquareWebhookSignature,
   type SquareBooking,
@@ -171,7 +172,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/square")({
         } else {
           try {
             const env: SquareEnv =
-              process.env.SQUARE_ENV === "sandbox" ? "sandbox" : "production";
+              resolveSquareEnv();
             booking = await getSquareBooking({
               accessToken: connection.access_token,
               env,

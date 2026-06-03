@@ -1434,12 +1434,13 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
             getSquareBooking,
             createSquareBooking,
             upsertSquareCustomer,
+            resolveSquareEnv,
           } = await import("@/lib/schedulers/square");
           const { withFreshSquareToken } = await import(
             "@/server/emma-scheduler.functions"
           );
           const env: import("@/lib/schedulers/square").SquareEnv =
-            process.env.SQUARE_ENV === "sandbox" ? "sandbox" : "production";
+            resolveSquareEnv();
 
           const { data: claimer } = await sb
             .from("knowledge_nodes")

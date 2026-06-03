@@ -54,6 +54,20 @@ function apiBase(env: SquareEnv): string {
   return env === "sandbox" ? SQUARE_API_BASE_SANDBOX : SQUARE_API_BASE_PROD;
 }
 
+/**
+ * v1.35.2 — single source of truth for SQUARE_ENV resolution. Cloudflare's
+ * secret/plaintext input field has demonstrated whitespace contamination
+ * on stored values (caught when the OAuth URL routed to PROD instead of
+ * sandbox because SQUARE_ENV was stored as " sandbox" with a leading
+ * space). All 7 call sites that previously did `process.env.SQUARE_ENV
+ * === "sandbox" ? ...` route through here so the defensive trim +
+ * lowercase happens in one place.
+ */
+export function resolveSquareEnv(): SquareEnv {
+  const raw = (process.env.SQUARE_ENV ?? "").trim().toLowerCase();
+  return raw === "sandbox" ? "sandbox" : "production";
+}
+
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 export type SquareOAuthCredentials = {

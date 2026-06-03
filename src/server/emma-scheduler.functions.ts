@@ -39,6 +39,7 @@ import {
   deleteSquareWebhookSubscription,
   listSquareBookings,
   refreshSquareAccessToken,
+  resolveSquareEnv,
   squareStatusToRefillStatus,
   type SquareBooking,
   type SquareEnv,
@@ -201,8 +202,10 @@ export const initiateSquareOAuth = createServerFn({ method: "POST" })
       );
     }
 
-    const env: SquareEnv =
-      process.env.SQUARE_ENV === "sandbox" ? "sandbox" : "production";
+    const env: SquareEnv = resolveSquareEnv();
+    console.log(
+      `[square/oauth-start] SQUARE_ENV raw="${process.env.SQUARE_ENV}" resolved="${env}"`,
+    );
     const CLIENT_ID =
       env === "sandbox"
         ? process.env.SQUARE_SANDBOX_APP_ID
@@ -378,7 +381,7 @@ export const disconnectScheduler = createServerFn({ method: "POST" })
       // subscription anyway once the receiver stops being reachable.
       try {
         const env: SquareEnv =
-          process.env.SQUARE_ENV === "sandbox" ? "sandbox" : "production";
+          resolveSquareEnv();
         await deleteSquareWebhookSubscription({
           accessToken: row.access_token,
           env,
@@ -782,7 +785,7 @@ export async function backfillSquareBookings(args: {
 }): Promise<{ totalAppointments: number; resolvedPatientNames: number }> {
   const { sb, userId, accessToken } = args;
   const env: SquareEnv =
-    process.env.SQUARE_ENV === "sandbox" ? "sandbox" : "production";
+    resolveSquareEnv();
 
   const now = new Date();
   const startAtMin = new Date(now.getTime() - 30 * 86400000).toISOString();
@@ -915,7 +918,7 @@ export async function withFreshSquareToken<T>(args: {
   }
 
   const env: SquareEnv =
-    process.env.SQUARE_ENV === "sandbox" ? "sandbox" : "production";
+    resolveSquareEnv();
   const CLIENT_ID =
     env === "sandbox"
       ? process.env.SQUARE_SANDBOX_APP_ID
