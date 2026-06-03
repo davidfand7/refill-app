@@ -222,8 +222,16 @@ export const Route = createFileRoute("/api/integrations/square/oauth-callback")(
           connectionId = ins.data.id;
         }
 
-        // ── Step 4: register the webhook subscription
-        let subscription;
+        // ── Step 4: register the webhook subscription (FAIL-DEGRADED in
+        //    v1.35.6). The DEVELOPER_APPLICATION_WEBHOOKS_* scopes that
+        //    this call requires are partner-level scopes Square doesn't
+        //    grant to unapproved apps. Connect flow proceeds even on
+        //    failure; webhook_subscription_id stays null and the
+        //    connection falls back to polling for sync once that ships.
+        let subscription: Awaited<
+          ReturnType<typeof createSquareWebhookSubscription>
+        > | null = null;
+        let webhookWarning: string | null = null;
         try {
           subscription = await createSquareWebhookSubscription({
             accessToken: tokenResp.accessToken,
@@ -232,29 +240,23 @@ export const Route = createFileRoute("/api/integrations/square/oauth-callback")(
             name: "Refill booking events",
           });
         } catch (e) {
-          console.error("[square/callback] webhook subscribe failed", e);
+          const msg = e instanceof Error ? e.message : String(e);
+          console.warn(
+            "[square/callback] webhook subscribe failed (non-fatal):",
+            msg,
+          );
+          webhookWarning = `Webhook subscription unavailable on this Square app (${msg.slice(0, 200)}). Connection works for read sync; real-time push deferred until app approval or polling fallback.`;
+        }
+
+        if (subscription) {
           await sbAny
             .from("emma_scheduler_connections")
             .update({
-              status: "error",
-              last_error: `Webhook subscription failed: ${e instanceof Error ? e.message : "unknown"}`,
+              webhook_subscription_id: subscription.id,
+              webhook_secret: subscription.signatureKey,
             })
             .eq("id", connectionId);
-          return errReturn("webhook_setup");
         }
-
-        // Persist subscription_id + signature_key on the connection row.
-        // Square's HMAC verification needs both the signature_key (HMAC
-        // key) and the registered notification URL (part of HMAC input),
-        // so the receiver reads webhook_secret = signature_key on every
-        // delivery.
-        await sbAny
-          .from("emma_scheduler_connections")
-          .update({
-            webhook_subscription_id: subscription.id,
-            webhook_secret: subscription.signatureKey,
-          })
-          .eq("id", connectionId);
 
         // ── Step 5: tier probe (non-fatal — UI surfaces the gate)
         let tier: "writeable" | "read_only" | "unknown" = "unknown";
@@ -286,18 +288,20 @@ export const Route = createFileRoute("/api/integrations/square/oauth-callback")(
           return errReturn("backfill");
         }
 
-        // ── Step 7: mark connected (tier baked into last_error as a
-        //          non-fatal banner the settings page can render)
+        // ── Step 7: mark connected (tier + webhook-warning baked into
+        //          last_error as a non-fatal banner the settings page
+        //          can render)
+        const lastError =
+          tier === "read_only"
+            ? "tier_gate: Square Appointments Free tier detected. Sync + Rescue work; claim writeback will fail until you upgrade to Appointments Plus or Premium."
+            : webhookWarning ?? null;
         await sbAny
           .from("emma_scheduler_connections")
           .update({
             status: "connected",
             connected_at: new Date().toISOString(),
             last_sync_at: new Date().toISOString(),
-            last_error:
-              tier === "read_only"
-                ? "tier_gate: Square Appointments Free tier detected. Sync + Rescue work; claim writeback will fail until you upgrade to Appointments Plus or Premium."
-                : null,
+            last_error: lastError,
           })
           .eq("id", connectionId);
 

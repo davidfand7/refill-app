@@ -153,10 +153,20 @@ export const SQUARE_WEBHOOK_EVENTS: SquareWebhookEvent[] = [
  * The OAuth scopes Refill requests. ALL_WRITE scopes are required for
  * the claim writeback path (book on the seller's behalf, not as a
  * client). MERCHANT_PROFILE_READ resolves merchant_id for tenant
- * routing. DEVELOPER_APPLICATION_WEBHOOKS_{READ,WRITE} authorize the
- * per-spa webhook subscription POST that fires in the OAuth callback —
- * v1.35.0 shipped without these and the live test failed at the
- * subscription create call with INSUFFICIENT_SCOPES. v1.35.1 fix.
+ * routing.
+ *
+ * v1.35.1 added DEVELOPER_APPLICATION_WEBHOOKS_{READ,WRITE} after the
+ * first live test hit INSUFFICIENT_SCOPES on webhook subscribe.
+ *
+ * v1.35.6 removed those two scopes as a diagnostic: Square's token
+ * exchange started returning 401 service.not_authorized once we
+ * requested them. Hypothesis: these are partner-level scopes that
+ * require app-level approval from Square; requesting them on an
+ * unapproved app rejects the entire token exchange. Confirmed by
+ * the consent screen rendering 7 scopes instead of 9 (Square's auth
+ * UI silently dropped the webhook scopes). The webhook subscription
+ * step is currently a non-goal until we either get app approval OR
+ * switch to a polling-based sync model.
  */
 export const SQUARE_OAUTH_SCOPES = [
   "APPOINTMENTS_READ",
@@ -166,8 +176,6 @@ export const SQUARE_OAUTH_SCOPES = [
   "CUSTOMERS_READ",
   "CUSTOMERS_WRITE",
   "MERCHANT_PROFILE_READ",
-  "DEVELOPER_APPLICATION_WEBHOOKS_WRITE",
-  "DEVELOPER_APPLICATION_WEBHOOKS_READ",
 ] as const;
 
 // ─── OAuth ─────────────────────────────────────────────────────────────────
