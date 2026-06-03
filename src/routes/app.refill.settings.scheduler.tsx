@@ -39,6 +39,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/integrations/supabase/client";
 import {
   initiateAcuityOAuth,
+  initiateSquareOAuth,
   getSchedulerConnection,
   disconnectScheduler,
   resyncSchedulerConnection,
@@ -157,6 +158,32 @@ function SchedulerSettingsPage() {
     }
   }, []);
 
+  const connectSquare = useCallback(async () => {
+    setConnecting(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        toast.error("Please sign in.");
+        setConnecting(false);
+        return;
+      }
+      const { redirectUrl } = await initiateSquareOAuth({
+        data: {
+          accessToken: token,
+          origin: window.location.origin,
+          returnTo: "/app/refill/settings/scheduler",
+        },
+      });
+      window.location.href = redirectUrl;
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Couldn't start the Square connect flow.",
+      );
+      setConnecting(false);
+    }
+  }, []);
+
   const handleResync = useCallback(async () => {
     setResyncing(true);
     try {
@@ -244,6 +271,7 @@ function SchedulerSettingsPage() {
       ) : (
         <AvailablePlatforms
           onConnectAcuity={connectAcuity}
+          onConnectSquare={connectSquare}
           connecting={connecting}
         />
       )}
@@ -389,9 +417,11 @@ function ConnectedCard({
 
 function AvailablePlatforms({
   onConnectAcuity,
+  onConnectSquare,
   connecting,
 }: {
   onConnectAcuity: () => void;
+  onConnectSquare: () => void;
   connecting: boolean;
 }) {
   return (
@@ -421,10 +451,35 @@ function AvailablePlatforms({
         </button>
       </div>
 
+      <div className="rounded-lg border border-border bg-card p-5 flex items-center gap-4">
+        <div className="h-10 w-10 rounded-full bg-slate-700/15 text-slate-700 flex items-center justify-center shrink-0">
+          <Calendar className="h-5 w-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-ink">Square Appointments</div>
+          <div className="text-xs text-ink-soft mt-0.5">
+            One click. Sign in with your Square account. Claim writeback needs Square Appointments Plus or Premium — we'll let you know if your account is on Free.
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onConnectSquare}
+          disabled={connecting}
+          className="inline-flex items-center gap-2 rounded-md bg-emerald text-paper px-4 py-2 text-sm font-medium hover:bg-emerald/90 disabled:opacity-50"
+        >
+          {connecting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Plug className="h-4 w-4" />
+          )}
+          Connect Square
+        </button>
+      </div>
+
       <div className="rounded-lg border border-border/60 bg-muted/10 p-4 text-xs text-ink-soft">
         <div className="font-medium text-ink mb-1">Coming soon</div>
         <div>
-          Mindbody · JaneApp · Square Appointments · Boulevard — each shipping as its own connector. Until then, those platforms can use the CSV import flow — ask us to enable it for your account.
+          Mindbody · JaneApp · Boulevard — each shipping as its own connector. Until then, those platforms can use the CSV import flow — ask us to enable it for your account.
         </div>
       </div>
     </div>

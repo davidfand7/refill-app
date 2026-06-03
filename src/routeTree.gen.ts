@@ -95,7 +95,9 @@ import { Route as AppRefillAgentsRescueRouteImport } from './routes/app.refill.a
 import { Route as AppRefillAgentsRecognitionRouteImport } from './routes/app.refill.agents.recognition'
 import { Route as AppRefillAgentsPreshowRouteImport } from './routes/app.refill.agents.preshow'
 import { Route as AppRefillAgentsAttributionRouteImport } from './routes/app.refill.agents.attribution'
+import { Route as ApiWebhooksSchedulerSquareRouteImport } from './routes/api.webhooks.scheduler.square'
 import { Route as ApiRecognitionSentSuggestionIdRouteImport } from './routes/api.recognition.sent.$suggestionId'
+import { Route as ApiIntegrationsSquareOauthCallbackRouteImport } from './routes/api.integrations.square.oauth-callback'
 import { Route as ApiIntegrationsAcuityOauthCallbackRouteImport } from './routes/api.integrations.acuity.oauth-callback'
 import { Route as AppRefillCampaignsCampaignIdIndexRouteImport } from './routes/app.refill.campaigns.$campaignId.index'
 import { Route as AppRefillCampaignsCampaignIdBlastRouteImport } from './routes/app.refill.campaigns.$campaignId.blast'
@@ -546,10 +548,22 @@ const AppRefillAgentsAttributionRoute =
     path: '/agents/attribution',
     getParentRoute: () => AppRefillRoute,
   } as any)
+const ApiWebhooksSchedulerSquareRoute =
+  ApiWebhooksSchedulerSquareRouteImport.update({
+    id: '/api/webhooks/scheduler/square',
+    path: '/api/webhooks/scheduler/square',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiRecognitionSentSuggestionIdRoute =
   ApiRecognitionSentSuggestionIdRouteImport.update({
     id: '/api/recognition/sent/$suggestionId',
     path: '/api/recognition/sent/$suggestionId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiIntegrationsSquareOauthCallbackRoute =
+  ApiIntegrationsSquareOauthCallbackRouteImport.update({
+    id: '/api/integrations/square/oauth-callback',
+    path: '/api/integrations/square/oauth-callback',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiIntegrationsAcuityOauthCallbackRoute =
@@ -640,7 +654,9 @@ export interface FileRoutesByFullPath {
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
+  '/api/integrations/square/oauth-callback': typeof ApiIntegrationsSquareOauthCallbackRoute
   '/api/recognition/sent/$suggestionId': typeof ApiRecognitionSentSuggestionIdRoute
+  '/api/webhooks/scheduler/square': typeof ApiWebhooksSchedulerSquareRoute
   '/app/refill/agents/attribution': typeof AppRefillAgentsAttributionRoute
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
   '/app/refill/agents/recognition': typeof AppRefillAgentsRecognitionRoute
@@ -729,7 +745,9 @@ export interface FileRoutesByTo {
   '/app/refill': typeof AppRefillIndexRoute
   '/app/rep': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
+  '/api/integrations/square/oauth-callback': typeof ApiIntegrationsSquareOauthCallbackRoute
   '/api/recognition/sent/$suggestionId': typeof ApiRecognitionSentSuggestionIdRoute
+  '/api/webhooks/scheduler/square': typeof ApiWebhooksSchedulerSquareRoute
   '/app/refill/agents/attribution': typeof AppRefillAgentsAttributionRoute
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
   '/app/refill/agents/recognition': typeof AppRefillAgentsRecognitionRoute
@@ -822,7 +840,9 @@ export interface FileRoutesById {
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
+  '/api/integrations/square/oauth-callback': typeof ApiIntegrationsSquareOauthCallbackRoute
   '/api/recognition/sent/$suggestionId': typeof ApiRecognitionSentSuggestionIdRoute
+  '/api/webhooks/scheduler/square': typeof ApiWebhooksSchedulerSquareRoute
   '/app/refill/agents/attribution': typeof AppRefillAgentsAttributionRoute
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
   '/app/refill/agents/recognition': typeof AppRefillAgentsRecognitionRoute
@@ -917,7 +937,9 @@ export interface FileRouteTypes {
     | '/app/refill/'
     | '/app/rep/'
     | '/api/integrations/acuity/oauth-callback'
+    | '/api/integrations/square/oauth-callback'
     | '/api/recognition/sent/$suggestionId'
+    | '/api/webhooks/scheduler/square'
     | '/app/refill/agents/attribution'
     | '/app/refill/agents/preshow'
     | '/app/refill/agents/recognition'
@@ -1006,7 +1028,9 @@ export interface FileRouteTypes {
     | '/app/refill'
     | '/app/rep'
     | '/api/integrations/acuity/oauth-callback'
+    | '/api/integrations/square/oauth-callback'
     | '/api/recognition/sent/$suggestionId'
+    | '/api/webhooks/scheduler/square'
     | '/app/refill/agents/attribution'
     | '/app/refill/agents/preshow'
     | '/app/refill/agents/recognition'
@@ -1098,7 +1122,9 @@ export interface FileRouteTypes {
     | '/app/refill/'
     | '/app/rep/'
     | '/api/integrations/acuity/oauth-callback'
+    | '/api/integrations/square/oauth-callback'
     | '/api/recognition/sent/$suggestionId'
+    | '/api/webhooks/scheduler/square'
     | '/app/refill/agents/attribution'
     | '/app/refill/agents/preshow'
     | '/app/refill/agents/recognition'
@@ -1159,7 +1185,9 @@ export interface RootRouteChildren {
   RescueClaimTokenRoute: typeof RescueClaimTokenRoute
   WaitlistOptinTokenRoute: typeof WaitlistOptinTokenRoute
   ApiIntegrationsAcuityOauthCallbackRoute: typeof ApiIntegrationsAcuityOauthCallbackRoute
+  ApiIntegrationsSquareOauthCallbackRoute: typeof ApiIntegrationsSquareOauthCallbackRoute
   ApiRecognitionSentSuggestionIdRoute: typeof ApiRecognitionSentSuggestionIdRoute
+  ApiWebhooksSchedulerSquareRoute: typeof ApiWebhooksSchedulerSquareRoute
   ApiWebhooksSchedulerAcuitySecretRoute: typeof ApiWebhooksSchedulerAcuitySecretRoute
 }
 
@@ -1767,11 +1795,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillAgentsAttributionRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/api/webhooks/scheduler/square': {
+      id: '/api/webhooks/scheduler/square'
+      path: '/api/webhooks/scheduler/square'
+      fullPath: '/api/webhooks/scheduler/square'
+      preLoaderRoute: typeof ApiWebhooksSchedulerSquareRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/recognition/sent/$suggestionId': {
       id: '/api/recognition/sent/$suggestionId'
       path: '/api/recognition/sent/$suggestionId'
       fullPath: '/api/recognition/sent/$suggestionId'
       preLoaderRoute: typeof ApiRecognitionSentSuggestionIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/integrations/square/oauth-callback': {
+      id: '/api/integrations/square/oauth-callback'
+      path: '/api/integrations/square/oauth-callback'
+      fullPath: '/api/integrations/square/oauth-callback'
+      preLoaderRoute: typeof ApiIntegrationsSquareOauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/integrations/acuity/oauth-callback': {
@@ -2017,7 +2059,10 @@ const rootRouteChildren: RootRouteChildren = {
   WaitlistOptinTokenRoute: WaitlistOptinTokenRoute,
   ApiIntegrationsAcuityOauthCallbackRoute:
     ApiIntegrationsAcuityOauthCallbackRoute,
+  ApiIntegrationsSquareOauthCallbackRoute:
+    ApiIntegrationsSquareOauthCallbackRoute,
   ApiRecognitionSentSuggestionIdRoute: ApiRecognitionSentSuggestionIdRoute,
+  ApiWebhooksSchedulerSquareRoute: ApiWebhooksSchedulerSquareRoute,
   ApiWebhooksSchedulerAcuitySecretRoute: ApiWebhooksSchedulerAcuitySecretRoute,
 }
 export const routeTree = rootRouteImport

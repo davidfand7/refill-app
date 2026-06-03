@@ -35,6 +35,15 @@ import {
   type AcuityClient,
 } from "@/lib/schedulers/acuity";
 import {
+  buildSquareAuthorizeUrl,
+  deleteSquareWebhookSubscription,
+  listSquareBookings,
+  refreshSquareAccessToken,
+  squareStatusToRefillStatus,
+  type SquareBooking,
+  type SquareEnv,
+} from "@/lib/schedulers/square";
+import {
   buildPatientIndex,
   matchPatientFromIndex,
 } from "@/server/emma-appointments.functions";
@@ -172,6 +181,59 @@ export const initiateAcuityOAuth = createServerFn({ method: "POST" })
     return { redirectUrl };
   });
 
+// ─── initiateSquareOAuth ───────────────────────────────────────────────────
+//
+// Mirrors initiateAcuityOAuth: returns a redirectUrl the UI navigates
+// the spa to so they authorize Refill on Square's side. Square's
+// authorize-code TTL is 5 minutes, so the callback handler exchanges
+// immediately. We default to production env; sandbox path uses
+// SQUARE_ENV=sandbox + the sandbox app credentials (separate Square
+// app per environment).
+
+export const initiateSquareOAuth = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => initiateInput.parse(raw))
+  .handler(async ({ data }): Promise<{ redirectUrl: string }> => {
+    const userId = await verifyAuth(data.accessToken);
+
+    if (!isAllowedReturnTo(data.returnTo)) {
+      throw new Error(
+        `returnTo "${data.returnTo}" is not in the OAuth allowlist`,
+      );
+    }
+
+    const env: SquareEnv =
+      process.env.SQUARE_ENV === "sandbox" ? "sandbox" : "production";
+    const CLIENT_ID =
+      env === "sandbox"
+        ? process.env.SQUARE_SANDBOX_APP_ID
+        : process.env.SQUARE_APP_ID;
+    if (!CLIENT_ID) {
+      throw new Error(
+        `Square OAuth is not configured on the server. ${env === "sandbox" ? "SQUARE_SANDBOX_APP_ID" : "SQUARE_APP_ID"} is missing.`,
+      );
+    }
+
+    const nonce =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const state = encodeOAuthState({
+      userId,
+      platform: "square",
+      returnTo: data.returnTo,
+      nonce,
+    });
+
+    const redirectUrl = buildSquareAuthorizeUrl({
+      clientId: CLIENT_ID,
+      env,
+      state,
+    });
+
+    return { redirectUrl };
+  });
+
 // ─── getSchedulerConnection ────────────────────────────────────────────────
 
 const getConnectionInput = z.object({ accessToken: z.string().min(1) });
@@ -264,6 +326,7 @@ export const disconnectScheduler = createServerFn({ method: "POST" })
                     data: (SchedulerConnectionRow & {
                       access_token: string | null;
                       webhook_secret: string;
+                      webhook_subscription_id: string | null;
                     }) | null;
                     error: { message: string } | null;
                   }>;
@@ -275,7 +338,7 @@ export const disconnectScheduler = createServerFn({ method: "POST" })
       };
     })
       .from("emma_scheduler_connections")
-      .select("id, platform, access_token, webhook_secret, status, platform_account_id, platform_account_email, last_sync_at, last_error, connected_at, disconnected_at")
+      .select("id, platform, access_token, webhook_secret, webhook_subscription_id, status, platform_account_id, platform_account_email, last_sync_at, last_error, connected_at, disconnected_at")
       .eq("user_id", userId)
       .in("status", ["connected", "pending", "reauth_needed", "error"])
       .order("connected_at", { ascending: false })
@@ -300,6 +363,33 @@ export const disconnectScheduler = createServerFn({ method: "POST" })
           .from("emma_scheduler_connections")
           .update({
             last_error: `Webhook teardown failed: ${e instanceof Error ? e.message : "unknown"}`,
+          })
+          .eq("id", row.id);
+      }
+    } else if (
+      row.platform === "square" &&
+      row.access_token &&
+      row.webhook_subscription_id
+    ) {
+      // Square teardown is targeted: delete the per-spa subscription
+      // resource by ID (the notification URL is single-global, shared
+      // across all Square spas, so URL-match teardown isn't an option).
+      // Fail-open if the token is already revoked — Square will GC the
+      // subscription anyway once the receiver stops being reachable.
+      try {
+        const env: SquareEnv =
+          process.env.SQUARE_ENV === "sandbox" ? "sandbox" : "production";
+        await deleteSquareWebhookSubscription({
+          accessToken: row.access_token,
+          env,
+          subscriptionId: row.webhook_subscription_id,
+        });
+        webhooksRemoved = 1;
+      } catch (e) {
+        await (sb as unknown as { from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> } } })
+          .from("emma_scheduler_connections")
+          .update({
+            last_error: `Square webhook teardown failed: ${e instanceof Error ? e.message : "unknown"}`,
           })
           .eq("id", row.id);
       }
@@ -372,25 +462,32 @@ export const resyncSchedulerConnection = createServerFn({ method: "POST" })
 
     if (!row) {
       throw new Error(
-        "No active scheduler connection — connect Acuity first.",
-      );
-    }
-    if (row.platform !== "acuity") {
-      throw new Error(
-        `Re-sync is only available for Acuity right now (your connection is ${row.platform}).`,
+        "No active scheduler connection — connect a scheduler first.",
       );
     }
     if (!row.access_token) {
       throw new Error(
-        "Connection is missing an access token — please reconnect Acuity.",
+        "Connection is missing an access token — please reconnect.",
+      );
+    }
+    if (row.platform !== "acuity" && row.platform !== "square") {
+      throw new Error(
+        `Re-sync is only available for Acuity and Square right now (your connection is ${row.platform}).`,
       );
     }
 
-    const result = await backfillAcuityAppointments({
-      sb,
-      userId,
-      accessToken: row.access_token,
-    });
+    const result =
+      row.platform === "square"
+        ? await backfillSquareBookings({
+            sb,
+            userId,
+            accessToken: row.access_token,
+          })
+        : await backfillAcuityAppointments({
+            sb,
+            userId,
+            accessToken: row.access_token,
+          });
 
     // Stamp last_sync_at so the settings page reflects the manual sync.
     await (sb as unknown as {
@@ -670,3 +767,195 @@ function acuityClientsToCsv(clients: AcuityClient[]): string {
   );
   return [header, ...lines].join("\n");
 }
+
+// ─── Backfill helper for Square (shared with OAuth callback + resync) ──────
+//
+// Same shape as backfillAcuityAppointments: pulls a 30d-back + 90d-
+// forward window, upserts on (user_id, external_id, source). The
+// pagination cursor is Square's idiom — we follow until the API stops
+// returning one.
+
+export async function backfillSquareBookings(args: {
+  sb: SupabaseAdmin;
+  userId: string;
+  accessToken: string;
+}): Promise<{ totalAppointments: number; resolvedPatientNames: number }> {
+  const { sb, userId, accessToken } = args;
+  const env: SquareEnv =
+    process.env.SQUARE_ENV === "sandbox" ? "sandbox" : "production";
+
+  const now = new Date();
+  const startAtMin = new Date(now.getTime() - 30 * 86400000).toISOString();
+  const startAtMax = new Date(now.getTime() + 90 * 86400000).toISOString();
+
+  const all: SquareBooking[] = [];
+  let cursor: string | null = null;
+  // Hard cap to avoid runaway pagination on degenerate seller accounts.
+  for (let page = 0; page < 50; page++) {
+    const { bookings, cursor: next } = await listSquareBookings({
+      accessToken,
+      env,
+      startAtMin,
+      startAtMax,
+      limit: 200,
+      cursor: cursor ?? undefined,
+    });
+    all.push(...bookings);
+    if (!next) break;
+    cursor = next;
+  }
+
+  // Pre-migrate any leftover csv-square-sourced rows so the upsert
+  // dedupes correctly on (user_id, external_id, source) — same pattern
+  // backfillAcuityAppointments uses for csv-acuity rows.
+  await (sb as unknown as {
+    from: (t: string) => {
+      update: (v: object) => {
+        eq: (c: string, v: string) => {
+          eq: (c: string, v: string) => Promise<unknown>;
+        };
+      };
+    };
+  })
+    .from("emma_appointments")
+    .update({ source: "square" })
+    .eq("user_id", userId)
+    .eq("source", "csv-square");
+
+  const patientIndex = await buildPatientIndex(sb, userId);
+
+  // Square bookings carry customer_id but not the customer's name on
+  // the booking response — we'd need a join or a follow-up to /v2/
+  // customers/:id to enrich. For v1 we pass empty name/phone/email to
+  // the matcher (it gracefully returns null when nothing's known) and
+  // rely on the inbound-webhook path to populate the patient_node_id
+  // when a known customer's booking changes. The Acuity pattern of
+  // resolving via webhook payload covers ongoing changes; bulk-initial
+  // backfill enrichment is queued for a follow-up ship.
+  let resolvedPatientNames = 0;
+  const rows = all.map((b) => {
+    const patientNodeId = matchPatientFromIndex(
+      {
+        patientFirstName: null,
+        patientLastName: null,
+        patientPhone: null,
+        patientEmail: null,
+      },
+      patientIndex,
+    );
+    if (patientNodeId) resolvedPatientNames++;
+    return squareBookingToRow(b, userId, patientNodeId);
+  });
+
+  const BATCH = 200;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const slice = rows.slice(i, i + BATCH);
+    const { error } = await sb
+      .from("emma_appointments")
+      .upsert(slice, { onConflict: "user_id,external_id,source" });
+    if (error) {
+      throw new Error(`Square appointment upsert batch ${i}: ${error.message}`);
+    }
+  }
+
+  return {
+    totalAppointments: rows.length,
+    resolvedPatientNames,
+  };
+}
+
+export function squareBookingToRow(
+  b: SquareBooking,
+  userId: string,
+  patientNodeId: string | null,
+): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
+  const scheduledAt = new Date(b.startAt).toISOString();
+  const seg = b.appointmentSegments[0];
+  const durationMin = b.appointmentSegments.reduce(
+    (sum, s) => sum + (s.durationMinutes ?? 0),
+    0,
+  );
+  const base: Database["public"]["Tables"]["emma_appointments"]["Insert"] = {
+    user_id: userId,
+    external_id: b.id,
+    source: "square",
+    scheduled_at: scheduledAt,
+    duration_min: durationMin,
+    treatment_type: seg?.serviceVariationId ?? null,
+    provider_name: seg?.teamMemberId ?? null,
+    status: squareStatusToRefillStatus(b.status),
+    notes: b.sellerNote || b.customerNote || null,
+  };
+  if (patientNodeId) base.patient_node_id = patientNodeId;
+  return base;
+}
+
+// ─── Square token refresh helper (used by webhook + writeback paths) ───────
+//
+// Square access tokens last 30 days; refresh_token reissues a fresh pair.
+// Centralized here so the webhook receiver, the rescue writeback, and the
+// resync path all use the same just-in-time refresh logic.
+
+export async function withFreshSquareToken<T>(args: {
+  sb: SupabaseAdmin;
+  connectionId: string;
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAt: string | null;
+  fn: (accessToken: string) => Promise<T>;
+}): Promise<T> {
+  const expiresAtMs = args.expiresAt ? Date.parse(args.expiresAt) : null;
+  const needsRefresh =
+    !!args.refreshToken &&
+    expiresAtMs !== null &&
+    expiresAtMs - Date.now() < 3 * 86400000; // refresh ~3 days before expiry
+
+  if (!needsRefresh) {
+    return args.fn(args.accessToken);
+  }
+
+  const env: SquareEnv =
+    process.env.SQUARE_ENV === "sandbox" ? "sandbox" : "production";
+  const CLIENT_ID =
+    env === "sandbox"
+      ? process.env.SQUARE_SANDBOX_APP_ID
+      : process.env.SQUARE_APP_ID;
+  const CLIENT_SECRET =
+    env === "sandbox"
+      ? process.env.SQUARE_SANDBOX_APP_SECRET
+      : process.env.SQUARE_APP_SECRET;
+  if (!CLIENT_ID || !CLIENT_SECRET) {
+    // Misconfigured — fall through with the old token; let the caller
+    // see the failure if it does fail.
+    return args.fn(args.accessToken);
+  }
+
+  const fresh = await refreshSquareAccessToken({
+    refreshToken: args.refreshToken!,
+    credentials: {
+      clientId: CLIENT_ID,
+      clientSecret: CLIENT_SECRET,
+      redirectUri: "", // not used by refresh
+      env,
+    },
+  });
+
+  await (args.sb as unknown as {
+    from: (t: string) => {
+      update: (v: object) => {
+        eq: (c: string, v: string) => Promise<unknown>;
+      };
+    };
+  })
+    .from("emma_scheduler_connections")
+    .update({
+      access_token: fresh.accessToken,
+      refresh_token: fresh.refreshToken,
+      token_expires_at: fresh.expiresAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", args.connectionId);
+
+  return args.fn(fresh.accessToken);
+}
+

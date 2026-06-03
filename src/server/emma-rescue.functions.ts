@@ -1269,22 +1269,25 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
         .eq("id", offer.appointment_id)
         .maybeSingle();
 
-      const acuitySource = claimedApt?.source === "acuity";
-      if (!acuitySource) {
+      const source = claimedApt?.source;
+      const writeableSource =
+        source === "acuity" || source === "square" ? source : null;
+
+      if (!writeableSource) {
         // CSV-only spas, or future platforms not yet wired for write-back.
         // No-op silently — the claim flow is complete for them.
         console.info(
-          `[claim-writeback] skipped (source=${claimedApt?.source ?? "unknown"}) for appointment ${offer.appointment_id}`,
+          `[claim-writeback] skipped (source=${source ?? "unknown"}) for appointment ${offer.appointment_id}`,
         );
         await stampWritebackNotes(
-          `writeback_skipped: source=${claimedApt?.source ?? "unknown"}`,
+          `writeback_skipped: source=${source ?? "unknown"}`,
         );
       } else if (!claimedApt?.external_id) {
         console.warn(
-          `[claim-writeback] acuity row missing external_id; cannot resolve original appointment for ${offer.appointment_id}`,
+          `[claim-writeback] ${writeableSource} row missing external_id; cannot resolve original appointment for ${offer.appointment_id}`,
         );
         await stampWritebackNotes("writeback_failed: missing_external_id");
-      } else {
+      } else if (writeableSource === "acuity") {
         // emma_scheduler_connections is not in the generated Database
         // types yet; cast through unknown to access the table directly.
         // Same pattern used in api.webhooks.scheduler.acuity.$secret.ts
@@ -1377,10 +1380,146 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
             `writeback_ok: new_external_id=${newApt.id} replaced=${claimedApt.external_id}`,
           );
         }
+      } else if (writeableSource === "square") {
+        // v1.35.0 — Square claim writeback. Mirror of the Acuity path:
+        // look up active connection → fetch original booking →
+        // find-or-create the rescuee customer → createBooking with the
+        // original location + appointment segments at the same start
+        // time. Tier-blocked sellers (Square Free) fail-degrade with a
+        // dedicated note value the Rescue dashboard renders as an
+        // upgrade prompt.
+        const sbAny = sb as unknown as {
+          from: (t: string) => {
+            select: (cols: string) => {
+              eq: (col: string, val: string) => {
+                eq: (col: string, val: string) => {
+                  maybeSingle: () => Promise<{
+                    data: {
+                      id: string;
+                      access_token: string | null;
+                      refresh_token: string | null;
+                      token_expires_at: string | null;
+                      status: string;
+                      platform: string;
+                    } | null;
+                  }>;
+                };
+              };
+            };
+            update: (v: object) => {
+              eq: (c: string, v: string) => Promise<unknown>;
+            };
+          };
+        };
+        const { data: connection } = await sbAny
+          .from("emma_scheduler_connections")
+          .select("id, access_token, refresh_token, token_expires_at, status, platform")
+          .eq("user_id", offer.user_id)
+          .eq("platform", "square")
+          .maybeSingle();
+
+        if (
+          !connection ||
+          connection.status !== "connected" ||
+          !connection.access_token
+        ) {
+          console.warn(
+            `[claim-writeback] no active square connection for user ${offer.user_id}`,
+          );
+          await stampWritebackNotes(
+            "writeback_failed: no_active_square_connection",
+          );
+        } else {
+          const {
+            getSquareBooking,
+            createSquareBooking,
+            upsertSquareCustomer,
+          } = await import("@/lib/schedulers/square");
+          const { withFreshSquareToken } = await import(
+            "@/server/emma-scheduler.functions"
+          );
+          const env: import("@/lib/schedulers/square").SquareEnv =
+            process.env.SQUARE_ENV === "sandbox" ? "sandbox" : "production";
+
+          const { data: claimer } = await sb
+            .from("knowledge_nodes")
+            .select("title, attachments")
+            .eq("id", offer.patient_node_id)
+            .maybeSingle();
+
+          const fullName = (claimer?.title ?? "").trim();
+          const nameParts = fullName.split(/\s+/).filter(Boolean);
+          const lastName = nameParts.length > 1 ? nameParts.pop()! : "";
+          const firstName = nameParts.join(" ") || fullName || "Patient";
+          const a = claimer?.attachments as
+            | { phone?: string; email?: string }
+            | null;
+
+          try {
+            const newApt = await withFreshSquareToken({
+              sb,
+              connectionId: connection.id,
+              accessToken: connection.access_token,
+              refreshToken: connection.refresh_token,
+              expiresAt: connection.token_expires_at,
+              fn: async (accessToken) => {
+                const originalApt = await getSquareBooking({
+                  accessToken,
+                  env,
+                  bookingId: claimedApt.external_id,
+                });
+                const customer = await upsertSquareCustomer({
+                  accessToken,
+                  env,
+                  phone: a?.phone || null,
+                  email: a?.email || null,
+                  givenName: firstName,
+                  familyName: lastName,
+                });
+                return createSquareBooking({
+                  accessToken,
+                  env,
+                  startAt: originalApt.startAt,
+                  locationId: originalApt.locationId,
+                  customerId: customer.id,
+                  appointmentSegments: originalApt.appointmentSegments,
+                  sellerNote: `Rebooked via Refill from cancelled booking ${claimedApt.external_id}`,
+                  idempotencyKey: `refill-rescue-${offer.id}`,
+                });
+              },
+            });
+
+            await sb
+              .from("emma_appointments")
+              .update({ external_id: newApt.id })
+              .eq("id", offer.appointment_id);
+
+            await stampWritebackNotes(
+              `writeback_ok: new_external_id=${newApt.id} replaced=${claimedApt.external_id}`,
+            );
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            // Square returns 403 + a permission-denied error code when
+            // the seller is on Free tier (no Bookings write access).
+            // Surface this distinctly so the Rescue dashboard can show
+            // an upgrade prompt instead of a generic write-back failure.
+            const tierBlocked =
+              msg.includes("403") &&
+              (msg.toLowerCase().includes("subscription") ||
+                msg.toLowerCase().includes("forbidden") ||
+                msg.toLowerCase().includes("unauthorized"));
+            await stampWritebackNotes(
+              tierBlocked
+                ? "writeback_failed: tier_blocked (Square Appointments Plus/Premium required)"
+                : `writeback_failed: ${msg.slice(0, 400)}`,
+            );
+            console.error("square write-back failed:", msg);
+          }
+        }
       }
     } catch (e) {
       console.error(
-        "acuity write-back failed:",
+        "scheduler write-back failed:",
         e instanceof Error ? e.message : e,
       );
       await stampWritebackNotes(
