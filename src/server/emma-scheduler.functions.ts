@@ -495,7 +495,12 @@ export const resyncSchedulerConnection = createServerFn({ method: "POST" })
             accessToken: row.access_token,
           });
 
-    // Stamp last_sync_at so the settings page reflects the manual sync.
+    // v1.35.11: Stamp last_sync_at AND clear last_error on success.
+    // Previously Re-sync left stale last_error frozen even when the
+    // backfill succeeded under newer code (caught when v1.35.10's
+    // chunked-backfill fix resolved the underlying issue but the prior
+    // error message persisted in the UI until the connection got
+    // dis/reconnected to fully refresh).
     await (sb as unknown as {
       from: (t: string) => {
         update: (v: object) => {
@@ -504,7 +509,10 @@ export const resyncSchedulerConnection = createServerFn({ method: "POST" })
       };
     })
       .from("emma_scheduler_connections")
-      .update({ last_sync_at: new Date().toISOString() })
+      .update({
+        last_sync_at: new Date().toISOString(),
+        last_error: null,
+      })
       .eq("id", row.id);
 
     return {

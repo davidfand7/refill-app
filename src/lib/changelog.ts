@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.35.11",
+    date: "June 2026",
+    items: [
+      "<strong>v1.35.11 &mdash; Re-sync clears stale last_error on success. Final polish from the v1.35.x debug arc. Grasshopper&rsquo;s post-v1.35.10 Re-sync succeeded under the chunked-window fix (backfill went through cleanly), but the connection card kept showing the pre-deploy backfill error message because <code>resyncSchedulerConnection</code> updated only <code>last_sync_at</code> &mdash; never touched <code>last_error</code>. Stale warnings stuck in place until a full disconnect+reconnect cycle refreshed everything. Now: Re-sync clears <code>last_error</code> to NULL on success path alongside the <code>last_sync_at</code> bump. Stale warning artifacts from prior shipping iterations get wiped on next manual sync, matching what the user expects (they hit Re-sync to clear something; it should actually clear).</strong> <strong>Touched</strong>: <code>src/server/emma-scheduler.functions.ts</code> (resyncSchedulerConnection update block), <code>src/lib/changelog.ts</code> (this entry). No schema change; no new dependencies; no Worker secret changes. <strong>The v1.35.x arc closes here.</strong> 11 ships across one debug session traced the Square OAuth integration from initial sandbox spec all the way through end-to-end working state on a real (sandbox) test account. Every layer proven: OAuth start + sandbox routing (v1.35.3 wrangler.jsonc); token exchange (v1.35.7 form-encoded + Grasshopper&rsquo;s correct Sandbox Application Secret re-paste from the OAuth tab); merchant fetch + connection upsert; webhook subscribe graceful degradation (v1.35.6); tier probe; backfill with location_id (v1.35.9) chunked into 30-day windows (v1.35.10); status flip + UI rendering with warning vs error split (v1.35.9 UI fix); platform-aware disconnect dialog (v1.35.9); Re-sync clears stale state (this ship). <strong>Production-seller reality</strong>: every degradation we ran into is sandbox-specific. Real Square sellers (production tier, Appointments enabled, no partner-tier webhook gate) walk through the green path our code already executes &mdash; they Just Connect.",
+    ],
+  },
+  {
     version: "v1.35.10",
     date: "June 2026",
     items: [
