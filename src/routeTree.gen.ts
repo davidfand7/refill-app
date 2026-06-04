@@ -56,6 +56,7 @@ import { Route as AppAdminUsersRouteImport } from './routes/app.admin.users'
 import { Route as AppAdminReportsRouteImport } from './routes/app.admin.reports'
 import { Route as AppAdminRefillTrialsRouteImport } from './routes/app.admin.refill-trials'
 import { Route as AppAdminOutreachRouteImport } from './routes/app.admin.outreach'
+import { Route as AppAdminNavFeaturesRouteImport } from './routes/app.admin.nav-features'
 import { Route as AppAdminFlagsRouteImport } from './routes/app.admin.flags'
 import { Route as AppAdminCanonicalBrandsRouteImport } from './routes/app.admin.canonical-brands'
 import { Route as AppAdminAuditRouteImport } from './routes/app.admin.audit'
@@ -357,6 +358,11 @@ const AppAdminRefillTrialsRoute = AppAdminRefillTrialsRouteImport.update({
 const AppAdminOutreachRoute = AppAdminOutreachRouteImport.update({
   id: '/admin/outreach',
   path: '/admin/outreach',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminNavFeaturesRoute = AppAdminNavFeaturesRouteImport.update({
+  id: '/admin/nav-features',
+  path: '/admin/nav-features',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminFlagsRoute = AppAdminFlagsRouteImport.update({
@@ -772,6 +778,7 @@ export interface FileRoutesByFullPath {
   '/app/admin/audit': typeof AppAdminAuditRoute
   '/app/admin/canonical-brands': typeof AppAdminCanonicalBrandsRoute
   '/app/admin/flags': typeof AppAdminFlagsRoute
+  '/app/admin/nav-features': typeof AppAdminNavFeaturesRoute
   '/app/admin/outreach': typeof AppAdminOutreachRoute
   '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
   '/app/admin/reports': typeof AppAdminReportsRoute
@@ -886,6 +893,7 @@ export interface FileRoutesByTo {
   '/app/admin/audit': typeof AppAdminAuditRoute
   '/app/admin/canonical-brands': typeof AppAdminCanonicalBrandsRoute
   '/app/admin/flags': typeof AppAdminFlagsRoute
+  '/app/admin/nav-features': typeof AppAdminNavFeaturesRoute
   '/app/admin/outreach': typeof AppAdminOutreachRoute
   '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
   '/app/admin/reports': typeof AppAdminReportsRoute
@@ -1000,6 +1008,7 @@ export interface FileRoutesById {
   '/app/admin/audit': typeof AppAdminAuditRoute
   '/app/admin/canonical-brands': typeof AppAdminCanonicalBrandsRoute
   '/app/admin/flags': typeof AppAdminFlagsRoute
+  '/app/admin/nav-features': typeof AppAdminNavFeaturesRoute
   '/app/admin/outreach': typeof AppAdminOutreachRoute
   '/app/admin/refill-trials': typeof AppAdminRefillTrialsRoute
   '/app/admin/reports': typeof AppAdminReportsRoute
@@ -1118,6 +1127,7 @@ export interface FileRouteTypes {
     | '/app/admin/audit'
     | '/app/admin/canonical-brands'
     | '/app/admin/flags'
+    | '/app/admin/nav-features'
     | '/app/admin/outreach'
     | '/app/admin/refill-trials'
     | '/app/admin/reports'
@@ -1232,6 +1242,7 @@ export interface FileRouteTypes {
     | '/app/admin/audit'
     | '/app/admin/canonical-brands'
     | '/app/admin/flags'
+    | '/app/admin/nav-features'
     | '/app/admin/outreach'
     | '/app/admin/refill-trials'
     | '/app/admin/reports'
@@ -1345,6 +1356,7 @@ export interface FileRouteTypes {
     | '/app/admin/audit'
     | '/app/admin/canonical-brands'
     | '/app/admin/flags'
+    | '/app/admin/nav-features'
     | '/app/admin/outreach'
     | '/app/admin/refill-trials'
     | '/app/admin/reports'
@@ -1806,6 +1818,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/outreach'
       fullPath: '/app/admin/outreach'
       preLoaderRoute: typeof AppAdminOutreachRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/admin/nav-features': {
+      id: '/app/admin/nav-features'
+      path: '/admin/nav-features'
+      fullPath: '/app/admin/nav-features'
+      preLoaderRoute: typeof AppAdminNavFeaturesRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/admin/flags': {
@@ -2446,6 +2465,7 @@ interface AppRouteChildren {
   AppAdminAuditRoute: typeof AppAdminAuditRoute
   AppAdminCanonicalBrandsRoute: typeof AppAdminCanonicalBrandsRoute
   AppAdminFlagsRoute: typeof AppAdminFlagsRoute
+  AppAdminNavFeaturesRoute: typeof AppAdminNavFeaturesRoute
   AppAdminOutreachRoute: typeof AppAdminOutreachRoute
   AppAdminRefillTrialsRoute: typeof AppAdminRefillTrialsRoute
   AppAdminReportsRoute: typeof AppAdminReportsRoute
@@ -2462,6 +2482,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminAuditRoute: AppAdminAuditRoute,
   AppAdminCanonicalBrandsRoute: AppAdminCanonicalBrandsRoute,
   AppAdminFlagsRoute: AppAdminFlagsRoute,
+  AppAdminNavFeaturesRoute: AppAdminNavFeaturesRoute,
   AppAdminOutreachRoute: AppAdminOutreachRoute,
   AppAdminRefillTrialsRoute: AppAdminRefillTrialsRoute,
   AppAdminReportsRoute: AppAdminReportsRoute,

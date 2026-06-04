@@ -70,6 +70,11 @@ const ITEMS: AdminNavItem[] = [
     label: "Brands",
     match: (p) => p.startsWith("/app/admin/canonical-brands"),
   },
+  {
+    to: "/app/admin/nav-features",
+    label: "Nav features",
+    match: (p) => p.startsWith("/app/admin/nav-features"),
+  },
 ];
 
 export function AdminNav() {

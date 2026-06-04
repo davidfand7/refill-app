@@ -22,6 +22,7 @@
  */
 
 import { Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import {
   ArrowRight,
   Award,
@@ -32,6 +33,7 @@ import {
   CreditCard,
   DollarSign,
   Inbox,
+  Megaphone,
   Plug,
   Sparkles,
   Users,
@@ -42,6 +44,7 @@ import { useAuth } from "@/lib/auth";
 import { greet } from "@/lib/refill-voice";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { LiveRecoveryFeed } from "@/components/refill/LiveRecoveryFeed";
+import { listVisibleNavFeaturesForTenant } from "@/server/refill-nav-features.functions";
 
 type QuickAction = {
   key: string;
@@ -49,6 +52,11 @@ type QuickAction = {
   label: string;
   subtitle: string;
   icon: LucideIcon;
+  /** v1.44.2: optional feature_key for the nav-features registry. When set,
+   *  the card only renders if listVisibleNavFeaturesForTenant returns this
+   *  key for the current tenant. Cards WITHOUT featureKey are always-on
+   *  (the daily/weekly core flow). */
+  featureKey?: string;
 };
 
 // v1.34.1 (coherency pass): dashboard quick-actions now mirror nav chips
@@ -112,6 +120,17 @@ const ACTIONS: QuickAction[] = [
     icon: BarChart3,
   },
   {
+    // v1.44.2: feature-flagged via nav.campaigns. Default OFF in the registry;
+    // admin enables per-tenant via /app/admin/nav-features. Rejuv flips on
+    // first as the proof-of-pattern for the opt-in nav surface.
+    key: "campaigns",
+    to: "/app/refill/campaigns",
+    label: "Campaigns",
+    subtitle: "Marketing blast composer (manual cohort sends)",
+    icon: Megaphone,
+    featureKey: "nav.campaigns",
+  },
+  {
     key: "inbox",
     to: "/app/refill/inbox",
     label: "Inbox",
@@ -137,6 +156,35 @@ const ACTIONS: QuickAction[] = [
 export function RefillHome() {
   const membership = useTenantMembership();
   const { session } = useAuth();
+  // v1.44.2: visible feature_keys for the current tenant from the
+  // nav-features registry. Always-on cards (no featureKey) render
+  // regardless; opt-in cards (with featureKey) only render when present.
+  // Defaults to an empty set during load so opt-ins stay hidden until
+  // resolution lands — safer than rendering then disappearing.
+  const [visibleKeys, setVisibleKeys] = useState<Set<string> | null>(null);
+
+  const tenantIdForLookup =
+    membership.status === "tenant" ? membership.tenant.id : null;
+  useEffect(() => {
+    const accessToken = session?.access_token;
+    if (!accessToken || !tenantIdForLookup) return;
+    let cancelled = false;
+    listVisibleNavFeaturesForTenant({
+      data: { accessToken, tenantId: tenantIdForLookup, persona: "spa" },
+    })
+      .then((r) => {
+        if (!cancelled) setVisibleKeys(new Set(r.visibleKeys));
+      })
+      .catch(() => {
+        // Fail-soft: empty set means only always-on cards show. Better
+        // than blocking the entire dashboard on a nav-flag fetch.
+        if (!cancelled) setVisibleKeys(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.access_token, tenantIdForLookup]);
+
   if (membership.status !== "tenant") return null;
   // v410.4 — useTenantMembership only resolves to "tenant" once useAuth has
   // a session (the hook reads session.access_token internally), so a tenant
@@ -148,16 +196,22 @@ export function RefillHome() {
   // owner is the persona we know exists.
   const greetingName = tenant.name;
 
+  // Filter cards: always-on (no featureKey) render unconditionally; opt-in
+  // cards render only when their key is in visibleKeys. While visibleKeys
+  // is still loading (null), hide opt-ins so we don't flash them then
+  // disappear.
+  const visibleActions = ACTIONS.filter(
+    (a) => !a.featureKey || (visibleKeys?.has(a.featureKey) ?? false),
+  );
+
   return (
     <div className="px-4 sm:px-8 py-8 sm:py-12" style={{ color: "#1c2024" }}>
       <div className="mx-auto max-w-6xl">
         <Hero name={greetingName} />
 
         <SectionLabel>Quick actions</SectionLabel>
-        {/* v1.34.1: 7 cards mirror the 7 nav chips. lg:grid-cols-4 gives a
-            balanced 4+3 split; sm:grid-cols-2 keeps tablet two-up. */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-10">
-          {ACTIONS.map((a) => (
+          {visibleActions.map((a) => (
             <ActionCard key={a.key} action={a} />
           ))}
         </div>

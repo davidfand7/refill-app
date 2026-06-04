@@ -24,6 +24,7 @@ import {
   BarChart3,
   FlaskConical,
   History,
+  LayoutGrid,
   Lightbulb,
   Loader2,
   Mail,
@@ -105,6 +106,13 @@ const ADMIN_SURFACES: AdminSurface[] = [
     description:
       "System-wide canonical brand registry (Botox, Juvederm, Daxxify, etc.). Powers catalog CSV import normalization + recognition allocation. Create + edit aliases.",
     icon: Package,
+  },
+  {
+    path: "/app/admin/nav-features",
+    label: "Nav features",
+    description:
+      "Per-tenant control of which optional nav surfaces (Campaigns, etc.) render on a spa owner's home. Ship features stealth, light them up for Rejuv first, then expand. Mirrors agent_defaults pattern.",
+    icon: LayoutGrid,
   },
 ];
 
