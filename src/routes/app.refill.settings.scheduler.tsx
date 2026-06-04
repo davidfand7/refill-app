@@ -36,6 +36,7 @@ import {
   Zap,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
 import { supabase } from "@/integrations/supabase/client";
 import {
   initiateAcuityOAuth,
@@ -451,6 +452,7 @@ function SchedulerSettingsPage() {
         title="Scheduler integration"
         description={`Connect your scheduling platform so ${brandName} knows the moment an appointment cancels or no-shows — no CSV uploads, no manual flips.`}
       />
+      <SettingsTabStrip active="scheduler" />
 
       {loading ? (
         <div className="mt-12 flex items-center justify-center gap-2 text-ink-soft">

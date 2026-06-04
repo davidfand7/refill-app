@@ -38,6 +38,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
 import { supabase } from "@/integrations/supabase/client";
 import {
   createSenderDomain,
@@ -191,6 +192,7 @@ function SenderSettingsPage() {
           { label: "Email sender" },
         ]}
       />
+      <SettingsTabStrip active="sender" />
 
       <div className="px-6 lg:px-10 py-8 max-w-3xl w-full mx-auto space-y-6">
         {loadError && (

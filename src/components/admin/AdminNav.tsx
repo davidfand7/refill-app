@@ -60,6 +60,16 @@ const ITEMS: AdminNavItem[] = [
     label: "Trials",
     match: (p) => p.startsWith("/app/admin/refill-trials"),
   },
+  {
+    to: "/app/admin/wishlist",
+    label: "Wishlist",
+    match: (p) => p.startsWith("/app/admin/wishlist"),
+  },
+  {
+    to: "/app/admin/canonical-brands",
+    label: "Brands",
+    match: (p) => p.startsWith("/app/admin/canonical-brands"),
+  },
 ];
 
 export function AdminNav() {

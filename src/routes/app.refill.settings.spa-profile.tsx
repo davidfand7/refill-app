@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { CheckCircle2, Loader2, Phone, Store, User as UserIcon } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -153,6 +154,7 @@ function SpaProfilePage() {
         title="Spa profile"
         description="Customer-facing name + owner name + outbound SMS number. These power the Refill engine's SMS and email composers (claim links, pre-show reminders, blasts)."
       />
+      <SettingsTabStrip active="spa-profile" />
 
       <div className="px-6 lg:px-10 py-6 max-w-2xl space-y-6">
         <form onSubmit={onSave} className="space-y-5">

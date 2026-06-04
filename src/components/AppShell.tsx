@@ -28,7 +28,7 @@
  * outermost layer; content failures never take it down.
  */
 import { Link } from "@tanstack/react-router";
-import { LogOut, Moon, Sun } from "lucide-react";
+import { LogOut, Moon, Sun, UserCog } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { NotificationCenter } from "@/components/NotificationCenter";
@@ -118,6 +118,16 @@ export function AppShell({
             >
               {user?.email}
             </span>
+            {user && (
+              <Link
+                to="/app/refill/settings/account"
+                title="Account settings"
+                aria-label="Account settings"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-soft hover:bg-sidebar-accent/60 hover:text-foreground transition-colors"
+              >
+                <UserCog className="h-4 w-4" />
+              </Link>
+            )}
             <button
               onClick={signOut}
               title="Sign out"

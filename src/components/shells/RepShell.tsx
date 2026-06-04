@@ -9,9 +9,7 @@
  *
  * Closes 3 of the 6 demo blockers from the 2026-05-22 Kelly Caffee
  * dry-run: Pinch #2 (legacy Agentiport sidebar exposed to rep) +
- * Pinch #6 (workspace identity reading "Agentiport") + Pinch #1
- * (onboarding wizard overlays rep landing — wizard skip ships in 3.1.7
- * alongside this shell).
+ * Pinch #6 (workspace identity reading "Agentiport").
  *
  * Callers are responsible for checking useRepProfile().status === 'rep'
  * before mounting RepShell. If the hook isn't in the 'rep' state when

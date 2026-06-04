@@ -27,6 +27,7 @@ import {
   Lightbulb,
   Loader2,
   Mail,
+  Package,
   ToggleLeft,
   Users,
   type LucideIcon,
@@ -97,6 +98,13 @@ const ADMIN_SURFACES: AdminSurface[] = [
     description:
       "Every feature request from every spa with the 48h SLA workflow. Status, reply thread, mark shipped in vX.Y.Z. Per project_wishlist_thesis: this loop IS the moat.",
     icon: Lightbulb,
+  },
+  {
+    path: "/app/admin/canonical-brands",
+    label: "Canonical brands",
+    description:
+      "System-wide canonical brand registry (Botox, Juvederm, Daxxify, etc.). Powers catalog CSV import normalization + recognition allocation. Create + edit aliases.",
+    icon: Package,
   },
 ];
 

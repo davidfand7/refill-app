@@ -25,8 +25,10 @@ import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
   Award,
+  BarChart3,
   Bell,
   BookOpen,
+  Calendar,
   CreditCard,
   DollarSign,
   Inbox,
@@ -59,6 +61,13 @@ const ACTIONS: QuickAction[] = [
     label: "Patients",
     subtitle: "Your roster, cadence, and waitlist",
     icon: Users,
+  },
+  {
+    key: "appointments",
+    to: "/app/refill/appointments",
+    label: "Appointments",
+    subtitle: "Calendar source of truth + CSV import",
+    icon: Calendar,
   },
   {
     key: "catalog",
@@ -94,6 +103,13 @@ const ACTIONS: QuickAction[] = [
     label: "Recovery",
     subtitle: "See what Refill recovered for you",
     icon: DollarSign,
+  },
+  {
+    key: "reports",
+    to: "/app/refill/reports",
+    label: "Reports",
+    subtitle: "Promotions funnel + per-campaign rollups",
+    icon: BarChart3,
   },
   {
     key: "inbox",
