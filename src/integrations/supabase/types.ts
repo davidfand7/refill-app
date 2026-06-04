@@ -14,6 +14,99 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_audit_log: {
+        Row: {
+          acted_at: string
+          action: string
+          actor_user_id: string | null
+          id: string
+          payload: Json | null
+          target_tenant_id: string | null
+          target_user_id: string | null
+        }
+        Insert: {
+          acted_at?: string
+          action: string
+          actor_user_id?: string | null
+          id?: string
+          payload?: Json | null
+          target_tenant_id?: string | null
+          target_user_id?: string | null
+        }
+        Update: {
+          acted_at?: string
+          action?: string
+          actor_user_id?: string | null
+          id?: string
+          payload?: Json | null
+          target_tenant_id?: string | null
+          target_user_id?: string | null
+        }
+        Relationships: []
+      }
+      agent_defaults: {
+        Row: {
+          agent_kind: string
+          created_at: string
+          defaults: Json
+          id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          agent_kind: string
+          created_at?: string
+          defaults?: Json
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          agent_kind?: string
+          created_at?: string
+          defaults?: Json
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      canonical_brands: {
+        Row: {
+          aliases: string[]
+          category: string
+          created_at: string
+          display_name: string
+          id: string
+          manufacturer: string | null
+          notes: string | null
+          unit_type: string
+          updated_at: string
+        }
+        Insert: {
+          aliases?: string[]
+          category: string
+          created_at?: string
+          display_name: string
+          id?: string
+          manufacturer?: string | null
+          notes?: string | null
+          unit_type: string
+          updated_at?: string
+        }
+        Update: {
+          aliases?: string[]
+          category?: string
+          created_at?: string
+          display_name?: string
+          id?: string
+          manufacturer?: string | null
+          notes?: string | null
+          unit_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       csv_scanner_leads: {
         Row: {
           appointment_count: number | null
@@ -424,6 +517,80 @@ export type Database = {
           },
         ]
       }
+      emma_email_quarantine: {
+        Row: {
+          created_at: string
+          from_address: string | null
+          id: string
+          inbound_slug: string | null
+          light_mode_connection_id: string | null
+          message_id: string | null
+          parser_confidence: number | null
+          platform: string | null
+          raw_html: string | null
+          raw_text: string | null
+          reason: string | null
+          received_at: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          reviewed_notes: string | null
+          reviewed_outcome: string | null
+          subject: string | null
+          to_address: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          from_address?: string | null
+          id?: string
+          inbound_slug?: string | null
+          light_mode_connection_id?: string | null
+          message_id?: string | null
+          parser_confidence?: number | null
+          platform?: string | null
+          raw_html?: string | null
+          raw_text?: string | null
+          reason?: string | null
+          received_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_notes?: string | null
+          reviewed_outcome?: string | null
+          subject?: string | null
+          to_address?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          from_address?: string | null
+          id?: string
+          inbound_slug?: string | null
+          light_mode_connection_id?: string | null
+          message_id?: string | null
+          parser_confidence?: number | null
+          platform?: string | null
+          raw_html?: string | null
+          raw_text?: string | null
+          reason?: string | null
+          received_at?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          reviewed_notes?: string | null
+          reviewed_outcome?: string | null
+          subject?: string | null
+          to_address?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emma_email_quarantine_light_mode_connection_id_fkey"
+            columns: ["light_mode_connection_id"]
+            isOneToOne: false
+            referencedRelation: "emma_light_mode_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       emma_invoices: {
         Row: {
           created_at: string
@@ -495,6 +662,62 @@ export type Database = {
           voided_by?: string | null
         }
         Relationships: []
+      }
+      emma_light_mode_connections: {
+        Row: {
+          created_at: string
+          events_parsed_total: number
+          events_quarantined_total: number
+          id: string
+          inbound_slug: string
+          last_error: string | null
+          last_event_at: string | null
+          notes: string | null
+          platform: string
+          status: string
+          tenant_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          events_parsed_total?: number
+          events_quarantined_total?: number
+          id?: string
+          inbound_slug?: string
+          last_error?: string | null
+          last_event_at?: string | null
+          notes?: string | null
+          platform: string
+          status?: string
+          tenant_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          events_parsed_total?: number
+          events_quarantined_total?: number
+          id?: string
+          inbound_slug?: string
+          last_error?: string | null
+          last_event_at?: string | null
+          notes?: string | null
+          platform?: string
+          status?: string
+          tenant_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emma_light_mode_connections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       emma_noshow_policies: {
         Row: {
@@ -623,6 +846,83 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      emma_preshow_message_templates: {
+        Row: {
+          body_template: string
+          created_at: string
+          id: string
+          offset_hours: number
+          profile_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body_template: string
+          created_at?: string
+          id?: string
+          offset_hours: number
+          profile_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body_template?: string
+          created_at?: string
+          id?: string
+          offset_hours?: number
+          profile_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "emma_preshow_message_templates_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "emma_preshow_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      emma_preshow_profiles: {
+        Row: {
+          cadence_by_treatment_type: Json
+          cadence_hours: number[]
+          channel: string
+          created_at: string
+          id: string
+          is_default: boolean
+          name: string
+          tone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cadence_by_treatment_type?: Json
+          cadence_hours?: number[]
+          channel?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name: string
+          tone?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cadence_by_treatment_type?: Json
+          cadence_hours?: number[]
+          channel?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+          tone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       emma_pricing_plans: {
         Row: {
@@ -984,6 +1284,7 @@ export type Database = {
           updated_at: string
           user_id: string
           webhook_secret: string
+          webhook_subscription_id: string | null
         }
         Insert: {
           access_token?: string | null
@@ -1003,6 +1304,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           webhook_secret?: string
+          webhook_subscription_id?: string | null
         }
         Update: {
           access_token?: string | null
@@ -1022,6 +1324,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           webhook_secret?: string
+          webhook_subscription_id?: string | null
         }
         Relationships: []
       }
@@ -1307,6 +1610,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      feature_flags: {
+        Row: {
+          enabled: boolean
+          flag_key: string
+          id: string
+          metadata: Json | null
+          scope: string
+          scope_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          enabled?: boolean
+          flag_key: string
+          id?: string
+          metadata?: Json | null
+          scope: string
+          scope_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          enabled?: boolean
+          flag_key?: string
+          id?: string
+          metadata?: Json | null
+          scope?: string
+          scope_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
       }
       inbox_unmatched: {
         Row: {
@@ -1902,6 +2238,59 @@ export type Database = {
           },
         ]
       }
+      products: {
+        Row: {
+          brand: string
+          category: string
+          cost_per_unit: number
+          created_at: string
+          hidden_at: string | null
+          id: string
+          manufacturer: string | null
+          notes: string | null
+          sales_price_per_unit: number
+          tenant_id: string
+          unit_type: string
+          updated_at: string
+        }
+        Insert: {
+          brand: string
+          category: string
+          cost_per_unit: number
+          created_at?: string
+          hidden_at?: string | null
+          id?: string
+          manufacturer?: string | null
+          notes?: string | null
+          sales_price_per_unit: number
+          tenant_id: string
+          unit_type: string
+          updated_at?: string
+        }
+        Update: {
+          brand?: string
+          category?: string
+          cost_per_unit?: number
+          created_at?: string
+          hidden_at?: string | null
+          id?: string
+          manufacturer?: string | null
+          notes?: string | null
+          sales_price_per_unit?: number
+          tenant_id?: string
+          unit_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       promo_intents: {
         Row: {
           account_node_id: string | null
@@ -2220,6 +2609,47 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      rebate_inventory_units: {
+        Row: {
+          created_at: string
+          id: string
+          node_id: string
+          soft_deleted_at: string | null
+          units_deployed: number
+          units_total: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          node_id: string
+          soft_deleted_at?: string | null
+          units_deployed?: number
+          units_total: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          node_id?: string
+          soft_deleted_at?: string | null
+          units_deployed?: number
+          units_total?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rebate_inventory_units_node_id_fkey"
+            columns: ["node_id"]
+            isOneToOne: true
+            referencedRelation: "knowledge_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       refill_invoices: {
         Row: {
@@ -2709,6 +3139,98 @@ export type Database = {
         }
         Relationships: []
       }
+      service_products: {
+        Row: {
+          created_at: string
+          id: string
+          product_id: string
+          quantity_per_service: number
+          service_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_id: string
+          quantity_per_service: number
+          service_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_id?: string
+          quantity_per_service?: number
+          service_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_products_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_products_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      services: {
+        Row: {
+          category: string
+          cogs_per_service: number | null
+          cogs_source: string
+          created_at: string
+          hidden_at: string | null
+          id: string
+          name: string
+          notes: string | null
+          service_price: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          category: string
+          cogs_per_service?: number | null
+          cogs_source?: string
+          created_at?: string
+          hidden_at?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          service_price: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          cogs_per_service?: number | null
+          cogs_source?: string
+          created_at?: string
+          hidden_at?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          service_price?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "services_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       spa_claim_sessions: {
         Row: {
           claimed_at: string | null
@@ -3078,6 +3600,74 @@ export type Database = {
         }
         Relationships: []
       }
+      wishlist_requests: {
+        Row: {
+          admin_notes: string | null
+          area: string | null
+          created_at: string
+          declined_at: string | null
+          description: string
+          id: string
+          in_progress_at: string | null
+          messages: Json
+          priority: Database["public"]["Enums"]["wishlist_priority"]
+          reviewing_at: string | null
+          shipped_at: string | null
+          shipped_in_version: string | null
+          status: Database["public"]["Enums"]["wishlist_status"]
+          tenant_id: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          area?: string | null
+          created_at?: string
+          declined_at?: string | null
+          description: string
+          id?: string
+          in_progress_at?: string | null
+          messages?: Json
+          priority?: Database["public"]["Enums"]["wishlist_priority"]
+          reviewing_at?: string | null
+          shipped_at?: string | null
+          shipped_in_version?: string | null
+          status?: Database["public"]["Enums"]["wishlist_status"]
+          tenant_id: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          admin_notes?: string | null
+          area?: string | null
+          created_at?: string
+          declined_at?: string | null
+          description?: string
+          id?: string
+          in_progress_at?: string | null
+          messages?: Json
+          priority?: Database["public"]["Enums"]["wishlist_priority"]
+          reviewing_at?: string | null
+          shipped_at?: string | null
+          shipped_in_version?: string | null
+          status?: Database["public"]["Enums"]["wishlist_status"]
+          tenant_id?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "wishlist_requests_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -3128,11 +3718,7 @@ export type Database = {
         }[]
       }
       refill_bulk_set_vip: {
-        Args: {
-          p_add_ids: string[]
-          p_remove_ids: string[]
-          p_user_id: string
-        }
+        Args: { p_add_ids: string[]; p_remove_ids: string[]; p_user_id: string }
         Returns: number
       }
       refill_recompute_reliability_counts: {
@@ -3155,7 +3741,20 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "member"
+      app_role:
+        | "admin"
+        | "member"
+        | "spa_owner"
+        | "rep"
+        | "sub_rep"
+        | "developer"
+      wishlist_priority: "low" | "normal" | "high" | "urgent"
+      wishlist_status:
+        | "submitted"
+        | "reviewing"
+        | "in_progress"
+        | "shipped"
+        | "declined"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -3283,7 +3882,17 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "member"],
+      app_role: ["admin", "member", "spa_owner", "rep", "sub_rep", "developer"],
+      wishlist_priority: ["low", "normal", "high", "urgent"],
+      wishlist_status: [
+        "submitted",
+        "reviewing",
+        "in_progress",
+        "shipped",
+        "declined",
+      ],
     },
   },
 } as const
+A new version of Supabase CLI is available: v2.104.0 (currently installed v2.90.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

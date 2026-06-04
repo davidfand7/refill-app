@@ -62,8 +62,11 @@ import { Route as AppAdminAuditRouteImport } from './routes/app.admin.audit'
 import { Route as AppAdminAgentsRouteImport } from './routes/app.admin.agents'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api.webhooks.stripe'
 import { Route as ApiTwilioInboundRouteImport } from './routes/api.twilio.inbound'
+import { Route as ApiResendInboundLiteRouteImport } from './routes/api.resend.inbound-lite'
 import { Route as ApiCronRefillTrialDripRouteImport } from './routes/api.cron.refill-trial-drip'
 import { Route as ApiCronRefillInvoiceRouteImport } from './routes/api.cron.refill-invoice'
+import { Route as ApiCronLightModeSilenceRouteImport } from './routes/api.cron.light-mode-silence'
+import { Route as ApiCronJanePollRouteImport } from './routes/api.cron.jane-poll'
 import { Route as ApiCronEmmaSweepRouteImport } from './routes/api.cron.emma-sweep'
 import { Route as ApiCronEmmaReliabilitySweepRouteImport } from './routes/api.cron.emma-reliability-sweep'
 import { Route as ApiCronEmmaReconcileRouteImport } from './routes/api.cron.emma-reconcile'
@@ -75,10 +78,15 @@ import { Route as AppRefillCampaignsIndexRouteImport } from './routes/app.refill
 import { Route as AppRefillWaitlistSeedRouteImport } from './routes/app.refill.waitlist.seed'
 import { Route as AppRefillWaitlistInviteRouteImport } from './routes/app.refill.waitlist.invite'
 import { Route as AppRefillWaitlistBulkRouteImport } from './routes/app.refill.waitlist.bulk'
+import { Route as AppRefillSettingsZenotiInstallRouteImport } from './routes/app.refill.settings.zenoti-install'
+import { Route as AppRefillSettingsVagaroInstallRouteImport } from './routes/app.refill.settings.vagaro-install'
 import { Route as AppRefillSettingsSpaProfileRouteImport } from './routes/app.refill.settings.spa-profile'
 import { Route as AppRefillSettingsSenderRouteImport } from './routes/app.refill.settings.sender'
 import { Route as AppRefillSettingsSchedulerRouteImport } from './routes/app.refill.settings.scheduler'
 import { Route as AppRefillSettingsNoshowRouteImport } from './routes/app.refill.settings.noshow'
+import { Route as AppRefillSettingsLightModeRouteImport } from './routes/app.refill.settings.light-mode'
+import { Route as AppRefillSettingsBoulevardInstallRouteImport } from './routes/app.refill.settings.boulevard-install'
+import { Route as AppRefillSettingsBookerInstallRouteImport } from './routes/app.refill.settings.booker-install'
 import { Route as AppRefillSettingsAccountRouteImport } from './routes/app.refill.settings.account'
 import { Route as AppRefillRecognitionManufacturersRouteImport } from './routes/app.refill.recognition.manufacturers'
 import { Route as AppRefillRecognitionInventoryRouteImport } from './routes/app.refill.recognition.inventory'
@@ -96,11 +104,24 @@ import { Route as AppRefillAgentsRecognitionRouteImport } from './routes/app.ref
 import { Route as AppRefillAgentsPreshowRouteImport } from './routes/app.refill.agents.preshow'
 import { Route as AppRefillAgentsAttributionRouteImport } from './routes/app.refill.agents.attribution'
 import { Route as ApiWebhooksSchedulerSquareRouteImport } from './routes/api.webhooks.scheduler.square'
+import { Route as ApiWebhooksSchedulerBoulevardRouteImport } from './routes/api.webhooks.scheduler.boulevard'
 import { Route as ApiRecognitionSentSuggestionIdRouteImport } from './routes/api.recognition.sent.$suggestionId'
+import { Route as ApiIntegrationsZenotiInstallCallbackRouteImport } from './routes/api.integrations.zenoti.install-callback'
+import { Route as ApiIntegrationsVagaroInstallCallbackRouteImport } from './routes/api.integrations.vagaro.install-callback'
 import { Route as ApiIntegrationsSquareOauthCallbackRouteImport } from './routes/api.integrations.square.oauth-callback'
+import { Route as ApiIntegrationsMindbodySandboxVerifyRouteImport } from './routes/api.integrations.mindbody.sandbox-verify'
+import { Route as ApiIntegrationsMindbodySandboxIntelSweepRouteImport } from './routes/api.integrations.mindbody.sandbox-intel-sweep'
+import { Route as ApiIntegrationsMindbodyOauthCallbackRouteImport } from './routes/api.integrations.mindbody.oauth-callback'
+import { Route as ApiIntegrationsJaneOauthCallbackRouteImport } from './routes/api.integrations.jane.oauth-callback'
+import { Route as ApiIntegrationsBoulevardInstallCallbackRouteImport } from './routes/api.integrations.boulevard.install-callback'
+import { Route as ApiIntegrationsBookerInstallCallbackRouteImport } from './routes/api.integrations.booker.install-callback'
 import { Route as ApiIntegrationsAcuityOauthCallbackRouteImport } from './routes/api.integrations.acuity.oauth-callback'
 import { Route as AppRefillCampaignsCampaignIdIndexRouteImport } from './routes/app.refill.campaigns.$campaignId.index'
 import { Route as AppRefillCampaignsCampaignIdBlastRouteImport } from './routes/app.refill.campaigns.$campaignId.blast'
+import { Route as ApiWebhooksSchedulerZenotiSecretRouteImport } from './routes/api.webhooks.scheduler.zenoti.$secret'
+import { Route as ApiWebhooksSchedulerVagaroSecretRouteImport } from './routes/api.webhooks.scheduler.vagaro.$secret'
+import { Route as ApiWebhooksSchedulerMindbodySecretRouteImport } from './routes/api.webhooks.scheduler.mindbody.$secret'
+import { Route as ApiWebhooksSchedulerBookerSecretRouteImport } from './routes/api.webhooks.scheduler.booker.$secret'
 import { Route as ApiWebhooksSchedulerAcuitySecretRouteImport } from './routes/api.webhooks.scheduler.acuity.$secret'
 
 const UnsubscribeRoute = UnsubscribeRouteImport.update({
@@ -368,6 +389,11 @@ const ApiTwilioInboundRoute = ApiTwilioInboundRouteImport.update({
   path: '/api/twilio/inbound',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiResendInboundLiteRoute = ApiResendInboundLiteRouteImport.update({
+  id: '/api/resend/inbound-lite',
+  path: '/api/resend/inbound-lite',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCronRefillTrialDripRoute = ApiCronRefillTrialDripRouteImport.update({
   id: '/api/cron/refill-trial-drip',
   path: '/api/cron/refill-trial-drip',
@@ -376,6 +402,16 @@ const ApiCronRefillTrialDripRoute = ApiCronRefillTrialDripRouteImport.update({
 const ApiCronRefillInvoiceRoute = ApiCronRefillInvoiceRouteImport.update({
   id: '/api/cron/refill-invoice',
   path: '/api/cron/refill-invoice',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronLightModeSilenceRoute = ApiCronLightModeSilenceRouteImport.update({
+  id: '/api/cron/light-mode-silence',
+  path: '/api/cron/light-mode-silence',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronJanePollRoute = ApiCronJanePollRouteImport.update({
+  id: '/api/cron/jane-poll',
+  path: '/api/cron/jane-poll',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCronEmmaSweepRoute = ApiCronEmmaSweepRouteImport.update({
@@ -435,6 +471,18 @@ const AppRefillWaitlistBulkRoute = AppRefillWaitlistBulkRouteImport.update({
   path: '/waitlist/bulk',
   getParentRoute: () => AppRefillRoute,
 } as any)
+const AppRefillSettingsZenotiInstallRoute =
+  AppRefillSettingsZenotiInstallRouteImport.update({
+    id: '/settings/zenoti-install',
+    path: '/settings/zenoti-install',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
+const AppRefillSettingsVagaroInstallRoute =
+  AppRefillSettingsVagaroInstallRouteImport.update({
+    id: '/settings/vagaro-install',
+    path: '/settings/vagaro-install',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
 const AppRefillSettingsSpaProfileRoute =
   AppRefillSettingsSpaProfileRouteImport.update({
     id: '/settings/spa-profile',
@@ -457,6 +505,24 @@ const AppRefillSettingsNoshowRoute = AppRefillSettingsNoshowRouteImport.update({
   path: '/settings/noshow',
   getParentRoute: () => AppRefillRoute,
 } as any)
+const AppRefillSettingsLightModeRoute =
+  AppRefillSettingsLightModeRouteImport.update({
+    id: '/settings/light-mode',
+    path: '/settings/light-mode',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
+const AppRefillSettingsBoulevardInstallRoute =
+  AppRefillSettingsBoulevardInstallRouteImport.update({
+    id: '/settings/boulevard-install',
+    path: '/settings/boulevard-install',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
+const AppRefillSettingsBookerInstallRoute =
+  AppRefillSettingsBookerInstallRouteImport.update({
+    id: '/settings/booker-install',
+    path: '/settings/booker-install',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
 const AppRefillSettingsAccountRoute =
   AppRefillSettingsAccountRouteImport.update({
     id: '/settings/account',
@@ -554,16 +620,70 @@ const ApiWebhooksSchedulerSquareRoute =
     path: '/api/webhooks/scheduler/square',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiWebhooksSchedulerBoulevardRoute =
+  ApiWebhooksSchedulerBoulevardRouteImport.update({
+    id: '/api/webhooks/scheduler/boulevard',
+    path: '/api/webhooks/scheduler/boulevard',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiRecognitionSentSuggestionIdRoute =
   ApiRecognitionSentSuggestionIdRouteImport.update({
     id: '/api/recognition/sent/$suggestionId',
     path: '/api/recognition/sent/$suggestionId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiIntegrationsZenotiInstallCallbackRoute =
+  ApiIntegrationsZenotiInstallCallbackRouteImport.update({
+    id: '/api/integrations/zenoti/install-callback',
+    path: '/api/integrations/zenoti/install-callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiIntegrationsVagaroInstallCallbackRoute =
+  ApiIntegrationsVagaroInstallCallbackRouteImport.update({
+    id: '/api/integrations/vagaro/install-callback',
+    path: '/api/integrations/vagaro/install-callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiIntegrationsSquareOauthCallbackRoute =
   ApiIntegrationsSquareOauthCallbackRouteImport.update({
     id: '/api/integrations/square/oauth-callback',
     path: '/api/integrations/square/oauth-callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiIntegrationsMindbodySandboxVerifyRoute =
+  ApiIntegrationsMindbodySandboxVerifyRouteImport.update({
+    id: '/api/integrations/mindbody/sandbox-verify',
+    path: '/api/integrations/mindbody/sandbox-verify',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiIntegrationsMindbodySandboxIntelSweepRoute =
+  ApiIntegrationsMindbodySandboxIntelSweepRouteImport.update({
+    id: '/api/integrations/mindbody/sandbox-intel-sweep',
+    path: '/api/integrations/mindbody/sandbox-intel-sweep',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiIntegrationsMindbodyOauthCallbackRoute =
+  ApiIntegrationsMindbodyOauthCallbackRouteImport.update({
+    id: '/api/integrations/mindbody/oauth-callback',
+    path: '/api/integrations/mindbody/oauth-callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiIntegrationsJaneOauthCallbackRoute =
+  ApiIntegrationsJaneOauthCallbackRouteImport.update({
+    id: '/api/integrations/jane/oauth-callback',
+    path: '/api/integrations/jane/oauth-callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiIntegrationsBoulevardInstallCallbackRoute =
+  ApiIntegrationsBoulevardInstallCallbackRouteImport.update({
+    id: '/api/integrations/boulevard/install-callback',
+    path: '/api/integrations/boulevard/install-callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiIntegrationsBookerInstallCallbackRoute =
+  ApiIntegrationsBookerInstallCallbackRouteImport.update({
+    id: '/api/integrations/booker/install-callback',
+    path: '/api/integrations/booker/install-callback',
     getParentRoute: () => rootRouteImport,
   } as any)
 const ApiIntegrationsAcuityOauthCallbackRoute =
@@ -583,6 +703,30 @@ const AppRefillCampaignsCampaignIdBlastRoute =
     id: '/blast',
     path: '/blast',
     getParentRoute: () => AppRefillCampaignsCampaignIdRoute,
+  } as any)
+const ApiWebhooksSchedulerZenotiSecretRoute =
+  ApiWebhooksSchedulerZenotiSecretRouteImport.update({
+    id: '/api/webhooks/scheduler/zenoti/$secret',
+    path: '/api/webhooks/scheduler/zenoti/$secret',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiWebhooksSchedulerVagaroSecretRoute =
+  ApiWebhooksSchedulerVagaroSecretRouteImport.update({
+    id: '/api/webhooks/scheduler/vagaro/$secret',
+    path: '/api/webhooks/scheduler/vagaro/$secret',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiWebhooksSchedulerMindbodySecretRoute =
+  ApiWebhooksSchedulerMindbodySecretRouteImport.update({
+    id: '/api/webhooks/scheduler/mindbody/$secret',
+    path: '/api/webhooks/scheduler/mindbody/$secret',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiWebhooksSchedulerBookerSecretRoute =
+  ApiWebhooksSchedulerBookerSecretRouteImport.update({
+    id: '/api/webhooks/scheduler/booker/$secret',
+    path: '/api/webhooks/scheduler/booker/$secret',
+    getParentRoute: () => rootRouteImport,
   } as any)
 const ApiWebhooksSchedulerAcuitySecretRoute =
   ApiWebhooksSchedulerAcuitySecretRouteImport.update({
@@ -617,8 +761,11 @@ export interface FileRoutesByFullPath {
   '/api/cron/emma-reconcile': typeof ApiCronEmmaReconcileRoute
   '/api/cron/emma-reliability-sweep': typeof ApiCronEmmaReliabilitySweepRoute
   '/api/cron/emma-sweep': typeof ApiCronEmmaSweepRoute
+  '/api/cron/jane-poll': typeof ApiCronJanePollRoute
+  '/api/cron/light-mode-silence': typeof ApiCronLightModeSilenceRoute
   '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
+  '/api/resend/inbound-lite': typeof ApiResendInboundLiteRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/admin/agents': typeof AppAdminAgentsRoute
@@ -654,8 +801,17 @@ export interface FileRoutesByFullPath {
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
+  '/api/integrations/booker/install-callback': typeof ApiIntegrationsBookerInstallCallbackRoute
+  '/api/integrations/boulevard/install-callback': typeof ApiIntegrationsBoulevardInstallCallbackRoute
+  '/api/integrations/jane/oauth-callback': typeof ApiIntegrationsJaneOauthCallbackRoute
+  '/api/integrations/mindbody/oauth-callback': typeof ApiIntegrationsMindbodyOauthCallbackRoute
+  '/api/integrations/mindbody/sandbox-intel-sweep': typeof ApiIntegrationsMindbodySandboxIntelSweepRoute
+  '/api/integrations/mindbody/sandbox-verify': typeof ApiIntegrationsMindbodySandboxVerifyRoute
   '/api/integrations/square/oauth-callback': typeof ApiIntegrationsSquareOauthCallbackRoute
+  '/api/integrations/vagaro/install-callback': typeof ApiIntegrationsVagaroInstallCallbackRoute
+  '/api/integrations/zenoti/install-callback': typeof ApiIntegrationsZenotiInstallCallbackRoute
   '/api/recognition/sent/$suggestionId': typeof ApiRecognitionSentSuggestionIdRoute
+  '/api/webhooks/scheduler/boulevard': typeof ApiWebhooksSchedulerBoulevardRoute
   '/api/webhooks/scheduler/square': typeof ApiWebhooksSchedulerSquareRoute
   '/app/refill/agents/attribution': typeof AppRefillAgentsAttributionRoute
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
@@ -673,16 +829,25 @@ export interface FileRoutesByFullPath {
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
   '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
+  '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
+  '/app/refill/settings/boulevard-install': typeof AppRefillSettingsBoulevardInstallRoute
+  '/app/refill/settings/light-mode': typeof AppRefillSettingsLightModeRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
   '/app/refill/settings/spa-profile': typeof AppRefillSettingsSpaProfileRoute
+  '/app/refill/settings/vagaro-install': typeof AppRefillSettingsVagaroInstallRoute
+  '/app/refill/settings/zenoti-install': typeof AppRefillSettingsZenotiInstallRoute
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
   '/app/refill/waitlist/invite': typeof AppRefillWaitlistInviteRoute
   '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
   '/app/refill/campaigns/': typeof AppRefillCampaignsIndexRoute
   '/app/refill/patients/': typeof AppRefillPatientsIndexRoute
   '/api/webhooks/scheduler/acuity/$secret': typeof ApiWebhooksSchedulerAcuitySecretRoute
+  '/api/webhooks/scheduler/booker/$secret': typeof ApiWebhooksSchedulerBookerSecretRoute
+  '/api/webhooks/scheduler/mindbody/$secret': typeof ApiWebhooksSchedulerMindbodySecretRoute
+  '/api/webhooks/scheduler/vagaro/$secret': typeof ApiWebhooksSchedulerVagaroSecretRoute
+  '/api/webhooks/scheduler/zenoti/$secret': typeof ApiWebhooksSchedulerZenotiSecretRoute
   '/app/refill/campaigns/$campaignId/blast': typeof AppRefillCampaignsCampaignIdBlastRoute
   '/app/refill/campaigns/$campaignId/': typeof AppRefillCampaignsCampaignIdIndexRoute
 }
@@ -710,8 +875,11 @@ export interface FileRoutesByTo {
   '/api/cron/emma-reconcile': typeof ApiCronEmmaReconcileRoute
   '/api/cron/emma-reliability-sweep': typeof ApiCronEmmaReliabilitySweepRoute
   '/api/cron/emma-sweep': typeof ApiCronEmmaSweepRoute
+  '/api/cron/jane-poll': typeof ApiCronJanePollRoute
+  '/api/cron/light-mode-silence': typeof ApiCronLightModeSilenceRoute
   '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
+  '/api/resend/inbound-lite': typeof ApiResendInboundLiteRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/admin/agents': typeof AppAdminAgentsRoute
@@ -745,8 +913,17 @@ export interface FileRoutesByTo {
   '/app/refill': typeof AppRefillIndexRoute
   '/app/rep': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
+  '/api/integrations/booker/install-callback': typeof ApiIntegrationsBookerInstallCallbackRoute
+  '/api/integrations/boulevard/install-callback': typeof ApiIntegrationsBoulevardInstallCallbackRoute
+  '/api/integrations/jane/oauth-callback': typeof ApiIntegrationsJaneOauthCallbackRoute
+  '/api/integrations/mindbody/oauth-callback': typeof ApiIntegrationsMindbodyOauthCallbackRoute
+  '/api/integrations/mindbody/sandbox-intel-sweep': typeof ApiIntegrationsMindbodySandboxIntelSweepRoute
+  '/api/integrations/mindbody/sandbox-verify': typeof ApiIntegrationsMindbodySandboxVerifyRoute
   '/api/integrations/square/oauth-callback': typeof ApiIntegrationsSquareOauthCallbackRoute
+  '/api/integrations/vagaro/install-callback': typeof ApiIntegrationsVagaroInstallCallbackRoute
+  '/api/integrations/zenoti/install-callback': typeof ApiIntegrationsZenotiInstallCallbackRoute
   '/api/recognition/sent/$suggestionId': typeof ApiRecognitionSentSuggestionIdRoute
+  '/api/webhooks/scheduler/boulevard': typeof ApiWebhooksSchedulerBoulevardRoute
   '/api/webhooks/scheduler/square': typeof ApiWebhooksSchedulerSquareRoute
   '/app/refill/agents/attribution': typeof AppRefillAgentsAttributionRoute
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
@@ -763,16 +940,25 @@ export interface FileRoutesByTo {
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
   '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
+  '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
+  '/app/refill/settings/boulevard-install': typeof AppRefillSettingsBoulevardInstallRoute
+  '/app/refill/settings/light-mode': typeof AppRefillSettingsLightModeRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
   '/app/refill/settings/spa-profile': typeof AppRefillSettingsSpaProfileRoute
+  '/app/refill/settings/vagaro-install': typeof AppRefillSettingsVagaroInstallRoute
+  '/app/refill/settings/zenoti-install': typeof AppRefillSettingsZenotiInstallRoute
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
   '/app/refill/waitlist/invite': typeof AppRefillWaitlistInviteRoute
   '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
   '/app/refill/campaigns': typeof AppRefillCampaignsIndexRoute
   '/app/refill/patients': typeof AppRefillPatientsIndexRoute
   '/api/webhooks/scheduler/acuity/$secret': typeof ApiWebhooksSchedulerAcuitySecretRoute
+  '/api/webhooks/scheduler/booker/$secret': typeof ApiWebhooksSchedulerBookerSecretRoute
+  '/api/webhooks/scheduler/mindbody/$secret': typeof ApiWebhooksSchedulerMindbodySecretRoute
+  '/api/webhooks/scheduler/vagaro/$secret': typeof ApiWebhooksSchedulerVagaroSecretRoute
+  '/api/webhooks/scheduler/zenoti/$secret': typeof ApiWebhooksSchedulerZenotiSecretRoute
   '/app/refill/campaigns/$campaignId/blast': typeof AppRefillCampaignsCampaignIdBlastRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdIndexRoute
 }
@@ -803,8 +989,11 @@ export interface FileRoutesById {
   '/api/cron/emma-reconcile': typeof ApiCronEmmaReconcileRoute
   '/api/cron/emma-reliability-sweep': typeof ApiCronEmmaReliabilitySweepRoute
   '/api/cron/emma-sweep': typeof ApiCronEmmaSweepRoute
+  '/api/cron/jane-poll': typeof ApiCronJanePollRoute
+  '/api/cron/light-mode-silence': typeof ApiCronLightModeSilenceRoute
   '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
+  '/api/resend/inbound-lite': typeof ApiResendInboundLiteRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/admin/agents': typeof AppAdminAgentsRoute
@@ -840,8 +1029,17 @@ export interface FileRoutesById {
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
+  '/api/integrations/booker/install-callback': typeof ApiIntegrationsBookerInstallCallbackRoute
+  '/api/integrations/boulevard/install-callback': typeof ApiIntegrationsBoulevardInstallCallbackRoute
+  '/api/integrations/jane/oauth-callback': typeof ApiIntegrationsJaneOauthCallbackRoute
+  '/api/integrations/mindbody/oauth-callback': typeof ApiIntegrationsMindbodyOauthCallbackRoute
+  '/api/integrations/mindbody/sandbox-intel-sweep': typeof ApiIntegrationsMindbodySandboxIntelSweepRoute
+  '/api/integrations/mindbody/sandbox-verify': typeof ApiIntegrationsMindbodySandboxVerifyRoute
   '/api/integrations/square/oauth-callback': typeof ApiIntegrationsSquareOauthCallbackRoute
+  '/api/integrations/vagaro/install-callback': typeof ApiIntegrationsVagaroInstallCallbackRoute
+  '/api/integrations/zenoti/install-callback': typeof ApiIntegrationsZenotiInstallCallbackRoute
   '/api/recognition/sent/$suggestionId': typeof ApiRecognitionSentSuggestionIdRoute
+  '/api/webhooks/scheduler/boulevard': typeof ApiWebhooksSchedulerBoulevardRoute
   '/api/webhooks/scheduler/square': typeof ApiWebhooksSchedulerSquareRoute
   '/app/refill/agents/attribution': typeof AppRefillAgentsAttributionRoute
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
@@ -859,16 +1057,25 @@ export interface FileRoutesById {
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
   '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
+  '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
+  '/app/refill/settings/boulevard-install': typeof AppRefillSettingsBoulevardInstallRoute
+  '/app/refill/settings/light-mode': typeof AppRefillSettingsLightModeRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
   '/app/refill/settings/spa-profile': typeof AppRefillSettingsSpaProfileRoute
+  '/app/refill/settings/vagaro-install': typeof AppRefillSettingsVagaroInstallRoute
+  '/app/refill/settings/zenoti-install': typeof AppRefillSettingsZenotiInstallRoute
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
   '/app/refill/waitlist/invite': typeof AppRefillWaitlistInviteRoute
   '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
   '/app/refill/campaigns/': typeof AppRefillCampaignsIndexRoute
   '/app/refill/patients/': typeof AppRefillPatientsIndexRoute
   '/api/webhooks/scheduler/acuity/$secret': typeof ApiWebhooksSchedulerAcuitySecretRoute
+  '/api/webhooks/scheduler/booker/$secret': typeof ApiWebhooksSchedulerBookerSecretRoute
+  '/api/webhooks/scheduler/mindbody/$secret': typeof ApiWebhooksSchedulerMindbodySecretRoute
+  '/api/webhooks/scheduler/vagaro/$secret': typeof ApiWebhooksSchedulerVagaroSecretRoute
+  '/api/webhooks/scheduler/zenoti/$secret': typeof ApiWebhooksSchedulerZenotiSecretRoute
   '/app/refill/campaigns/$campaignId/blast': typeof AppRefillCampaignsCampaignIdBlastRoute
   '/app/refill/campaigns/$campaignId/': typeof AppRefillCampaignsCampaignIdIndexRoute
 }
@@ -900,8 +1107,11 @@ export interface FileRouteTypes {
     | '/api/cron/emma-reconcile'
     | '/api/cron/emma-reliability-sweep'
     | '/api/cron/emma-sweep'
+    | '/api/cron/jane-poll'
+    | '/api/cron/light-mode-silence'
     | '/api/cron/refill-invoice'
     | '/api/cron/refill-trial-drip'
+    | '/api/resend/inbound-lite'
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
     | '/app/admin/agents'
@@ -937,8 +1147,17 @@ export interface FileRouteTypes {
     | '/app/refill/'
     | '/app/rep/'
     | '/api/integrations/acuity/oauth-callback'
+    | '/api/integrations/booker/install-callback'
+    | '/api/integrations/boulevard/install-callback'
+    | '/api/integrations/jane/oauth-callback'
+    | '/api/integrations/mindbody/oauth-callback'
+    | '/api/integrations/mindbody/sandbox-intel-sweep'
+    | '/api/integrations/mindbody/sandbox-verify'
     | '/api/integrations/square/oauth-callback'
+    | '/api/integrations/vagaro/install-callback'
+    | '/api/integrations/zenoti/install-callback'
     | '/api/recognition/sent/$suggestionId'
+    | '/api/webhooks/scheduler/boulevard'
     | '/api/webhooks/scheduler/square'
     | '/app/refill/agents/attribution'
     | '/app/refill/agents/preshow'
@@ -956,16 +1175,25 @@ export interface FileRouteTypes {
     | '/app/refill/recognition/inventory'
     | '/app/refill/recognition/manufacturers'
     | '/app/refill/settings/account'
+    | '/app/refill/settings/booker-install'
+    | '/app/refill/settings/boulevard-install'
+    | '/app/refill/settings/light-mode'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
     | '/app/refill/settings/sender'
     | '/app/refill/settings/spa-profile'
+    | '/app/refill/settings/vagaro-install'
+    | '/app/refill/settings/zenoti-install'
     | '/app/refill/waitlist/bulk'
     | '/app/refill/waitlist/invite'
     | '/app/refill/waitlist/seed'
     | '/app/refill/campaigns/'
     | '/app/refill/patients/'
     | '/api/webhooks/scheduler/acuity/$secret'
+    | '/api/webhooks/scheduler/booker/$secret'
+    | '/api/webhooks/scheduler/mindbody/$secret'
+    | '/api/webhooks/scheduler/vagaro/$secret'
+    | '/api/webhooks/scheduler/zenoti/$secret'
     | '/app/refill/campaigns/$campaignId/blast'
     | '/app/refill/campaigns/$campaignId/'
   fileRoutesByTo: FileRoutesByTo
@@ -993,8 +1221,11 @@ export interface FileRouteTypes {
     | '/api/cron/emma-reconcile'
     | '/api/cron/emma-reliability-sweep'
     | '/api/cron/emma-sweep'
+    | '/api/cron/jane-poll'
+    | '/api/cron/light-mode-silence'
     | '/api/cron/refill-invoice'
     | '/api/cron/refill-trial-drip'
+    | '/api/resend/inbound-lite'
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
     | '/app/admin/agents'
@@ -1028,8 +1259,17 @@ export interface FileRouteTypes {
     | '/app/refill'
     | '/app/rep'
     | '/api/integrations/acuity/oauth-callback'
+    | '/api/integrations/booker/install-callback'
+    | '/api/integrations/boulevard/install-callback'
+    | '/api/integrations/jane/oauth-callback'
+    | '/api/integrations/mindbody/oauth-callback'
+    | '/api/integrations/mindbody/sandbox-intel-sweep'
+    | '/api/integrations/mindbody/sandbox-verify'
     | '/api/integrations/square/oauth-callback'
+    | '/api/integrations/vagaro/install-callback'
+    | '/api/integrations/zenoti/install-callback'
     | '/api/recognition/sent/$suggestionId'
+    | '/api/webhooks/scheduler/boulevard'
     | '/api/webhooks/scheduler/square'
     | '/app/refill/agents/attribution'
     | '/app/refill/agents/preshow'
@@ -1046,16 +1286,25 @@ export interface FileRouteTypes {
     | '/app/refill/recognition/inventory'
     | '/app/refill/recognition/manufacturers'
     | '/app/refill/settings/account'
+    | '/app/refill/settings/booker-install'
+    | '/app/refill/settings/boulevard-install'
+    | '/app/refill/settings/light-mode'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
     | '/app/refill/settings/sender'
     | '/app/refill/settings/spa-profile'
+    | '/app/refill/settings/vagaro-install'
+    | '/app/refill/settings/zenoti-install'
     | '/app/refill/waitlist/bulk'
     | '/app/refill/waitlist/invite'
     | '/app/refill/waitlist/seed'
     | '/app/refill/campaigns'
     | '/app/refill/patients'
     | '/api/webhooks/scheduler/acuity/$secret'
+    | '/api/webhooks/scheduler/booker/$secret'
+    | '/api/webhooks/scheduler/mindbody/$secret'
+    | '/api/webhooks/scheduler/vagaro/$secret'
+    | '/api/webhooks/scheduler/zenoti/$secret'
     | '/app/refill/campaigns/$campaignId/blast'
     | '/app/refill/campaigns/$campaignId'
   id:
@@ -1085,8 +1334,11 @@ export interface FileRouteTypes {
     | '/api/cron/emma-reconcile'
     | '/api/cron/emma-reliability-sweep'
     | '/api/cron/emma-sweep'
+    | '/api/cron/jane-poll'
+    | '/api/cron/light-mode-silence'
     | '/api/cron/refill-invoice'
     | '/api/cron/refill-trial-drip'
+    | '/api/resend/inbound-lite'
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
     | '/app/admin/agents'
@@ -1122,8 +1374,17 @@ export interface FileRouteTypes {
     | '/app/refill/'
     | '/app/rep/'
     | '/api/integrations/acuity/oauth-callback'
+    | '/api/integrations/booker/install-callback'
+    | '/api/integrations/boulevard/install-callback'
+    | '/api/integrations/jane/oauth-callback'
+    | '/api/integrations/mindbody/oauth-callback'
+    | '/api/integrations/mindbody/sandbox-intel-sweep'
+    | '/api/integrations/mindbody/sandbox-verify'
     | '/api/integrations/square/oauth-callback'
+    | '/api/integrations/vagaro/install-callback'
+    | '/api/integrations/zenoti/install-callback'
     | '/api/recognition/sent/$suggestionId'
+    | '/api/webhooks/scheduler/boulevard'
     | '/api/webhooks/scheduler/square'
     | '/app/refill/agents/attribution'
     | '/app/refill/agents/preshow'
@@ -1141,16 +1402,25 @@ export interface FileRouteTypes {
     | '/app/refill/recognition/inventory'
     | '/app/refill/recognition/manufacturers'
     | '/app/refill/settings/account'
+    | '/app/refill/settings/booker-install'
+    | '/app/refill/settings/boulevard-install'
+    | '/app/refill/settings/light-mode'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
     | '/app/refill/settings/sender'
     | '/app/refill/settings/spa-profile'
+    | '/app/refill/settings/vagaro-install'
+    | '/app/refill/settings/zenoti-install'
     | '/app/refill/waitlist/bulk'
     | '/app/refill/waitlist/invite'
     | '/app/refill/waitlist/seed'
     | '/app/refill/campaigns/'
     | '/app/refill/patients/'
     | '/api/webhooks/scheduler/acuity/$secret'
+    | '/api/webhooks/scheduler/booker/$secret'
+    | '/api/webhooks/scheduler/mindbody/$secret'
+    | '/api/webhooks/scheduler/vagaro/$secret'
+    | '/api/webhooks/scheduler/zenoti/$secret'
     | '/app/refill/campaigns/$campaignId/blast'
     | '/app/refill/campaigns/$campaignId/'
   fileRoutesById: FileRoutesById
@@ -1178,17 +1448,33 @@ export interface RootRouteChildren {
   ApiCronEmmaReconcileRoute: typeof ApiCronEmmaReconcileRoute
   ApiCronEmmaReliabilitySweepRoute: typeof ApiCronEmmaReliabilitySweepRoute
   ApiCronEmmaSweepRoute: typeof ApiCronEmmaSweepRoute
+  ApiCronJanePollRoute: typeof ApiCronJanePollRoute
+  ApiCronLightModeSilenceRoute: typeof ApiCronLightModeSilenceRoute
   ApiCronRefillInvoiceRoute: typeof ApiCronRefillInvoiceRoute
   ApiCronRefillTrialDripRoute: typeof ApiCronRefillTrialDripRoute
+  ApiResendInboundLiteRoute: typeof ApiResendInboundLiteRoute
   ApiTwilioInboundRoute: typeof ApiTwilioInboundRoute
   ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
   RescueClaimTokenRoute: typeof RescueClaimTokenRoute
   WaitlistOptinTokenRoute: typeof WaitlistOptinTokenRoute
   ApiIntegrationsAcuityOauthCallbackRoute: typeof ApiIntegrationsAcuityOauthCallbackRoute
+  ApiIntegrationsBookerInstallCallbackRoute: typeof ApiIntegrationsBookerInstallCallbackRoute
+  ApiIntegrationsBoulevardInstallCallbackRoute: typeof ApiIntegrationsBoulevardInstallCallbackRoute
+  ApiIntegrationsJaneOauthCallbackRoute: typeof ApiIntegrationsJaneOauthCallbackRoute
+  ApiIntegrationsMindbodyOauthCallbackRoute: typeof ApiIntegrationsMindbodyOauthCallbackRoute
+  ApiIntegrationsMindbodySandboxIntelSweepRoute: typeof ApiIntegrationsMindbodySandboxIntelSweepRoute
+  ApiIntegrationsMindbodySandboxVerifyRoute: typeof ApiIntegrationsMindbodySandboxVerifyRoute
   ApiIntegrationsSquareOauthCallbackRoute: typeof ApiIntegrationsSquareOauthCallbackRoute
+  ApiIntegrationsVagaroInstallCallbackRoute: typeof ApiIntegrationsVagaroInstallCallbackRoute
+  ApiIntegrationsZenotiInstallCallbackRoute: typeof ApiIntegrationsZenotiInstallCallbackRoute
   ApiRecognitionSentSuggestionIdRoute: typeof ApiRecognitionSentSuggestionIdRoute
+  ApiWebhooksSchedulerBoulevardRoute: typeof ApiWebhooksSchedulerBoulevardRoute
   ApiWebhooksSchedulerSquareRoute: typeof ApiWebhooksSchedulerSquareRoute
   ApiWebhooksSchedulerAcuitySecretRoute: typeof ApiWebhooksSchedulerAcuitySecretRoute
+  ApiWebhooksSchedulerBookerSecretRoute: typeof ApiWebhooksSchedulerBookerSecretRoute
+  ApiWebhooksSchedulerMindbodySecretRoute: typeof ApiWebhooksSchedulerMindbodySecretRoute
+  ApiWebhooksSchedulerVagaroSecretRoute: typeof ApiWebhooksSchedulerVagaroSecretRoute
+  ApiWebhooksSchedulerZenotiSecretRoute: typeof ApiWebhooksSchedulerZenotiSecretRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -1564,6 +1850,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiTwilioInboundRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/resend/inbound-lite': {
+      id: '/api/resend/inbound-lite'
+      path: '/api/resend/inbound-lite'
+      fullPath: '/api/resend/inbound-lite'
+      preLoaderRoute: typeof ApiResendInboundLiteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/cron/refill-trial-drip': {
       id: '/api/cron/refill-trial-drip'
       path: '/api/cron/refill-trial-drip'
@@ -1576,6 +1869,20 @@ declare module '@tanstack/react-router' {
       path: '/api/cron/refill-invoice'
       fullPath: '/api/cron/refill-invoice'
       preLoaderRoute: typeof ApiCronRefillInvoiceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/light-mode-silence': {
+      id: '/api/cron/light-mode-silence'
+      path: '/api/cron/light-mode-silence'
+      fullPath: '/api/cron/light-mode-silence'
+      preLoaderRoute: typeof ApiCronLightModeSilenceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/jane-poll': {
+      id: '/api/cron/jane-poll'
+      path: '/api/cron/jane-poll'
+      fullPath: '/api/cron/jane-poll'
+      preLoaderRoute: typeof ApiCronJanePollRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/cron/emma-sweep': {
@@ -1655,6 +1962,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillWaitlistBulkRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/refill/settings/zenoti-install': {
+      id: '/app/refill/settings/zenoti-install'
+      path: '/settings/zenoti-install'
+      fullPath: '/app/refill/settings/zenoti-install'
+      preLoaderRoute: typeof AppRefillSettingsZenotiInstallRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/settings/vagaro-install': {
+      id: '/app/refill/settings/vagaro-install'
+      path: '/settings/vagaro-install'
+      fullPath: '/app/refill/settings/vagaro-install'
+      preLoaderRoute: typeof AppRefillSettingsVagaroInstallRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/settings/spa-profile': {
       id: '/app/refill/settings/spa-profile'
       path: '/settings/spa-profile'
@@ -1681,6 +2002,27 @@ declare module '@tanstack/react-router' {
       path: '/settings/noshow'
       fullPath: '/app/refill/settings/noshow'
       preLoaderRoute: typeof AppRefillSettingsNoshowRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/settings/light-mode': {
+      id: '/app/refill/settings/light-mode'
+      path: '/settings/light-mode'
+      fullPath: '/app/refill/settings/light-mode'
+      preLoaderRoute: typeof AppRefillSettingsLightModeRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/settings/boulevard-install': {
+      id: '/app/refill/settings/boulevard-install'
+      path: '/settings/boulevard-install'
+      fullPath: '/app/refill/settings/boulevard-install'
+      preLoaderRoute: typeof AppRefillSettingsBoulevardInstallRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/settings/booker-install': {
+      id: '/app/refill/settings/booker-install'
+      path: '/settings/booker-install'
+      fullPath: '/app/refill/settings/booker-install'
+      preLoaderRoute: typeof AppRefillSettingsBookerInstallRouteImport
       parentRoute: typeof AppRefillRoute
     }
     '/app/refill/settings/account': {
@@ -1802,6 +2144,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiWebhooksSchedulerSquareRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/webhooks/scheduler/boulevard': {
+      id: '/api/webhooks/scheduler/boulevard'
+      path: '/api/webhooks/scheduler/boulevard'
+      fullPath: '/api/webhooks/scheduler/boulevard'
+      preLoaderRoute: typeof ApiWebhooksSchedulerBoulevardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/recognition/sent/$suggestionId': {
       id: '/api/recognition/sent/$suggestionId'
       path: '/api/recognition/sent/$suggestionId'
@@ -1809,11 +2158,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiRecognitionSentSuggestionIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/integrations/zenoti/install-callback': {
+      id: '/api/integrations/zenoti/install-callback'
+      path: '/api/integrations/zenoti/install-callback'
+      fullPath: '/api/integrations/zenoti/install-callback'
+      preLoaderRoute: typeof ApiIntegrationsZenotiInstallCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/integrations/vagaro/install-callback': {
+      id: '/api/integrations/vagaro/install-callback'
+      path: '/api/integrations/vagaro/install-callback'
+      fullPath: '/api/integrations/vagaro/install-callback'
+      preLoaderRoute: typeof ApiIntegrationsVagaroInstallCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/integrations/square/oauth-callback': {
       id: '/api/integrations/square/oauth-callback'
       path: '/api/integrations/square/oauth-callback'
       fullPath: '/api/integrations/square/oauth-callback'
       preLoaderRoute: typeof ApiIntegrationsSquareOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/integrations/mindbody/sandbox-verify': {
+      id: '/api/integrations/mindbody/sandbox-verify'
+      path: '/api/integrations/mindbody/sandbox-verify'
+      fullPath: '/api/integrations/mindbody/sandbox-verify'
+      preLoaderRoute: typeof ApiIntegrationsMindbodySandboxVerifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/integrations/mindbody/sandbox-intel-sweep': {
+      id: '/api/integrations/mindbody/sandbox-intel-sweep'
+      path: '/api/integrations/mindbody/sandbox-intel-sweep'
+      fullPath: '/api/integrations/mindbody/sandbox-intel-sweep'
+      preLoaderRoute: typeof ApiIntegrationsMindbodySandboxIntelSweepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/integrations/mindbody/oauth-callback': {
+      id: '/api/integrations/mindbody/oauth-callback'
+      path: '/api/integrations/mindbody/oauth-callback'
+      fullPath: '/api/integrations/mindbody/oauth-callback'
+      preLoaderRoute: typeof ApiIntegrationsMindbodyOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/integrations/jane/oauth-callback': {
+      id: '/api/integrations/jane/oauth-callback'
+      path: '/api/integrations/jane/oauth-callback'
+      fullPath: '/api/integrations/jane/oauth-callback'
+      preLoaderRoute: typeof ApiIntegrationsJaneOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/integrations/boulevard/install-callback': {
+      id: '/api/integrations/boulevard/install-callback'
+      path: '/api/integrations/boulevard/install-callback'
+      fullPath: '/api/integrations/boulevard/install-callback'
+      preLoaderRoute: typeof ApiIntegrationsBoulevardInstallCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/integrations/booker/install-callback': {
+      id: '/api/integrations/booker/install-callback'
+      path: '/api/integrations/booker/install-callback'
+      fullPath: '/api/integrations/booker/install-callback'
+      preLoaderRoute: typeof ApiIntegrationsBookerInstallCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/integrations/acuity/oauth-callback': {
@@ -1836,6 +2241,34 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/refill/campaigns/$campaignId/blast'
       preLoaderRoute: typeof AppRefillCampaignsCampaignIdBlastRouteImport
       parentRoute: typeof AppRefillCampaignsCampaignIdRoute
+    }
+    '/api/webhooks/scheduler/zenoti/$secret': {
+      id: '/api/webhooks/scheduler/zenoti/$secret'
+      path: '/api/webhooks/scheduler/zenoti/$secret'
+      fullPath: '/api/webhooks/scheduler/zenoti/$secret'
+      preLoaderRoute: typeof ApiWebhooksSchedulerZenotiSecretRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/webhooks/scheduler/vagaro/$secret': {
+      id: '/api/webhooks/scheduler/vagaro/$secret'
+      path: '/api/webhooks/scheduler/vagaro/$secret'
+      fullPath: '/api/webhooks/scheduler/vagaro/$secret'
+      preLoaderRoute: typeof ApiWebhooksSchedulerVagaroSecretRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/webhooks/scheduler/mindbody/$secret': {
+      id: '/api/webhooks/scheduler/mindbody/$secret'
+      path: '/api/webhooks/scheduler/mindbody/$secret'
+      fullPath: '/api/webhooks/scheduler/mindbody/$secret'
+      preLoaderRoute: typeof ApiWebhooksSchedulerMindbodySecretRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/webhooks/scheduler/booker/$secret': {
+      id: '/api/webhooks/scheduler/booker/$secret'
+      path: '/api/webhooks/scheduler/booker/$secret'
+      fullPath: '/api/webhooks/scheduler/booker/$secret'
+      preLoaderRoute: typeof ApiWebhooksSchedulerBookerSecretRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/webhooks/scheduler/acuity/$secret': {
       id: '/api/webhooks/scheduler/acuity/$secret'
@@ -1923,10 +2356,15 @@ interface AppRefillRouteChildren {
   AppRefillRecognitionInventoryRoute: typeof AppRefillRecognitionInventoryRoute
   AppRefillRecognitionManufacturersRoute: typeof AppRefillRecognitionManufacturersRoute
   AppRefillSettingsAccountRoute: typeof AppRefillSettingsAccountRoute
+  AppRefillSettingsBookerInstallRoute: typeof AppRefillSettingsBookerInstallRoute
+  AppRefillSettingsBoulevardInstallRoute: typeof AppRefillSettingsBoulevardInstallRoute
+  AppRefillSettingsLightModeRoute: typeof AppRefillSettingsLightModeRoute
   AppRefillSettingsNoshowRoute: typeof AppRefillSettingsNoshowRoute
   AppRefillSettingsSchedulerRoute: typeof AppRefillSettingsSchedulerRoute
   AppRefillSettingsSenderRoute: typeof AppRefillSettingsSenderRoute
   AppRefillSettingsSpaProfileRoute: typeof AppRefillSettingsSpaProfileRoute
+  AppRefillSettingsVagaroInstallRoute: typeof AppRefillSettingsVagaroInstallRoute
+  AppRefillSettingsZenotiInstallRoute: typeof AppRefillSettingsZenotiInstallRoute
   AppRefillWaitlistBulkRoute: typeof AppRefillWaitlistBulkRoute
   AppRefillWaitlistInviteRoute: typeof AppRefillWaitlistInviteRoute
   AppRefillWaitlistSeedRoute: typeof AppRefillWaitlistSeedRoute
@@ -1956,10 +2394,16 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillRecognitionManufacturersRoute:
     AppRefillRecognitionManufacturersRoute,
   AppRefillSettingsAccountRoute: AppRefillSettingsAccountRoute,
+  AppRefillSettingsBookerInstallRoute: AppRefillSettingsBookerInstallRoute,
+  AppRefillSettingsBoulevardInstallRoute:
+    AppRefillSettingsBoulevardInstallRoute,
+  AppRefillSettingsLightModeRoute: AppRefillSettingsLightModeRoute,
   AppRefillSettingsNoshowRoute: AppRefillSettingsNoshowRoute,
   AppRefillSettingsSchedulerRoute: AppRefillSettingsSchedulerRoute,
   AppRefillSettingsSenderRoute: AppRefillSettingsSenderRoute,
   AppRefillSettingsSpaProfileRoute: AppRefillSettingsSpaProfileRoute,
+  AppRefillSettingsVagaroInstallRoute: AppRefillSettingsVagaroInstallRoute,
+  AppRefillSettingsZenotiInstallRoute: AppRefillSettingsZenotiInstallRoute,
   AppRefillWaitlistBulkRoute: AppRefillWaitlistBulkRoute,
   AppRefillWaitlistInviteRoute: AppRefillWaitlistInviteRoute,
   AppRefillWaitlistSeedRoute: AppRefillWaitlistSeedRoute,
@@ -2051,19 +2495,43 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronEmmaReconcileRoute: ApiCronEmmaReconcileRoute,
   ApiCronEmmaReliabilitySweepRoute: ApiCronEmmaReliabilitySweepRoute,
   ApiCronEmmaSweepRoute: ApiCronEmmaSweepRoute,
+  ApiCronJanePollRoute: ApiCronJanePollRoute,
+  ApiCronLightModeSilenceRoute: ApiCronLightModeSilenceRoute,
   ApiCronRefillInvoiceRoute: ApiCronRefillInvoiceRoute,
   ApiCronRefillTrialDripRoute: ApiCronRefillTrialDripRoute,
+  ApiResendInboundLiteRoute: ApiResendInboundLiteRoute,
   ApiTwilioInboundRoute: ApiTwilioInboundRoute,
   ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
   RescueClaimTokenRoute: RescueClaimTokenRoute,
   WaitlistOptinTokenRoute: WaitlistOptinTokenRoute,
   ApiIntegrationsAcuityOauthCallbackRoute:
     ApiIntegrationsAcuityOauthCallbackRoute,
+  ApiIntegrationsBookerInstallCallbackRoute:
+    ApiIntegrationsBookerInstallCallbackRoute,
+  ApiIntegrationsBoulevardInstallCallbackRoute:
+    ApiIntegrationsBoulevardInstallCallbackRoute,
+  ApiIntegrationsJaneOauthCallbackRoute: ApiIntegrationsJaneOauthCallbackRoute,
+  ApiIntegrationsMindbodyOauthCallbackRoute:
+    ApiIntegrationsMindbodyOauthCallbackRoute,
+  ApiIntegrationsMindbodySandboxIntelSweepRoute:
+    ApiIntegrationsMindbodySandboxIntelSweepRoute,
+  ApiIntegrationsMindbodySandboxVerifyRoute:
+    ApiIntegrationsMindbodySandboxVerifyRoute,
   ApiIntegrationsSquareOauthCallbackRoute:
     ApiIntegrationsSquareOauthCallbackRoute,
+  ApiIntegrationsVagaroInstallCallbackRoute:
+    ApiIntegrationsVagaroInstallCallbackRoute,
+  ApiIntegrationsZenotiInstallCallbackRoute:
+    ApiIntegrationsZenotiInstallCallbackRoute,
   ApiRecognitionSentSuggestionIdRoute: ApiRecognitionSentSuggestionIdRoute,
+  ApiWebhooksSchedulerBoulevardRoute: ApiWebhooksSchedulerBoulevardRoute,
   ApiWebhooksSchedulerSquareRoute: ApiWebhooksSchedulerSquareRoute,
   ApiWebhooksSchedulerAcuitySecretRoute: ApiWebhooksSchedulerAcuitySecretRoute,
+  ApiWebhooksSchedulerBookerSecretRoute: ApiWebhooksSchedulerBookerSecretRoute,
+  ApiWebhooksSchedulerMindbodySecretRoute:
+    ApiWebhooksSchedulerMindbodySecretRoute,
+  ApiWebhooksSchedulerVagaroSecretRoute: ApiWebhooksSchedulerVagaroSecretRoute,
+  ApiWebhooksSchedulerZenotiSecretRoute: ApiWebhooksSchedulerZenotiSecretRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

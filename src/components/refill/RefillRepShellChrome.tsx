@@ -16,6 +16,7 @@ import type { RepAccountRow } from "@/server/rep-platform";
 function deriveActiveKey(pathname: string): RefillRepNavKey | undefined {
   if (pathname.startsWith("/app/rep/outreach")) return "outreach";
   if (pathname.startsWith("/app/rep/recruit")) return "recruit";
+  if (pathname.startsWith("/app/rep/economics")) return "economics";
   if (pathname.startsWith("/app/rep/network")) return "network";
   if (pathname.startsWith("/app/rep/ledger")) return "ledger";
   if (pathname.startsWith("/app/rep/referral-links")) return "referral-links";

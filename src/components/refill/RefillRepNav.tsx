@@ -1,18 +1,17 @@
 /**
  * RefillRepNav — chip nav for the Refill rep workspace.
  *
- * Sibling of RefillNav (spa-owner 4-chip nav). Stays narrow per
- * project_refill_trojan_horse_thesis — 7 chips for the rep's primary
- * surfaces, no overflow menu, no "more" affordance. The chip order
- * matches the daily-use frequency per memory `project_rep_to_rep_recruiting_outreach`:
- * Outreach → Recruit → Network → Commissions → Referral links → Integrations.
- * Home is the wordmark click (not a chip).
+ * Sibling of RefillNav (spa-owner 4-chip nav). Order: Outreach → Recruit →
+ * Economics → Network → Commissions → Referral links → Integrations.
+ * Economics sits after Recruit so the recruiting flow naturally reads
+ * "here's the model" before "here's your network." Home is the wordmark.
  */
 import { Link } from "@tanstack/react-router";
 
 export type RefillRepNavKey =
   | "outreach"
   | "recruit"
+  | "economics"
   | "network"
   | "ledger"
   | "referral-links"
@@ -21,6 +20,7 @@ export type RefillRepNavKey =
 const CHIPS: { key: RefillRepNavKey; label: string; to: string }[] = [
   { key: "outreach", label: "Outreach", to: "/app/rep/outreach" },
   { key: "recruit", label: "Recruit", to: "/app/rep/recruit" },
+  { key: "economics", label: "Economics", to: "/app/rep/economics" },
   { key: "network", label: "Network", to: "/app/rep/network" },
   { key: "ledger", label: "Commissions", to: "/app/rep/ledger" },
   { key: "referral-links", label: "Referral links", to: "/app/rep/referral-links" },

@@ -79,6 +79,32 @@ type SendResult = {
   message: string;
 };
 
+// v1.44 client-side preview substitution. Mirrors the spa-outreach subset of
+// the server-side substitutePlaceholders in refill-outreach-send.ts — empty
+// values leave the literal placeholder so the rep can see gaps in the preview
+// (same discipline as the server: never silently render "$" or "0 weeks").
+function applyOutreachSubstitutions(
+  text: string,
+  ctx: {
+    firstName?: string;
+    spaName?: string;
+    rejuvRecoveredAmount?: string;
+    rejuvRecoveredWeeks?: string;
+  },
+): string {
+  let out = text;
+  if (ctx.firstName) {
+    out = out.replace(/\[first name\]/gi, ctx.firstName);
+    out = out.replace(/\[name\]/gi, ctx.firstName);
+  }
+  if (ctx.spaName) out = out.replace(/\[spa name\]/gi, ctx.spaName);
+  if (ctx.rejuvRecoveredAmount)
+    out = out.replace(/\$\[exact figure\]/gi, ctx.rejuvRecoveredAmount);
+  if (ctx.rejuvRecoveredWeeks)
+    out = out.replace(/\[N\] weeks/gi, ctx.rejuvRecoveredWeeks);
+  return out;
+}
+
 function OutreachPage() {
   const { session, loading: authLoading } = useAuth();
   const accessToken = session?.access_token;
@@ -108,6 +134,15 @@ function OutreachPage() {
     rejuvRecoveredAmount: REJUV_RECOVERED_DEFAULT,
     rejuvRecoveredWeeks: REJUV_RECOVERED_WEEKS_DEFAULT,
   });
+  // v1.44 per-send overrides. null = use template default; string = rep
+  // tweaked. Reset to null when the template selection changes so each new
+  // template starts from its own default, not the prior template's edits.
+  const [subjectOverride, setSubjectOverride] = useState<string | null>(null);
+  const [bodyOverride, setBodyOverride] = useState<string | null>(null);
+  useEffect(() => {
+    setSubjectOverride(null);
+    setBodyOverride(null);
+  }, [selected?.id]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -197,6 +232,11 @@ function OutreachPage() {
             rejuvRecoveredAmount: form.rejuvRecoveredAmount || undefined,
             rejuvRecoveredWeeks: form.rejuvRecoveredWeeks || undefined,
           },
+          // v1.44: rep tweaked the template before sending. Only pass the
+          // override fields when actually dirty so the server keeps using the
+          // template defaults otherwise (preserves the analytics path).
+          ...(bodyOverride !== null ? { bodyOverride } : {}),
+          ...(subjectOverride !== null ? { subjectOverride } : {}),
         },
       });
       setResult({
@@ -307,6 +347,10 @@ function OutreachPage() {
                 sending={sending}
                 result={result}
                 liveEnabled={liveEnabled}
+                subjectOverride={subjectOverride}
+                bodyOverride={bodyOverride}
+                onSubjectOverrideChange={setSubjectOverride}
+                onBodyOverrideChange={setBodyOverride}
               />
             ) : (
               <Hint>Pick a template on the left to see the preview.</Hint>
@@ -545,6 +589,10 @@ function SendPanel({
   sending,
   result,
   liveEnabled,
+  subjectOverride,
+  bodyOverride,
+  onSubjectOverrideChange,
+  onBodyOverrideChange,
 }: {
   template: OutreachTemplate;
   form: {
@@ -560,7 +608,44 @@ function SendPanel({
   sending: boolean;
   result: SendResult | null;
   liveEnabled: boolean | null;
+  subjectOverride: string | null;
+  bodyOverride: string | null;
+  onSubjectOverrideChange: (v: string | null) => void;
+  onBodyOverrideChange: (v: string | null) => void;
 }) {
+  // v1.44 effective subject/body: rep override wins, falls back to template.
+  // The textareas seed from the override OR the template (so users can start
+  // typing without an explicit "edit" toggle). First keystroke promotes the
+  // value to "override" (dirty); Reset wipes back to null = template.
+  const effectiveSubject = subjectOverride ?? template.subject ?? "";
+  const effectiveBody = bodyOverride ?? template.body;
+  const isDirty = subjectOverride !== null || bodyOverride !== null;
+
+  // Live post-substitution preview mirrors what the recipient will read,
+  // using the same placeholder set the server fn substitutes at send time.
+  const previewBody = useMemo(
+    () =>
+      applyOutreachSubstitutions(effectiveBody, {
+        firstName: form.firstName,
+        spaName: form.spaName,
+        rejuvRecoveredAmount: form.rejuvRecoveredAmount,
+        rejuvRecoveredWeeks: form.rejuvRecoveredWeeks,
+      }),
+    [effectiveBody, form.firstName, form.spaName, form.rejuvRecoveredAmount, form.rejuvRecoveredWeeks],
+  );
+  const previewSubject = useMemo(
+    () =>
+      effectiveSubject
+        ? applyOutreachSubstitutions(effectiveSubject, {
+            firstName: form.firstName,
+            spaName: form.spaName,
+            rejuvRecoveredAmount: form.rejuvRecoveredAmount,
+            rejuvRecoveredWeeks: form.rejuvRecoveredWeeks,
+          })
+        : null,
+    [effectiveSubject, form.firstName, form.spaName, form.rejuvRecoveredAmount, form.rejuvRecoveredWeeks],
+  );
+
   return (
     <div
       className="rounded-xl border bg-white p-5"
@@ -573,15 +658,15 @@ function SendPanel({
             style={{ color: "#8a9098" }}
           >
             ICP {template.icp} · {template.channel}
+            {isDirty && (
+              <span
+                className="ml-2 rounded-full px-1.5 py-0.5 text-[9px]"
+                style={{ background: "#fdf6e6", color: "#8a6d10" }}
+              >
+                edited
+              </span>
+            )}
           </div>
-          {template.subject && (
-            <div
-              className="text-[15px] font-semibold mt-1"
-              style={{ color: "#1c2024" }}
-            >
-              {template.subject}
-            </div>
-          )}
         </div>
         <button
           type="button"
@@ -594,27 +679,92 @@ function SendPanel({
         </button>
       </div>
 
-      {/* Body preview (read-only, raw template — placeholders show literal) */}
-      <details className="mb-4">
-        <summary
-          className="text-[12px] cursor-pointer"
-          style={{ color: "#5a6068" }}
-        >
-          View template body
-        </summary>
-        <div
-          className="mt-2 rounded-md border p-3 text-[13px] leading-[1.55] max-h-64 overflow-y-auto"
-          style={{
-            borderColor: "#f0ebe0",
-            background: "#fbfaf7",
-            color: "#1c2024",
-          }}
-          dangerouslySetInnerHTML={{ __html: template.body }}
-        />
-      </details>
-
       {!result ? (
         <>
+          {/* v1.44 inline editor: subject + body editable per-send. Server
+              still substitutes placeholders at send time so [first name]
+              etc. fill from the recipient fields below. Template defaults
+              auto-seed the textareas; Reset to default wipes back to the
+              shared library version. */}
+          {template.subject !== null && (
+            <Field
+              label="Subject"
+              value={effectiveSubject}
+              onChange={(v) => onSubjectOverrideChange(v)}
+              placeholder="Email subject"
+            />
+          )}
+          <label className="block mt-3">
+            <span className="flex items-baseline justify-between gap-2">
+              <span
+                className="text-[11px] uppercase tracking-wider font-semibold"
+                style={{ color: "#8a9098" }}
+              >
+                Body (HTML — placeholders fill at send)
+              </span>
+              {isDirty && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSubjectOverrideChange(null);
+                    onBodyOverrideChange(null);
+                  }}
+                  className="text-[11px] underline-offset-2 hover:underline"
+                  style={{ color: "#056048" }}
+                >
+                  Reset to default
+                </button>
+              )}
+            </span>
+            <textarea
+              value={effectiveBody}
+              onChange={(e) => onBodyOverrideChange(e.target.value)}
+              rows={10}
+              className="mt-1 w-full rounded-md border px-3 py-2 text-[12px] font-mono leading-[1.5] focus:outline-none transition"
+              style={{
+                borderColor: "#e6e2d6",
+                background: "#fff",
+                color: "#1c2024",
+              }}
+            />
+            <p
+              className="mt-1 text-[11px]"
+              style={{ color: "#8a9098" }}
+            >
+              Placeholders: <code>[first name]</code>, <code>[spa name]</code>,{" "}
+              <code>$[exact figure]</code>, <code>[N] weeks</code>.
+            </p>
+          </label>
+
+          {/* Live preview of what the recipient will see after substitution. */}
+          <details className="mt-4" open>
+            <summary
+              className="text-[12px] cursor-pointer"
+              style={{ color: "#5a6068" }}
+            >
+              Preview as recipient
+            </summary>
+            {previewSubject && (
+              <div
+                className="mt-2 text-[13px] font-semibold"
+                style={{ color: "#1c2024" }}
+              >
+                {previewSubject}
+              </div>
+            )}
+            <div
+              className="mt-2 rounded-md border p-3 text-[13px] leading-[1.55] max-h-64 overflow-y-auto"
+              style={{
+                borderColor: "#f0ebe0",
+                background: "#fbfaf7",
+                color: "#1c2024",
+              }}
+              dangerouslySetInnerHTML={{ __html: previewBody }}
+            />
+          </details>
+
+          <hr className="my-4" style={{ borderColor: "#f0ebe0" }} />
+
           <div className="space-y-3">
             <Field
               label="Recipient email"

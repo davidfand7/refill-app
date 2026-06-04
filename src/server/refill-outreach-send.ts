@@ -407,6 +407,15 @@ const sendInput = z.object({
       recipient: z.string().optional(),
     })
     .optional(),
+  // v1.44 per-send body/subject override. When provided, the rep has tweaked
+  // the template inline before sending. The override is the RAW string with
+  // placeholders still intact — substitution still runs against it server-side
+  // so any [first name] / [my month earnings] tokens the rep typed get filled
+  // from the same ctx as the template path. template_id still references the
+  // original row so analytics (open rate by template, A/B groups) keep working.
+  // subjectOverride === null explicitly clears the subject (Loom-style channels).
+  subjectOverride: z.string().max(300).nullable().optional(),
+  bodyOverride: z.string().min(1).max(20000).optional(),
   // Operator forced override: true = always dry_run, regardless of flag.
   // Used by the "Test send" affordance to be explicit that no real email
   // fires even if OUTREACH_LIVE=true.
@@ -494,10 +503,18 @@ export const sendOutreachEmail = createServerFn({ method: "POST" })
         myDownstreamCount: repStats?.myDownstreamCount,
       };
 
-      const renderedSubject = tpl.subject
-        ? substitutePlaceholders(tpl.subject, ctx)
+      // v1.44 per-send override: rep tweaked the template inline. Use the
+      // override text but still run substitution (the rep might have typed
+      // a new [first name] token or kept existing placeholders). subjectOverride
+      // is tri-state: undefined = use template, null = explicit no-subject,
+      // string = use this.
+      const sourceSubject =
+        data.subjectOverride !== undefined ? data.subjectOverride : tpl.subject;
+      const sourceBody = data.bodyOverride ?? tpl.body;
+      const renderedSubject = sourceSubject
+        ? substitutePlaceholders(sourceSubject, ctx)
         : null;
-      const renderedBody = substitutePlaceholders(tpl.body, ctx);
+      const renderedBody = substitutePlaceholders(sourceBody, ctx);
 
       // Insert engagement row FIRST so we have the row id to use as the
       // plus-address token in the Reply-To.

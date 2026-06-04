@@ -45,6 +45,59 @@ import {
   type SquareEnv,
 } from "@/lib/schedulers/square";
 import {
+  buildBoulevardInstallUrl,
+  resolveBoulevardEnv,
+  type BoulevardEnv,
+} from "@/lib/schedulers/boulevard";
+import {
+  buildMindbodyAuthorizeUrl,
+  deleteMindbodyWebhookSubscription,
+  listMindbodyAppointments,
+  listMindbodyStaff,
+  mindbodyStatusToRefillStatus,
+  refreshMindbodyAccessToken,
+  resolveMindbodyEnv,
+  type MindbodyAppointment,
+  type MindbodyEnv,
+} from "@/lib/schedulers/mindbody";
+import {
+  buildVagaroInstallUrl,
+  deleteVagaroWebhookSubscription,
+  listVagaroAppointments,
+  vagaroStatusToRefillStatus,
+  type VagaroAppointment,
+} from "@/lib/schedulers/vagaro";
+import {
+  bookerStatusToRefillStatus,
+  deleteBookerWebhookSubscription,
+  getBookerAccessToken,
+  listBookerAppointments,
+  resolveBookerEnv,
+  type BookerAppointment,
+  type BookerCredentials,
+  type BookerEnv,
+} from "@/lib/schedulers/booker";
+import {
+  buildJaneAuthorizeUrl,
+  generateJanePkcePair,
+  janeStatusToRefillStatus,
+  listJaneAppointments,
+  refreshJaneAccessToken,
+  resolveJaneEnv,
+  type JaneAppointment,
+  type JaneEnv,
+  type JaneOAuthCredentials,
+} from "@/lib/schedulers/jane";
+import {
+  deleteZenotiWebhookSubscription,
+  listZenotiAppointments,
+  resolveZenotiEnv,
+  zenotiStatusToRefillStatus,
+  type ZenotiAppointment,
+  type ZenotiCredentials,
+  type ZenotiEnv,
+} from "@/lib/schedulers/zenoti";
+import {
   buildPatientIndex,
   matchPatientFromIndex,
 } from "@/server/emma-appointments.functions";
@@ -55,7 +108,7 @@ import {
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
-export type SchedulerPlatform = "acuity" | "mindbody" | "jane" | "square" | "boulevard";
+export type SchedulerPlatform = "acuity" | "mindbody" | "jane" | "square" | "boulevard" | "vagaro" | "booker" | "zenoti";
 
 export type SchedulerStatus = "connected" | "pending" | "reauth_needed" | "error" | "disconnected";
 
@@ -240,6 +293,408 @@ export const initiateSquareOAuth = createServerFn({ method: "POST" })
     return { redirectUrl };
   });
 
+// ─── initiateZenotiConnect ─────────────────────────────────────────────────
+//
+// Zenoti is API-key-based (no user-consent OAuth). The wizard collects
+// the spa's center_id; the API key itself lives on the Refill server
+// (issued during Zenoti API package CSM onboarding). Per-center scope.
+
+export const initiateZenotiConnect = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => initiateInput.parse(raw))
+  .handler(async ({ data }): Promise<{ redirectUrl: string }> => {
+    const userId = await verifyAuth(data.accessToken);
+    if (!isAllowedReturnTo(data.returnTo)) {
+      throw new Error(`returnTo "${data.returnTo}" is not in the OAuth allowlist`);
+    }
+
+    const env: ZenotiEnv = resolveZenotiEnv();
+    const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+    const API_KEY = stripWs(env === "sandbox" ? process.env.ZENOTI_SANDBOX_API_KEY : process.env.ZENOTI_API_KEY);
+    console.log(
+      `[zenoti/connect-start] ZENOTI_ENV raw="${process.env.ZENOTI_ENV}" resolved="${env}" api_key_len=${API_KEY?.length ?? 0}`,
+    );
+    if (!API_KEY) {
+      throw new Error(
+        `Zenoti is not configured on the server. Missing ${env === "sandbox" ? "ZENOTI_SANDBOX_API_KEY" : "ZENOTI_API_KEY"}. CSM-led API package onboarding may still be pending.`,
+      );
+    }
+
+    const nonce = typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const state = encodeOAuthState({
+      userId,
+      platform: "zenoti",
+      returnTo: data.returnTo,
+      nonce,
+    });
+
+    const params = new URLSearchParams({ state });
+    const redirectUrl = `${data.origin}/app/refill/settings/zenoti-install?${params.toString()}`;
+    return { redirectUrl };
+  });
+
+// ─── initiateJaneOAuth ─────────────────────────────────────────────────────
+//
+// Jane uses OAuth 2.0 + PKCE (mandatory). Generates a code_verifier +
+// code_challenge pair; the verifier is embedded in the state token (no
+// separate DB storage) so the callback can complete the exchange.
+//
+// 5-min token TTL means aggressive refresh; per-clinic base URLs mean
+// the connection row's platform_account_email stores the clinic_url
+// (NOT the user email like other platforms).
+
+// State type for Jane includes the PKCE code_verifier so the OAuth
+// callback can complete the exchange without separate storage. The
+// state is already base64-encoded JSON; we just add the verifier as
+// a field. The verifier protects against auth-code intercept, not
+// state intercept, so embedding in state is safe.
+type JaneOAuthState = {
+  userId: string;
+  platform: "jane";
+  returnTo: string;
+  nonce: string;
+  codeVerifier: string;
+};
+
+export const initiateJaneOAuth = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => initiateInput.parse(raw))
+  .handler(async ({ data }): Promise<{ redirectUrl: string }> => {
+    const userId = await verifyAuth(data.accessToken);
+    if (!isAllowedReturnTo(data.returnTo)) {
+      throw new Error(`returnTo "${data.returnTo}" is not in the OAuth allowlist`);
+    }
+
+    const env: JaneEnv = resolveJaneEnv();
+    const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+    const CLIENT_ID = stripWs(env === "sandbox" ? process.env.JANE_SANDBOX_CLIENT_ID : process.env.JANE_CLIENT_ID);
+    const CLIENT_SECRET = stripWs(env === "sandbox" ? process.env.JANE_SANDBOX_CLIENT_SECRET : process.env.JANE_CLIENT_SECRET);
+    const IAM_BASE_URL = stripWs(env === "sandbox" ? process.env.JANE_SANDBOX_IAM_BASE_URL : process.env.JANE_IAM_BASE_URL);
+    console.log(
+      `[jane/oauth-start] JANE_ENV raw="${process.env.JANE_ENV}" resolved="${env}" client_id_len=${CLIENT_ID?.length ?? 0} client_secret_len=${CLIENT_SECRET?.length ?? 0} iam_base_url_len=${IAM_BASE_URL?.length ?? 0}`,
+    );
+    if (!CLIENT_ID || !CLIENT_SECRET || !IAM_BASE_URL) {
+      const missing = [
+        !CLIENT_ID && (env === "sandbox" ? "JANE_SANDBOX_CLIENT_ID" : "JANE_CLIENT_ID"),
+        !CLIENT_SECRET && (env === "sandbox" ? "JANE_SANDBOX_CLIENT_SECRET" : "JANE_CLIENT_SECRET"),
+        !IAM_BASE_URL && (env === "sandbox" ? "JANE_SANDBOX_IAM_BASE_URL" : "JANE_IAM_BASE_URL"),
+      ].filter(Boolean).join(", ");
+      throw new Error(
+        `Jane OAuth is not configured on the server. Missing: ${missing}. Jane partnership approval pending — apply at developers.jane.app.`,
+      );
+    }
+
+    const pkce = await generateJanePkcePair();
+    const nonce = typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    // Encode Jane-specific state with the PKCE verifier inline. Falls
+    // through decodeOAuthState's generic check (which only validates
+    // userId + platform); the additional codeVerifier field is preserved
+    // on the round-trip.
+    const stateObj: JaneOAuthState = {
+      userId,
+      platform: "jane",
+      returnTo: data.returnTo,
+      nonce,
+      codeVerifier: pkce.codeVerifier,
+    };
+    const state = Buffer.from(JSON.stringify(stateObj), "utf-8").toString("base64url");
+
+    const redirectUri = `${data.origin}/api/integrations/jane/oauth-callback`;
+    const credentials: JaneOAuthCredentials = {
+      clientId: CLIENT_ID,
+      clientSecret: CLIENT_SECRET,
+      iamBaseUrl: IAM_BASE_URL,
+      redirectUri,
+      env,
+    };
+
+    const redirectUrl = buildJaneAuthorizeUrl({
+      credentials,
+      state,
+      codeChallenge: pkce.codeChallenge,
+    });
+
+    return { redirectUrl };
+  });
+
+// ─── initiateBookerConnect ─────────────────────────────────────────────────
+//
+// Booker uses server-to-server OAuth client_credentials (app-level creds,
+// NOT user-consent 3-legged OAuth). The spa identifies their Booker
+// location to us — install wizard collects the LocationId, callback
+// validates by minting an access_token + fetching that location.
+//
+// Architecture-only: throws "not configured" until BOOKER_CLIENT_ID +
+// BOOKER_CLIENT_SECRET + BOOKER_SUBSCRIPTION_KEY land in CF secrets
+// after Booker dev portal approval.
+
+export const initiateBookerConnect = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => initiateInput.parse(raw))
+  .handler(async ({ data }): Promise<{ redirectUrl: string }> => {
+    const userId = await verifyAuth(data.accessToken);
+    if (!isAllowedReturnTo(data.returnTo)) {
+      throw new Error(`returnTo "${data.returnTo}" is not in the OAuth allowlist`);
+    }
+
+    const env: BookerEnv = resolveBookerEnv();
+    const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+    const CLIENT_ID = stripWs(
+      env === "sandbox" ? process.env.BOOKER_SANDBOX_CLIENT_ID : process.env.BOOKER_CLIENT_ID,
+    );
+    const CLIENT_SECRET = stripWs(
+      env === "sandbox" ? process.env.BOOKER_SANDBOX_CLIENT_SECRET : process.env.BOOKER_CLIENT_SECRET,
+    );
+    const SUBSCRIPTION_KEY = stripWs(
+      env === "sandbox" ? process.env.BOOKER_SANDBOX_SUBSCRIPTION_KEY : process.env.BOOKER_SUBSCRIPTION_KEY,
+    );
+    console.log(
+      `[booker/oauth-start] BOOKER_ENV raw="${process.env.BOOKER_ENV}" resolved="${env}" client_id_len=${CLIENT_ID?.length ?? 0} client_secret_len=${CLIENT_SECRET?.length ?? 0} sub_key_len=${SUBSCRIPTION_KEY?.length ?? 0}`,
+    );
+    if (!CLIENT_ID || !CLIENT_SECRET || !SUBSCRIPTION_KEY) {
+      const missing = [
+        !CLIENT_ID && (env === "sandbox" ? "BOOKER_SANDBOX_CLIENT_ID" : "BOOKER_CLIENT_ID"),
+        !CLIENT_SECRET && (env === "sandbox" ? "BOOKER_SANDBOX_CLIENT_SECRET" : "BOOKER_CLIENT_SECRET"),
+        !SUBSCRIPTION_KEY && (env === "sandbox" ? "BOOKER_SANDBOX_SUBSCRIPTION_KEY" : "BOOKER_SUBSCRIPTION_KEY"),
+      ].filter(Boolean).join(", ");
+      throw new Error(
+        `Booker is not configured on the server. Missing: ${missing}. Developer app approval at developers.booker.com may still be pending.`,
+      );
+    }
+
+    const nonce = typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const state = encodeOAuthState({
+      userId,
+      platform: "booker",
+      returnTo: data.returnTo,
+      nonce,
+    });
+
+    const params = new URLSearchParams({ state });
+    const redirectUrl = `${data.origin}/app/refill/settings/booker-install?${params.toString()}`;
+    return { redirectUrl };
+  });
+
+// ─── initiateVagaroConnect ─────────────────────────────────────────────────
+//
+// Vagaro is paste-API-key (no OAuth). The wizard launcher returns a URL
+// to a Refill-internal install page where the spa pastes their merchant-
+// generated API key. NO Refill-side app credentials — every spa is its
+// own mini-tenant relationship with Vagaro.
+
+export const initiateVagaroConnect = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => initiateInput.parse(raw))
+  .handler(async ({ data }): Promise<{ redirectUrl: string }> => {
+    const userId = await verifyAuth(data.accessToken);
+
+    if (!isAllowedReturnTo(data.returnTo)) {
+      throw new Error(
+        `returnTo "${data.returnTo}" is not in the OAuth allowlist`,
+      );
+    }
+
+    const nonce =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const state = encodeOAuthState({
+      userId,
+      platform: "vagaro",
+      returnTo: data.returnTo,
+      nonce,
+    });
+
+    const redirectUrl = buildVagaroInstallUrl({
+      origin: data.origin,
+      state,
+    });
+
+    return { redirectUrl };
+  });
+
+// ─── initiateMindbodyOAuth ─────────────────────────────────────────────────
+//
+// Standard 3-legged OAuth launcher. Mindbody's authorize endpoint takes
+// response_type=code id_token + response_mode=form_post — the callback
+// is a POST from Mindbody's server, not a redirect with ?code= in the
+// URL. The callback route handles both shapes.
+//
+// Activation-link UX path: per feedback_setup_wizards_auto_advance, if
+// the spa hasn't yet activated Refill on their Mindbody account, this
+// fn generates the activation link first + sends the spa to it before
+// the authorize round-trip. Code-paste fallback is for the rare case
+// where activation-link generation fails (spa-side admin permission
+// quirks).
+//
+// Architecture-only: this server fn throws "not configured" until the
+// Mindbody API Support ticket clears + MINDBODY_OAUTH_CLIENT_ID lands
+// in CF secrets. Per platforms-pre-built doctrine, code ships now; UI
+// button stays disabled.
+
+export const initiateMindbodyOAuth = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => initiateInput.parse(raw))
+  .handler(async ({ data }): Promise<{ redirectUrl: string }> => {
+    const userId = await verifyAuth(data.accessToken);
+
+    if (!isAllowedReturnTo(data.returnTo)) {
+      throw new Error(
+        `returnTo "${data.returnTo}" is not in the OAuth allowlist`,
+      );
+    }
+
+    const env: MindbodyEnv = resolveMindbodyEnv();
+    // v1.35.x doctrine: defensive whitespace strip on credentials at every
+    // read site. MB credentials are alphanumeric — no legitimate whitespace.
+    const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+    const CLIENT_ID = stripWs(
+      env === "sandbox"
+        ? process.env.MINDBODY_SANDBOX_OAUTH_CLIENT_ID
+        : process.env.MINDBODY_OAUTH_CLIENT_ID,
+    );
+    const API_KEY = stripWs(
+      env === "sandbox"
+        ? process.env.MINDBODY_SANDBOX_API_KEY
+        : process.env.MINDBODY_API_KEY,
+    );
+    // v1.35.x doctrine: length-logging on credential reads.
+    console.log(
+      `[mindbody/oauth-start] MINDBODY_ENV raw="${process.env.MINDBODY_ENV}" resolved="${env}" client_id_len=${CLIENT_ID?.length ?? 0} api_key_len=${API_KEY?.length ?? 0}`,
+    );
+    if (!CLIENT_ID || !API_KEY) {
+      const missing = [
+        !CLIENT_ID &&
+          (env === "sandbox"
+            ? "MINDBODY_SANDBOX_OAUTH_CLIENT_ID"
+            : "MINDBODY_OAUTH_CLIENT_ID"),
+        !API_KEY &&
+          (env === "sandbox"
+            ? "MINDBODY_SANDBOX_API_KEY"
+            : "MINDBODY_API_KEY"),
+      ]
+        .filter(Boolean)
+        .join(", ");
+      throw new Error(
+        `Mindbody OAuth is not configured on the server. Missing: ${missing}. The OAuth-client-provisioning Support ticket may still be open at Mindbody API Support — check status before retrying.`,
+      );
+    }
+
+    const redirectUri = `${data.origin}/api/integrations/mindbody/oauth-callback`;
+    const nonce =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const state = encodeOAuthState({
+      userId,
+      platform: "mindbody",
+      returnTo: data.returnTo,
+      nonce,
+    });
+
+    const redirectUrl = buildMindbodyAuthorizeUrl({
+      clientId: CLIENT_ID,
+      redirectUri,
+      state,
+    });
+
+    return { redirectUrl };
+  });
+
+// ─── initiateBoulevardOAuth ────────────────────────────────────────────────
+//
+// Mirrors initiateSquareOAuth in shape so the settings page can dispatch
+// on platform without special-casing. Boulevard's install model is
+// fundamentally divergent though: NOT a 3-legged OAuth, but a paste-
+// Application-ID model where the spa installs our app inside their
+// Boulevard dashboard. The returned redirectUrl points to a Refill-
+// internal wizard page (NOT Boulevard's authorize) that displays the
+// Application ID for clipboard-copy + deep-links the spa to
+// `https://dashboard.joinblvd.com/manage-business/apps`.
+//
+// Architecture-only: this server fn will throw "not configured" until
+// Grasshopper pastes BLVD_APPLICATION_ID + BLVD_API_KEY + BLVD_API_SECRET
+// to CF secrets when the 48hr app-approval clock ends. That's the
+// platforms-pre-built doctrine in action — engineering ships now, the
+// flip-switch happens when credentials arrive.
+
+export const initiateBoulevardOAuth = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => initiateInput.parse(raw))
+  .handler(async ({ data }): Promise<{ redirectUrl: string }> => {
+    const userId = await verifyAuth(data.accessToken);
+
+    if (!isAllowedReturnTo(data.returnTo)) {
+      throw new Error(
+        `returnTo "${data.returnTo}" is not in the OAuth allowlist`,
+      );
+    }
+
+    const env: BoulevardEnv = resolveBoulevardEnv();
+    // v1.35.x doctrine: defensive whitespace strip on credentials at every
+    // read site. Boulevard credentials are alphanumeric — no legitimate
+    // whitespace possible — so stripping all whitespace is safe and
+    // defends against CF input-field multi-line paste artifacts.
+    const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+    const APPLICATION_ID = stripWs(
+      env === "sandbox"
+        ? process.env.BLVD_SANDBOX_APPLICATION_ID
+        : process.env.BLVD_APPLICATION_ID,
+    );
+    const API_KEY = stripWs(
+      env === "sandbox"
+        ? process.env.BLVD_SANDBOX_API_KEY
+        : process.env.BLVD_API_KEY,
+    );
+    const API_SECRET = stripWs(
+      env === "sandbox"
+        ? process.env.BLVD_SANDBOX_API_SECRET
+        : process.env.BLVD_API_SECRET,
+    );
+    // v1.35.x doctrine: length-logging on credential reads. Surfaces
+    // type-confusion (wrong field pasted) before code-fix iterations.
+    console.log(
+      `[boulevard/oauth-start] BLVD_ENV raw="${process.env.BLVD_ENV}" resolved="${env}" application_id_len=${APPLICATION_ID?.length ?? 0} api_key_len=${API_KEY?.length ?? 0} api_secret_len=${API_SECRET?.length ?? 0}`,
+    );
+    if (!APPLICATION_ID || !API_KEY || !API_SECRET) {
+      const missing = [
+        !APPLICATION_ID && (env === "sandbox" ? "BLVD_SANDBOX_APPLICATION_ID" : "BLVD_APPLICATION_ID"),
+        !API_KEY && (env === "sandbox" ? "BLVD_SANDBOX_API_KEY" : "BLVD_API_KEY"),
+        !API_SECRET && (env === "sandbox" ? "BLVD_SANDBOX_API_SECRET" : "BLVD_API_SECRET"),
+      ]
+        .filter(Boolean)
+        .join(", ");
+      throw new Error(
+        `Boulevard install is not configured on the server. Missing: ${missing}. The 48hr Boulevard app-approval clock may still be running — check developers.joinblvd.com for status.`,
+      );
+    }
+
+    const nonce =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const state = encodeOAuthState({
+      userId,
+      platform: "boulevard",
+      returnTo: data.returnTo,
+      nonce,
+    });
+
+    const redirectUrl = buildBoulevardInstallUrl({
+      origin: data.origin,
+      applicationId: APPLICATION_ID,
+      state,
+    });
+
+    return { redirectUrl };
+  });
+
 // ─── getSchedulerConnection ────────────────────────────────────────────────
 
 const getConnectionInput = z.object({ accessToken: z.string().min(1) });
@@ -399,6 +854,160 @@ export const disconnectScheduler = createServerFn({ method: "POST" })
           })
           .eq("id", row.id);
       }
+    } else if (
+      row.platform === "zenoti" &&
+      row.webhook_subscription_id
+    ) {
+      try {
+        const env: ZenotiEnv = resolveZenotiEnv();
+        const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+        const API_KEY = stripWs(env === "sandbox" ? process.env.ZENOTI_SANDBOX_API_KEY : process.env.ZENOTI_API_KEY);
+        if (!API_KEY || !row.platform_account_id) {
+          throw new Error("Zenoti API key or center_id missing");
+        }
+        const credentials: ZenotiCredentials = { apiKey: API_KEY, centerId: row.platform_account_id, env };
+        await deleteZenotiWebhookSubscription({ credentials, subscriptionId: row.webhook_subscription_id });
+        webhooksRemoved = 1;
+      } catch (e) {
+        await (sb as unknown as { from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> } } })
+          .from("emma_scheduler_connections")
+          .update({ last_error: `Zenoti webhook teardown failed: ${e instanceof Error ? e.message : "unknown"}` })
+          .eq("id", row.id);
+      }
+    } else if (
+      row.platform === "booker" &&
+      row.webhook_subscription_id
+    ) {
+      try {
+        const env: BookerEnv = resolveBookerEnv();
+        const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+        const CLIENT_ID = stripWs(env === "sandbox" ? process.env.BOOKER_SANDBOX_CLIENT_ID : process.env.BOOKER_CLIENT_ID);
+        const CLIENT_SECRET = stripWs(env === "sandbox" ? process.env.BOOKER_SANDBOX_CLIENT_SECRET : process.env.BOOKER_CLIENT_SECRET);
+        const SUBSCRIPTION_KEY = stripWs(env === "sandbox" ? process.env.BOOKER_SANDBOX_SUBSCRIPTION_KEY : process.env.BOOKER_SUBSCRIPTION_KEY);
+        if (!CLIENT_ID || !CLIENT_SECRET || !SUBSCRIPTION_KEY) {
+          throw new Error("Booker app credentials are not configured on the server.");
+        }
+        const credentials: BookerCredentials = { clientId: CLIENT_ID, clientSecret: CLIENT_SECRET, subscriptionKey: SUBSCRIPTION_KEY, env };
+        const tok = await getBookerAccessToken({ credentials });
+        await deleteBookerWebhookSubscription({
+          accessToken: tok.accessToken,
+          credentials,
+          subscriptionId: row.webhook_subscription_id,
+        });
+        webhooksRemoved = 1;
+      } catch (e) {
+        await (sb as unknown as { from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> } } })
+          .from("emma_scheduler_connections")
+          .update({ last_error: `Booker webhook teardown failed: ${e instanceof Error ? e.message : "unknown"}` })
+          .eq("id", row.id);
+      }
+    } else if (
+      row.platform === "vagaro" &&
+      row.access_token &&
+      row.webhook_subscription_id
+    ) {
+      // Vagaro teardown: per-spa API key (stored in access_token) deletes
+      // its own webhook subscription. Fail-open if API key already revoked.
+      try {
+        await deleteVagaroWebhookSubscription({
+          credentials: {
+            apiKey: row.access_token,
+            merchantId: row.platform_account_id ?? "",
+          },
+          subscriptionId: row.webhook_subscription_id,
+        });
+        webhooksRemoved = 1;
+      } catch (e) {
+        await (sb as unknown as { from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> } } })
+          .from("emma_scheduler_connections")
+          .update({
+            last_error: `Vagaro webhook teardown failed: ${e instanceof Error ? e.message : "unknown"}`,
+          })
+          .eq("id", row.id);
+      }
+    } else if (
+      row.platform === "mindbody" &&
+      row.webhook_subscription_id
+    ) {
+      // Mindbody teardown: delete the per-spa subscription by ID.
+      // Webhook lifecycle uses partner-level API-Key (NOT per-spa OAuth
+      // token) so this still works after the spa's OAuth grant gets
+      // revoked. Fail-open if MB API rejects.
+      try {
+        const env: MindbodyEnv = resolveMindbodyEnv();
+        const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+        const API_KEY = stripWs(
+          env === "sandbox"
+            ? process.env.MINDBODY_SANDBOX_API_KEY
+            : process.env.MINDBODY_API_KEY,
+        );
+        if (!API_KEY) {
+          throw new Error("Mindbody API key is not configured on the server.");
+        }
+        await deleteMindbodyWebhookSubscription({
+          apiKey: API_KEY,
+          subscriptionId: row.webhook_subscription_id,
+        });
+        webhooksRemoved = 1;
+      } catch (e) {
+        await (sb as unknown as { from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> } } })
+          .from("emma_scheduler_connections")
+          .update({
+            last_error: `Mindbody webhook teardown failed: ${e instanceof Error ? e.message : "unknown"}`,
+          })
+          .eq("id", row.id);
+      }
+    } else if (
+      row.platform === "boulevard" &&
+      row.webhook_subscription_id &&
+      row.platform_account_id
+    ) {
+      // Boulevard teardown: delete the per-spa subscription resource by
+      // ID. Boulevard auth is app-level (no per-spa access_token);
+      // credentials come from env vars + the businessId URN scopes the
+      // mutation. Fail-open if app creds aren't configured (rare; would
+      // indicate the spa connected while creds were live + then creds
+      // got rotated) or if Boulevard rejects the delete.
+      try {
+        const env: BoulevardEnv = resolveBoulevardEnv();
+        const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+        const APPLICATION_ID = stripWs(
+          env === "sandbox"
+            ? process.env.BLVD_SANDBOX_APPLICATION_ID
+            : process.env.BLVD_APPLICATION_ID,
+        );
+        const API_KEY = stripWs(
+          env === "sandbox"
+            ? process.env.BLVD_SANDBOX_API_KEY
+            : process.env.BLVD_API_KEY,
+        );
+        const API_SECRET = stripWs(
+          env === "sandbox"
+            ? process.env.BLVD_SANDBOX_API_SECRET
+            : process.env.BLVD_API_SECRET,
+        );
+        if (!APPLICATION_ID || !API_KEY || !API_SECRET) {
+          throw new Error(
+            "Boulevard app credentials are not configured on the server.",
+          );
+        }
+        const { deleteBoulevardWebhookSubscription } = await import(
+          "@/lib/schedulers/boulevard"
+        );
+        await deleteBoulevardWebhookSubscription({
+          credentials: { applicationId: APPLICATION_ID, apiKey: API_KEY, apiSecret: API_SECRET, env },
+          businessId: row.platform_account_id,
+          subscriptionId: row.webhook_subscription_id,
+        });
+        webhooksRemoved = 1;
+      } catch (e) {
+        await (sb as unknown as { from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> } } })
+          .from("emma_scheduler_connections")
+          .update({
+            last_error: `Boulevard webhook teardown failed: ${e instanceof Error ? e.message : "unknown"}`,
+          })
+          .eq("id", row.id);
+      }
     }
 
     await (sb as unknown as { from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> } } })
@@ -449,6 +1058,7 @@ export const resyncSchedulerConnection = createServerFn({ method: "POST" })
                       id: string;
                       platform: string;
                       access_token: string | null;
+                      platform_account_id: string | null;
                     } | null;
                   }>;
                 };
@@ -459,7 +1069,7 @@ export const resyncSchedulerConnection = createServerFn({ method: "POST" })
       };
     })
       .from("emma_scheduler_connections")
-      .select("id, platform, access_token")
+      .select("id, platform, access_token, platform_account_id")
       .eq("user_id", userId)
       .in("status", ["connected", "reauth_needed", "error"])
       .order("connected_at", { ascending: false })
@@ -471,29 +1081,102 @@ export const resyncSchedulerConnection = createServerFn({ method: "POST" })
         "No active scheduler connection — connect a scheduler first.",
       );
     }
-    if (!row.access_token) {
+    // Boulevard auth is app-level (no per-spa access_token), so the
+    // access_token gate doesn't apply for that platform — instead we
+    // gate on businessId presence (platform_account_id).
+    if (row.platform !== "boulevard" && !row.access_token) {
       throw new Error(
         "Connection is missing an access token — please reconnect.",
       );
     }
-    if (row.platform !== "acuity" && row.platform !== "square") {
+    if (
+      row.platform !== "acuity" &&
+      row.platform !== "square" &&
+      row.platform !== "boulevard" &&
+      row.platform !== "mindbody" &&
+      row.platform !== "vagaro" &&
+      row.platform !== "booker" &&
+      row.platform !== "jane" &&
+      row.platform !== "zenoti"
+    ) {
       throw new Error(
-        `Re-sync is only available for Acuity and Square right now (your connection is ${row.platform}).`,
+        `Re-sync is only available for Acuity, Square, Boulevard, Mindbody, Vagaro, Booker, Jane, and Zenoti right now (your connection is ${row.platform}).`,
       );
     }
 
-    const result =
-      row.platform === "square"
-        ? await backfillSquareBookings({
-            sb,
-            userId,
-            accessToken: row.access_token,
-          })
-        : await backfillAcuityAppointments({
-            sb,
-            userId,
-            accessToken: row.access_token,
-          });
+    let result: { totalAppointments: number; resolvedPatientNames: number };
+    if (row.platform === "zenoti") {
+      if (!row.platform_account_id) {
+        throw new Error("Zenoti connection is missing the center_id — please reconnect.");
+      }
+      result = await backfillZenotiAppointments({
+        sb,
+        userId,
+        centerId: row.platform_account_id,
+      });
+    } else if (row.platform === "jane") {
+      if (!row.access_token || !row.platform_account_id) {
+        throw new Error("Jane connection is missing token or clinicUrl — please reconnect.");
+      }
+      result = await backfillJaneAppointments({
+        sb,
+        userId,
+        connectionId: row.id,
+        accessToken: row.access_token,
+        clinicUrl: row.platform_account_id, // overload: Jane stores clinic_url here
+      });
+    } else if (row.platform === "booker") {
+      if (!row.platform_account_id) {
+        throw new Error("Booker connection is missing the LocationId — please reconnect.");
+      }
+      result = await backfillBookerAppointments({
+        sb,
+        userId,
+        locationId: row.platform_account_id,
+      });
+    } else if (row.platform === "vagaro") {
+      result = await backfillVagaroAppointments({
+        sb,
+        userId,
+        apiKey: row.access_token!,
+      });
+    } else if (row.platform === "mindbody") {
+      if (!row.platform_account_id) {
+        throw new Error(
+          "Mindbody connection is missing the siteId — please reconnect.",
+        );
+      }
+      result = await backfillMindbodyAppointments({
+        sb,
+        userId,
+        connectionId: row.id,
+        accessToken: row.access_token!,
+        siteId: row.platform_account_id,
+      });
+    } else if (row.platform === "boulevard") {
+      if (!row.platform_account_id) {
+        throw new Error(
+          "Boulevard connection is missing the businessId — please reconnect.",
+        );
+      }
+      result = await backfillBoulevardAppointments({
+        sb,
+        userId,
+        businessId: row.platform_account_id,
+      });
+    } else if (row.platform === "square") {
+      result = await backfillSquareBookings({
+        sb,
+        userId,
+        accessToken: row.access_token!,
+      });
+    } else {
+      result = await backfillAcuityAppointments({
+        sb,
+        userId,
+        accessToken: row.access_token!,
+      });
+    }
 
     // v1.35.11: Stamp last_sync_at AND clear last_error on success.
     // Previously Re-sync left stale last_error frozen even when the
@@ -1015,6 +1698,885 @@ export async function withFreshSquareToken<T>(args: {
     .update({
       access_token: fresh.accessToken,
       refresh_token: fresh.refreshToken,
+      token_expires_at: fresh.expiresAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", args.connectionId);
+
+  return args.fn(fresh.accessToken);
+}
+
+// ─── Zenoti backfill helper (shared with install callback + resync) ──────
+//
+// API key + center_id path-param tenant routing. Offset (page/size)
+// pagination. Page size 100 = Zenoti's max.
+
+const ZENOTI_BACKFILL_DAYS_BACK = 30;
+const ZENOTI_BACKFILL_DAYS_FORWARD = 90;
+
+export async function backfillZenotiAppointments(args: {
+  sb: SupabaseAdmin;
+  userId: string;
+  centerId: string;
+}): Promise<{ totalAppointments: number; resolvedPatientNames: number }> {
+  const { sb, userId, centerId } = args;
+
+  const env: ZenotiEnv = resolveZenotiEnv();
+  const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+  const API_KEY = stripWs(env === "sandbox" ? process.env.ZENOTI_SANDBOX_API_KEY : process.env.ZENOTI_API_KEY);
+  if (!API_KEY) throw new Error("Zenoti API key is not configured on the server.");
+  const credentials: ZenotiCredentials = { apiKey: API_KEY, centerId, env };
+
+  const now = new Date();
+  const startDate = new Date(now.getTime() - ZENOTI_BACKFILL_DAYS_BACK * 86400000).toISOString().slice(0, 10);
+  const endDate = new Date(now.getTime() + ZENOTI_BACKFILL_DAYS_FORWARD * 86400000).toISOString().slice(0, 10);
+
+  const all: ZenotiAppointment[] = [];
+  let page: number | null = 1;
+  for (let i = 0; i < 50; i++) {
+    if (page === null) break;
+    const { appointments, nextPage } = await listZenotiAppointments({
+      credentials,
+      startDate,
+      endDate,
+      page,
+      size: 100,
+    });
+    all.push(...appointments);
+    page = nextPage;
+  }
+
+  await (sb as unknown as {
+    from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => { eq: (c: string, v: string) => Promise<unknown> } } };
+  })
+    .from("emma_appointments")
+    .update({ source: "zenoti" })
+    .eq("user_id", userId)
+    .eq("source", "csv-zenoti");
+
+  const patientIndex = await buildPatientIndex(sb, userId);
+
+  let resolvedPatientNames = 0;
+  const rows = all.map((apt) => {
+    const patientNodeId = matchPatientFromIndex(
+      { patientFirstName: null, patientLastName: null, patientPhone: null, patientEmail: null },
+      patientIndex,
+    );
+    if (patientNodeId) resolvedPatientNames++;
+    return zenotiAppointmentToRow(apt, userId, patientNodeId);
+  });
+
+  const BATCH = 200;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const slice = rows.slice(i, i + BATCH);
+    const { error } = await sb
+      .from("emma_appointments")
+      .upsert(slice, { onConflict: "user_id,external_id,source" });
+    if (error) throw new Error(`Zenoti appointment upsert batch ${i}: ${error.message}`);
+  }
+
+  return { totalAppointments: rows.length, resolvedPatientNames };
+}
+
+export function zenotiAppointmentToRow(
+  apt: ZenotiAppointment,
+  userId: string,
+  patientNodeId: string | null,
+): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
+  const scheduledAt = new Date(apt.startTime).toISOString();
+  const durationMin = Math.round(
+    (new Date(apt.endTime).getTime() - new Date(apt.startTime).getTime()) / 60000,
+  );
+  const base: Database["public"]["Tables"]["emma_appointments"]["Insert"] = {
+    user_id: userId,
+    external_id: apt.id,
+    source: "zenoti",
+    scheduled_at: scheduledAt,
+    duration_min: Number.isFinite(durationMin) && durationMin > 0 ? durationMin : 0,
+    treatment_type: apt.serviceId,
+    provider_name: apt.therapistId,
+    status: zenotiStatusToRefillStatus(apt.status),
+    notes: apt.notes,
+  };
+  if (patientNodeId) base.patient_node_id = patientNodeId;
+  return base;
+}
+
+// ─── Jane backfill helper (shared with install callback + resync) ─────────
+//
+// Jane is POLLING-ONLY (no webhooks). 5-min token TTL means aggressive
+// refresh via withFreshJaneToken. Per-clinic base URL stored in
+// connection.platform_account_id (overload — clinic_url is the load-
+// bearing tenant identifier, not a UUID).
+
+const JANE_BACKFILL_DAYS_BACK = 30;
+const JANE_BACKFILL_DAYS_FORWARD = 90;
+
+export async function backfillJaneAppointments(args: {
+  sb: SupabaseAdmin;
+  userId: string;
+  connectionId: string;
+  accessToken: string;
+  clinicUrl: string;
+}): Promise<{ totalAppointments: number; resolvedPatientNames: number }> {
+  const { sb, userId, clinicUrl } = args;
+
+  const now = new Date();
+  const startDate = new Date(now.getTime() - JANE_BACKFILL_DAYS_BACK * 86400000).toISOString().slice(0, 10);
+  const endDate = new Date(now.getTime() + JANE_BACKFILL_DAYS_FORWARD * 86400000).toISOString().slice(0, 10);
+
+  const all: JaneAppointment[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < 50; page++) {
+    const { appointments, nextCursor } = await listJaneAppointments({
+      accessToken: args.accessToken,
+      clinicUrl,
+      startDate,
+      endDate,
+      pageSize: 200,
+      cursor: cursor ?? undefined,
+    });
+    all.push(...appointments);
+    if (!nextCursor) break;
+    cursor = nextCursor;
+  }
+
+  await (sb as unknown as {
+    from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => { eq: (c: string, v: string) => Promise<unknown> } } };
+  })
+    .from("emma_appointments")
+    .update({ source: "jane" })
+    .eq("user_id", userId)
+    .eq("source", "csv-jane");
+
+  const patientIndex = await buildPatientIndex(sb, userId);
+
+  let resolvedPatientNames = 0;
+  const rows = all.map((apt) => {
+    const patientNodeId = matchPatientFromIndex(
+      { patientFirstName: null, patientLastName: null, patientPhone: null, patientEmail: null },
+      patientIndex,
+    );
+    if (patientNodeId) resolvedPatientNames++;
+    return janeAppointmentToRow(apt, userId, patientNodeId);
+  });
+
+  const BATCH = 200;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const slice = rows.slice(i, i + BATCH);
+    const { error } = await sb
+      .from("emma_appointments")
+      .upsert(slice, { onConflict: "user_id,external_id,source" });
+    if (error) throw new Error(`Jane appointment upsert batch ${i}: ${error.message}`);
+  }
+
+  return { totalAppointments: rows.length, resolvedPatientNames };
+}
+
+export function janeAppointmentToRow(
+  apt: JaneAppointment,
+  userId: string,
+  patientNodeId: string | null,
+): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
+  const scheduledAt = new Date(apt.startAt).toISOString();
+  const durationMin = Math.round(
+    (new Date(apt.endAt).getTime() - new Date(apt.startAt).getTime()) / 60000,
+  );
+  const base: Database["public"]["Tables"]["emma_appointments"]["Insert"] = {
+    user_id: userId,
+    external_id: apt.id,
+    source: "jane",
+    scheduled_at: scheduledAt,
+    duration_min: Number.isFinite(durationMin) && durationMin > 0 ? durationMin : 0,
+    treatment_type: apt.treatmentId,
+    provider_name: apt.staffMemberId,
+    status: janeStatusToRefillStatus(apt.status),
+    notes: apt.notes,
+  };
+  if (patientNodeId) base.patient_node_id = patientNodeId;
+  return base;
+}
+
+// Jane uses 5-min token TTL — refresh much earlier than Square's 3-day
+// or MB's 5-min window. Helper refreshes ~30s before expiry.
+export async function withFreshJaneToken<T>(args: {
+  sb: SupabaseAdmin;
+  connectionId: string;
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAt: string | null;
+  fn: (accessToken: string) => Promise<T>;
+}): Promise<T> {
+  const expiresAtMs = args.expiresAt ? Date.parse(args.expiresAt) : null;
+  const needsRefresh =
+    !!args.refreshToken &&
+    expiresAtMs !== null &&
+    expiresAtMs - Date.now() < 30 * 1000;
+
+  if (!needsRefresh) return args.fn(args.accessToken);
+
+  const env: JaneEnv = resolveJaneEnv();
+  const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+  const CLIENT_ID = stripWs(env === "sandbox" ? process.env.JANE_SANDBOX_CLIENT_ID : process.env.JANE_CLIENT_ID);
+  const CLIENT_SECRET = stripWs(env === "sandbox" ? process.env.JANE_SANDBOX_CLIENT_SECRET : process.env.JANE_CLIENT_SECRET);
+  const IAM_BASE_URL = stripWs(env === "sandbox" ? process.env.JANE_SANDBOX_IAM_BASE_URL : process.env.JANE_IAM_BASE_URL);
+  if (!CLIENT_ID || !CLIENT_SECRET || !IAM_BASE_URL) {
+    return args.fn(args.accessToken);
+  }
+
+  const fresh = await refreshJaneAccessToken({
+    refreshToken: args.refreshToken!,
+    credentials: { clientId: CLIENT_ID, clientSecret: CLIENT_SECRET, iamBaseUrl: IAM_BASE_URL, redirectUri: "", env },
+  });
+
+  await (args.sb as unknown as {
+    from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> } };
+  })
+    .from("emma_scheduler_connections")
+    .update({
+      access_token: fresh.accessToken,
+      refresh_token: fresh.refreshToken || args.refreshToken,
+      token_expires_at: fresh.expiresAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", args.connectionId);
+
+  return args.fn(fresh.accessToken);
+}
+
+// ─── Booker backfill helper (shared with install callback + resync) ───────
+//
+// Booker uses server-to-server OAuth: mint access_token per call (1hr TTL),
+// scope by LocationId in path/params. PageNumber-based pagination.
+
+const BOOKER_BACKFILL_DAYS_BACK = 30;
+const BOOKER_BACKFILL_DAYS_FORWARD = 90;
+
+export async function backfillBookerAppointments(args: {
+  sb: SupabaseAdmin;
+  userId: string;
+  locationId: string;
+}): Promise<{ totalAppointments: number; resolvedPatientNames: number }> {
+  const { sb, userId } = args;
+
+  const env: BookerEnv = resolveBookerEnv();
+  const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+  const CLIENT_ID = stripWs(env === "sandbox" ? process.env.BOOKER_SANDBOX_CLIENT_ID : process.env.BOOKER_CLIENT_ID);
+  const CLIENT_SECRET = stripWs(env === "sandbox" ? process.env.BOOKER_SANDBOX_CLIENT_SECRET : process.env.BOOKER_CLIENT_SECRET);
+  const SUBSCRIPTION_KEY = stripWs(env === "sandbox" ? process.env.BOOKER_SANDBOX_SUBSCRIPTION_KEY : process.env.BOOKER_SUBSCRIPTION_KEY);
+  if (!CLIENT_ID || !CLIENT_SECRET || !SUBSCRIPTION_KEY) {
+    throw new Error("Booker app credentials are not configured on the server.");
+  }
+  const credentials: BookerCredentials = { clientId: CLIENT_ID, clientSecret: CLIENT_SECRET, subscriptionKey: SUBSCRIPTION_KEY, env };
+  const tok = await getBookerAccessToken({ credentials });
+
+  const now = new Date();
+  const startDate = new Date(now.getTime() - BOOKER_BACKFILL_DAYS_BACK * 86400000).toISOString().slice(0, 10);
+  const endDate = new Date(now.getTime() + BOOKER_BACKFILL_DAYS_FORWARD * 86400000).toISOString().slice(0, 10);
+
+  const all: BookerAppointment[] = [];
+  let page: number | null = 1;
+  for (let i = 0; i < 50; i++) {
+    if (page === null) break;
+    const { appointments, nextPage } = await listBookerAppointments({
+      accessToken: tok.accessToken,
+      credentials,
+      startDate,
+      endDate,
+      pageSize: 200,
+      pageNumber: page,
+    });
+    all.push(...appointments);
+    page = nextPage;
+  }
+
+  await (sb as unknown as {
+    from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => { eq: (c: string, v: string) => Promise<unknown> } } };
+  })
+    .from("emma_appointments")
+    .update({ source: "booker" })
+    .eq("user_id", userId)
+    .eq("source", "csv-booker");
+
+  const patientIndex = await buildPatientIndex(sb, userId);
+
+  let resolvedPatientNames = 0;
+  const rows = all.map((apt) => {
+    const patientNodeId = matchPatientFromIndex(
+      { patientFirstName: null, patientLastName: null, patientPhone: null, patientEmail: null },
+      patientIndex,
+    );
+    if (patientNodeId) resolvedPatientNames++;
+    return bookerAppointmentToRow(apt, userId, patientNodeId);
+  });
+
+  const BATCH = 200;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const slice = rows.slice(i, i + BATCH);
+    const { error } = await sb
+      .from("emma_appointments")
+      .upsert(slice, { onConflict: "user_id,external_id,source" });
+    if (error) throw new Error(`Booker appointment upsert batch ${i}: ${error.message}`);
+  }
+
+  // Suppress unused-warning for the helper that will be used by webhook receivers
+  void bookerStatusToRefillStatus;
+  return { totalAppointments: rows.length, resolvedPatientNames };
+}
+
+export function bookerAppointmentToRow(
+  apt: BookerAppointment,
+  userId: string,
+  patientNodeId: string | null,
+): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
+  const scheduledAt = new Date(apt.startDateTime).toISOString();
+  const durationMin = Math.round(
+    (new Date(apt.endDateTime).getTime() - new Date(apt.startDateTime).getTime()) / 60000,
+  );
+  const base: Database["public"]["Tables"]["emma_appointments"]["Insert"] = {
+    user_id: userId,
+    external_id: apt.id,
+    source: "booker",
+    scheduled_at: scheduledAt,
+    duration_min: Number.isFinite(durationMin) && durationMin > 0 ? durationMin : 0,
+    treatment_type: apt.treatmentId,
+    provider_name: apt.employeeId,
+    status: bookerStatusToRefillStatus(apt.status),
+    notes: apt.notes,
+  };
+  if (patientNodeId) base.patient_node_id = patientNodeId;
+  return base;
+}
+
+// ─── Vagaro backfill helper (shared with install callback + resync) ───────
+//
+// Vagaro auth is per-spa API key (no OAuth tokens to refresh). Otherwise
+// same shape as backfillSquareBookings — pages until consumed >= total,
+// idempotent upsert, 50-page hard cap.
+
+const VAGARO_BACKFILL_DAYS_BACK = 30;
+const VAGARO_BACKFILL_DAYS_FORWARD = 90;
+
+export async function backfillVagaroAppointments(args: {
+  sb: SupabaseAdmin;
+  userId: string;
+  apiKey: string;
+}): Promise<{ totalAppointments: number; resolvedPatientNames: number }> {
+  const { sb, userId, apiKey } = args;
+
+  const now = new Date();
+  const startDate = new Date(now.getTime() - VAGARO_BACKFILL_DAYS_BACK * 86400000)
+    .toISOString()
+    .slice(0, 10);
+  const endDate = new Date(now.getTime() + VAGARO_BACKFILL_DAYS_FORWARD * 86400000)
+    .toISOString()
+    .slice(0, 10);
+
+  const all: VagaroAppointment[] = [];
+  let offset: number | null = 0;
+  for (let page = 0; page < 50; page++) {
+    if (offset === null) break;
+    const { appointments, nextOffset } = await listVagaroAppointments({
+      credentials: { apiKey, merchantId: "" },
+      startDate,
+      endDate,
+      limit: 200,
+      offset,
+    });
+    all.push(...appointments);
+    offset = nextOffset;
+  }
+
+  await (sb as unknown as {
+    from: (t: string) => {
+      update: (v: object) => {
+        eq: (c: string, v: string) => {
+          eq: (c: string, v: string) => Promise<unknown>;
+        };
+      };
+    };
+  })
+    .from("emma_appointments")
+    .update({ source: "vagaro" })
+    .eq("user_id", userId)
+    .eq("source", "csv-vagaro");
+
+  const patientIndex = await buildPatientIndex(sb, userId);
+
+  let resolvedPatientNames = 0;
+  const rows = all.map((apt) => {
+    const patientNodeId = matchPatientFromIndex(
+      {
+        patientFirstName: null,
+        patientLastName: null,
+        patientPhone: null,
+        patientEmail: null,
+      },
+      patientIndex,
+    );
+    if (patientNodeId) resolvedPatientNames++;
+    return vagaroAppointmentToRow(apt, userId, patientNodeId);
+  });
+
+  const BATCH = 200;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const slice = rows.slice(i, i + BATCH);
+    const { error } = await sb
+      .from("emma_appointments")
+      .upsert(slice, { onConflict: "user_id,external_id,source" });
+    if (error) {
+      throw new Error(`Vagaro appointment upsert batch ${i}: ${error.message}`);
+    }
+  }
+
+  return { totalAppointments: rows.length, resolvedPatientNames };
+}
+
+export function vagaroAppointmentToRow(
+  apt: VagaroAppointment,
+  userId: string,
+  patientNodeId: string | null,
+): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
+  const scheduledAt = new Date(apt.startDateTime).toISOString();
+  const durationMin = Math.round(
+    (new Date(apt.endDateTime).getTime() - new Date(apt.startDateTime).getTime()) / 60000,
+  );
+  const base: Database["public"]["Tables"]["emma_appointments"]["Insert"] = {
+    user_id: userId,
+    external_id: apt.id,
+    source: "vagaro",
+    scheduled_at: scheduledAt,
+    duration_min: Number.isFinite(durationMin) && durationMin > 0 ? durationMin : 0,
+    treatment_type: apt.serviceId,
+    provider_name: apt.staffId,
+    status: vagaroStatusToRefillStatus(apt.status),
+    notes: apt.notes,
+  };
+  if (patientNodeId) base.patient_node_id = patientNodeId;
+  return base;
+}
+
+// ─── Boulevard backfill helper (shared with install callback + resync) ─────
+//
+// Mirror of backfillSquareBookings / backfillAcuityAppointments. Reads the
+// spa's appointment window (30d-back + 90d-forward) through Boulevard's
+// GraphQL connector and upserts idempotently on (user_id, external_id,
+// source). The connector handles pagination via GraphQL cursor (vs Square's
+// REST cursor) so the loop shape stays the same.
+//
+// Boulevard auth is app-level: API_KEY + API_SECRET come from env vars,
+// businessId URN scopes each call. No per-spa token refresh.
+
+const BLVD_BACKFILL_DAYS_BACK = 30;
+const BLVD_BACKFILL_DAYS_FORWARD = 90;
+
+export async function backfillBoulevardAppointments(args: {
+  sb: SupabaseAdmin;
+  userId: string;
+  businessId: string; // URN: urn:blvd:Business:abc
+}): Promise<{ totalAppointments: number; resolvedPatientNames: number }> {
+  const { sb, userId, businessId } = args;
+
+  const env: BoulevardEnv = resolveBoulevardEnv();
+  const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+  const APPLICATION_ID = stripWs(
+    env === "sandbox"
+      ? process.env.BLVD_SANDBOX_APPLICATION_ID
+      : process.env.BLVD_APPLICATION_ID,
+  );
+  const API_KEY = stripWs(
+    env === "sandbox"
+      ? process.env.BLVD_SANDBOX_API_KEY
+      : process.env.BLVD_API_KEY,
+  );
+  const API_SECRET = stripWs(
+    env === "sandbox"
+      ? process.env.BLVD_SANDBOX_API_SECRET
+      : process.env.BLVD_API_SECRET,
+  );
+  if (!APPLICATION_ID || !API_KEY || !API_SECRET) {
+    throw new Error(
+      "Boulevard app credentials are not configured on the server (BLVD_APPLICATION_ID + BLVD_API_KEY + BLVD_API_SECRET).",
+    );
+  }
+
+  const {
+    listBoulevardAppointments,
+    boulevardStatusToRefillStatus,
+  } = await import("@/lib/schedulers/boulevard");
+  type BlvdAppointment = Awaited<
+    ReturnType<typeof listBoulevardAppointments>
+  >["appointments"][number];
+
+  const now = new Date();
+  const windowStart = new Date(
+    now.getTime() - BLVD_BACKFILL_DAYS_BACK * 86400000,
+  );
+  const windowEnd = new Date(
+    now.getTime() + BLVD_BACKFILL_DAYS_FORWARD * 86400000,
+  );
+
+  const credentials = {
+    applicationId: APPLICATION_ID,
+    apiKey: API_KEY,
+    apiSecret: API_SECRET,
+    env,
+  };
+
+  // Pull pages until the cursor stops returning hasNextPage. 50-page
+  // hard cap mirrors backfillSquareBookings — defense against
+  // pathological cursor loops at the provider layer.
+  const all: BlvdAppointment[] = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < 50; page++) {
+    const { appointments, cursor: next } = await listBoulevardAppointments({
+      credentials,
+      businessId,
+      startAtMin: windowStart.toISOString(),
+      startAtMax: windowEnd.toISOString(),
+      limit: 200,
+      cursor: cursor ?? undefined,
+    });
+    all.push(...appointments);
+    if (!next) break;
+    cursor = next;
+  }
+
+  // Pre-migrate any leftover csv-boulevard-sourced rows so the upsert
+  // dedupes correctly on (user_id, external_id, source). Same pattern
+  // backfillAcuityAppointments + backfillSquareBookings use.
+  await (sb as unknown as {
+    from: (t: string) => {
+      update: (v: object) => {
+        eq: (c: string, v: string) => {
+          eq: (c: string, v: string) => Promise<unknown>;
+        };
+      };
+    };
+  })
+    .from("emma_appointments")
+    .update({ source: "boulevard" })
+    .eq("user_id", userId)
+    .eq("source", "csv-boulevard");
+
+  const patientIndex = await buildPatientIndex(sb, userId);
+
+  // Boulevard appointments carry clientId (URN) but not the client's
+  // name on the appointment response — we'd need a separate query OR
+  // we accept rows landing with patient_node_id null and rely on
+  // CLIENT_CREATED webhook events to enrich. Mirrors Square pattern.
+  let resolvedPatientNames = 0;
+  const rows = all.map((apt) => {
+    const patientNodeId = matchPatientFromIndex(
+      {
+        patientFirstName: null,
+        patientLastName: null,
+        patientPhone: null,
+        patientEmail: null,
+      },
+      patientIndex,
+    );
+    if (patientNodeId) resolvedPatientNames++;
+    return boulevardAppointmentToRow(apt, userId, patientNodeId, boulevardStatusToRefillStatus);
+  });
+
+  const BATCH = 200;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const slice = rows.slice(i, i + BATCH);
+    const { error } = await sb
+      .from("emma_appointments")
+      .upsert(slice, { onConflict: "user_id,external_id,source" });
+    if (error) {
+      throw new Error(
+        `Boulevard appointment upsert batch ${i}: ${error.message}`,
+      );
+    }
+  }
+
+  return {
+    totalAppointments: rows.length,
+    resolvedPatientNames,
+  };
+}
+
+type BoulevardAppointmentShape = {
+  id: string;
+  status: string;
+  startAt: string;
+  endAt: string;
+  locationId: string | null;
+  clientId: string | null;
+  staffId: string | null;
+  serviceIds: string[];
+  notes: string | null;
+};
+
+export function boulevardAppointmentToRow(
+  apt: BoulevardAppointmentShape,
+  userId: string,
+  patientNodeId: string | null,
+  statusMap: (s: string) => "scheduled" | "cancelled" | "no_show" | "showed",
+): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
+  const scheduledAt = new Date(apt.startAt).toISOString();
+  const durationMin = Math.round(
+    (new Date(apt.endAt).getTime() - new Date(apt.startAt).getTime()) / 60000,
+  );
+  const base: Database["public"]["Tables"]["emma_appointments"]["Insert"] = {
+    user_id: userId,
+    external_id: apt.id,
+    source: "boulevard",
+    scheduled_at: scheduledAt,
+    duration_min: Number.isFinite(durationMin) && durationMin > 0 ? durationMin : 0,
+    treatment_type: apt.serviceIds[0] ?? null,
+    provider_name: apt.staffId ?? null,
+    status: statusMap(apt.status),
+    notes: apt.notes,
+  };
+  if (patientNodeId) base.patient_node_id = patientNodeId;
+  return base;
+}
+
+// ─── Mindbody backfill helper (shared with OAuth callback + resync) ────────
+//
+// Mirror of backfillSquareBookings / backfillBoulevardAppointments. Reads
+// the spa's appointment window (30d-back + 90d-forward) through Mindbody's
+// REST connector and upserts idempotently on (user_id, external_id, source).
+// Token refresh handled via withFreshMindbodyToken so a token mid-expiry
+// during a long backfill doesn't fail the whole batch.
+
+const MB_BACKFILL_DAYS_BACK = 30;
+const MB_BACKFILL_DAYS_FORWARD = 90;
+
+export async function backfillMindbodyAppointments(args: {
+  sb: SupabaseAdmin;
+  userId: string;
+  connectionId: string;
+  accessToken: string;
+  siteId: string;
+}): Promise<{ totalAppointments: number; resolvedPatientNames: number }> {
+  const { sb, userId, accessToken, siteId } = args;
+  const env: MindbodyEnv = resolveMindbodyEnv();
+  const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+  const API_KEY = stripWs(
+    env === "sandbox"
+      ? process.env.MINDBODY_SANDBOX_API_KEY
+      : process.env.MINDBODY_API_KEY,
+  );
+  if (!API_KEY) {
+    throw new Error("Mindbody API key is not configured on the server.");
+  }
+
+  const now = new Date();
+  const startDate = new Date(now.getTime() - MB_BACKFILL_DAYS_BACK * 86400000)
+    .toISOString()
+    .slice(0, 10);
+  const endDate = new Date(
+    now.getTime() + MB_BACKFILL_DAYS_FORWARD * 86400000,
+  )
+    .toISOString()
+    .slice(0, 10);
+
+  // v1.42.3 — Mindbody's /appointment/staffappointments endpoint
+  // requires StaffIds scoping (confirmed via sandbox smoke 2026-06-03;
+  // v1.37.0 omitted StaffIds and got back empty Appointments[] silently).
+  // Pre-fetch the spa's staff roster, then iterate appointment list
+  // per staff. 20-page hard cap on staff pagination; 50-page hard cap
+  // on appointment pagination per staff.
+  const allStaff: Array<{ id: string; name: string | null }> = [];
+  let staffOffset: number | null = 0;
+  for (let page = 0; page < 20; page++) {
+    if (staffOffset === null) break;
+    const { staff, nextOffset } = await listMindbodyStaff({
+      accessToken,
+      apiKey: API_KEY,
+      siteId,
+      env,
+      limit: 200,
+      offset: staffOffset,
+    });
+    allStaff.push(...staff);
+    staffOffset = nextOffset;
+  }
+  const staffIdsAll = allStaff.map((s) => s.id).filter((id) => id !== "");
+
+  // Per-staff appointment pagination. Batch up to 20 staff IDs per call
+  // to reduce round-trips (Mindbody accepts repeated StaffIds params).
+  const all: MindbodyAppointment[] = [];
+  const STAFF_BATCH = 20;
+  for (let i = 0; i < staffIdsAll.length; i += STAFF_BATCH) {
+    const staffBatch = staffIdsAll.slice(i, i + STAFF_BATCH);
+    let offset: number | null = 0;
+    for (let page = 0; page < 50; page++) {
+      if (offset === null) break;
+      const { appointments, nextOffset } = await listMindbodyAppointments({
+        accessToken,
+        apiKey: API_KEY,
+        siteId,
+        env,
+        startDate,
+        endDate,
+        staffIds: staffBatch,
+        limit: 200,
+        offset,
+      });
+      all.push(...appointments);
+      offset = nextOffset;
+    }
+  }
+
+  // Pre-migrate any leftover csv-mindbody-sourced rows so upsert dedupes
+  // correctly on (user_id, external_id, source).
+  await (sb as unknown as {
+    from: (t: string) => {
+      update: (v: object) => {
+        eq: (c: string, v: string) => {
+          eq: (c: string, v: string) => Promise<unknown>;
+        };
+      };
+    };
+  })
+    .from("emma_appointments")
+    .update({ source: "mindbody" })
+    .eq("user_id", userId)
+    .eq("source", "csv-mindbody");
+
+  const patientIndex = await buildPatientIndex(sb, userId);
+
+  // Mindbody appointments carry ClientId but not the client's name on
+  // the appointment response — mirrors Square + Boulevard pattern.
+  // Rely on client.created webhooks + initial roster pull (separate
+  // ship) to populate patient_node_id; for the appointment backfill
+  // accept rows landing with null patient_node_id.
+  let resolvedPatientNames = 0;
+  const rows = all.map((apt) => {
+    const patientNodeId = matchPatientFromIndex(
+      {
+        patientFirstName: null,
+        patientLastName: null,
+        patientPhone: null,
+        patientEmail: null,
+      },
+      patientIndex,
+    );
+    if (patientNodeId) resolvedPatientNames++;
+    return mindbodyAppointmentToRow(apt, userId, patientNodeId);
+  });
+
+  const BATCH = 200;
+  for (let i = 0; i < rows.length; i += BATCH) {
+    const slice = rows.slice(i, i + BATCH);
+    const { error } = await sb
+      .from("emma_appointments")
+      .upsert(slice, { onConflict: "user_id,external_id,source" });
+    if (error) {
+      throw new Error(
+        `Mindbody appointment upsert batch ${i}: ${error.message}`,
+      );
+    }
+  }
+
+  return {
+    totalAppointments: rows.length,
+    resolvedPatientNames,
+  };
+}
+
+export function mindbodyAppointmentToRow(
+  apt: MindbodyAppointment,
+  userId: string,
+  patientNodeId: string | null,
+): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
+  const scheduledAt = new Date(apt.startDateTime).toISOString();
+  const durationMin = Math.round(
+    (new Date(apt.endDateTime).getTime() -
+      new Date(apt.startDateTime).getTime()) /
+      60000,
+  );
+  const base: Database["public"]["Tables"]["emma_appointments"]["Insert"] = {
+    user_id: userId,
+    external_id: apt.id,
+    source: "mindbody",
+    scheduled_at: scheduledAt,
+    duration_min:
+      Number.isFinite(durationMin) && durationMin > 0 ? durationMin : 0,
+    treatment_type: apt.sessionTypeId,
+    provider_name: apt.staffId,
+    status: mindbodyStatusToRefillStatus(apt.status),
+    notes: apt.notes,
+  };
+  if (patientNodeId) base.patient_node_id = patientNodeId;
+  return base;
+}
+
+// ─── Mindbody token refresh helper (used by webhook + writeback paths) ─────
+//
+// Mindbody access tokens last ~1 hour; refresh_token (requires offline_access
+// scope) reissues a fresh pair. Centralized so the webhook receiver, the
+// rescue writeback, and the resync path all use the same just-in-time
+// refresh. Mirrors withFreshSquareToken in shape.
+
+export async function withFreshMindbodyToken<T>(args: {
+  sb: SupabaseAdmin;
+  connectionId: string;
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAt: string | null;
+  fn: (accessToken: string) => Promise<T>;
+}): Promise<T> {
+  const expiresAtMs = args.expiresAt ? Date.parse(args.expiresAt) : null;
+  const needsRefresh =
+    !!args.refreshToken &&
+    expiresAtMs !== null &&
+    expiresAtMs - Date.now() < 5 * 60 * 1000; // refresh ~5 min before expiry
+
+  if (!needsRefresh) {
+    return args.fn(args.accessToken);
+  }
+
+  const env: MindbodyEnv = resolveMindbodyEnv();
+  const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+  const CLIENT_ID = stripWs(
+    env === "sandbox"
+      ? process.env.MINDBODY_SANDBOX_OAUTH_CLIENT_ID
+      : process.env.MINDBODY_OAUTH_CLIENT_ID,
+  );
+  const CLIENT_SECRET = stripWs(
+    env === "sandbox"
+      ? process.env.MINDBODY_SANDBOX_OAUTH_CLIENT_SECRET
+      : process.env.MINDBODY_OAUTH_CLIENT_SECRET,
+  );
+  const API_KEY = stripWs(
+    env === "sandbox"
+      ? process.env.MINDBODY_SANDBOX_API_KEY
+      : process.env.MINDBODY_API_KEY,
+  );
+  if (!CLIENT_ID || !CLIENT_SECRET || !API_KEY) {
+    // Misconfigured — fall through with old token; caller sees failure.
+    return args.fn(args.accessToken);
+  }
+
+  const fresh = await refreshMindbodyAccessToken({
+    refreshToken: args.refreshToken!,
+    credentials: {
+      clientId: CLIENT_ID,
+      clientSecret: CLIENT_SECRET,
+      apiKey: API_KEY,
+      redirectUri: "",
+      env,
+    },
+  });
+
+  await (args.sb as unknown as {
+    from: (t: string) => {
+      update: (v: object) => {
+        eq: (c: string, v: string) => Promise<unknown>;
+      };
+    };
+  })
+    .from("emma_scheduler_connections")
+    .update({
+      access_token: fresh.accessToken,
+      refresh_token: fresh.refreshToken || args.refreshToken,
       token_expires_at: fresh.expiresAt,
       updated_at: new Date().toISOString(),
     })

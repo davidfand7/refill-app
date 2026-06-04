@@ -40,11 +40,21 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   initiateAcuityOAuth,
   initiateSquareOAuth,
+  initiateBoulevardOAuth,
+  initiateMindbodyOAuth,
+  initiateVagaroConnect,
+  initiateBookerConnect,
+  initiateJaneOAuth,
+  initiateZenotiConnect,
   getSchedulerConnection,
   disconnectScheduler,
   resyncSchedulerConnection,
   type SchedulerConnection,
 } from "@/server/emma-scheduler.functions";
+import {
+  getSchedulerExtras,
+  type LightModePlatform,
+} from "@/server/light-mode.functions";
 import { useShell } from "@/lib/shell";
 import { cn } from "@/lib/utils";
 
@@ -80,6 +90,12 @@ function SchedulerSettingsPage() {
   const [disconnecting, setDisconnecting] = useState(false);
   const [resyncing, setResyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // v1.42.0 — Light Mode + Plaid Mode availability. Light Mode is
+  // universally available; Plaid Mode is per-tenant flag-gated.
+  const [schedulerExtras, setSchedulerExtras] = useState<{
+    lightMode: boolean;
+    plaidMode: boolean;
+  }>({ lightMode: true, plaidMode: false });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -103,6 +119,25 @@ function SchedulerSettingsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // v1.42.0 — Load Light Mode + Plaid Mode availability for this spa.
+  // Light Mode is universally on; Plaid Mode is per-tenant flag-gated
+  // via /app/admin/agents → plaid_mode_enabled feature flag.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess.session?.access_token;
+        if (!token) return;
+        const extras = await getSchedulerExtras({
+          data: { accessToken: token },
+        });
+        setSchedulerExtras(extras);
+      } catch {
+        // Soft-fail — extras default to { lightMode: true, plaidMode: false }.
+      }
+    })();
+  }, []);
 
   // Surface OAuth round-trip outcomes as toasts + clean the URL.
   useEffect(() => {
@@ -179,6 +214,168 @@ function SchedulerSettingsPage() {
     } catch (e) {
       toast.error(
         e instanceof Error ? e.message : "Couldn't start the Square connect flow.",
+      );
+      setConnecting(false);
+    }
+  }, []);
+
+  const connectBoulevard = useCallback(async () => {
+    setConnecting(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        toast.error("Please sign in.");
+        setConnecting(false);
+        return;
+      }
+      const { redirectUrl } = await initiateBoulevardOAuth({
+        data: {
+          accessToken: token,
+          origin: window.location.origin,
+          returnTo: "/app/refill/settings/scheduler",
+        },
+      });
+      window.location.href = redirectUrl;
+    } catch (e) {
+      toast.error(
+        e instanceof Error
+          ? e.message
+          : "Couldn't start the Boulevard connect flow.",
+      );
+      setConnecting(false);
+    }
+  }, []);
+
+  const connectZenoti = useCallback(async () => {
+    setConnecting(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        toast.error("Please sign in.");
+        setConnecting(false);
+        return;
+      }
+      const { redirectUrl } = await initiateZenotiConnect({
+        data: {
+          accessToken: token,
+          origin: window.location.origin,
+          returnTo: "/app/refill/settings/scheduler",
+        },
+      });
+      window.location.href = redirectUrl;
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Couldn't start the Zenoti connect flow.",
+      );
+      setConnecting(false);
+    }
+  }, []);
+
+  const connectJane = useCallback(async () => {
+    setConnecting(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        toast.error("Please sign in.");
+        setConnecting(false);
+        return;
+      }
+      const { redirectUrl } = await initiateJaneOAuth({
+        data: {
+          accessToken: token,
+          origin: window.location.origin,
+          returnTo: "/app/refill/settings/scheduler",
+        },
+      });
+      window.location.href = redirectUrl;
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Couldn't start the Jane connect flow.",
+      );
+      setConnecting(false);
+    }
+  }, []);
+
+  const connectBooker = useCallback(async () => {
+    setConnecting(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        toast.error("Please sign in.");
+        setConnecting(false);
+        return;
+      }
+      const { redirectUrl } = await initiateBookerConnect({
+        data: {
+          accessToken: token,
+          origin: window.location.origin,
+          returnTo: "/app/refill/settings/scheduler",
+        },
+      });
+      window.location.href = redirectUrl;
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Couldn't start the Booker connect flow.",
+      );
+      setConnecting(false);
+    }
+  }, []);
+
+  const connectVagaro = useCallback(async () => {
+    setConnecting(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        toast.error("Please sign in.");
+        setConnecting(false);
+        return;
+      }
+      const { redirectUrl } = await initiateVagaroConnect({
+        data: {
+          accessToken: token,
+          origin: window.location.origin,
+          returnTo: "/app/refill/settings/scheduler",
+        },
+      });
+      window.location.href = redirectUrl;
+    } catch (e) {
+      toast.error(
+        e instanceof Error
+          ? e.message
+          : "Couldn't start the Vagaro connect flow.",
+      );
+      setConnecting(false);
+    }
+  }, []);
+
+  const connectMindbody = useCallback(async () => {
+    setConnecting(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        toast.error("Please sign in.");
+        setConnecting(false);
+        return;
+      }
+      const { redirectUrl } = await initiateMindbodyOAuth({
+        data: {
+          accessToken: token,
+          origin: window.location.origin,
+          returnTo: "/app/refill/settings/scheduler",
+        },
+      });
+      window.location.href = redirectUrl;
+    } catch (e) {
+      toast.error(
+        e instanceof Error
+          ? e.message
+          : "Couldn't start the Mindbody connect flow.",
       );
       setConnecting(false);
     }
@@ -276,6 +473,26 @@ function SchedulerSettingsPage() {
         <AvailablePlatforms
           onConnectAcuity={connectAcuity}
           onConnectSquare={connectSquare}
+          onConnectBoulevard={connectBoulevard}
+          onConnectMindbody={connectMindbody}
+          onConnectVagaro={connectVagaro}
+          onConnectBooker={connectBooker}
+          onConnectJane={connectJane}
+          onConnectZenoti={connectZenoti}
+          schedulerExtras={schedulerExtras}
+          onConnectLightMode={(platform) =>
+            void navigate({
+              to: "/app/refill/settings/light-mode",
+              search: { platform },
+            })
+          }
+          onConnectPlaid={(platform) =>
+            toast.info(
+              `Plaid Connect (Pro) for ${platformLabel(
+                platform,
+              )} — concierge setup. We'll reach out to confirm consent.`,
+            )
+          }
           connecting={connecting}
         />
       )}
@@ -438,12 +655,72 @@ function ConnectedCard({
 function AvailablePlatforms({
   onConnectAcuity,
   onConnectSquare,
+  onConnectBoulevard,
+  onConnectMindbody,
+  onConnectVagaro,
+  onConnectBooker,
+  onConnectJane,
+  onConnectZenoti,
+  schedulerExtras,
+  onConnectLightMode,
+  onConnectPlaid,
   connecting,
 }: {
   onConnectAcuity: () => void;
   onConnectSquare: () => void;
+  onConnectBoulevard: () => void;
+  onConnectMindbody: () => void;
+  onConnectVagaro: () => void;
+  onConnectBooker: () => void;
+  onConnectJane: () => void;
+  onConnectZenoti: () => void;
+  schedulerExtras: { lightMode: boolean; plaidMode: boolean };
+  onConnectLightMode: (platform: LightModePlatform) => void;
+  onConnectPlaid: (platform: LightModePlatform) => void;
   connecting: boolean;
 }) {
+  // v1.36.0 — Boulevard architecture pre-build per the platforms-pre-built
+  // doctrine. UI lands in disabled state with "App approval pending"
+  // badge; flip to enabled by setting REFILL_BOULEVARD_ENABLED=1 in
+  // wrangler.jsonc vars OR by removing this constant once Boulevard's
+  // 48hr app-approval clears + credentials land in CF secrets.
+  const BOULEVARD_ENABLED =
+    typeof window !== "undefined" &&
+    typeof process !== "undefined" &&
+    process.env?.REFILL_BOULEVARD_ENABLED === "1";
+
+  // v1.37.0 — Mindbody architecture pre-build per the same doctrine.
+  // Disabled until MINDBODY_OAUTH_CLIENT_ID + secret + API_KEY land in
+  // CF secrets after the OAuth-client-provisioning Support ticket clears.
+  // Flip by setting REFILL_MINDBODY_ENABLED=1 in wrangler.jsonc vars.
+  const MINDBODY_ENABLED =
+    typeof window !== "undefined" &&
+    typeof process !== "undefined" &&
+    process.env?.REFILL_MINDBODY_ENABLED === "1";
+
+  // v1.39.0 — Booker architecture pre-build. Disabled until Booker
+  // developer app approval at developers.booker.com + BOOKER_CLIENT_ID
+  // + BOOKER_CLIENT_SECRET + BOOKER_SUBSCRIPTION_KEY land in CF.
+  const BOOKER_ENABLED =
+    typeof window !== "undefined" &&
+    typeof process !== "undefined" &&
+    process.env?.REFILL_BOOKER_ENABLED === "1";
+
+  // v1.40.0 — Jane architecture pre-build. Polling-only (no webhooks).
+  // Disabled until partnership approval clears + JANE_CLIENT_ID +
+  // JANE_CLIENT_SECRET + JANE_IAM_BASE_URL land in CF.
+  const JANE_ENABLED =
+    typeof window !== "undefined" &&
+    typeof process !== "undefined" &&
+    process.env?.REFILL_JANE_ENABLED === "1";
+
+  // v1.41.0 — Zenoti architecture pre-build. CSM-gated API package +
+  // ZENOTI_API_KEY in CF.
+  const ZENOTI_ENABLED =
+    typeof window !== "undefined" &&
+    typeof process !== "undefined" &&
+    process.env?.REFILL_ZENOTI_ENABLED === "1";
+
   return (
     <div className="mt-6 space-y-3">
       <div className="rounded-lg border border-border bg-card p-5 flex items-center gap-4">
@@ -496,10 +773,274 @@ function AvailablePlatforms({
         </button>
       </div>
 
+      {/*
+        Vagaro card — paste-API-key (no OAuth). Enabled in production
+        because there's no Refill-side approval gate; each spa
+        independently signs up for Vagaro's $10/mo API access form,
+        gets an API key, pastes it into our wizard. Ordered with the
+        live-connectable platforms (Acuity / Square / Vagaro) above
+        the architecture-ready pending group.
+      */}
+      <div className="rounded-lg border border-border bg-card p-5 flex items-center gap-4">
+        <div className="h-10 w-10 rounded-full bg-orange-500/15 text-orange-700 flex items-center justify-center shrink-0">
+          <Calendar className="h-5 w-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-ink">Vagaro</div>
+          <div className="text-xs text-ink-soft mt-0.5">
+            Paste your Vagaro API key — we&rsquo;ll register webhooks and pull your next 90 days of appointments. Vagaro charges $10/mo for API access (paid to them, not us).
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onConnectVagaro}
+          disabled={connecting}
+          className="inline-flex items-center gap-2 rounded-md bg-emerald text-paper px-4 py-2 text-sm font-medium hover:bg-emerald/90 disabled:opacity-50"
+        >
+          {connecting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Plug className="h-4 w-4" />
+          )}
+          Connect Vagaro
+        </button>
+      </div>
+
+      {/*
+        Boulevard card — architecture-complete, button disabled until
+        Boulevard's 48hr app approval clears + credentials land in CF.
+        Per the platforms-pre-built doctrine: card lives in the live
+        Available list (not Coming Soon), labeled "App approval pending"
+        so spas see Boulevard is real + on the roadmap.
+      */}
+      <div className="rounded-lg border border-border bg-card p-5 flex items-center gap-4">
+        <div className="h-10 w-10 rounded-full bg-fuchsia-500/15 text-fuchsia-700 flex items-center justify-center shrink-0">
+          <Calendar className="h-5 w-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-ink flex items-center gap-2">
+            Boulevard
+            {!BOULEVARD_ENABLED && (
+              <span className="text-[10px] font-medium uppercase tracking-wide bg-amber-500/15 text-amber-700 px-1.5 py-0.5 rounded">
+                App approval pending
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-ink-soft mt-0.5">
+            {BOULEVARD_ENABLED
+              ? "One click. We hand you your Application ID; you paste it into your Boulevard dashboard's Apps & Integrations. Claim writeback needs Boulevard Premier or Enterprise — we'll let you know if your tier doesn't qualify."
+              : "Architecture ready. Submitted to Boulevard's developer portal — typical approval window is 48 hours. We'll flip this card live as soon as credentials clear."}
+          </div>
+          <PlatformExtrasRow
+            platform="boulevard"
+            extras={schedulerExtras}
+            onLightMode={onConnectLightMode}
+            onPlaid={onConnectPlaid}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={onConnectBoulevard}
+          disabled={connecting || !BOULEVARD_ENABLED}
+          title={
+            BOULEVARD_ENABLED
+              ? undefined
+              : "Boulevard's 48hr app approval is in progress. We'll enable this button as soon as it clears."
+          }
+          className="inline-flex items-center gap-2 rounded-md bg-emerald text-paper px-4 py-2 text-sm font-medium hover:bg-emerald/90 disabled:opacity-50"
+        >
+          {connecting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Plug className="h-4 w-4" />
+          )}
+          {BOULEVARD_ENABLED
+            ? "Connect Boulevard"
+            : "Connect Boulevard · Pending"}
+        </button>
+      </div>
+
+      {/*
+        Mindbody card — architecture-complete, button disabled until
+        Mindbody API Support clears the OAuth-client-provisioning ticket.
+        Per the platforms-pre-built doctrine: card lives in the live
+        Available list (not Coming Soon), labeled "OAuth setup pending"
+        so spas see Mindbody is real + on the roadmap.
+      */}
+      <div className="rounded-lg border border-border bg-card p-5 flex items-center gap-4">
+        <div className="h-10 w-10 rounded-full bg-rose-500/15 text-rose-700 flex items-center justify-center shrink-0">
+          <Calendar className="h-5 w-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-ink flex items-center gap-2">
+            Mindbody
+            {!MINDBODY_ENABLED && (
+              <span className="text-[10px] font-medium uppercase tracking-wide bg-amber-500/15 text-amber-700 px-1.5 py-0.5 rounded">
+                OAuth setup pending
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-ink-soft mt-0.5">
+            {MINDBODY_ENABLED
+              ? "One click. Sign in with your Mindbody owner account, grant Refill access — Refill handles activation, webhooks, and the next 90 days of appointments automatically."
+              : "Architecture ready. Waiting on Mindbody API Support to provision our OAuth client — usually a few business days after submission. We'll flip this card live as soon as credentials clear."}
+          </div>
+          <PlatformExtrasRow
+            platform="mindbody"
+            extras={schedulerExtras}
+            onLightMode={onConnectLightMode}
+            onPlaid={onConnectPlaid}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={onConnectMindbody}
+          disabled={connecting || !MINDBODY_ENABLED}
+          title={
+            MINDBODY_ENABLED
+              ? undefined
+              : "Mindbody API Support is provisioning our OAuth client. We'll enable this button as soon as it clears."
+          }
+          className="inline-flex items-center gap-2 rounded-md bg-emerald text-paper px-4 py-2 text-sm font-medium hover:bg-emerald/90 disabled:opacity-50"
+        >
+          {connecting ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Plug className="h-4 w-4" />
+          )}
+          {MINDBODY_ENABLED
+            ? "Connect Mindbody"
+            : "Connect Mindbody · Pending"}
+        </button>
+      </div>
+
+      {/*
+        Zenoti card — enterprise tier, CSM-gated API package. Disabled
+        until ZENOTI_API_KEY + REFILL_ZENOTI_ENABLED=1.
+      */}
+      <div className="rounded-lg border border-border bg-card p-5 flex items-center gap-4">
+        <div className="h-10 w-10 rounded-full bg-indigo-500/15 text-indigo-700 flex items-center justify-center shrink-0">
+          <Calendar className="h-5 w-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-ink flex items-center gap-2">
+            Zenoti
+            {!ZENOTI_ENABLED && (
+              <span className="text-[10px] font-medium uppercase tracking-wide bg-amber-500/15 text-amber-700 px-1.5 py-0.5 rounded">
+                CSM onboarding pending
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-ink-soft mt-0.5">
+            {ZENOTI_ENABLED
+              ? "Paste your Zenoti center_id — we'll use the shared API package credentials to read appointments + receive cancel/no-show events. Multi-center chains: one connection per center."
+              : "Architecture ready. Zenoti requires a CSM-led API package subscription (typically 1-2 weeks). We'll flip this card live as soon as the package activates."}
+          </div>
+          <PlatformExtrasRow
+            platform="zenoti"
+            extras={schedulerExtras}
+            onLightMode={onConnectLightMode}
+            onPlaid={onConnectPlaid}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={onConnectZenoti}
+          disabled={connecting || !ZENOTI_ENABLED}
+          title={ZENOTI_ENABLED ? undefined : "Zenoti CSM-led API package onboarding pending."}
+          className="inline-flex items-center gap-2 rounded-md bg-emerald text-paper px-4 py-2 text-sm font-medium hover:bg-emerald/90 disabled:opacity-50"
+        >
+          {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />}
+          {ZENOTI_ENABLED ? "Connect Zenoti" : "Connect Zenoti · Pending"}
+        </button>
+      </div>
+
+      {/*
+        Jane card — polling architecture (no webhooks). Disabled until
+        Jane partnership approval at developers.jane.app clears.
+      */}
+      <div className="rounded-lg border border-border bg-card p-5 flex items-center gap-4">
+        <div className="h-10 w-10 rounded-full bg-teal-500/15 text-teal-700 flex items-center justify-center shrink-0">
+          <Calendar className="h-5 w-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-ink flex items-center gap-2">
+            Jane
+            {!JANE_ENABLED && (
+              <span className="text-[10px] font-medium uppercase tracking-wide bg-amber-500/15 text-amber-700 px-1.5 py-0.5 rounded">
+                Partnership approval pending
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-ink-soft mt-0.5">
+            {JANE_ENABLED
+              ? "One click — sign in with your Jane clinic owner account. Polling-based sync (Jane doesn't offer webhooks); cancels reach us within minutes."
+              : "Architecture ready. Waiting on Jane's vetted-partner approval (intake at developers.jane.app). We'll flip this card live as soon as credentials clear."}
+          </div>
+          <PlatformExtrasRow
+            platform="jane"
+            extras={schedulerExtras}
+            onLightMode={onConnectLightMode}
+            onPlaid={onConnectPlaid}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={onConnectJane}
+          disabled={connecting || !JANE_ENABLED}
+          title={JANE_ENABLED ? undefined : "Jane partnership approval pending."}
+          className="inline-flex items-center gap-2 rounded-md bg-emerald text-paper px-4 py-2 text-sm font-medium hover:bg-emerald/90 disabled:opacity-50"
+        >
+          {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />}
+          {JANE_ENABLED ? "Connect Jane" : "Connect Jane · Pending"}
+        </button>
+      </div>
+
+      {/*
+        Booker card — architecture-complete, disabled until Booker dev
+        portal approval + app creds land in CF.
+      */}
+      <div className="rounded-lg border border-border bg-card p-5 flex items-center gap-4">
+        <div className="h-10 w-10 rounded-full bg-violet-500/15 text-violet-700 flex items-center justify-center shrink-0">
+          <Calendar className="h-5 w-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-ink flex items-center gap-2">
+            Booker
+            {!BOOKER_ENABLED && (
+              <span className="text-[10px] font-medium uppercase tracking-wide bg-amber-500/15 text-amber-700 px-1.5 py-0.5 rounded">
+                App approval pending
+              </span>
+            )}
+          </div>
+          <div className="text-xs text-ink-soft mt-0.5">
+            {BOOKER_ENABLED
+              ? "Paste your Booker Location ID — we'll use shared app credentials to read appointments + receive cancel/no-show events."
+              : "Architecture ready. Waiting on Booker developer portal approval (Mindbody-owned but separate API). We'll flip this card live as soon as credentials clear."}
+          </div>
+          <PlatformExtrasRow
+            platform="booker"
+            extras={schedulerExtras}
+            onLightMode={onConnectLightMode}
+            onPlaid={onConnectPlaid}
+          />
+        </div>
+        <button
+          type="button"
+          onClick={onConnectBooker}
+          disabled={connecting || !BOOKER_ENABLED}
+          title={BOOKER_ENABLED ? undefined : "Booker developer portal approval pending."}
+          className="inline-flex items-center gap-2 rounded-md bg-emerald text-paper px-4 py-2 text-sm font-medium hover:bg-emerald/90 disabled:opacity-50"
+        >
+          {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plug className="h-4 w-4" />}
+          {BOOKER_ENABLED ? "Connect Booker" : "Connect Booker · Pending"}
+        </button>
+      </div>
+
       <div className="rounded-lg border border-border/60 bg-muted/10 p-4 text-xs text-ink-soft">
         <div className="font-medium text-ink mb-1">Coming soon</div>
         <div>
-          Mindbody · JaneApp · Boulevard — each shipping as its own connector. Until then, those platforms can use the CSV import flow — ask us to enable it for your account.
+          Mangomint requires a direct partnership contract (no public dev portal) — ask us about early access. All other major platforms are above; CSV import is available for anything else.
         </div>
       </div>
     </div>
@@ -539,6 +1080,57 @@ function HowItWorks({ brandName }: { brandName: string }) {
   );
 }
 
+/**
+ * v1.42.0 — Per-card extras row surfaced on each gated platform card
+ * (Boulevard / Mindbody / Booker / Jane / Zenoti). Shows Light Mode +
+ * Plaid Connect alternatives so the spa doesn't have to wait for the
+ * vendor's API gate to clear before starting Refill.
+ *
+ * Light Mode is universally available (extras.lightMode default true).
+ * Plaid Mode is admin-gated per-tenant via the plaid_mode_enabled
+ * feature flag — admin toggles it at /app/admin/agents.
+ */
+function PlatformExtrasRow({
+  platform,
+  extras,
+  onLightMode,
+  onPlaid,
+}: {
+  platform: LightModePlatform;
+  extras: { lightMode: boolean; plaidMode: boolean };
+  onLightMode: (p: LightModePlatform) => void;
+  onPlaid: (p: LightModePlatform) => void;
+}) {
+  if (!extras.lightMode && !extras.plaidMode) return null;
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-soft">
+      {extras.lightMode && (
+        <button
+          type="button"
+          onClick={() => onLightMode(platform)}
+          className="text-emerald hover:underline"
+          title="Forward your platform notification emails — start today without vendor approval."
+        >
+          ⚡ Connect Light Mode (no approval needed) →
+        </button>
+      )}
+      {extras.plaidMode && (
+        <>
+          {extras.lightMode && <span aria-hidden>·</span>}
+          <button
+            type="button"
+            onClick={() => onPlaid(platform)}
+            className="text-fuchsia-700 hover:underline"
+            title="Pro option — credential-mediated connector with explicit consent. Concierge setup."
+          >
+            🔐 Plaid Connect (Pro) →
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function platformLabel(platform: string): string {
   switch (platform) {
     case "acuity":
@@ -551,6 +1143,12 @@ function platformLabel(platform: string): string {
       return "Square Appointments";
     case "boulevard":
       return "Boulevard";
+    case "vagaro":
+      return "Vagaro";
+    case "zenoti":
+      return "Zenoti";
+    case "booker":
+      return "Booker";
     default:
       return platform;
   }

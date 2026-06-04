@@ -103,6 +103,14 @@ function RecruitPage() {
     recipientEmail: prefill.to ?? "",
     firstName: prefill.firstName ?? "",
   });
+  // v1.44 per-send overrides. Same shape as outreach — null = template
+  // default, string = rep tweaked. Reset on template selection change.
+  const [subjectOverride, setSubjectOverride] = useState<string | null>(null);
+  const [bodyOverride, setBodyOverride] = useState<string | null>(null);
+  useEffect(() => {
+    setSubjectOverride(null);
+    setBodyOverride(null);
+  }, [selected?.id]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -186,6 +194,8 @@ function RecruitPage() {
           context: {
             firstName: form.firstName,
           },
+          ...(bodyOverride !== null ? { bodyOverride } : {}),
+          ...(subjectOverride !== null ? { subjectOverride } : {}),
         },
       });
       setResult({
@@ -296,6 +306,10 @@ function RecruitPage() {
                 liveEnabled={liveEnabled}
                 senderFirstName={rep.displayName.split(" ")[0] || rep.displayName}
                 stats={stats}
+                subjectOverride={subjectOverride}
+                bodyOverride={bodyOverride}
+                onSubjectOverrideChange={setSubjectOverride}
+                onBodyOverrideChange={setBodyOverride}
               />
             ) : (
               <Hint>Pick a template on the left to see the preview.</Hint>
@@ -634,6 +648,10 @@ function SendPanel({
   liveEnabled,
   senderFirstName,
   stats,
+  subjectOverride,
+  bodyOverride,
+  onSubjectOverrideChange,
+  onBodyOverrideChange,
 }: {
   template: OutreachTemplate;
   form: {
@@ -648,46 +666,53 @@ function SendPanel({
   liveEnabled: boolean | null;
   senderFirstName: string;
   stats: RecruitStats | null;
+  subjectOverride: string | null;
+  bodyOverride: string | null;
+  onSubjectOverrideChange: (v: string | null) => void;
+  onBodyOverrideChange: (v: string | null) => void;
 }) {
-  // v408: post-substitution preview so the rep sees what the recipient
-  // will actually read (with [first name] / [from first name] /
-  // [my month earnings] resolved). Computed client-side from the template
-  // body + current form + stats; no server round-trip needed for preview.
-  const previewBody = useMemo(() => {
-    if (!form.firstName && !senderFirstName) return template.body;
-    let body = template.body;
+  // v1.44 effective subject/body: rep override wins, falls back to template.
+  // First keystroke promotes to "override" (dirty); Reset wipes back to null.
+  const effectiveSubject = subjectOverride ?? template.subject ?? "";
+  const effectiveBody = bodyOverride ?? template.body;
+  const isDirty = subjectOverride !== null || bodyOverride !== null;
+
+  // Live post-substitution preview, computed off the effective (override-or-
+  // template) text so the preview tracks edits in real time. Same placeholder
+  // set the server fn substitutes at send time.
+  const substitute = (text: string) => {
+    let out = text;
     if (form.firstName) {
-      body = body.replace(/\[first name\]/gi, form.firstName);
-      body = body.replace(/\[name\]/gi, form.firstName);
+      out = out.replace(/\[first name\]/gi, form.firstName);
+      out = out.replace(/\[name\]/gi, form.firstName);
     }
     if (senderFirstName) {
-      body = body.replace(/\[from first name\]/gi, senderFirstName);
-      body = body.replace(/\[from\]/gi, senderFirstName);
+      out = out.replace(/\[from first name\]/gi, senderFirstName);
+      out = out.replace(/\[from\]/gi, senderFirstName);
     }
     if (stats?.myCommissionRate) {
-      body = body.replace(/\[my commission rate\]/gi, stats.myCommissionRate);
+      out = out.replace(/\[my commission rate\]/gi, stats.myCommissionRate);
     }
     if (stats?.myMonthEarnings) {
-      body = body.replace(/\[my month earnings\]/gi, stats.myMonthEarnings);
+      out = out.replace(/\[my month earnings\]/gi, stats.myMonthEarnings);
     }
     if (stats?.myDownstreamCount) {
-      body = body.replace(/\[my downstream count\]/gi, stats.myDownstreamCount);
+      out = out.replace(/\[my downstream count\]/gi, stats.myDownstreamCount);
     }
-    return body;
-  }, [template.body, form.firstName, senderFirstName, stats]);
+    return out;
+  };
 
-  const previewSubject = useMemo(() => {
-    if (!template.subject) return null;
-    let subj = template.subject;
-    if (form.firstName) {
-      subj = subj.replace(/\[first name\]/gi, form.firstName);
-      subj = subj.replace(/\[name\]/gi, form.firstName);
-    }
-    if (stats?.myMonthEarnings) {
-      subj = subj.replace(/\[my month earnings\]/gi, stats.myMonthEarnings);
-    }
-    return subj;
-  }, [template.subject, form.firstName, stats]);
+  const previewBody = useMemo(
+    () => substitute(effectiveBody),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [effectiveBody, form.firstName, senderFirstName, stats],
+  );
+
+  const previewSubject = useMemo(
+    () => (effectiveSubject ? substitute(effectiveSubject) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [effectiveSubject, form.firstName, senderFirstName, stats],
+  );
 
   return (
     <div
@@ -701,15 +726,15 @@ function SendPanel({
             style={{ color: "#8a9098" }}
           >
             ICP {template.icp} · {template.channel}
+            {isDirty && (
+              <span
+                className="ml-2 rounded-full px-1.5 py-0.5 text-[9px]"
+                style={{ background: "#fdf6e6", color: "#8a6d10" }}
+              >
+                edited
+              </span>
+            )}
           </div>
-          {previewSubject && (
-            <div
-              className="text-[15px] font-semibold mt-1"
-              style={{ color: "#1c2024" }}
-            >
-              {previewSubject}
-            </div>
-          )}
         </div>
         <button
           type="button"
@@ -722,27 +747,92 @@ function SendPanel({
         </button>
       </div>
 
-      {/* Live post-substitution preview — what the recipient will read. */}
-      <details className="mb-4" open>
-        <summary
-          className="text-[12px] cursor-pointer"
-          style={{ color: "#5a6068" }}
-        >
-          Preview as recipient
-        </summary>
-        <div
-          className="mt-2 rounded-md border p-3 text-[13px] leading-[1.55] max-h-64 overflow-y-auto"
-          style={{
-            borderColor: "#f0ebe0",
-            background: "#fbfaf7",
-            color: "#1c2024",
-          }}
-          dangerouslySetInnerHTML={{ __html: previewBody }}
-        />
-      </details>
-
       {!result ? (
         <>
+          {/* v1.44 inline editor — subject + body editable per-send. Server
+              still substitutes placeholders so [first name] / [from first name]
+              / [my month earnings] fill from the recipient form + stats. */}
+          {template.subject !== null && (
+            <Field
+              label="Subject"
+              value={effectiveSubject}
+              onChange={(v) => onSubjectOverrideChange(v)}
+              placeholder="Email subject"
+            />
+          )}
+          <label className="block mt-3">
+            <span className="flex items-baseline justify-between gap-2">
+              <span
+                className="text-[11px] uppercase tracking-wider font-semibold"
+                style={{ color: "#8a9098" }}
+              >
+                Body (HTML — placeholders fill at send)
+              </span>
+              {isDirty && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSubjectOverrideChange(null);
+                    onBodyOverrideChange(null);
+                  }}
+                  className="text-[11px] underline-offset-2 hover:underline"
+                  style={{ color: "#056048" }}
+                >
+                  Reset to default
+                </button>
+              )}
+            </span>
+            <textarea
+              value={effectiveBody}
+              onChange={(e) => onBodyOverrideChange(e.target.value)}
+              rows={10}
+              className="mt-1 w-full rounded-md border px-3 py-2 text-[12px] font-mono leading-[1.5] focus:outline-none transition"
+              style={{
+                borderColor: "#e6e2d6",
+                background: "#fff",
+                color: "#1c2024",
+              }}
+            />
+            <p
+              className="mt-1 text-[11px]"
+              style={{ color: "#8a9098" }}
+            >
+              Placeholders: <code>[first name]</code>,{" "}
+              <code>[from first name]</code>, <code>[my commission rate]</code>,{" "}
+              <code>[my month earnings]</code>,{" "}
+              <code>[my downstream count]</code>.
+            </p>
+          </label>
+
+          {/* Live post-substitution preview — what the recipient will read. */}
+          <details className="mt-4" open>
+            <summary
+              className="text-[12px] cursor-pointer"
+              style={{ color: "#5a6068" }}
+            >
+              Preview as recipient
+            </summary>
+            {previewSubject && (
+              <div
+                className="mt-2 text-[13px] font-semibold"
+                style={{ color: "#1c2024" }}
+              >
+                {previewSubject}
+              </div>
+            )}
+            <div
+              className="mt-2 rounded-md border p-3 text-[13px] leading-[1.55] max-h-64 overflow-y-auto"
+              style={{
+                borderColor: "#f0ebe0",
+                background: "#fbfaf7",
+                color: "#1c2024",
+              }}
+              dangerouslySetInnerHTML={{ __html: previewBody }}
+            />
+          </details>
+
+          <hr className="my-4" style={{ borderColor: "#f0ebe0" }} />
+
           <div className="space-y-3">
             <Field
               label="Peer rep email"

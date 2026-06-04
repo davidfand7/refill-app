@@ -90,6 +90,26 @@ export const FLAG_CATALOG: FeatureFlagDefinition[] = [
     onMeaning: "Demo banner visible; synthetic data substitutes for real reads.",
     offMeaning: "Real customer data only.",
   },
+  {
+    key: "light_mode_enabled",
+    label: "Light Mode (email-forward connector)",
+    description:
+      "When ON for a tenant, the spa's scheduler settings page surfaces a 'Connect Light Mode' option on each gated platform card (Boulevard / Mindbody / Booker / Jane / Zenoti). The spa forwards their platform's notification emails to a per-spa Refill inbound address; Refill parses cancellation + booking events without touching the vendor's API. Default OFF because most spas should start on full API mode where possible.",
+    defaultEnabled: false,
+    onMeaning:
+      "Spa sees Light Mode toggle on gated-platform cards + can enroll in 60 seconds.",
+    offMeaning: "Light Mode hidden; spa uses API mode only.",
+  },
+  {
+    key: "plaid_mode_enabled",
+    label: "Plaid Mode (browser-automation connector, Pro)",
+    description:
+      "When ON for a tenant, the spa's scheduler settings page surfaces a 'Plaid Connect (Pro)' option on each gated platform card. The connector uses the spa owner's portal login under explicit click-through consent (Plaid-style credential-mediated access). Vendor ToS-gray; reserved for design partners + concierge onboarding. See Refill-PlaidMode-BackPocket-v1.html. Default OFF — admin flips ON per spa.",
+    defaultEnabled: false,
+    onMeaning:
+      "Spa sees Plaid Mode (Pro) toggle on gated-platform cards + can opt in via consent gate.",
+    offMeaning: "Plaid Mode hidden from this spa entirely.",
+  },
 ];
 
 export function findFlagInCatalog(key: string): FeatureFlagDefinition | undefined {

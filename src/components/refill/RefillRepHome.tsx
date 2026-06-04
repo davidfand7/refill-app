@@ -24,6 +24,7 @@ import {
   Network,
   Plug,
   Share2,
+  TrendingUp,
   UserPlus,
   Wallet,
   type LucideIcon,
@@ -61,6 +62,13 @@ const ACTIONS: QuickAction[] = [
     label: "Recruit",
     subtitle: "Pull other reps into your network",
     icon: UserPlus,
+  },
+  {
+    key: "economics",
+    to: "/app/rep/economics",
+    label: "Economics",
+    subtitle: "How the 8/3/1 split pays you",
+    icon: TrendingUp,
   },
   {
     key: "network",

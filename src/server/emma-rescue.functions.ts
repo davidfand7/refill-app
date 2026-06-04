@@ -1271,9 +1271,54 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
 
       const source = claimedApt?.source;
       const writeableSource =
-        source === "acuity" || source === "square" ? source : null;
+        source === "acuity" ||
+        source === "square" ||
+        source === "boulevard" ||
+        source === "mindbody" ||
+        source === "vagaro" ||
+        source === "booker" ||
+        source === "zenoti" ||
+        source === "jane"
+          ? source
+          : null;
 
-      if (!writeableSource) {
+      // v1.43.0 — Light Mode writeback branch. When the appointment
+      // came in via Light Mode email parse (source matches /^lite-/),
+      // we don't have vendor API access. Compose + send the owner an
+      // email with a deeplink to the vendor portal + copy-paste payload
+      // so they can do the booking in 30 seconds. The vendor's own
+      // confirmation email triggered by that manual book closes the
+      // loop via the next Light Mode parse.
+      const isLightModeSource =
+        typeof source === "string" && source.startsWith("lite-");
+
+      if (isLightModeSource) {
+        try {
+          const { dispatchLightModeWriteback } = await import(
+            "@/server/light-mode-writeback.functions"
+          );
+          const result = await dispatchLightModeWriteback({
+            userId: offer.user_id,
+            appointmentId: offer.appointment_id,
+            patientNodeId: offer.patient_node_id,
+            source: source as string,
+            originalExternalId: claimedApt?.external_id ?? null,
+            scheduledAt:
+              (claimedApt?.scheduled_at as string | null | undefined) ?? null,
+          });
+          await stampWritebackNotes(result.notes);
+        } catch (e) {
+          console.error(
+            "light-mode writeback dispatch failed:",
+            e instanceof Error ? e.message : e,
+          );
+          await stampWritebackNotes(
+            `writeback_failed: light_mode dispatch threw (${
+              e instanceof Error ? e.message.slice(0, 80) : "unknown"
+            })`,
+          );
+        }
+      } else if (!writeableSource) {
         // CSV-only spas, or future platforms not yet wired for write-back.
         // No-op silently — the claim flow is complete for them.
         console.info(
@@ -1515,6 +1560,709 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
                 : `writeback_failed: ${msg.slice(0, 400)}`,
             );
             console.error("square write-back failed:", msg);
+          }
+        }
+      } else if (writeableSource === "zenoti") {
+        // v1.41.0 — Zenoti claim writeback. Server-side API key + per-
+        // center scope. No token refresh (API key non-expiring).
+        const sbAny = sb as unknown as {
+          from: (t: string) => {
+            select: (cols: string) => {
+              eq: (col: string, val: string) => {
+                eq: (col: string, val: string) => {
+                  maybeSingle: () => Promise<{
+                    data: { platform_account_id: string | null; status: string } | null;
+                  }>;
+                };
+              };
+            };
+            update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> };
+          };
+        };
+        const { data: connection } = await sbAny
+          .from("emma_scheduler_connections")
+          .select("platform_account_id, status")
+          .eq("user_id", offer.user_id)
+          .eq("platform", "zenoti")
+          .maybeSingle();
+
+        if (!connection || connection.status !== "connected" || !connection.platform_account_id) {
+          console.warn(`[claim-writeback] no active zenoti connection for user ${offer.user_id}`);
+          await stampWritebackNotes("writeback_failed: no_active_zenoti_connection");
+        } else {
+          const { createZenotiAppointment, getZenotiAppointment, resolveZenotiEnv, upsertZenotiGuest } =
+            await import("@/lib/schedulers/zenoti");
+          const env = resolveZenotiEnv();
+          const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+          const API_KEY = stripWs(env === "sandbox" ? process.env.ZENOTI_SANDBOX_API_KEY : process.env.ZENOTI_API_KEY);
+
+          if (!API_KEY) {
+            await stampWritebackNotes("writeback_failed: zenoti_api_key_not_configured");
+          } else {
+            const credentials = { apiKey: API_KEY, centerId: connection.platform_account_id, env };
+
+            const { data: claimer } = await sb
+              .from("knowledge_nodes")
+              .select("title, attachments")
+              .eq("id", offer.patient_node_id)
+              .maybeSingle();
+
+            const fullName = (claimer?.title ?? "").trim();
+            const nameParts = fullName.split(/\s+/).filter(Boolean);
+            const lastName = nameParts.length > 1 ? nameParts.pop()! : "";
+            const firstName = nameParts.join(" ") || fullName || "Patient";
+            const a = claimer?.attachments as { phone?: string; email?: string } | null;
+
+            try {
+              const originalApt = await getZenotiAppointment({ credentials, appointmentId: claimedApt.external_id });
+              if (!originalApt.serviceId || !originalApt.therapistId) {
+                throw new Error("original_appointment_missing_service_or_therapist");
+              }
+              const guest = await upsertZenotiGuest({
+                credentials,
+                phone: a?.phone || null,
+                email: a?.email || null,
+                firstName,
+                lastName,
+              });
+              const newApt = await createZenotiAppointment({
+                credentials,
+                startTime: originalApt.startTime,
+                guestId: guest.id,
+                therapistId: originalApt.therapistId,
+                serviceId: originalApt.serviceId,
+                notes: `Rebooked via Refill from cancelled appointment ${claimedApt.external_id}`,
+              });
+              await sb.from("emma_appointments").update({ external_id: newApt.id }).eq("id", offer.appointment_id);
+              await stampWritebackNotes(`writeback_ok: new_external_id=${newApt.id} replaced=${claimedApt.external_id}`);
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : String(e);
+              await stampWritebackNotes(`writeback_failed: ${msg.slice(0, 400)}`);
+              console.error("zenoti write-back failed:", msg);
+            }
+          }
+        }
+      } else if (writeableSource === "jane") {
+        // v1.40.0 — Jane claim writeback. PKCE + 5-min token TTL means
+        // withFreshJaneToken handles refresh; per-clinic base URL.
+        const sbAny = sb as unknown as {
+          from: (t: string) => {
+            select: (cols: string) => {
+              eq: (col: string, val: string) => {
+                eq: (col: string, val: string) => {
+                  maybeSingle: () => Promise<{
+                    data: {
+                      id: string;
+                      access_token: string | null;
+                      refresh_token: string | null;
+                      token_expires_at: string | null;
+                      platform_account_id: string | null;
+                      status: string;
+                    } | null;
+                  }>;
+                };
+              };
+            };
+            update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> };
+          };
+        };
+        const { data: connection } = await sbAny
+          .from("emma_scheduler_connections")
+          .select("id, access_token, refresh_token, token_expires_at, platform_account_id, status")
+          .eq("user_id", offer.user_id)
+          .eq("platform", "jane")
+          .maybeSingle();
+
+        if (
+          !connection ||
+          connection.status !== "connected" ||
+          !connection.access_token ||
+          !connection.platform_account_id
+        ) {
+          console.warn(`[claim-writeback] no active jane connection for user ${offer.user_id}`);
+          await stampWritebackNotes("writeback_failed: no_active_jane_connection");
+        } else {
+          const { createJaneAppointment, getJaneAppointment, upsertJanePatient } =
+            await import("@/lib/schedulers/jane");
+          const { withFreshJaneToken } = await import("@/server/emma-scheduler.functions");
+
+          const { data: claimer } = await sb
+            .from("knowledge_nodes")
+            .select("title, attachments")
+            .eq("id", offer.patient_node_id)
+            .maybeSingle();
+
+          const fullName = (claimer?.title ?? "").trim();
+          const nameParts = fullName.split(/\s+/).filter(Boolean);
+          const lastName = nameParts.length > 1 ? nameParts.pop()! : "";
+          const firstName = nameParts.join(" ") || fullName || "Patient";
+          const a = claimer?.attachments as { phone?: string; email?: string } | null;
+
+          try {
+            const clinicUrl = connection.platform_account_id;
+            const newApt = await withFreshJaneToken({
+              sb,
+              connectionId: connection.id,
+              accessToken: connection.access_token,
+              refreshToken: connection.refresh_token,
+              expiresAt: connection.token_expires_at,
+              fn: async (accessToken) => {
+                const originalApt = await getJaneAppointment({
+                  accessToken,
+                  clinicUrl,
+                  appointmentId: claimedApt.external_id,
+                });
+                if (!originalApt.treatmentId || !originalApt.staffMemberId) {
+                  throw new Error("original_appointment_missing_treatment_or_staff");
+                }
+                const patient = await upsertJanePatient({
+                  accessToken,
+                  clinicUrl,
+                  firstName,
+                  lastName,
+                  email: a?.email || null,
+                  phone: a?.phone || null,
+                });
+                return createJaneAppointment({
+                  accessToken,
+                  clinicUrl,
+                  startAt: originalApt.startAt,
+                  patientId: patient.id,
+                  staffMemberId: originalApt.staffMemberId,
+                  treatmentId: originalApt.treatmentId,
+                  locationId: originalApt.locationId ?? undefined,
+                  notes: `Rebooked via Refill from cancelled appointment ${claimedApt.external_id}`,
+                });
+              },
+            });
+            await sb.from("emma_appointments").update({ external_id: newApt.id }).eq("id", offer.appointment_id);
+            await stampWritebackNotes(
+              `writeback_ok: new_external_id=${newApt.id} replaced=${claimedApt.external_id}`,
+            );
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            await stampWritebackNotes(`writeback_failed: ${msg.slice(0, 400)}`);
+            console.error("jane write-back failed:", msg);
+          }
+        }
+      } else if (writeableSource === "booker") {
+        // v1.39.0 — Booker claim writeback. Server-to-server OAuth mint
+        // access_token per writeback, scope by stored LocationId.
+        const sbAny = sb as unknown as {
+          from: (t: string) => {
+            select: (cols: string) => {
+              eq: (col: string, val: string) => {
+                eq: (col: string, val: string) => {
+                  maybeSingle: () => Promise<{
+                    data: { platform_account_id: string | null; status: string } | null;
+                  }>;
+                };
+              };
+            };
+            update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> };
+          };
+        };
+        const { data: connection } = await sbAny
+          .from("emma_scheduler_connections")
+          .select("platform_account_id, status")
+          .eq("user_id", offer.user_id)
+          .eq("platform", "booker")
+          .maybeSingle();
+
+        if (!connection || connection.status !== "connected" || !connection.platform_account_id) {
+          console.warn(`[claim-writeback] no active booker connection for user ${offer.user_id}`);
+          await stampWritebackNotes("writeback_failed: no_active_booker_connection");
+        } else {
+          const {
+            createBookerAppointment,
+            getBookerAccessToken,
+            getBookerAppointment,
+            resolveBookerEnv,
+            upsertBookerCustomer,
+          } = await import("@/lib/schedulers/booker");
+          const env = resolveBookerEnv();
+          const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+          const CLIENT_ID = stripWs(env === "sandbox" ? process.env.BOOKER_SANDBOX_CLIENT_ID : process.env.BOOKER_CLIENT_ID);
+          const CLIENT_SECRET = stripWs(env === "sandbox" ? process.env.BOOKER_SANDBOX_CLIENT_SECRET : process.env.BOOKER_CLIENT_SECRET);
+          const SUBSCRIPTION_KEY = stripWs(env === "sandbox" ? process.env.BOOKER_SANDBOX_SUBSCRIPTION_KEY : process.env.BOOKER_SUBSCRIPTION_KEY);
+
+          if (!CLIENT_ID || !CLIENT_SECRET || !SUBSCRIPTION_KEY) {
+            await stampWritebackNotes("writeback_failed: booker_credentials_not_configured");
+          } else {
+            const credentials = { clientId: CLIENT_ID, clientSecret: CLIENT_SECRET, subscriptionKey: SUBSCRIPTION_KEY, env };
+
+            const { data: claimer } = await sb
+              .from("knowledge_nodes")
+              .select("title, attachments")
+              .eq("id", offer.patient_node_id)
+              .maybeSingle();
+
+            const fullName = (claimer?.title ?? "").trim();
+            const nameParts = fullName.split(/\s+/).filter(Boolean);
+            const lastName = nameParts.length > 1 ? nameParts.pop()! : "";
+            const firstName = nameParts.join(" ") || fullName || "Patient";
+            const a = claimer?.attachments as { phone?: string; email?: string } | null;
+
+            try {
+              const tok = await getBookerAccessToken({ credentials });
+              const originalApt = await getBookerAppointment({
+                accessToken: tok.accessToken,
+                credentials,
+                appointmentId: claimedApt.external_id,
+              });
+              if (!originalApt.employeeId || !originalApt.treatmentId) {
+                throw new Error("original_appointment_missing_employee_or_treatment");
+              }
+              const customer = await upsertBookerCustomer({
+                accessToken: tok.accessToken,
+                credentials,
+                phone: a?.phone || null,
+                email: a?.email || null,
+                firstName,
+                lastName,
+              });
+              const newApt = await createBookerAppointment({
+                accessToken: tok.accessToken,
+                credentials,
+                startDateTime: originalApt.startDateTime,
+                customerId: customer.id,
+                employeeId: originalApt.employeeId,
+                treatmentId: originalApt.treatmentId,
+                notes: `Rebooked via Refill from cancelled appointment ${claimedApt.external_id}`,
+              });
+              await sb.from("emma_appointments").update({ external_id: newApt.id }).eq("id", offer.appointment_id);
+              await stampWritebackNotes(`writeback_ok: new_external_id=${newApt.id} replaced=${claimedApt.external_id}`);
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : String(e);
+              await stampWritebackNotes(`writeback_failed: ${msg.slice(0, 400)}`);
+              console.error("booker write-back failed:", msg);
+            }
+          }
+        }
+      } else if (writeableSource === "vagaro") {
+        // v1.38.0 — Vagaro claim writeback. Per-spa API key auth (no OAuth).
+        const sbAny = sb as unknown as {
+          from: (t: string) => {
+            select: (cols: string) => {
+              eq: (col: string, val: string) => {
+                eq: (col: string, val: string) => {
+                  maybeSingle: () => Promise<{
+                    data: {
+                      access_token: string | null;
+                      platform_account_id: string | null;
+                      status: string;
+                    } | null;
+                  }>;
+                };
+              };
+            };
+            update: (v: object) => {
+              eq: (c: string, v: string) => Promise<unknown>;
+            };
+          };
+        };
+        const { data: connection } = await sbAny
+          .from("emma_scheduler_connections")
+          .select("access_token, platform_account_id, status")
+          .eq("user_id", offer.user_id)
+          .eq("platform", "vagaro")
+          .maybeSingle();
+
+        if (!connection || connection.status !== "connected" || !connection.access_token) {
+          console.warn(`[claim-writeback] no active vagaro connection for user ${offer.user_id}`);
+          await stampWritebackNotes("writeback_failed: no_active_vagaro_connection");
+        } else {
+          const { createVagaroAppointment, getVagaroAppointment, upsertVagaroCustomer } =
+            await import("@/lib/schedulers/vagaro");
+
+          const { data: claimer } = await sb
+            .from("knowledge_nodes")
+            .select("title, attachments")
+            .eq("id", offer.patient_node_id)
+            .maybeSingle();
+
+          const fullName = (claimer?.title ?? "").trim();
+          const nameParts = fullName.split(/\s+/).filter(Boolean);
+          const lastName = nameParts.length > 1 ? nameParts.pop()! : "";
+          const firstName = nameParts.join(" ") || fullName || "Patient";
+          const a = claimer?.attachments as { phone?: string; email?: string } | null;
+
+          try {
+            const credentials = {
+              apiKey: connection.access_token,
+              merchantId: connection.platform_account_id ?? "",
+            };
+            const originalApt = await getVagaroAppointment({
+              credentials,
+              appointmentId: claimedApt.external_id,
+            });
+            if (!originalApt.serviceId || !originalApt.staffId) {
+              throw new Error("original_appointment_missing_service_or_staff");
+            }
+            const customer = await upsertVagaroCustomer({
+              credentials,
+              phone: a?.phone || null,
+              email: a?.email || null,
+              firstName,
+              lastName,
+            });
+            const newApt = await createVagaroAppointment({
+              credentials,
+              startDateTime: originalApt.startDateTime,
+              customerId: customer.id,
+              serviceId: originalApt.serviceId,
+              staffId: originalApt.staffId,
+              notes: `Rebooked via Refill from cancelled appointment ${claimedApt.external_id}`,
+            });
+            await sb
+              .from("emma_appointments")
+              .update({ external_id: newApt.id })
+              .eq("id", offer.appointment_id);
+            await stampWritebackNotes(
+              `writeback_ok: new_external_id=${newApt.id} replaced=${claimedApt.external_id}`,
+            );
+          } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            await stampWritebackNotes(`writeback_failed: ${msg.slice(0, 400)}`);
+            console.error("vagaro write-back failed:", msg);
+          }
+        }
+      } else if (writeableSource === "mindbody") {
+        // v1.37.0 — Mindbody claim writeback. Mirror of the Acuity +
+        // Square + Boulevard branches. Mindbody requires explicit
+        // ClientId on the booking POST (no inline name/email/phone),
+        // so the roster-miss path calls addclient first then uses
+        // the returned ClientId in the booking. Execute: "Force" is
+        // the admin override (analog to Acuity's ?admin=true).
+        const sbAny = sb as unknown as {
+          from: (t: string) => {
+            select: (cols: string) => {
+              eq: (col: string, val: string) => {
+                eq: (col: string, val: string) => {
+                  maybeSingle: () => Promise<{
+                    data: {
+                      id: string;
+                      access_token: string | null;
+                      refresh_token: string | null;
+                      token_expires_at: string | null;
+                      status: string;
+                      platform: string;
+                      platform_account_id: string | null;
+                    } | null;
+                  }>;
+                };
+              };
+            };
+            update: (v: object) => {
+              eq: (c: string, v: string) => Promise<unknown>;
+            };
+          };
+        };
+        const { data: connection } = await sbAny
+          .from("emma_scheduler_connections")
+          .select(
+            "id, access_token, refresh_token, token_expires_at, status, platform, platform_account_id",
+          )
+          .eq("user_id", offer.user_id)
+          .eq("platform", "mindbody")
+          .maybeSingle();
+
+        if (
+          !connection ||
+          connection.status !== "connected" ||
+          !connection.access_token ||
+          !connection.platform_account_id
+        ) {
+          console.warn(
+            `[claim-writeback] no active mindbody connection for user ${offer.user_id}`,
+          );
+          await stampWritebackNotes(
+            "writeback_failed: no_active_mindbody_connection",
+          );
+        } else {
+          const {
+            addMindbodyClient,
+            bookMindbodyAppointment,
+            getMindbodyAppointment,
+            resolveMindbodyEnv,
+          } = await import("@/lib/schedulers/mindbody");
+          const { withFreshMindbodyToken } = await import(
+            "@/server/emma-scheduler.functions"
+          );
+          const env = resolveMindbodyEnv();
+          const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+          const API_KEY = stripWs(
+            env === "sandbox"
+              ? process.env.MINDBODY_SANDBOX_API_KEY
+              : process.env.MINDBODY_API_KEY,
+          );
+          if (!API_KEY) {
+            await stampWritebackNotes(
+              "writeback_failed: mindbody_api_key_not_configured",
+            );
+          } else {
+            const siteId = connection.platform_account_id;
+
+            const { data: claimer } = await sb
+              .from("knowledge_nodes")
+              .select("title, attachments")
+              .eq("id", offer.patient_node_id)
+              .maybeSingle();
+
+            const fullName = (claimer?.title ?? "").trim();
+            const nameParts = fullName.split(/\s+/).filter(Boolean);
+            const lastName = nameParts.length > 1 ? nameParts.pop()! : "";
+            const firstName =
+              nameParts.join(" ") || fullName || "Patient";
+            const a = claimer?.attachments as
+              | {
+                  phone?: string;
+                  email?: string;
+                  scheduler_client_id?: string;
+                }
+              | null;
+
+            try {
+              const newApt = await withFreshMindbodyToken({
+                sb,
+                connectionId: connection.id,
+                accessToken: connection.access_token,
+                refreshToken: connection.refresh_token,
+                expiresAt: connection.token_expires_at,
+                fn: async (accessToken) => {
+                  const originalApt = await getMindbodyAppointment({
+                    accessToken,
+                    apiKey: API_KEY,
+                    siteId,
+                    env,
+                    appointmentId: claimedApt.external_id,
+                  });
+
+                  if (!originalApt.sessionTypeId || !originalApt.staffId) {
+                    throw new Error(
+                      "original_appointment_missing_session_type_or_staff",
+                    );
+                  }
+
+                  // Roster hit vs roster miss
+                  let clientId =
+                    a?.scheduler_client_id || null;
+                  if (!clientId) {
+                    const newClient = await addMindbodyClient({
+                      accessToken,
+                      apiKey: API_KEY,
+                      siteId,
+                      env,
+                      firstName,
+                      lastName,
+                      email: a?.email || null,
+                      phone: a?.phone || null,
+                    });
+                    clientId = newClient.id;
+                    // Stamp returned ID back onto the patient node so
+                    // future writebacks hit the fast path.
+                    const newAttachments = {
+                      ...(a ?? {}),
+                      scheduler_client_id: clientId,
+                    };
+                    await sb
+                      .from("knowledge_nodes")
+                      .update({ attachments: newAttachments })
+                      .eq("id", offer.patient_node_id);
+                  }
+
+                  return bookMindbodyAppointment({
+                    accessToken,
+                    apiKey: API_KEY,
+                    siteId,
+                    env,
+                    startDateTime: originalApt.startDateTime,
+                    clientId,
+                    sessionTypeId: originalApt.sessionTypeId,
+                    staffId: originalApt.staffId,
+                    locationId: originalApt.locationId ?? undefined,
+                    notes: `Rebooked via Refill from cancelled appointment ${claimedApt.external_id}`,
+                  });
+                },
+              });
+
+              await sb
+                .from("emma_appointments")
+                .update({ external_id: newApt.id })
+                .eq("id", offer.appointment_id);
+
+              await stampWritebackNotes(
+                `writeback_ok: new_external_id=${newApt.id} replaced=${claimedApt.external_id}`,
+              );
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : String(e);
+              await stampWritebackNotes(
+                `writeback_failed: ${msg.slice(0, 400)}`,
+              );
+              console.error("mindbody write-back failed:", msg);
+            }
+          }
+        }
+      } else if (writeableSource === "boulevard") {
+        // v1.36.0 — Boulevard claim writeback. Mirror of the Acuity +
+        // Square branches but on the GraphQL substrate. Boulevard auth
+        // is app-level (BLVD_API_KEY + BLVD_API_SECRET from env) +
+        // businessId URN scopes each mutation. No per-spa access token
+        // to refresh. Tier-blocked sellers (Free/Starter) fail-degrade
+        // with a dedicated note value the Rescue dashboard renders as
+        // an upgrade prompt.
+        const sbAny = sb as unknown as {
+          from: (t: string) => {
+            select: (cols: string) => {
+              eq: (col: string, val: string) => {
+                eq: (col: string, val: string) => {
+                  maybeSingle: () => Promise<{
+                    data: {
+                      id: string;
+                      status: string;
+                      platform: string;
+                      platform_account_id: string | null;
+                    } | null;
+                  }>;
+                };
+              };
+            };
+            update: (v: object) => {
+              eq: (c: string, v: string) => Promise<unknown>;
+            };
+          };
+        };
+        const { data: connection } = await sbAny
+          .from("emma_scheduler_connections")
+          .select("id, status, platform, platform_account_id")
+          .eq("user_id", offer.user_id)
+          .eq("platform", "boulevard")
+          .maybeSingle();
+
+        if (
+          !connection ||
+          connection.status !== "connected" ||
+          !connection.platform_account_id
+        ) {
+          console.warn(
+            `[claim-writeback] no active boulevard connection for user ${offer.user_id}`,
+          );
+          await stampWritebackNotes(
+            "writeback_failed: no_active_boulevard_connection",
+          );
+        } else {
+          const {
+            getBoulevardAppointment,
+            createBoulevardAppointment,
+            upsertBoulevardClient,
+            resolveBoulevardEnv,
+          } = await import("@/lib/schedulers/boulevard");
+          const env = resolveBoulevardEnv();
+          const stripWs = (v: string | undefined) => v?.replace(/\s+/g, "");
+          const APPLICATION_ID = stripWs(
+            env === "sandbox"
+              ? process.env.BLVD_SANDBOX_APPLICATION_ID
+              : process.env.BLVD_APPLICATION_ID,
+          );
+          const API_KEY = stripWs(
+            env === "sandbox"
+              ? process.env.BLVD_SANDBOX_API_KEY
+              : process.env.BLVD_API_KEY,
+          );
+          const API_SECRET = stripWs(
+            env === "sandbox"
+              ? process.env.BLVD_SANDBOX_API_SECRET
+              : process.env.BLVD_API_SECRET,
+          );
+
+          if (!APPLICATION_ID || !API_KEY || !API_SECRET) {
+            await stampWritebackNotes(
+              "writeback_failed: boulevard_app_credentials_not_configured",
+            );
+          } else {
+            const credentials = {
+              applicationId: APPLICATION_ID,
+              apiKey: API_KEY,
+              apiSecret: API_SECRET,
+              env,
+            };
+            const businessId = connection.platform_account_id;
+
+            const { data: claimer } = await sb
+              .from("knowledge_nodes")
+              .select("title, attachments")
+              .eq("id", offer.patient_node_id)
+              .maybeSingle();
+
+            const fullName = (claimer?.title ?? "").trim();
+            const nameParts = fullName.split(/\s+/).filter(Boolean);
+            const lastName = nameParts.length > 1 ? nameParts.pop()! : "";
+            const firstName =
+              nameParts.join(" ") || fullName || "Patient";
+            const a = claimer?.attachments as
+              | { phone?: string; email?: string }
+              | null;
+
+            try {
+              const originalApt = await getBoulevardAppointment({
+                credentials,
+                businessId,
+                appointmentId: claimedApt.external_id,
+              });
+
+              if (!originalApt.locationId) {
+                await stampWritebackNotes(
+                  "writeback_failed: original_appointment_missing_location",
+                );
+              } else {
+                const client = await upsertBoulevardClient({
+                  credentials,
+                  businessId,
+                  phone: a?.phone || null,
+                  email: a?.email || null,
+                  firstName,
+                  lastName,
+                });
+                const newApt = await createBoulevardAppointment({
+                  credentials,
+                  businessId,
+                  startAt: originalApt.startAt,
+                  locationId: originalApt.locationId,
+                  clientId: client.id,
+                  serviceIds: originalApt.serviceIds,
+                  staffId: originalApt.staffId ?? undefined,
+                  notes: `Rebooked via Refill from cancelled appointment ${claimedApt.external_id}`,
+                  idempotencyKey: `refill-rescue-${offer.id}`,
+                });
+
+                await sb
+                  .from("emma_appointments")
+                  .update({ external_id: newApt.id })
+                  .eq("id", offer.appointment_id);
+
+                await stampWritebackNotes(
+                  `writeback_ok: new_external_id=${newApt.id} replaced=${claimedApt.external_id}`,
+                );
+              }
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : String(e);
+              // Boulevard surfaces tier-block via GraphQL userErrors[]
+              // (the connector throws with the message text). Detect
+              // tier-block on common substring patterns; same UX as
+              // Square tier-block.
+              const lower = msg.toLowerCase();
+              const tierBlocked =
+                lower.includes("premier") ||
+                lower.includes("enterprise") ||
+                lower.includes("subscription") ||
+                lower.includes("forbidden");
+              await stampWritebackNotes(
+                tierBlocked
+                  ? "writeback_failed: tier_blocked (Boulevard Premier/Enterprise required)"
+                  : `writeback_failed: ${msg.slice(0, 400)}`,
+              );
+              console.error("boulevard write-back failed:", msg);
+            }
           }
         }
       }
