@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Send, Sparkles, X } from "lucide-react";
 import { z } from "zod";
 
+import { TemplateEditor } from "@/components/refill/TemplateEditor";
 import { getAdminViewAsUserId } from "@/lib/admin-view-as";
 import { useAuth } from "@/lib/auth";
 import {
@@ -694,13 +695,13 @@ function SendPanel({
               placeholder="Email subject"
             />
           )}
-          <label className="block mt-3">
-            <span className="flex items-baseline justify-between gap-2">
+          <div className="mt-3">
+            <div className="flex items-baseline justify-between gap-2 mb-1">
               <span
                 className="text-[11px] uppercase tracking-wider font-semibold"
                 style={{ color: "#8a9098" }}
               >
-                Body (HTML — placeholders fill at send)
+                Body
               </span>
               {isDirty && (
                 <button
@@ -715,26 +716,23 @@ function SendPanel({
                   Reset to default
                 </button>
               )}
-            </span>
-            <textarea
+            </div>
+            {/* v1.45.0: TipTap WYSIWYG replaces the raw-HTML textarea. Placeholders
+                like [first name] render as inline chips; reps see compose-like
+                formatting instead of <p>/<strong> markup. */}
+            <TemplateEditor
               value={effectiveBody}
-              onChange={(e) => onBodyOverrideChange(e.target.value)}
+              onChange={(html) => onBodyOverrideChange(html)}
               rows={10}
-              className="mt-1 w-full rounded-md border px-3 py-2 text-[12px] font-mono leading-[1.5] focus:outline-none transition"
-              style={{
-                borderColor: "#e6e2d6",
-                background: "#fff",
-                color: "#1c2024",
-              }}
+              ariaLabel="Email body"
+              placeholderHints={[
+                "[first name]",
+                "[spa name]",
+                "$[exact figure]",
+                "[N] weeks",
+              ]}
             />
-            <p
-              className="mt-1 text-[11px]"
-              style={{ color: "#8a9098" }}
-            >
-              Placeholders: <code>[first name]</code>, <code>[spa name]</code>,{" "}
-              <code>$[exact figure]</code>, <code>[N] weeks</code>.
-            </p>
-          </label>
+          </div>
 
           {/* Live preview of what the recipient will see after substitution. */}
           <details className="mt-4" open>

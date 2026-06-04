@@ -37,6 +37,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link2, Send, Sparkles, UserPlus, X } from "lucide-react";
 import { z } from "zod";
 
+import { TemplateEditor } from "@/components/refill/TemplateEditor";
 import { getAdminViewAsUserId } from "@/lib/admin-view-as";
 import { useAuth } from "@/lib/auth";
 import {
@@ -760,13 +761,13 @@ function SendPanel({
               placeholder="Email subject"
             />
           )}
-          <label className="block mt-3">
-            <span className="flex items-baseline justify-between gap-2">
+          <div className="mt-3">
+            <div className="flex items-baseline justify-between gap-2 mb-1">
               <span
                 className="text-[11px] uppercase tracking-wider font-semibold"
                 style={{ color: "#8a9098" }}
               >
-                Body (HTML — placeholders fill at send)
+                Body
               </span>
               {isDirty && (
                 <button
@@ -781,28 +782,22 @@ function SendPanel({
                   Reset to default
                 </button>
               )}
-            </span>
-            <textarea
+            </div>
+            {/* v1.45.0: TipTap WYSIWYG. Recruit placeholders render as chips. */}
+            <TemplateEditor
               value={effectiveBody}
-              onChange={(e) => onBodyOverrideChange(e.target.value)}
+              onChange={(html) => onBodyOverrideChange(html)}
               rows={10}
-              className="mt-1 w-full rounded-md border px-3 py-2 text-[12px] font-mono leading-[1.5] focus:outline-none transition"
-              style={{
-                borderColor: "#e6e2d6",
-                background: "#fff",
-                color: "#1c2024",
-              }}
+              ariaLabel="Email body"
+              placeholderHints={[
+                "[first name]",
+                "[from first name]",
+                "[my commission rate]",
+                "[my month earnings]",
+                "[my downstream count]",
+              ]}
             />
-            <p
-              className="mt-1 text-[11px]"
-              style={{ color: "#8a9098" }}
-            >
-              Placeholders: <code>[first name]</code>,{" "}
-              <code>[from first name]</code>, <code>[my commission rate]</code>,{" "}
-              <code>[my month earnings]</code>,{" "}
-              <code>[my downstream count]</code>.
-            </p>
-          </label>
+          </div>
 
           {/* Live post-substitution preview — what the recipient will read. */}
           <details className="mt-4" open>

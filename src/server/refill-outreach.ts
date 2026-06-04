@@ -124,6 +124,10 @@ const updateInput = z.object({
 const templateInputSchema = z.object({
   icp: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   channel: z.string().min(1).max(80),
+  // v1.45.0: audience optional for back-compat with the HTML-marker importer
+  // which only ever produced 'spa'-audience templates. New paste/upload flow
+  // passes 'spa' or 'rep' explicitly so admin can seed the recruit library.
+  audience: z.enum(["spa", "rep"]).optional(),
   subject: z.string().nullable().optional(),
   body: z.string().min(1),
   loomUrl: z.string().nullable().optional(),
@@ -292,13 +296,16 @@ export const bulkUpsertOutreachTemplates = createServerFn({ method: "POST" })
 
       for (const tpl of data.templates) {
         try {
-          // Get current active version (if any) to compute next version
-          // number AND to deactivate before insert.
+          // v1.45.0: scope the existing-active lookup by audience too so a new
+          // 'rep' template doesn't accidentally deactivate the matching 'spa'
+          // template with the same (icp, channel) tuple.
+          const audience = tpl.audience ?? "spa";
           const { data: existing } = await sb
             .from("outreach_templates")
             .select("id, version")
             .eq("icp", tpl.icp)
             .eq("channel", tpl.channel)
+            .eq("audience", audience)
             .eq("is_active", true)
             .maybeSingle();
 
@@ -319,6 +326,7 @@ export const bulkUpsertOutreachTemplates = createServerFn({ method: "POST" })
             .insert({
               icp: tpl.icp,
               channel: tpl.channel,
+              audience,
               subject: tpl.subject ?? null,
               body: tpl.body,
               loom_url: tpl.loomUrl ?? null,

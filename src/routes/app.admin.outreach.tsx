@@ -35,11 +35,14 @@ import {
   ArrowDown,
   Eye,
   ArrowLeft,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { useAuth } from "@/lib/auth";
 import { PageHeader } from "@/components/PageHeader";
+import { TemplateEditor } from "@/components/refill/TemplateEditor";
+import { TemplateBulkImport } from "@/components/refill/TemplateBulkImport";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -183,6 +186,7 @@ function AdminOutreachPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [editing, setEditing] = useState<OutreachTemplate | null>(null);
   const [importing, setImporting] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Auth bounce
@@ -348,6 +352,10 @@ function AdminOutreachPage() {
               className="hidden"
               onChange={handleFileSelected}
             />
+            <Button onClick={() => setBulkOpen(true)} variant="outline">
+              <FileText className="mr-2 h-4 w-4" />
+              Paste / upload
+            </Button>
             <Button onClick={handleImport} disabled={importing} variant="outline">
               {importing ? (
                 <>
@@ -357,7 +365,7 @@ function AdminOutreachPage() {
               ) : (
                 <>
                   <Upload className="mr-2 h-4 w-4" />
-                  Import from doc
+                  Import HTML pack
                 </>
               )}
             </Button>
@@ -452,6 +460,21 @@ function AdminOutreachPage() {
           })}
         </div>
       </main>
+
+      {/* v1.45.0: paste-or-upload import modal — alongside the existing
+          HTML-pack import. Different mental model: HTML-pack is for the
+          structured Refill-Outreach-Pack.html doc; paste/upload is for any
+          .txt / .md / .docx / raw paste, with auto-detect multi-message split
+          via `---`. */}
+      <TemplateBulkImport
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        onSaved={() => {
+          // Refresh templates after a successful bulk save.
+          void refresh();
+        }}
+        accessToken={session?.access_token ?? null}
+      />
 
       {/* Inline edit modal */}
       <EditModal
@@ -639,21 +662,41 @@ function EditModal({ template, onClose, onSaved, accessToken }: EditModalProps) 
                 </div>
               )}
               <div>
-                <Label htmlFor="outreach-body" className="text-xs uppercase tracking-wide text-slate-600">
-                  {isLoom ? "Script" : "Body (HTML)"}
+                <Label className="text-xs uppercase tracking-wide text-slate-600">
+                  {isLoom ? "Script" : "Body"}
                 </Label>
-                <Textarea
-                  id="outreach-body"
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  rows={isLoom ? 18 : 14}
-                  className="mt-1 font-mono text-[13px]"
-                />
-                <p className="mt-1 text-[11px] text-slate-500">
-                  {isLoom
-                    ? "Plain text + timestamps. Read aloud as Karen."
-                    : "HTML allowed. Placeholders like [first name] / [spa name] / $[exact figure] are substituted at send time."}
-                </p>
+                {isLoom ? (
+                  <>
+                    <Textarea
+                      id="outreach-body"
+                      value={body}
+                      onChange={(e) => setBody(e.target.value)}
+                      rows={18}
+                      className="mt-1 font-mono text-[13px]"
+                    />
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Plain text + timestamps. Read aloud as Karen.
+                    </p>
+                  </>
+                ) : (
+                  <div className="mt-1">
+                    {/* v1.45.0: WYSIWYG editor in the admin modal too — same
+                        chip-rendered placeholders + same toolbar shape as the
+                        rep-side surfaces. */}
+                    <TemplateEditor
+                      value={body}
+                      onChange={setBody}
+                      rows={14}
+                      ariaLabel="Email body"
+                      placeholderHints={[
+                        "[first name]",
+                        "[spa name]",
+                        "$[exact figure]",
+                        "[N] weeks",
+                      ]}
+                    />
+                  </div>
+                )}
               </div>
               <div>
                 <Label htmlFor="outreach-notes" className="text-xs uppercase tracking-wide text-slate-600">
