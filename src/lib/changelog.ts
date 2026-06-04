@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.46.2",
+    date: "June 2026",
+    items: [
+      "<strong>v1.46.2 &mdash; Hotfix: Zoho OAuth callback bounce crashed the integrations page on render.</strong> The OAuth round-trip itself worked end-to-end &mdash; token exchange succeeded, connection row upserted, browser redirected back to <code>/app/rep/integrations?zoho_connected=1</code>. But the page&rsquo;s Zod <code>validateSearch</code> schema demanded a string for <code>zoho_connected</code>, and TanStack Router&rsquo;s search-param parser auto-coerced the literal <code>1</code> to a number. Zod rejected, error boundary swallowed. <strong>Fix</strong>: relax both <code>zoho_connected</code> and <code>zoho_error</code> to accept string/number/boolean and normalize to string in the transform &mdash; same downstream <code>=== &ldquo;1&rdquo;</code> comparison still works. Per <code>feedback-own-it-no-excuses</code>: my schema was too strict; I should have tested the bounce against the actual redirect URL before shipping v1.46.0. <strong>Touched</strong>: <code>src/routes/app.rep.integrations.tsx</code> (schema only), <code>src/lib/changelog.ts</code> (this entry). No dep change, no migration, no behavior change for any other surface.",
+    ],
+  },
+  {
     version: "v1.46.1",
     date: "June 2026",
     items: [

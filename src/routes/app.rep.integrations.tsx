@@ -38,12 +38,19 @@ import {
 } from "@/server/zoho.functions";
 import type { ZohoContact } from "@/lib/integrations/zoho";
 
-// Search params from the OAuth callback bounce. Tolerant — any unknown
-// shape is ignored without throwing, so a stale link with garbage params
-// still renders the page.
+// Search params from the OAuth callback bounce. v1.46.2: TanStack Router
+// auto-coerces numeric-looking params ("?zoho_connected=1" → number 1), so
+// declare both numeric-and-string tolerance + normalize to string for the
+// downstream comparison. A stale link with garbage params still renders.
 const integrationsSearchSchema = z.object({
-  zoho_connected: z.string().optional(),
-  zoho_error: z.string().optional(),
+  zoho_connected: z
+    .union([z.string(), z.number(), z.boolean()])
+    .optional()
+    .transform((v) => (v == null ? undefined : String(v))),
+  zoho_error: z
+    .union([z.string(), z.number()])
+    .optional()
+    .transform((v) => (v == null ? undefined : String(v))),
 });
 
 export const Route = createFileRoute("/app/rep/integrations")({
