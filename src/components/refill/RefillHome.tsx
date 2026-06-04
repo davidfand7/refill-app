@@ -35,7 +35,9 @@ import {
   Inbox,
   Megaphone,
   Plug,
+  Share2,
   Sparkles,
+  UserPlus,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -129,6 +131,41 @@ const ACTIONS: QuickAction[] = [
     subtitle: "Marketing blast composer (manual cohort sends)",
     icon: Megaphone,
     featureKey: "nav.campaigns",
+  },
+  // v1.44.3: remaining orphans from the 2026-06-03 audit registered as
+  // featureKey-gated cards. All default OFF; admin enables per-tenant.
+  // Sharing stays invisible until rep-side reader ships (half-built P4).
+  {
+    key: "sharing",
+    to: "/app/refill/sharing",
+    label: "Data sharing",
+    subtitle: "Grant per-rep access to your aggregate metrics",
+    icon: Share2,
+    featureKey: "nav.sharing",
+  },
+  {
+    key: "waitlist-invite",
+    to: "/app/refill/waitlist/invite",
+    label: "Waitlist invite",
+    subtitle: "Cold opt-in composer for new patients",
+    icon: UserPlus,
+    featureKey: "nav.waitlist.invite",
+  },
+  {
+    key: "waitlist-seed",
+    to: "/app/refill/waitlist/seed",
+    label: "Waitlist seed (per patient)",
+    subtitle: "Manually add a waitlist intent for one patient",
+    icon: UserPlus,
+    featureKey: "nav.waitlist.seed",
+  },
+  {
+    key: "waitlist-bulk",
+    to: "/app/refill/waitlist/bulk",
+    label: "Waitlist seed (bulk)",
+    subtitle: "Migrate a cohort onto Refill's waitlist at once",
+    icon: UserPlus,
+    featureKey: "nav.waitlist.bulk",
   },
   {
     key: "inbox",
