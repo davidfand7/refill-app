@@ -98,8 +98,9 @@ function createServiceClient() {
  * Returns an empty array if Light Mode has not been enabled for any
  * platform yet.
  */
+const listLightModeConnectionsInput = z.object({ accessToken: z.string() });
 export const listLightModeConnections = createServerFn({ method: "POST" })
-  .validator(z.object({ accessToken: z.string() }))
+  .inputValidator((raw: unknown) => listLightModeConnectionsInput.parse(raw))
   .handler(async ({ data }) => {
     const { effectiveUserId } = await resolveEffectiveUserId({
       data: { accessToken: data.accessToken },
@@ -141,13 +142,12 @@ export const listLightModeConnections = createServerFn({ method: "POST" })
  * slug if no connection exists yet for that platform; otherwise just
  * unpause an existing row.
  */
+const enableLightModeInput = z.object({
+  accessToken: z.string(),
+  platform: z.enum(["zenoti", "jane", "boulevard", "mindbody", "booker"]),
+});
 export const enableLightMode = createServerFn({ method: "POST" })
-  .validator(
-    z.object({
-      accessToken: z.string(),
-      platform: z.enum(["zenoti", "jane", "boulevard", "mindbody", "booker"]),
-    }),
-  )
+  .inputValidator((raw: unknown) => enableLightModeInput.parse(raw))
   .handler(async ({ data }) => {
     const { effectiveUserId } = await resolveEffectiveUserId({
       data: { accessToken: data.accessToken },
@@ -237,13 +237,12 @@ export const enableLightMode = createServerFn({ method: "POST" })
  * a future re-enable hits the same inbound address; the owner's Gmail
  * filter keeps working when they re-enable.
  */
+const disableLightModeInput = z.object({
+  accessToken: z.string(),
+  platform: z.enum(["zenoti", "jane", "boulevard", "mindbody", "booker"]),
+});
 export const disableLightMode = createServerFn({ method: "POST" })
-  .validator(
-    z.object({
-      accessToken: z.string(),
-      platform: z.enum(["zenoti", "jane", "boulevard", "mindbody", "booker"]),
-    }),
-  )
+  .inputValidator((raw: unknown) => disableLightModeInput.parse(raw))
   .handler(async ({ data }) => {
     const { effectiveUserId } = await resolveEffectiveUserId({
       data: { accessToken: data.accessToken },
@@ -280,13 +279,12 @@ export const disableLightMode = createServerFn({ method: "POST" })
  * List recent quarantine rows for this spa (parser couldn't classify).
  * Used by the Light Mode wizard + the admin review surface.
  */
+const listLightModeQuarantineInput = z.object({
+  accessToken: z.string(),
+  limit: z.number().int().min(1).max(100).optional(),
+});
 export const listLightModeQuarantine = createServerFn({ method: "POST" })
-  .validator(
-    z.object({
-      accessToken: z.string(),
-      limit: z.number().int().min(1).max(100).optional(),
-    }),
-  )
+  .inputValidator((raw: unknown) => listLightModeQuarantineInput.parse(raw))
   .handler(async ({ data }) => {
     const { effectiveUserId } = await resolveEffectiveUserId({
       data: { accessToken: data.accessToken },
@@ -338,13 +336,12 @@ export const listLightModeQuarantine = createServerFn({ method: "POST" })
  * this so the owner gets a one-click confirm prompt instead of having
  * to dig the verification mail out of their forwarded queue.
  */
+const getPendingGmailVerificationInput = z.object({
+  accessToken: z.string(),
+  platform: z.enum(["zenoti", "jane", "boulevard", "mindbody", "booker"]),
+});
 export const getPendingGmailVerification = createServerFn({ method: "POST" })
-  .validator(
-    z.object({
-      accessToken: z.string(),
-      platform: z.enum(["zenoti", "jane", "boulevard", "mindbody", "booker"]),
-    }),
-  )
+  .inputValidator((raw: unknown) => getPendingGmailVerificationInput.parse(raw))
   .handler(async ({ data }) => {
     const { effectiveUserId } = await resolveEffectiveUserId({
       data: { accessToken: data.accessToken },
@@ -404,8 +401,9 @@ export const getPendingGmailVerification = createServerFn({ method: "POST" })
  *   per-spa via /app/admin/agents (existing UI), keeping the gray-zone
  *   connector hidden from any spa the admin hasn't opted in.
  */
+const getSchedulerExtrasInput = z.object({ accessToken: z.string() });
 export const getSchedulerExtras = createServerFn({ method: "POST" })
-  .validator(z.object({ accessToken: z.string() }))
+  .inputValidator((raw: unknown) => getSchedulerExtrasInput.parse(raw))
   .handler(async ({ data }) => {
     const { effectiveUserId } = await resolveEffectiveUserId({
       data: { accessToken: data.accessToken },

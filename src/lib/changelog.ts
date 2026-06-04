@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.46.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.46.1 &mdash; Hotfix: light-mode server fns broken by transitive TanStack Start bump in v1.45.0. Scheduler settings page (and any page that transitively imports light-mode-functions) was throwing <code>TypeError: e(...).validator is not a function</code> in the browser error boundary. Root cause: <code>src/server/light-mode.functions.ts</code> had 6 callsites using the deprecated <code>.validator(SCHEMA)</code> signature; the rest of the codebase (~263 callsites) had already been migrated to <code>.inputValidator((raw: unknown) => SCHEMA.parse(raw))</code>. The TipTap install in v1.45.0 transitively upgraded TanStack Start and that release dropped the deprecated alias.</strong> <strong>Owning it</strong>: I bumped TanStack transitively in v1.45.0 and didn&rsquo;t audit the rest of the codebase for deprecated APIs before shipping. Per <code>feedback-own-it-no-excuses</code>: name + act + done. <strong>What ships</strong>: convert all 6 <code>.validator(SCHEMA)</code> callsites in <code>light-mode.functions.ts</code> to the current <code>.inputValidator((raw: unknown) =&gt; SCHEMA.parse(raw))</code> pattern. Schemas extracted to local const so the lambda stays one line. Affected fns: <code>listLightModeConnections</code>, <code>enableLightMode</code>, <code>disableLightMode</code>, <code>listLightModeQuarantine</code>, <code>getPendingGmailVerification</code>, <code>getSchedulerExtras</code>. Behavior unchanged &mdash; same input shapes, same handlers. <strong>Touched</strong>: <code>src/server/light-mode.functions.ts</code> (6 fn signatures), <code>src/lib/changelog.ts</code> (this entry). No schema change; no dependency change; no wrangler.jsonc change.",
+    ],
+  },
+  {
     version: "v1.46.0",
     date: "June 2026",
     items: [
