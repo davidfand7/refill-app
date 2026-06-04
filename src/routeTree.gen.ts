@@ -107,6 +107,7 @@ import { Route as AppRefillAgentsAttributionRouteImport } from './routes/app.ref
 import { Route as ApiWebhooksSchedulerSquareRouteImport } from './routes/api.webhooks.scheduler.square'
 import { Route as ApiWebhooksSchedulerBoulevardRouteImport } from './routes/api.webhooks.scheduler.boulevard'
 import { Route as ApiRecognitionSentSuggestionIdRouteImport } from './routes/api.recognition.sent.$suggestionId'
+import { Route as ApiIntegrationsZohoOauthCallbackRouteImport } from './routes/api.integrations.zoho.oauth-callback'
 import { Route as ApiIntegrationsZenotiInstallCallbackRouteImport } from './routes/api.integrations.zenoti.install-callback'
 import { Route as ApiIntegrationsVagaroInstallCallbackRouteImport } from './routes/api.integrations.vagaro.install-callback'
 import { Route as ApiIntegrationsSquareOauthCallbackRouteImport } from './routes/api.integrations.square.oauth-callback'
@@ -638,6 +639,12 @@ const ApiRecognitionSentSuggestionIdRoute =
     path: '/api/recognition/sent/$suggestionId',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiIntegrationsZohoOauthCallbackRoute =
+  ApiIntegrationsZohoOauthCallbackRouteImport.update({
+    id: '/api/integrations/zoho/oauth-callback',
+    path: '/api/integrations/zoho/oauth-callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiIntegrationsZenotiInstallCallbackRoute =
   ApiIntegrationsZenotiInstallCallbackRouteImport.update({
     id: '/api/integrations/zenoti/install-callback',
@@ -817,6 +824,7 @@ export interface FileRoutesByFullPath {
   '/api/integrations/square/oauth-callback': typeof ApiIntegrationsSquareOauthCallbackRoute
   '/api/integrations/vagaro/install-callback': typeof ApiIntegrationsVagaroInstallCallbackRoute
   '/api/integrations/zenoti/install-callback': typeof ApiIntegrationsZenotiInstallCallbackRoute
+  '/api/integrations/zoho/oauth-callback': typeof ApiIntegrationsZohoOauthCallbackRoute
   '/api/recognition/sent/$suggestionId': typeof ApiRecognitionSentSuggestionIdRoute
   '/api/webhooks/scheduler/boulevard': typeof ApiWebhooksSchedulerBoulevardRoute
   '/api/webhooks/scheduler/square': typeof ApiWebhooksSchedulerSquareRoute
@@ -930,6 +938,7 @@ export interface FileRoutesByTo {
   '/api/integrations/square/oauth-callback': typeof ApiIntegrationsSquareOauthCallbackRoute
   '/api/integrations/vagaro/install-callback': typeof ApiIntegrationsVagaroInstallCallbackRoute
   '/api/integrations/zenoti/install-callback': typeof ApiIntegrationsZenotiInstallCallbackRoute
+  '/api/integrations/zoho/oauth-callback': typeof ApiIntegrationsZohoOauthCallbackRoute
   '/api/recognition/sent/$suggestionId': typeof ApiRecognitionSentSuggestionIdRoute
   '/api/webhooks/scheduler/boulevard': typeof ApiWebhooksSchedulerBoulevardRoute
   '/api/webhooks/scheduler/square': typeof ApiWebhooksSchedulerSquareRoute
@@ -1047,6 +1056,7 @@ export interface FileRoutesById {
   '/api/integrations/square/oauth-callback': typeof ApiIntegrationsSquareOauthCallbackRoute
   '/api/integrations/vagaro/install-callback': typeof ApiIntegrationsVagaroInstallCallbackRoute
   '/api/integrations/zenoti/install-callback': typeof ApiIntegrationsZenotiInstallCallbackRoute
+  '/api/integrations/zoho/oauth-callback': typeof ApiIntegrationsZohoOauthCallbackRoute
   '/api/recognition/sent/$suggestionId': typeof ApiRecognitionSentSuggestionIdRoute
   '/api/webhooks/scheduler/boulevard': typeof ApiWebhooksSchedulerBoulevardRoute
   '/api/webhooks/scheduler/square': typeof ApiWebhooksSchedulerSquareRoute
@@ -1166,6 +1176,7 @@ export interface FileRouteTypes {
     | '/api/integrations/square/oauth-callback'
     | '/api/integrations/vagaro/install-callback'
     | '/api/integrations/zenoti/install-callback'
+    | '/api/integrations/zoho/oauth-callback'
     | '/api/recognition/sent/$suggestionId'
     | '/api/webhooks/scheduler/boulevard'
     | '/api/webhooks/scheduler/square'
@@ -1279,6 +1290,7 @@ export interface FileRouteTypes {
     | '/api/integrations/square/oauth-callback'
     | '/api/integrations/vagaro/install-callback'
     | '/api/integrations/zenoti/install-callback'
+    | '/api/integrations/zoho/oauth-callback'
     | '/api/recognition/sent/$suggestionId'
     | '/api/webhooks/scheduler/boulevard'
     | '/api/webhooks/scheduler/square'
@@ -1395,6 +1407,7 @@ export interface FileRouteTypes {
     | '/api/integrations/square/oauth-callback'
     | '/api/integrations/vagaro/install-callback'
     | '/api/integrations/zenoti/install-callback'
+    | '/api/integrations/zoho/oauth-callback'
     | '/api/recognition/sent/$suggestionId'
     | '/api/webhooks/scheduler/boulevard'
     | '/api/webhooks/scheduler/square'
@@ -1479,6 +1492,7 @@ export interface RootRouteChildren {
   ApiIntegrationsSquareOauthCallbackRoute: typeof ApiIntegrationsSquareOauthCallbackRoute
   ApiIntegrationsVagaroInstallCallbackRoute: typeof ApiIntegrationsVagaroInstallCallbackRoute
   ApiIntegrationsZenotiInstallCallbackRoute: typeof ApiIntegrationsZenotiInstallCallbackRoute
+  ApiIntegrationsZohoOauthCallbackRoute: typeof ApiIntegrationsZohoOauthCallbackRoute
   ApiRecognitionSentSuggestionIdRoute: typeof ApiRecognitionSentSuggestionIdRoute
   ApiWebhooksSchedulerBoulevardRoute: typeof ApiWebhooksSchedulerBoulevardRoute
   ApiWebhooksSchedulerSquareRoute: typeof ApiWebhooksSchedulerSquareRoute
@@ -2177,6 +2191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiRecognitionSentSuggestionIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/integrations/zoho/oauth-callback': {
+      id: '/api/integrations/zoho/oauth-callback'
+      path: '/api/integrations/zoho/oauth-callback'
+      fullPath: '/api/integrations/zoho/oauth-callback'
+      preLoaderRoute: typeof ApiIntegrationsZohoOauthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/integrations/zenoti/install-callback': {
       id: '/api/integrations/zenoti/install-callback'
       path: '/api/integrations/zenoti/install-callback'
@@ -2544,6 +2565,7 @@ const rootRouteChildren: RootRouteChildren = {
     ApiIntegrationsVagaroInstallCallbackRoute,
   ApiIntegrationsZenotiInstallCallbackRoute:
     ApiIntegrationsZenotiInstallCallbackRoute,
+  ApiIntegrationsZohoOauthCallbackRoute: ApiIntegrationsZohoOauthCallbackRoute,
   ApiRecognitionSentSuggestionIdRoute: ApiRecognitionSentSuggestionIdRoute,
   ApiWebhooksSchedulerBoulevardRoute: ApiWebhooksSchedulerBoulevardRoute,
   ApiWebhooksSchedulerSquareRoute: ApiWebhooksSchedulerSquareRoute,
