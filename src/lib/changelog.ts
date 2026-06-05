@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.47.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.47.0 &mdash; Outreach composer, P1: inline edits now persist as drafts (save without sending). </strong>Surfaced in the 2026-06-05 smoke walk: a rep&rsquo;s inline TipTap edit on the Outreach SendPanel was a one-shot in-memory <code>bodyOverride</code> &mdash; it evaporated the moment you navigated away. P1 lands the persistence substrate + the first &lsquo;Save draft&rsquo; control of the per-account-draft, multi-recipient composer (edit model A: one shared body + per-account overrides). <strong>What ships</strong>: (1) NEW <code>outreach_drafts</code> table &mdash; one flat row per <code>(rep, recipient_email, template)</code>, nullable <code>subject_override</code> / <code>body_override</code> (NULL = use the shared batch body), Zoho-forward <code>contact_id</code>, <code>sent_at</code>/<code>sent_event_id</code> stamps for the P2 batch-send idempotency, service-role RLS. <code>recipient_email</code> stored lowercased so the unique index doubles as the dedup guard. (2) NEW <code>src/server/refill-outreach-drafts.ts</code> &mdash; <code>saveOutreachDraft</code> (upsert), <code>listOutreachDrafts</code>, <code>deleteOutreachDraft</code>; <code>requireRepOrAdmin</code> gate + ownership in every WHERE, mirrors the <code>refill-outreach.ts</code> module shape. (3) &lsquo;Save draft&rsquo; button on the SendPanel + a &lsquo;Saved &mdash; reopens with this edit&rsquo; chip; a matching saved draft re-hydrates its overrides once per <code>(template, recipient)</code> on the next visit, proving persistence without sending. The existing single-send path is completely untouched &mdash; this is purely additive. <strong>Touched</strong>: NEW <code>supabase/migrations/20260630000000_v1_47_0_outreach_drafts.sql</code> (applied via dashboard), NEW <code>src/server/refill-outreach-drafts.ts</code>, <code>src/integrations/supabase/types.ts</code> (outreach_drafts types, hand-added scoped), <code>src/routes/app.rep.outreach.tsx</code> (drafts state + Save button + hydrate-on-match), <code>src/lib/changelog.ts</code> (this entry). No dep change, no wrangler.jsonc change. <strong>Next</strong>: P2 = shared <code>dispatchOneOutreachEmail</code> helper + <code>sendOutreachBatch</code> (server-batch, concurrency-3).",
+    ],
+  },
+  {
     version: "v1.46.8",
     date: "June 2026",
     items: [

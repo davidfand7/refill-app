@@ -20,8 +20,8 @@
  */
 
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
-import { Send, Sparkles, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BookmarkPlus, Send, Sparkles, X } from "lucide-react";
 import { z } from "zod";
 
 import { TemplateEditor } from "@/components/refill/TemplateEditor";
@@ -42,6 +42,11 @@ import {
   sendOutreachEmail,
   type SendMode,
 } from "@/server/refill-outreach-send";
+import {
+  listOutreachDrafts,
+  saveOutreachDraft,
+  type OutreachDraft,
+} from "@/server/refill-outreach-drafts";
 
 // v407 Pinch #16: URL-param pre-fill schema. Any link can deep-link a
 // pre-populated send via /app/rep/outreach?to=&firstName=&spaName=&icp=&channel=.
@@ -140,10 +145,40 @@ function OutreachPage() {
   // template starts from its own default, not the prior template's edits.
   const [subjectOverride, setSubjectOverride] = useState<string | null>(null);
   const [bodyOverride, setBodyOverride] = useState<string | null>(null);
+  // v1.47.0 P1: persisted drafts for this rep. A saved draft = one row keyed by
+  // (rep, recipient_email, template). draftSavedAt drives the "Saved ✓" chip;
+  // hydratedKeyRef ensures we auto-load a matching draft only ONCE per
+  // (template, email) so "Reset to default" isn't fought by a re-hydrate.
+  const [drafts, setDrafts] = useState<OutreachDraft[]>([]);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  const hydratedKeyRef = useRef<string | null>(null);
   useEffect(() => {
     setSubjectOverride(null);
     setBodyOverride(null);
+    setDraftSavedAt(null);
+    hydratedKeyRef.current = null;
   }, [selected?.id]);
+
+  // v1.47.0 P1: when a saved draft matches the current (template, recipient),
+  // hydrate its overrides so a saved edit reappears after a refresh — the proof
+  // that Save persisted without sending. Once-per-key; only fills when the rep
+  // hasn't started a fresh edit, so it never clobbers in-progress work.
+  useEffect(() => {
+    if (!selected) return;
+    const email = form.recipientEmail.trim().toLowerCase();
+    if (!email) return;
+    const key = `${selected.id}::${email}`;
+    if (hydratedKeyRef.current === key) return;
+    const match = drafts.find(
+      (d) => d.templateId === selected.id && d.recipientEmail === email,
+    );
+    if (!match) return;
+    hydratedKeyRef.current = key;
+    if (match.subjectOverride !== null) setSubjectOverride(match.subjectOverride);
+    if (match.bodyOverride !== null) setBodyOverride(match.bodyOverride);
+    setDraftSavedAt(match.updatedAt);
+  }, [selected?.id, form.recipientEmail, drafts]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -156,7 +191,7 @@ function OutreachPage() {
       try {
         const viewAsUserId =
           typeof window !== "undefined" ? getAdminViewAsUserId() : undefined;
-        const [repRes, tplRes, modeRes, sendsRes] = await Promise.all([
+        const [repRes, tplRes, modeRes, sendsRes, draftsRes] = await Promise.all([
           getMyRepAccount({ data: { accessToken, viewAsUserId } }),
           listOutreachTemplates({ data: { accessToken } }).catch(() => ({
             templates: [],
@@ -173,12 +208,18 @@ function OutreachPage() {
           listMyOutreachSends({ data: { accessToken } }).catch(() => ({
             sends: [],
           })),
+          // v1.47.0 P1: pull this rep's saved drafts alongside the rest so a
+          // matching draft hydrates on first paint. Fail-soft to empty.
+          listOutreachDrafts({ data: { accessToken } }).catch(() => ({
+            drafts: [],
+          })),
         ]);
         if (cancelled) return;
         setRep(repRes.rep);
         setTemplates(tplRes.templates);
         setLiveEnabled(modeRes.liveEnabled);
         setSends(sendsRes.sends);
+        setDrafts(draftsRes.drafts);
       } catch (err) {
         if (!cancelled) {
           setError(
@@ -263,6 +304,43 @@ function OutreachPage() {
       setError(err instanceof Error ? err.message : "Send failed.");
     } finally {
       setSending(false);
+    }
+  };
+
+  // v1.47.0 P1: persist the current edit as a draft WITHOUT sending. Upserts on
+  // (rep, recipient_email, template) so re-saving the same recipient updates in
+  // place. Marks the (template, email) key as hydrated so the just-saved values
+  // aren't re-loaded over a continued edit.
+  const handleSaveDraft = async () => {
+    if (!accessToken || !selected || savingDraft) return;
+    if (!form.recipientEmail) {
+      setError("Recipient email is required to save a draft.");
+      return;
+    }
+    setSavingDraft(true);
+    setError(null);
+    try {
+      const { draft } = await saveOutreachDraft({
+        data: {
+          accessToken,
+          templateId: selected.id,
+          icp: selected.icp,
+          channel: selected.channel,
+          audience: selected.audience,
+          recipientEmail: form.recipientEmail,
+          recipientFirstName: form.firstName || null,
+          spaName: form.spaName || null,
+          subjectOverride,
+          bodyOverride,
+        },
+      });
+      setDraftSavedAt(draft.updatedAt);
+      hydratedKeyRef.current = `${selected.id}::${draft.recipientEmail}`;
+      setDrafts((prev) => [draft, ...prev.filter((d) => d.id !== draft.id)]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save draft.");
+    } finally {
+      setSavingDraft(false);
     }
   };
 
@@ -352,6 +430,9 @@ function OutreachPage() {
                 bodyOverride={bodyOverride}
                 onSubjectOverrideChange={setSubjectOverride}
                 onBodyOverrideChange={setBodyOverride}
+                onSaveDraft={handleSaveDraft}
+                savingDraft={savingDraft}
+                draftSavedAt={draftSavedAt}
               />
             ) : (
               <Hint>Pick a template on the left to see the preview.</Hint>
@@ -594,6 +675,9 @@ function SendPanel({
   bodyOverride,
   onSubjectOverrideChange,
   onBodyOverrideChange,
+  onSaveDraft,
+  savingDraft,
+  draftSavedAt,
 }: {
   template: OutreachTemplate;
   form: {
@@ -613,6 +697,9 @@ function SendPanel({
   bodyOverride: string | null;
   onSubjectOverrideChange: (v: string | null) => void;
   onBodyOverrideChange: (v: string | null) => void;
+  onSaveDraft: () => void;
+  savingDraft: boolean;
+  draftSavedAt: string | null;
 }) {
   // v1.44 effective subject/body: rep override wins, falls back to template.
   // The textareas seed from the override OR the template (so users can start
@@ -799,6 +886,28 @@ function SendPanel({
             </div>
           </div>
 
+          {/* v1.47.0 P1: persist the current edit as a draft WITHOUT sending.
+              Upserts on (rep, recipient, template); a saved draft re-hydrates
+              its overrides on the next visit. Disabled until a recipient email
+              is present (the draft key needs it). */}
+          <div className="mt-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onSaveDraft}
+              disabled={savingDraft || !form.recipientEmail}
+              className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-[13px] font-semibold transition hover:bg-[#fbfaf7] disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ borderColor: "#e6e2d6", background: "#fff", color: "#1c2024" }}
+            >
+              <BookmarkPlus className="h-3.5 w-3.5" style={{ color: "#056048" }} />
+              {savingDraft ? "Saving…" : "Save draft"}
+            </button>
+            {draftSavedAt && !savingDraft && (
+              <span className="text-[12px] font-medium" style={{ color: "#056048" }}>
+                ✓ Saved — reopens with this edit
+              </span>
+            )}
+          </div>
+
           {/* v404 Pinch #14b: button telegraphs the send mode BEFORE click.
               LIVE renders in danger-red to break muscle-memory; dry-run keeps
               the emerald. liveEnabled === null means we haven't resolved yet
@@ -807,7 +916,7 @@ function SendPanel({
             type="button"
             onClick={onSend}
             disabled={sending || liveEnabled === null}
-            className="mt-4 inline-flex items-center gap-2 rounded-md px-5 py-2.5 text-[14px] font-semibold shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="mt-3 inline-flex items-center gap-2 rounded-md px-5 py-2.5 text-[14px] font-semibold shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
               background: liveEnabled === true ? "#b91c1c" : "#056048",
               color: "#fbfaf7",
