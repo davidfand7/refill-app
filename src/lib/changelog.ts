@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.46.6",
+    date: "June 2026",
+    items: [
+      "<strong>v1.46.6 &mdash; Guided demo walkthrough arrow on the public marketing pages. </strong>Grasshopper asked for a bottom-right &lsquo;Next&rsquo; arrow so the public surfaces can be presented as a linear demo instead of standalone screens you navigate by hand. <strong>What ships</strong>: NEW <code>src/components/DemoNav.tsx</code> &mdash; a single position-fixed controller mounted ONCE in <code>__root.tsx</code> (the public pages share no layout route, so per-page mounting would be six copies). It self-gates: a <code>WALKTHROUGH</code> array (<code>/</code> &rarr; <code>/story</code> &rarr; <code>/scan</code> &rarr; <code>/start</code> &rarr; <code>/claim-your-business</code>) is the single source of truth for the sequence; on any path NOT in that array <code>findIndex</code> returns -1 and the component renders null &mdash; so it never appears on <code>/app/*</code>, <code>/login</code>, <code>/unsubscribe</code>, etc. Beyond the bare Next arrow: a subtle Back chevron (hidden on the first stop) + an <code>N / total</code> step counter so a live demo is bidirectional and the audience sees their position; the last stop swaps Next for an &lsquo;End of tour&rsquo; pill. Brand-matched (<code>bg-emerald text-paper</code>, paper Back button, <code>border-border-soft</code>), uses TanStack <code>Link</code> for client-side nav (no full reload between stops) and <code>useLocation</code> to derive the current stop. <code>z-40</code> sits below the sonner Toaster&rsquo;s <code>z-[100]</code> so a toast never hides behind it. <strong>Reorder/extend</strong>: edit the one <code>WALKTHROUGH</code> array. <strong>Touched</strong>: NEW <code>src/components/DemoNav.tsx</code>, <code>src/routes/__root.tsx</code> (import + mount next to Toaster), <code>src/lib/changelog.ts</code> (this entry). No dep change, no schema change, no wrangler.jsonc change.",
+    ],
+  },
+  {
     version: "v1.46.5",
     date: "June 2026",
     items: [

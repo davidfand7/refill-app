@@ -7,6 +7,7 @@ import {
 import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 import { AuthProvider } from "@/lib/auth";
+import { DemoNav } from "@/components/DemoNav";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -51,6 +52,10 @@ function RootComponent() {
         <AuthProvider>
           <Outlet />
         </AuthProvider>
+        {/* v1.46.6: guided demo walkthrough arrow. Self-gates to the public
+            marketing sequence (see WALKTHROUGH in DemoNav) — null everywhere
+            else, so it never shows on /app, /login, etc. */}
+        <DemoNav />
         {/* v1.46.4: sonner Toaster mounted at root. Every page in the app
             calls toast.success/error throughout (Zoho connect, outreach
             send, template import, light-mode, etc.) but no Toaster was
