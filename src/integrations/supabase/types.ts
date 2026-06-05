@@ -1808,6 +1808,81 @@ export type Database = {
         }
         Relationships: []
       }
+      outreach_drafts: {
+        Row: {
+          audience: string
+          batch_label: string | null
+          body_override: string | null
+          channel: string
+          contact_id: string | null
+          created_at: string
+          icp: number
+          id: string
+          recipient_email: string
+          recipient_first_name: string | null
+          rep_user_id: string
+          sent_at: string | null
+          sent_event_id: string | null
+          spa_name: string | null
+          subject_override: string | null
+          template_id: string
+          updated_at: string
+        }
+        Insert: {
+          audience?: string
+          batch_label?: string | null
+          body_override?: string | null
+          channel: string
+          contact_id?: string | null
+          created_at?: string
+          icp: number
+          id?: string
+          recipient_email: string
+          recipient_first_name?: string | null
+          rep_user_id: string
+          sent_at?: string | null
+          sent_event_id?: string | null
+          spa_name?: string | null
+          subject_override?: string | null
+          template_id: string
+          updated_at?: string
+        }
+        Update: {
+          audience?: string
+          batch_label?: string | null
+          body_override?: string | null
+          channel?: string
+          contact_id?: string | null
+          created_at?: string
+          icp?: number
+          id?: string
+          recipient_email?: string
+          recipient_first_name?: string | null
+          rep_user_id?: string
+          sent_at?: string | null
+          sent_event_id?: string | null
+          spa_name?: string | null
+          subject_override?: string | null
+          template_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outreach_drafts_sent_event_id_fkey"
+            columns: ["sent_event_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_engagement_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "outreach_drafts_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       outreach_engagement_events: {
         Row: {
           channel: string
