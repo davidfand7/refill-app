@@ -23,11 +23,13 @@ import { Link } from "@tanstack/react-router";
 
 export type RefillNavKey =
   | "patients"
+  | "appointments"
   | "catalog"
   | "promos"
   | "recognition"
   | "agents"
   | "recovery"
+  | "reports"
   | "inbox"
   | "settings"
   | "billing";
@@ -46,6 +48,10 @@ type RefillNavItem = {
 // the v341 port. Closes the discoverability gap.
 const ITEMS: RefillNavItem[] = [
   { key: "patients", to: "/app/refill/patients",          label: "Patients", shortLabel: "Patients" },
+  // v1.46.5: Appointments chip promoted into nav. Was card-only on RefillHome
+  // since the port — orphan once you navigate off the home grid (no way back to
+  // your own appointments table). Sits right after Patients (WHO → WHEN pairing).
+  { key: "appointments", to: "/app/refill/appointments",  label: "Appointments", shortLabel: "Appts" },
   { key: "catalog",  to: "/app/refill/catalog/products",  label: "Catalog",  shortLabel: "Catalog" },
   { key: "promos",   to: "/app/refill/promos",            label: "Promos",   shortLabel: "Promos" },
   // v1.34.2: Recognition Allocation Engine. Lives between Promos and Recovery —
@@ -60,6 +66,10 @@ const ITEMS: RefillNavItem[] = [
   // follow-on ships under the same parent.
   { key: "agents",   to: "/app/refill/agents/preshow",       label: "Agents",   shortLabel: "Agents" },
   { key: "recovery", to: "/app/refill/recovery",           label: "Recovery", shortLabel: "Recovery" },
+  // v1.46.5: Reports chip promoted into nav. Was an ungated landing-card-only
+  // orphan (RefillHome ACTIONS) — reachable only from the home grid. Same
+  // orphan shape as Appointments; closed in the same nav-coherency pass.
+  { key: "reports",  to: "/app/refill/reports",            label: "Reports",  shortLabel: "Reports" },
   { key: "inbox",    to: "/app/refill/inbox",              label: "Inbox",    shortLabel: "Inbox" },
   { key: "settings", to: "/app/refill/settings/scheduler", label: "Settings", shortLabel: "Settings" },
   { key: "billing",  to: "/app/billing",                 label: "Billing",  shortLabel: "Billing" },

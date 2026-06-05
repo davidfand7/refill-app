@@ -225,21 +225,6 @@ function LoginPage() {
                 {loading ? "Signing in…" : "Sign in"}
               </button>
             </form>
-
-            <p
-              className="mt-6 text-center text-[12px] leading-[1.5]"
-              style={{ color: "#8a9098" }}
-            >
-              Testing the system? Visit{" "}
-              <Link
-                to="/personas"
-                className="transition hover:opacity-80"
-                style={{ color: "#056048" }}
-              >
-                /personas
-              </Link>{" "}
-              for the demo-identity switcher.
-            </p>
           </div>
         </div>
       </main>

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.46.5",
+    date: "June 2026",
+    items: [
+      "<strong>v1.46.5 &mdash; Nav-coherency pass: two chip-less orphans closed + one dead link ripped. </strong>Surfaced during the v1.46.4 smoke walk &mdash; Grasshopper hit <code>/app/refill/appointments</code> from its RefillHome card and noticed there was no way back to it once off the home grid (no nav chip). A full nav-orphan audit across all three persona strips (Spa / Rep / Admin) confirmed the complete set: Rep and Admin navs are perfectly coherent; the Spa-owner strip had exactly two ungated landing-cards with no chip &mdash; <code>Appointments</code> and <code>Reports</code> &mdash; reachable only from the home grid. <strong>What ships</strong>: (1) <code>Appointments</code> chip added to <code>RefillNav</code> right after Patients (WHO &rarr; WHEN pairing), short-label <code>Appts</code> so the now-11-chip strip doesn&rsquo;t overflow on mobile. (2) <code>Reports</code> chip added after Recovery (ungated; subtitle already &lsquo;Promotions funnel + per-campaign rollups&rsquo;). (3) Ripped the dead <code>/personas</code> link on <code>login.tsx</code> (the &lsquo;Testing the system? Visit /personas&rsquo; line) &mdash; that route never existed, the data layer in <code>src/lib/personas.ts</code> is consumed only by the authenticated admin PersonaSwitcher, and a public demo-identity switcher would cut against stealth-first + the queued frontdoor password-protect. <code>Link</code> import retained (still used by the logo + brand links). <strong>Audit also corrected a stale finding</strong>: the &lsquo;Admin Flags chip missing&rsquo; note from the prior session is resolved &mdash; Flags was renamed to Agents and <code>app.admin.flags.tsx</code> is now a redirect stub to <code>/app/admin/agents</code>. Intentionally chip-less surfaces (Campaigns/Sharing/Waitlist suite via featureKey gates; rescue/health diagnostic deep-links) left untouched by design. <strong>Touched</strong>: <code>src/components/refill/RefillNav.tsx</code> (2 chips + 2 union keys), <code>src/routes/login.tsx</code> (removed dead-link paragraph), <code>src/lib/changelog.ts</code> (this entry). No dep change, no schema change, no wrangler.jsonc change.",
+    ],
+  },
+  {
     version: "v1.46.4",
     date: "June 2026",
     items: [
