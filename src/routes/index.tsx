@@ -174,6 +174,14 @@ function RefillLanding() {
           </Link>
           <nav className="flex items-center gap-5 text-[13px]" style={{ color: "#5a6068" }}>
             <Link
+              to="/story"
+              className="inline-flex items-center gap-1 transition hover:opacity-80"
+              style={{ color: "#5a6068" }}
+            >
+              Our Story
+              <ArrowRight className="h-3 w-3" aria-hidden />
+            </Link>
+            <Link
               to="/login"
               className="transition hover:opacity-80"
               style={{ color: "#5a6068" }}

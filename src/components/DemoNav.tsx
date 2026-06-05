@@ -19,9 +19,14 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 
+// v1.46.7: the arrow mirrors the real conversion funnel so it never fights a
+// page's own primary CTA. The landing's big button already goes / → /scan, so
+// the arrow does too. /story is NOT a funnel step — it's the why-narrative
+// branch, reachable via the "Our Story →" header link on the landing, and it
+// flows back into /scan via its own header CTA. Keeping it out of this array
+// means no two-different-next-steps-on-one-screen confusion in a demo.
 const WALKTHROUGH = [
   { path: "/", label: "Home" },
-  { path: "/story", label: "Story" },
   { path: "/scan", label: "Scan" },
   { path: "/start", label: "Start" },
   { path: "/claim-your-business", label: "Claim" },

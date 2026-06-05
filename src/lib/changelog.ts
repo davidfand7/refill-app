@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.46.7",
+    date: "June 2026",
+    items: [
+      "<strong>v1.46.7 &mdash; Demo arrow now mirrors the conversion funnel + &lsquo;Our Story&rsquo; gets a home. </strong>Grasshopper spotted it walking the v1.46.6 demo arrow: on the landing, the big green CTA (&lsquo;See what we&rsquo;d recover&rsquo;) goes <code>/ &rarr; /scan</code>, but the Next arrow was sending you <code>/ &rarr; /story</code> &mdash; two different next-steps on one screen, confusing in a live demo. <strong>Fix</strong>: (1) The <code>WALKTHROUGH</code> sequence in <code>DemoNav.tsx</code> drops <code>/story</code> and now mirrors the real funnel &mdash; <code>/ &rarr; /scan &rarr; /start &rarr; /claim-your-business</code> &mdash; so the arrow always agrees with the page&rsquo;s own primary CTA. <code>/story</code> isn&rsquo;t a funnel step; it&rsquo;s the why-narrative branch. (2) Added an <code>Our Story &rarr;</code> link to the landing header nav (<code>RefillLanding</code>, alongside Sign in / For reps) so the narrative is one tap away without hijacking the conversion path. <code>/story</code> already carries a &lsquo;See your number &rarr;&rsquo; link in its own header, so a detour into the story flows right back into <code>/scan</code> &mdash; the funnel self-heals, no dead end. <strong>Touched</strong>: <code>src/components/DemoNav.tsx</code> (sequence), <code>src/routes/index.tsx</code> (landing header link), <code>src/lib/changelog.ts</code> (this entry). No dep change, no schema change, no wrangler.jsonc change.",
+    ],
+  },
+  {
     version: "v1.46.6",
     date: "June 2026",
     items: [
