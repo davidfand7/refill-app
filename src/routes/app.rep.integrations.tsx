@@ -171,14 +171,23 @@ function IntegrationsPage() {
 
   const handleDisconnect = useCallback(async () => {
     if (!accessToken) return;
-    if (!window.confirm("Disconnect Zoho? You can reconnect any time.")) return;
+    if (
+      !window.confirm(
+        "Disconnect Zoho? This clears Refill's tokens and revokes Refill's grant on Zoho's side, so the next Connect click is a clean first-time flow.",
+      )
+    )
+      return;
     setDisconnecting(true);
     try {
-      await disconnectZoho({ data: { accessToken } });
+      const res = await disconnectZoho({ data: { accessToken } });
       setConnection(null);
       setContacts(null);
       setLastSyncMessage(null);
-      toast.success("Zoho disconnected.");
+      toast.success(
+        res.revokedRemote
+          ? "Zoho disconnected · grant revoked."
+          : "Zoho disconnected · couldn't reach Zoho to revoke the grant (local clear succeeded).",
+      );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       toast.error(`Disconnect failed: ${msg}`);

@@ -312,9 +312,38 @@ export const syncMyZohoContacts = createServerFn({ method: "POST" })
 
 export const disconnectZoho = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => authInput.parse(raw))
-  .handler(async ({ data }): Promise<{ disconnected: boolean }> => {
+  .handler(async ({ data }): Promise<{ disconnected: boolean; revokedRemote: boolean }> => {
     const sb = admin();
     const principal = await requireRepOrAdmin(sb, data.accessToken);
+
+    // v1.46.3: pull the connection row FIRST so we can tell Zoho to revoke
+    // the refresh_token on their side too. Without this, our DB is cleared
+    // but Zoho still remembers the grant — next Connect click skips the
+    // first-time consent screen, which makes "clean slate" testing
+    // impossible AND leaves a stale grant in the rep's Zoho permissions
+    // panel that they can't see in Refill.
+    const { data: row } = await sb
+      .from("zoho_connections")
+      .select("refresh_token, accounts_server")
+      .eq("user_id", principal.userId)
+      .maybeSingle();
+
+    // Best-effort remote revoke. If Zoho is down OR the token already
+    // expired OR was revoked from Zoho's side already, we STILL want to
+    // clear our local row — so the catch is silent.
+    let revokedRemote = false;
+    if (row?.refresh_token) {
+      try {
+        const params = new URLSearchParams({ token: row.refresh_token as string });
+        const res = await fetch(
+          `${row.accounts_server ?? "https://accounts.zoho.com"}/oauth/v2/token/revoke?${params.toString()}`,
+          { method: "POST" },
+        );
+        revokedRemote = res.ok;
+      } catch {
+        // ignore — local clear proceeds
+      }
+    }
 
     const { error } = await sb
       .from("zoho_connections")
@@ -329,5 +358,5 @@ export const disconnectZoho = createServerFn({ method: "POST" })
     if (error) {
       throw new Error(`Couldn't disconnect Zoho: ${error.message}`);
     }
-    return { disconnected: true };
+    return { disconnected: true, revokedRemote };
   });

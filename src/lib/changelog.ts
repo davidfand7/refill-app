@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.46.3",
+    date: "June 2026",
+    items: [
+      "<strong>v1.46.3 &mdash; Disconnect now revokes the grant on Zoho&rsquo;s side too. </strong>Before: Disconnect cleared Refill&rsquo;s local row but left the grant alive in Zoho. Next Connect click skipped the first-time consent screen because Zoho remembered Refill was already authorized &mdash; impossible to demo the clean-slate flow, and left stale grants in the rep&rsquo;s Zoho permissions panel. After: <code>disconnectZoho</code> first POSTs to Zoho&rsquo;s <code>/oauth/v2/token/revoke</code> with the refresh_token, then clears the local row. Best-effort &mdash; if Zoho is down the local clear still proceeds, and the toast tells the rep which path landed. <strong>Touched</strong>: <code>src/server/zoho.functions.ts</code> (revoke call + return flag), <code>src/routes/app.rep.integrations.tsx</code> (toast text reflects revoke outcome + confirm dialog explains the side effect), <code>src/lib/changelog.ts</code> (this entry). No dep change, no schema change.",
+    ],
+  },
+  {
     version: "v1.46.2",
     date: "June 2026",
     items: [
