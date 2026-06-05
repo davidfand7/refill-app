@@ -226,6 +226,20 @@ function RefillLanding() {
             <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>
 
+          {/* v1.46.8: prominent secondary CTA to the why-narrative. Outline
+              (not filled) so it reads clearly secondary to the conversion
+              button above while still being button-prominent. */}
+          <div className="mt-4">
+            <Link
+              to="/story"
+              className="inline-flex items-center gap-2 rounded-md px-6 py-3 text-[15px] font-semibold transition hover:opacity-80"
+              style={{ border: "1px solid #056048", color: "#056048", background: "transparent" }}
+            >
+              Our Story
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+          </div>
+
           <p className="text-[13px] mt-5" style={{ color: "#8a9098" }}>
             30-day free trial · No card · Cancel anytime
           </p>

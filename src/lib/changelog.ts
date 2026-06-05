@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.46.8",
+    date: "June 2026",
+    items: [
+      "<strong>v1.46.8 &mdash; &lsquo;Our Story&rsquo; promoted to a prominent hero CTA. </strong>The v1.46.7 header-nav link wasn&rsquo;t prominent enough for Grasshopper&rsquo;s taste. Added a secondary <code>Our Story &rarr;</code> button in the landing hero, positioned BETWEEN the primary &lsquo;See what we&rsquo;d recover&rsquo; CTA and the &lsquo;30-day free trial&rsquo; microcopy. Styled as an OUTLINE button (emerald border + emerald text, transparent fill) so it&rsquo;s button-prominent but reads clearly secondary to the filled-green conversion CTA above it &mdash; doesn&rsquo;t steal the primary click. The header-nav <code>Our Story</code> link stays too (per <code>feedback-multiple-routes-landing</code>: multiple routes to the same destination are fine/preferred on landing pages). <strong>Touched</strong>: <code>src/routes/index.tsx</code> (hero secondary CTA), <code>src/lib/changelog.ts</code> (this entry). No dep change, no schema change, no wrangler.jsonc change.",
+    ],
+  },
+  {
     version: "v1.46.7",
     date: "June 2026",
     items: [
