@@ -4,6 +4,7 @@ import {
   Outlet,
   Scripts,
 } from "@tanstack/react-router";
+import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 import { AuthProvider } from "@/lib/auth";
 
@@ -50,6 +51,17 @@ function RootComponent() {
         <AuthProvider>
           <Outlet />
         </AuthProvider>
+        {/* v1.46.4: sonner Toaster mounted at root. Every page in the app
+            calls toast.success/error throughout (Zoho connect, outreach
+            send, template import, light-mode, etc.) but no Toaster was
+            ever mounted — zero toasts have rendered app-wide since the
+            cleave. Light-theme to match Refill's design language. */}
+        <Toaster
+          richColors
+          position="bottom-right"
+          theme="light"
+          closeButton
+        />
         <Scripts />
       </body>
     </html>

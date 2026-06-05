@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.46.4",
+    date: "June 2026",
+    items: [
+      "<strong>v1.46.4 &mdash; Hotfix: app-wide toast system was silently dead. </strong>~50 callsites across the codebase fire <code>toast.success()</code> / <code>toast.error()</code> from sonner (Zoho connect/disconnect, outreach send, template import, light-mode enable, search-param-bounce success/error banners, etc.) but the <code>&lt;Toaster /&gt;</code> render component was never mounted anywhere in the tree. So every toast call has been a no-op since the Refill cleave. Grasshopper caught it during Zoho disconnect testing &mdash; the &ldquo;Zoho disconnected · grant revoked&rdquo; toast that v1.46.3 was supposed to surface was firing but with nowhere to render. <strong>Fix</strong>: mount <code>&lt;Toaster richColors position=&ldquo;bottom-right&rdquo; theme=&ldquo;light&rdquo; closeButton /&gt;</code> at <code>src/routes/__root.tsx</code> so every page in the app inherits it. <strong>Touched</strong>: <code>src/routes/__root.tsx</code> (Toaster import + mount), <code>src/lib/changelog.ts</code> (this entry). Per <code>feedback-own-it-no-excuses</code>: I should have walked the Zoho connect flow end-to-end before claiming v1.46.0 shipped &mdash; the OAuth round-trip worked but every status toast was invisible, masking the actual UX for the rep.",
+    ],
+  },
+  {
     version: "v1.46.3",
     date: "June 2026",
     items: [
