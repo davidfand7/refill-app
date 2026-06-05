@@ -45,6 +45,7 @@ import {
 import {
   listOutreachDrafts,
   saveOutreachDraft,
+  sendOutreachBatch,
   type OutreachDraft,
 } from "@/server/refill-outreach-drafts";
 
@@ -153,6 +154,14 @@ function OutreachPage() {
   const [savingDraft, setSavingDraft] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
   const hydratedKeyRef = useRef<string | null>(null);
+  // v1.47.0 P2 (temp scaffold): batch dry-run of all saved drafts for the
+  // selected template. P3 replaces this strip with the real recipient list.
+  const [sendingBatch, setSendingBatch] = useState(false);
+  const [batchResult, setBatchResult] = useState<{
+    sent: number;
+    failed: number;
+    total: number;
+  } | null>(null);
   useEffect(() => {
     setSubjectOverride(null);
     setBodyOverride(null);
@@ -344,6 +353,53 @@ function OutreachPage() {
     }
   };
 
+  // v1.47.0 P2 (temp scaffold): dry-run send every unsent saved draft for the
+  // selected template. Forces dryRun:true so this gate never fires real email.
+  // Shared subject/body = the composer's current overrides (null/untouched =>
+  // the dispatch helper falls to the template default per recipient).
+  const handleSendBatch = async () => {
+    if (!accessToken || !selected || sendingBatch) return;
+    setSendingBatch(true);
+    setError(null);
+    setBatchResult(null);
+    try {
+      const res = await sendOutreachBatch({
+        data: {
+          accessToken,
+          templateId: selected.id,
+          icp: selected.icp,
+          channel: selected.channel,
+          audience: selected.audience,
+          sharedSubject: subjectOverride ?? undefined,
+          sharedBody: bodyOverride ?? undefined,
+          context: {
+            spaName: form.spaName || undefined,
+            rejuvRecoveredAmount: form.rejuvRecoveredAmount || undefined,
+            rejuvRecoveredWeeks: form.rejuvRecoveredWeeks || undefined,
+          },
+          sourceContext: rep ? `rep:${rep.displayName}` : undefined,
+          dryRun: true,
+        },
+      });
+      setBatchResult({ sent: res.sent, failed: res.failed, total: res.total });
+      // Refresh drafts (sent ones now stamped) + sends history.
+      try {
+        const [draftsRes, sendsRes] = await Promise.all([
+          listOutreachDrafts({ data: { accessToken } }),
+          listMyOutreachSends({ data: { accessToken } }),
+        ]);
+        setDrafts(draftsRes.drafts);
+        setSends(sendsRes.sends);
+      } catch {
+        // Non-fatal — next load picks it up.
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Batch send failed.");
+    } finally {
+      setSendingBatch(false);
+    }
+  };
+
   if (authLoading || !loaded) {
     return <Pulse label="Loading outreach…" />;
   }
@@ -414,26 +470,38 @@ function OutreachPage() {
           {/* Right column: detail + send */}
           <div className="md:sticky md:top-6 self-start">
             {selected ? (
-              <SendPanel
-                template={selected}
-                form={form}
-                onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
-                onClose={() => {
-                  setSelected(null);
-                  setResult(null);
-                }}
-                onSend={handleSend}
-                sending={sending}
-                result={result}
-                liveEnabled={liveEnabled}
-                subjectOverride={subjectOverride}
-                bodyOverride={bodyOverride}
-                onSubjectOverrideChange={setSubjectOverride}
-                onBodyOverrideChange={setBodyOverride}
-                onSaveDraft={handleSaveDraft}
-                savingDraft={savingDraft}
-                draftSavedAt={draftSavedAt}
-              />
+              <>
+                <SendPanel
+                  template={selected}
+                  form={form}
+                  onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
+                  onClose={() => {
+                    setSelected(null);
+                    setResult(null);
+                  }}
+                  onSend={handleSend}
+                  sending={sending}
+                  result={result}
+                  liveEnabled={liveEnabled}
+                  subjectOverride={subjectOverride}
+                  bodyOverride={bodyOverride}
+                  onSubjectOverrideChange={setSubjectOverride}
+                  onBodyOverrideChange={setBodyOverride}
+                  onSaveDraft={handleSaveDraft}
+                  savingDraft={savingDraft}
+                  draftSavedAt={draftSavedAt}
+                />
+                <BatchScaffold
+                  unsentCount={
+                    drafts.filter(
+                      (d) => d.templateId === selected.id && !d.sentAt,
+                    ).length
+                  }
+                  sendingBatch={sendingBatch}
+                  batchResult={batchResult}
+                  onSendBatch={handleSendBatch}
+                />
+              </>
             ) : (
               <Hint>Pick a template on the left to see the preview.</Hint>
             )}
@@ -658,6 +726,61 @@ function IcpSection({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// v1.47.0 P2 temp scaffold — dry-run-send all saved drafts for the selected
+// template + a one-line result. P3 replaces this with the real recipient list.
+function BatchScaffold({
+  unsentCount,
+  sendingBatch,
+  batchResult,
+  onSendBatch,
+}: {
+  unsentCount: number;
+  sendingBatch: boolean;
+  batchResult: { sent: number; failed: number; total: number } | null;
+  onSendBatch: () => void;
+}) {
+  return (
+    <div
+      className="mt-4 rounded-xl border border-dashed bg-white p-4"
+      style={{ borderColor: "#e6e2d6" }}
+    >
+      <div
+        className="text-[11px] uppercase tracking-wider font-semibold mb-2"
+        style={{ color: "#8a9098" }}
+      >
+        P2 · batch send (temp)
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-[13px]" style={{ color: "#5a6068" }}>
+          {unsentCount === 0
+            ? "No unsent saved drafts for this template."
+            : `${unsentCount} unsent saved draft${unsentCount === 1 ? "" : "s"} for this template.`}
+        </span>
+        <button
+          type="button"
+          onClick={onSendBatch}
+          disabled={sendingBatch || unsentCount === 0}
+          className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-[13px] font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ background: "#056048", color: "#fbfaf7" }}
+        >
+          <Send className="h-3.5 w-3.5" />
+          {sendingBatch ? "Sending…" : "Send all (dry-run)"}
+        </button>
+      </div>
+      {batchResult && (
+        <div
+          className="mt-3 rounded-md px-3 py-2 text-[12.5px]"
+          style={{ background: "#e8f3ed", color: "#056048" }}
+        >
+          Batch complete — {batchResult.sent} sent
+          {batchResult.failed > 0 ? `, ${batchResult.failed} failed` : ""} of{" "}
+          {batchResult.total}. Re-click skips already-sent rows.
+        </div>
+      )}
     </div>
   );
 }

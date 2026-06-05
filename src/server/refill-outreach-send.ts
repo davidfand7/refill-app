@@ -424,228 +424,310 @@ const sendInput = z.object({
 
 export type SendMode = "dry_run" | "test" | "live";
 
+// ─── Shared dispatch core (v1.47.0 P2) ──────────────────────────────────
+// The per-recipient send pipeline, extracted so BOTH the single-send fn
+// (sendOutreachEmail) and the multi-send (sendOutreachBatch in
+// refill-outreach-drafts.ts) run ONE path. Resolution that is identical across
+// a whole batch — auth-derived sender persona, mode, template, rep stats,
+// From: line — is hoisted into OutreachSendContext and computed ONCE per batch.
+// The per-recipient work (placeholder ctx → render → engagement-row insert →
+// reply-to token alloc → Resend) lives in dispatchOneOutreachEmail. The
+// engagement-row insert and the reply-to token allocation stay welded together
+// (the row id IS the plus-address token) so inbound reply routing never breaks.
+
+export type OutreachAudience = "spa" | "rep";
+
+export interface OutreachSendContext {
+  sb: SbClient;
+  mode: SendMode;
+  audience: OutreachAudience;
+  purpose: "spa_outreach" | "rep_recruit";
+  template: Database["public"]["Tables"]["outreach_templates"]["Row"];
+  senderDisplayName: string;
+  senderFirstNameToken: string;
+  /** From: line — depends only on sender persona + audience, so resolved once. */
+  fromLine: string;
+  repStats: {
+    myCommissionRate: string;
+    myMonthEarnings?: string;
+    myDownstreamCount?: string;
+  } | null;
+  userId: string;
+  icp: 1 | 2 | 3;
+  channel: string;
+}
+
+/** Per-recipient placeholder context extras (everything except the name, which
+ * is taken from recipientFirstName when context.firstName is absent). */
+export interface OutreachRecipientContext {
+  firstName?: string;
+  lastName?: string;
+  spaName?: string;
+  acuityUrl?: string;
+  rejuvRecoveredAmount?: string;
+  rejuvRecoveredWeeks?: string;
+  rejuvRecentRecoveredAmount?: string;
+  recipient?: string;
+}
+
+export interface OutreachRecipientSend {
+  recipientEmail: string;
+  recipientFirstName?: string | null;
+  recipientLastName?: string | null;
+  sourceContext?: string;
+  /** Tri-state, identical to sendInput: undefined = use template subject,
+   * null = explicit no-subject, string = use this (post-override-resolution). */
+  subjectOverride?: string | null;
+  /** undefined = use template body; string = use this. */
+  bodyOverride?: string;
+  context?: OutreachRecipientContext;
+}
+
+export interface OutreachSendResult {
+  mode: SendMode;
+  eventId: string;
+  renderedSubject: string | null;
+  renderedBody: string;
+  replyTo: string;
+  resendEmailId: string | null;
+  message: string;
+}
+
+/**
+ * Resolve the once-per-batch send context. Throws if no active template for
+ * (icp, channel, audience). Caller has already authed and passes the principal.
+ */
+export async function buildOutreachSendContext(
+  sb: SbClient,
+  principal: { userId: string; isRep: boolean; repDisplayName?: string | null },
+  opts: { icp: 1 | 2 | 3; channel: string; audience?: OutreachAudience; dryRun?: boolean },
+): Promise<OutreachSendContext> {
+  // Resolve mode. Feature flag is the master gate.
+  const OUTREACH_LIVE = process.env.OUTREACH_LIVE === "true";
+  const mode: SendMode = opts.dryRun ? "test" : OUTREACH_LIVE ? "live" : "dry_run";
+
+  // v408: audience drives template filter, From: line, placeholder set, purpose.
+  const audience: OutreachAudience = opts.audience ?? "spa";
+  const purpose = audience === "rep" ? "rep_recruit" : "spa_outreach";
+
+  const tpl = await getActiveTemplateInternal(sb, opts.icp, opts.channel, audience);
+  if (!tpl) {
+    throw new Error(
+      `No active ${audience} template for icp=${opts.icp} channel=${opts.channel}`,
+    );
+  }
+
+  // v403 Pinch #18: sender persona. Rep sends voice as the rep; admin sends
+  // keep "Karen Anderson" so legacy first-person ICP-1 templates still read.
+  const senderDisplayName =
+    principal.isRep && principal.repDisplayName
+      ? principal.repDisplayName
+      : "Karen Anderson";
+  const senderFirstNameToken =
+    senderDisplayName.split(/\s+/)[0] || senderDisplayName;
+
+  // v408: rep-recruit placeholders only need live rep stats for rep audience.
+  const repStats =
+    audience === "rep" && principal.isRep
+      ? await loadRepStatsForPlaceholders(sb, principal.userId)
+      : null;
+
+  // v397/v408: From: line depends only on sender persona + audience → once.
+  const fromLine =
+    audience === "rep" && principal.isRep && principal.repDisplayName
+      ? buildRecruitFrom(principal.repDisplayName)
+      : principal.isRep && principal.repDisplayName
+        ? buildRepFrom(principal.repDisplayName)
+        : KAREN_FROM;
+
+  return {
+    sb,
+    mode,
+    audience,
+    purpose,
+    template: tpl,
+    senderDisplayName,
+    senderFirstNameToken,
+    fromLine,
+    repStats,
+    userId: principal.userId,
+    icp: opts.icp,
+    channel: opts.channel,
+  };
+}
+
+/**
+ * Dispatch ONE recipient against a resolved context. Builds the placeholder
+ * context, renders, inserts the engagement row (its id becomes the reply-to
+ * token), then branches on mode. Identical behavior to the pre-v1.47 inline
+ * single-send path.
+ */
+export async function dispatchOneOutreachEmail(
+  ctx: OutreachSendContext,
+  r: OutreachRecipientSend,
+): Promise<OutreachSendResult> {
+  const { sb, template: tpl } = ctx;
+
+  // Build context with auto-fill of recipient name from explicit args.
+  const placeholderCtx: PlaceholderContext = {
+    firstName: r.context?.firstName ?? r.recipientFirstName ?? undefined,
+    lastName: r.context?.lastName ?? r.recipientLastName ?? undefined,
+    spaName: r.context?.spaName,
+    acuityUrl: r.context?.acuityUrl,
+    rejuvRecoveredAmount: r.context?.rejuvRecoveredAmount,
+    rejuvRecoveredWeeks: r.context?.rejuvRecoveredWeeks,
+    rejuvRecentRecoveredAmount: r.context?.rejuvRecentRecoveredAmount,
+    recipient: r.context?.recipient,
+    senderName: ctx.senderDisplayName,
+    senderFirstName: ctx.senderFirstNameToken,
+    myCommissionRate: ctx.repStats?.myCommissionRate,
+    myMonthEarnings: ctx.repStats?.myMonthEarnings,
+    myDownstreamCount: ctx.repStats?.myDownstreamCount,
+  };
+
+  // v1.44 per-send override (tri-state). For batch, the caller has already
+  // resolved per-account-override-vs-shared-body into these two fields.
+  const sourceSubject =
+    r.subjectOverride !== undefined ? r.subjectOverride : tpl.subject;
+  const sourceBody = r.bodyOverride ?? tpl.body;
+  const renderedSubject = sourceSubject
+    ? substitutePlaceholders(sourceSubject, placeholderCtx)
+    : null;
+  const renderedBody = substitutePlaceholders(sourceBody, placeholderCtx);
+
+  // Insert engagement row FIRST so we have the row id for the reply-to token.
+  const { data: row, error: insErr } = await sb
+    .from("outreach_engagement_events")
+    .insert({
+      recipient_email: r.recipientEmail,
+      recipient_first_name: r.recipientFirstName ?? null,
+      recipient_last_name: r.recipientLastName ?? null,
+      source_context: r.sourceContext ?? null,
+      template_id: tpl.id,
+      icp: ctx.icp,
+      channel: ctx.channel,
+      send_mode: ctx.mode,
+      purpose: ctx.purpose,
+      rendered_subject: renderedSubject,
+      rendered_body: renderedBody,
+      sent_by: ctx.userId,
+    })
+    .select("*")
+    .single();
+  if (insErr || !row) {
+    throw new Error(`Couldn't pre-allocate engagement row: ${insErr?.message}`);
+  }
+
+  const replyTo = buildReplyTo(row.id, ctx.senderDisplayName);
+
+  // Non-live modes return without firing Resend.
+  if (ctx.mode !== "live") {
+    return {
+      mode: ctx.mode,
+      eventId: row.id,
+      renderedSubject,
+      renderedBody,
+      replyTo,
+      resendEmailId: null,
+      message:
+        ctx.mode === "dry_run"
+          ? "Logged dry-run. Set OUTREACH_LIVE=true on the worker to enable real sends."
+          : "Operator test render. No email sent regardless of flag.",
+    };
+  }
+
+  // ── LIVE PATH ────────────────────────────────────────────────────
+  const RESEND_API_KEY = process.env.RESEND_API_KEY;
+  if (!RESEND_API_KEY) {
+    throw new Error(
+      "OUTREACH_LIVE=true but RESEND_API_KEY is not set on the worker.",
+    );
+  }
+  if (!renderedSubject) {
+    throw new Error(
+      `Live send requires a subject. Channel '${ctx.channel}' has none.`,
+    );
+  }
+
+  const resendBody = {
+    from: ctx.fromLine,
+    to: r.recipientEmail,
+    subject: renderedSubject,
+    html: renderedBody,
+    reply_to: replyTo,
+    tags: [
+      { name: "product", value: "refill" },
+      { name: "stream", value: "outreach" },
+      { name: "icp", value: String(ctx.icp) },
+      { name: "channel", value: ctx.channel },
+      { name: "audience", value: ctx.audience },
+      { name: "purpose", value: ctx.purpose },
+    ],
+  };
+
+  const resp = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(resendBody),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text().catch(() => "");
+    await sb
+      .from("outreach_engagement_events")
+      .update({ resend_email_id: null })
+      .eq("id", row.id);
+    throw new Error(`Resend POST failed (${resp.status}): ${errText.slice(0, 300)}`);
+  }
+
+  const resendData = (await resp.json().catch(() => ({}))) as { id?: string };
+  const resendEmailId = resendData.id ?? null;
+
+  if (resendEmailId) {
+    await sb
+      .from("outreach_engagement_events")
+      .update({ resend_email_id: resendEmailId })
+      .eq("id", row.id);
+  }
+
+  return {
+    mode: "live",
+    eventId: row.id,
+    renderedSubject,
+    renderedBody,
+    replyTo,
+    resendEmailId,
+    message: `Live send dispatched via Resend (${resendEmailId ?? "no-id-returned"}).`,
+  };
+}
+
 export const sendOutreachEmail = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => sendInput.parse(raw))
-  .handler(
-    async ({
-      data,
-    }): Promise<{
-      mode: SendMode;
-      eventId: string;
-      renderedSubject: string | null;
-      renderedBody: string;
-      replyTo: string;
-      resendEmailId: string | null;
-      message: string;
-    }> => {
-      const sb = admin();
-      // v397 Phase 2E: active reps OR admins can send. When a rep fires the
-      // send, From: uses the rep's display name; admin sends keep "Karen
-      // Anderson". sent_by column audits either path.
-      const principal = await requireRepOrAdmin(sb, data.accessToken);
-      const userId = principal.userId;
-
-      // Resolve mode. Feature flag is the master gate.
-      const OUTREACH_LIVE = process.env.OUTREACH_LIVE === "true";
-      const mode: SendMode = data.dryRun
-        ? "test"
-        : OUTREACH_LIVE
-          ? "live"
-          : "dry_run";
-
-      // v408: audience drives template filter, From: line, placeholder set,
-      // and purpose column. Defaults to 'spa' for back-compat.
-      const audience: "spa" | "rep" = data.audience ?? "spa";
-      const purpose = audience === "rep" ? "rep_recruit" : "spa_outreach";
-
-      // Load template
-      const tpl = await getActiveTemplateInternal(sb, data.icp, data.channel, audience);
-      if (!tpl) {
-        throw new Error(
-          `No active ${audience} template for icp=${data.icp} channel=${data.channel}`,
-        );
-      }
-
-      // v403 Pinch #18: resolve sender persona BEFORE building the placeholder
-      // context so [from] / [from first name] render in the body. Rep sends
-      // voice as the rep ("My friend Karen at Rejuv built this... — Kelly"),
-      // admin sends keep "Karen Anderson" / "Karen" so legacy ICP-1 templates
-      // (where Karen messages her own warm network) still read first-person.
-      const senderDisplayName = principal.isRep && principal.repDisplayName
-        ? principal.repDisplayName
-        : "Karen Anderson";
-      const senderFirstNameToken =
-        senderDisplayName.split(/\s+/)[0] || senderDisplayName;
-
-      // v408: when audience='rep', load live rep stats for the recruit
-      // placeholders. Skipped for spa audience (zero cost; no rep stats are
-      // referenced by any spa template).
-      const repStats =
-        audience === "rep" && principal.isRep
-          ? await loadRepStatsForPlaceholders(sb, userId)
-          : null;
-
-      // Build context with auto-fill of recipient name fields from explicit args
-      const ctx: PlaceholderContext = {
-        firstName:
-          data.context?.firstName ?? data.recipientFirstName ?? undefined,
-        lastName: data.context?.lastName ?? data.recipientLastName ?? undefined,
-        spaName: data.context?.spaName,
-        acuityUrl: data.context?.acuityUrl,
-        rejuvRecoveredAmount: data.context?.rejuvRecoveredAmount,
-        rejuvRecoveredWeeks: data.context?.rejuvRecoveredWeeks,
-        rejuvRecentRecoveredAmount: data.context?.rejuvRecentRecoveredAmount,
-        recipient: data.context?.recipient,
-        senderName: senderDisplayName,
-        senderFirstName: senderFirstNameToken,
-        myCommissionRate: repStats?.myCommissionRate,
-        myMonthEarnings: repStats?.myMonthEarnings,
-        myDownstreamCount: repStats?.myDownstreamCount,
-      };
-
-      // v1.44 per-send override: rep tweaked the template inline. Use the
-      // override text but still run substitution (the rep might have typed
-      // a new [first name] token or kept existing placeholders). subjectOverride
-      // is tri-state: undefined = use template, null = explicit no-subject,
-      // string = use this.
-      const sourceSubject =
-        data.subjectOverride !== undefined ? data.subjectOverride : tpl.subject;
-      const sourceBody = data.bodyOverride ?? tpl.body;
-      const renderedSubject = sourceSubject
-        ? substitutePlaceholders(sourceSubject, ctx)
-        : null;
-      const renderedBody = substitutePlaceholders(sourceBody, ctx);
-
-      // Insert engagement row FIRST so we have the row id to use as the
-      // plus-address token in the Reply-To.
-      const { data: row, error: insErr } = await sb
-        .from("outreach_engagement_events")
-        .insert({
-          recipient_email: data.recipientEmail,
-          recipient_first_name: data.recipientFirstName ?? null,
-          recipient_last_name: data.recipientLastName ?? null,
-          source_context: data.sourceContext ?? null,
-          template_id: tpl.id,
-          icp: data.icp,
-          channel: data.channel,
-          send_mode: mode,
-          purpose,
-          rendered_subject: renderedSubject,
-          rendered_body: renderedBody,
-          sent_by: userId,
-        })
-        .select("*")
-        .single();
-      if (insErr || !row) {
-        throw new Error(`Couldn't pre-allocate engagement row: ${insErr?.message}`);
-      }
-
-      // v397: when a rep is the sender, From:/Reply-To use the rep's display
-      // name. Admin sends keep "Karen Anderson" as the persona.
-      // v408: audience='rep' routes the From: line through buildRecruitFrom
-      // so peer-rep recruit emails come from <repFirstName>@getrefill.app
-      // (Kelly Caffee <kelly@getrefill.app>) instead of the spa-outreach
-      // karen@ address. Reply-To stays on karen+<id>@reply.openagentic.site
-      // so the inbound dispatcher keeps a single local-part to match against.
-      const fromLine =
-        audience === "rep" && principal.isRep && principal.repDisplayName
-          ? buildRecruitFrom(principal.repDisplayName)
-          : principal.isRep && principal.repDisplayName
-            ? buildRepFrom(principal.repDisplayName)
-            : KAREN_FROM;
-      const replyTo = buildReplyTo(row.id, senderDisplayName);
-
-      // Non-live modes return without firing Resend.
-      if (mode !== "live") {
-        return {
-          mode,
-          eventId: row.id,
-          renderedSubject,
-          renderedBody,
-          replyTo,
-          resendEmailId: null,
-          message:
-            mode === "dry_run"
-              ? "Logged dry-run. Set OUTREACH_LIVE=true on the worker to enable real sends."
-              : "Operator test render. No email sent regardless of flag.",
-        };
-      }
-
-      // ── LIVE PATH ────────────────────────────────────────────────────
-      const RESEND_API_KEY = process.env.RESEND_API_KEY;
-      if (!RESEND_API_KEY) {
-        throw new Error(
-          "OUTREACH_LIVE=true but RESEND_API_KEY is not set on the worker.",
-        );
-      }
-      if (!renderedSubject) {
-        throw new Error(
-          `Live send requires a subject. Channel '${data.channel}' has none.`,
-        );
-      }
-
-      const resendBody = {
-        from: fromLine,
-        to: data.recipientEmail,
-        subject: renderedSubject,
-        html: renderedBody,
-        reply_to: replyTo,
-        tags: [
-          { name: "product", value: "refill" },
-          { name: "stream", value: "outreach" },
-          { name: "icp", value: String(data.icp) },
-          { name: "channel", value: data.channel },
-          // v408: audience + purpose let Resend analytics split rep-recruit
-          // engagement from spa-outreach engagement without joining back to
-          // outreach_engagement_events.
-          { name: "audience", value: audience },
-          { name: "purpose", value: purpose },
-        ],
-      };
-
-      const resp = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${RESEND_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(resendBody),
-      });
-
-      if (!resp.ok) {
-        const errText = await resp.text().catch(() => "");
-        // Stamp the row with the error context so we have a forensic trail.
-        await sb
-          .from("outreach_engagement_events")
-          .update({ resend_email_id: null })
-          .eq("id", row.id);
-        throw new Error(`Resend POST failed (${resp.status}): ${errText.slice(0, 300)}`);
-      }
-
-      const resendData = (await resp.json().catch(() => ({}))) as {
-        id?: string;
-      };
-      const resendEmailId = resendData.id ?? null;
-
-      // Stamp resend_email_id on the engagement row.
-      if (resendEmailId) {
-        await sb
-          .from("outreach_engagement_events")
-          .update({ resend_email_id: resendEmailId })
-          .eq("id", row.id);
-      }
-
-      return {
-        mode: "live",
-        eventId: row.id,
-        renderedSubject,
-        renderedBody,
-        replyTo,
-        resendEmailId,
-        message: `Live send dispatched via Resend (${resendEmailId ?? "no-id-returned"}).`,
-      };
-    },
-  );
+  .handler(async ({ data }): Promise<OutreachSendResult> => {
+    const sb = admin();
+    // v397 Phase 2E: active reps OR admins can send. When a rep fires the
+    // send, From: uses the rep's display name; admin sends keep "Karen
+    // Anderson". sent_by column audits either path.
+    const principal = await requireRepOrAdmin(sb, data.accessToken);
+    const ctx = await buildOutreachSendContext(sb, principal, {
+      icp: data.icp,
+      channel: data.channel,
+      audience: data.audience,
+      dryRun: data.dryRun,
+    });
+    return dispatchOneOutreachEmail(ctx, {
+      recipientEmail: data.recipientEmail,
+      recipientFirstName: data.recipientFirstName,
+      recipientLastName: data.recipientLastName,
+      sourceContext: data.sourceContext,
+      subjectOverride: data.subjectOverride,
+      bodyOverride: data.bodyOverride,
+      context: data.context,
+    });
+  });
 
 // ─── getOutreachSendMode — pre-click affordance for rep UI ───────────────
 // v404 Pinch #14b: the rep-facing Send button should TELEGRAPH whether the

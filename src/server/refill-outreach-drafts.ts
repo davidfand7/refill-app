@@ -29,6 +29,11 @@ import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
 import { requireRepOrAdmin } from "@/server/auth-helpers";
+import {
+  buildOutreachSendContext,
+  dispatchOneOutreachEmail,
+  type SendMode,
+} from "@/server/refill-outreach-send";
 
 // ─── service-role admin client (module-private) ──────────────────────────
 
@@ -99,6 +104,34 @@ const listDraftsInput = z.object({
 const deleteDraftInput = z.object({
   accessToken: z.string().min(1),
   id: z.string().uuid(),
+});
+
+const sendBatchInput = z.object({
+  accessToken: z.string().min(1),
+  templateId: z.string().uuid(),
+  icp: icpSchema,
+  channel: z.string().min(1).max(80),
+  audience: z.enum(["spa", "rep"]).optional(),
+  // The shared composed body the batch applies wherever a draft has NO
+  // per-account override. NULL subject = explicit no-subject; undefined =
+  // fall through to the template default inside the dispatch helper.
+  sharedSubject: z.string().max(300).nullable().optional(),
+  sharedBody: z.string().min(1).max(20000).optional(),
+  // Shared placeholder context (Rejuv figures etc.). Per-recipient first name +
+  // spa name come from the draft row and win over these.
+  context: z
+    .object({
+      firstName: z.string().optional(),
+      spaName: z.string().optional(),
+      acuityUrl: z.string().optional(),
+      rejuvRecoveredAmount: z.string().optional(),
+      rejuvRecoveredWeeks: z.string().optional(),
+      rejuvRecentRecoveredAmount: z.string().optional(),
+      recipient: z.string().optional(),
+    })
+    .optional(),
+  sourceContext: z.string().optional(),
+  dryRun: z.boolean().optional(),
 });
 
 // ─── Row → public type ───────────────────────────────────────────────────
@@ -211,3 +244,124 @@ export const deleteOutreachDraft = createServerFn({ method: "POST" })
     }
     return { ok: true };
   });
+
+// ─── sendOutreachBatch — multi-send (server-batch, concurrency-3) ─────────
+// Loads this rep's UNSENT drafts for the template, resolves the send context
+// ONCE, then dispatches each recipient through the shared
+// dispatchOneOutreachEmail in a 3-wide worker pool. Per-account override wins;
+// otherwise the shared batch body. Each success stamps sent_event_id + sent_at
+// so a re-click skips already-sent rows (idempotent). Awaits the whole pool —
+// no fire-and-forget (a Worker isolate dies at response and would drop sends).
+
+export interface BatchSendResult {
+  draftId: string;
+  recipientEmail: string;
+  ok: boolean;
+  mode?: SendMode;
+  eventId?: string;
+  error?: string;
+}
+
+export const sendOutreachBatch = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => sendBatchInput.parse(raw))
+  .handler(
+    async ({
+      data,
+    }): Promise<{
+      results: BatchSendResult[];
+      sent: number;
+      failed: number;
+      total: number;
+    }> => {
+      const sb = admin();
+      const principal = await requireRepOrAdmin(sb, data.accessToken);
+
+      // Unsent drafts for this rep + template, oldest-first (stable send order).
+      const { data: rows, error: loadErr } = await sb
+        .from("outreach_drafts")
+        .select("*")
+        .eq("rep_user_id", principal.userId)
+        .eq("template_id", data.templateId)
+        .is("sent_at", null)
+        .order("created_at", { ascending: true })
+        .limit(500);
+      if (loadErr) {
+        throw new Error(`Couldn't load drafts to send: ${loadErr.message}`);
+      }
+      const drafts = rows ?? [];
+      if (drafts.length === 0) {
+        return { results: [], sent: 0, failed: 0, total: 0 };
+      }
+
+      // Resolve the shared send context ONCE (auth-derived persona, mode,
+      // template, From: line, rep stats).
+      const ctx = await buildOutreachSendContext(sb, principal, {
+        icp: data.icp,
+        channel: data.channel,
+        audience: data.audience,
+        dryRun: data.dryRun,
+      });
+
+      const results: BatchSendResult[] = new Array(drafts.length);
+      let next = 0;
+      const worker = async (): Promise<void> => {
+        for (;;) {
+          const idx = next++;
+          if (idx >= drafts.length) return;
+          const draft = drafts[idx];
+          try {
+            const res = await dispatchOneOutreachEmail(ctx, {
+              recipientEmail: draft.recipient_email,
+              recipientFirstName: draft.recipient_first_name,
+              sourceContext: data.sourceContext,
+              // Per-account override wins; else the shared batch subject/body;
+              // else (undefined) the dispatch helper falls to the template.
+              subjectOverride:
+                draft.subject_override !== null
+                  ? draft.subject_override
+                  : data.sharedSubject,
+              bodyOverride: draft.body_override ?? data.sharedBody,
+              context: {
+                ...data.context,
+                firstName: draft.recipient_first_name ?? data.context?.firstName,
+                spaName: draft.spa_name ?? data.context?.spaName,
+              },
+            });
+            // Stamp sent — the is(sent_at,null) load filter makes re-runs skip.
+            await sb
+              .from("outreach_drafts")
+              .update({
+                sent_event_id: res.eventId,
+                sent_at: new Date().toISOString(),
+              })
+              .eq("id", draft.id);
+            results[idx] = {
+              draftId: draft.id,
+              recipientEmail: draft.recipient_email,
+              ok: true,
+              mode: res.mode,
+              eventId: res.eventId,
+            };
+          } catch (err) {
+            results[idx] = {
+              draftId: draft.id,
+              recipientEmail: draft.recipient_email,
+              ok: false,
+              error: err instanceof Error ? err.message : "send failed",
+            };
+          }
+        }
+      };
+
+      const poolSize = Math.min(3, drafts.length);
+      await Promise.all(Array.from({ length: poolSize }, () => worker()));
+
+      const sent = results.filter((r) => r.ok).length;
+      return {
+        results,
+        sent,
+        failed: results.length - sent,
+        total: drafts.length,
+      };
+    },
+  );

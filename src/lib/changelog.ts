@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.47.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.47.1 &mdash; Outreach composer, P2: shared send core + multi-send batch engine. </strong>Server-batch orchestration (Grasshopper&rsquo;s call over client-pool: one auth check, one mode resolution, idempotency adjacent to the send). <strong>What ships</strong>: (1) The single-send pipeline is refactored into a shared core in <code>refill-outreach-send.ts</code> &mdash; <code>buildOutreachSendContext</code> (resolves the once-per-batch bits: auth-derived sender persona, mode, template, From: line, rep stats) + <code>dispatchOneOutreachEmail</code> (the per-recipient work: placeholder context &rarr; render &rarr; engagement-row insert &rarr; reply-to token alloc &rarr; Resend). The engagement-row insert and the reply-to plus-address token stay welded together (the row id IS the token) so inbound reply routing is untouched &mdash; the partial-port footgun the plan flagged. <code>sendOutreachEmail</code> keeps its exact input/output contract and now just delegates through the same core, so there is one send path, not two. (2) NEW <code>sendOutreachBatch</code> &mdash; loads this rep&rsquo;s unsent drafts for a template, resolves context once, dispatches each recipient through a 3-wide worker pool (awaits the whole pool, no fire-and-forget per <code>feedback-workers-no-fire-and-forget</code>), resolves per-account-override-vs-shared-body per recipient, and stamps <code>sent_event_id</code>/<code>sent_at</code> on each draft so a re-click skips already-sent rows (idempotent). (3) A temporary &lsquo;Send all (dry-run)&rsquo; scaffold under the SendPanel exercises the batch &mdash; P3 replaces it with the real multi-recipient list. Forced <code>dryRun:true</code> so it never fires real email regardless of the OUTREACH_LIVE flag. <strong>Touched</strong>: <code>src/server/refill-outreach-send.ts</code> (extract shared core, slim single-send), <code>src/server/refill-outreach-drafts.ts</code> (<code>sendOutreachBatch</code> + worker pool), <code>src/routes/app.rep.outreach.tsx</code> (batch handler + temp scaffold), <code>src/lib/changelog.ts</code> (this entry). No dep change, no schema change, no wrangler.jsonc change. <strong>Next</strong>: P3 = real multi-recipient list + +Recipient + per-account tweak panel.",
+    ],
+  },
+  {
     version: "v1.47.0",
     date: "June 2026",
     items: [
