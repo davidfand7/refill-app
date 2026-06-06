@@ -27,7 +27,9 @@ import {
   Globe,
   Link2,
   Loader2,
+  Plus,
   Sparkles,
+  Users,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -35,9 +37,12 @@ import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
+  createProviderFn,
   getSchedulingSetupFn,
   saveSchedulingSetupFn,
+  updateProviderFn,
   type BookableServiceDraft,
+  type ProviderRow,
   type SchedulingHoursDraft,
   type SchedulingSettingsDraft,
   type SchedulingSetupBundle,
@@ -85,6 +90,14 @@ function BookingSettingsPage() {
   const [selDays, setSelDays] = useState<Set<number>>(new Set());
   const [bulkOpen, setBulkOpen] = useState("09:00");
   const [bulkClose, setBulkClose] = useState("17:00");
+  // Which provider's hours the business-hours grid is editing.
+  const [selProviderId, setSelProviderId] = useState<string>("");
+  // Provider management (persisted immediately, separate from the batched Save).
+  const [addingProvider, setAddingProvider] = useState(false);
+  const [newProviderName, setNewProviderName] = useState("");
+  const [providerBusy, setProviderBusy] = useState(false);
+  // Transient rename buffers, keyed by providerId (so renaming never trips dirty).
+  const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (membership.status !== "tenant") return;
@@ -99,6 +112,9 @@ function BookingSettingsPage() {
         if (cancelled) return;
         setServer(result);
         setDraft(structuredClone(result));
+        // Default the hours grid to the primary provider (or first active).
+        const firstActive = result.providers.find((p) => p.isActive);
+        setSelProviderId(result.providerId || firstActive?.id || "");
       } catch (err) {
         if (!cancelled) {
           toast.error(err instanceof Error ? err.message : "Couldn't load booking settings.");
@@ -117,14 +133,37 @@ function BookingSettingsPage() {
     [draft, server],
   );
 
+  const activeProviders = useMemo(() => draft?.providers.filter((p) => p.isActive) ?? [], [draft]);
+  const selHours = draft?.hoursByProvider[selProviderId] ?? [];
+  const selProviderName = draft?.providers.find((p) => p.id === selProviderId)?.name ?? "";
+
+  // Keep the selected provider valid (e.g. after deactivating the selected one).
+  useEffect(() => {
+    if (!draft) return;
+    const active = draft.providers.filter((p) => p.isActive);
+    if (active.length && !active.some((p) => p.id === selProviderId)) {
+      setSelProviderId(active[0].id);
+    }
+  }, [draft, selProviderId]);
+
   function patchSettings(patch: Partial<SchedulingSettingsDraft>) {
     setDraft((d) => (d ? { ...d, settings: { ...d.settings, ...patch } } : d));
   }
+  /** Map the selected provider's hours rows; no-op for other providers. */
+  function mapSelectedHours(
+    d: SchedulingSetupBundle,
+    fn: (h: SchedulingHoursDraft) => SchedulingHoursDraft,
+  ): SchedulingSetupBundle {
+    const rows = d.hoursByProvider[selProviderId];
+    if (!rows) return d;
+    return {
+      ...d,
+      hoursByProvider: { ...d.hoursByProvider, [selProviderId]: rows.map(fn) },
+    };
+  }
   function patchDay(dayOfWeek: number, patch: Partial<SchedulingHoursDraft>) {
     setDraft((d) =>
-      d
-        ? { ...d, hours: d.hours.map((h) => (h.dayOfWeek === dayOfWeek ? { ...h, ...patch } : h)) }
-        : d,
+      d ? mapSelectedHours(d, (h) => (h.dayOfWeek === dayOfWeek ? { ...h, ...patch } : h)) : d,
     );
   }
   function toggleSelDay(dow: number) {
@@ -143,14 +182,11 @@ function BookingSettingsPage() {
     }
     setDraft((d) =>
       d
-        ? {
-            ...d,
-            hours: d.hours.map((h) =>
-              selDays.has(h.dayOfWeek)
-                ? { ...h, openTime: bulkOpen, closeTime: bulkClose, isClosed: false }
-                : h,
-            ),
-          }
+        ? mapSelectedHours(d, (h) =>
+            selDays.has(h.dayOfWeek)
+              ? { ...h, openTime: bulkOpen, closeTime: bulkClose, isClosed: false }
+              : h,
+          )
         : d,
     );
     toast.success(`Applied ${bulkOpen}–${bulkClose} to ${selDays.size} day${selDays.size === 1 ? "" : "s"}.`);
@@ -158,10 +194,94 @@ function BookingSettingsPage() {
   function setSelectedClosed() {
     if (selDays.size === 0) return;
     setDraft((d) =>
-      d
-        ? { ...d, hours: d.hours.map((h) => (selDays.has(h.dayOfWeek) ? { ...h, isClosed: true } : h)) }
-        : d,
+      d ? mapSelectedHours(d, (h) => (selDays.has(h.dayOfWeek) ? { ...h, isClosed: true } : h)) : d,
     );
+  }
+
+  // ── Provider management (immediate persist) ──────────────────────────────
+  async function withToken<T>(fn: (token: string) => Promise<T>): Promise<T | undefined> {
+    const { data: sess } = await supabase.auth.getSession();
+    const token = sess.session?.access_token;
+    if (!token) {
+      toast.error("Not signed in.");
+      return undefined;
+    }
+    return fn(token);
+  }
+  /** Patch a provider row + seeded hours into BOTH draft and server (keeps dirty honest). */
+  function syncProviderAdd(provider: ProviderRow, hours: SchedulingHoursDraft[]) {
+    const merge = (b: SchedulingSetupBundle): SchedulingSetupBundle => ({
+      ...b,
+      providers: [...b.providers, provider],
+      hoursByProvider: { ...b.hoursByProvider, [provider.id]: hours },
+    });
+    setServer((s) => (s ? merge(s) : s));
+    setDraft((d) => (d ? merge(d) : d));
+  }
+  function syncProviderUpdate(provider: ProviderRow) {
+    const merge = (b: SchedulingSetupBundle): SchedulingSetupBundle => ({
+      ...b,
+      providers: b.providers.map((p) => (p.id === provider.id ? provider : p)),
+    });
+    setServer((s) => (s ? merge(s) : s));
+    setDraft((d) => (d ? merge(d) : d));
+  }
+  async function onAddProvider() {
+    const name = newProviderName.trim();
+    if (!name) return;
+    setProviderBusy(true);
+    try {
+      const res = await withToken((token) =>
+        createProviderFn({ data: { accessToken: token, viewAsUserId, name } }),
+      );
+      if (!res) return;
+      syncProviderAdd(res.provider, res.hours);
+      setSelProviderId(res.provider.id);
+      setNewProviderName("");
+      setAddingProvider(false);
+      toast.success(`Added ${res.provider.name}.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't add provider.");
+    } finally {
+      setProviderBusy(false);
+    }
+  }
+  async function commitRename(p: ProviderRow) {
+    const next = (nameDrafts[p.id] ?? p.name).trim();
+    setNameDrafts((m) => {
+      const n = { ...m };
+      delete n[p.id];
+      return n;
+    });
+    if (!next || next === p.name) return;
+    try {
+      const res = await withToken((token) =>
+        updateProviderFn({ data: { accessToken: token, viewAsUserId, providerId: p.id, name: next } }),
+      );
+      if (!res) return;
+      syncProviderUpdate(res.provider);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't rename provider.");
+    }
+  }
+  async function onToggleProviderActive(p: ProviderRow) {
+    try {
+      const res = await withToken((token) =>
+        updateProviderFn({
+          data: { accessToken: token, viewAsUserId, providerId: p.id, isActive: !p.isActive },
+        }),
+      );
+      if (!res) return;
+      syncProviderUpdate(res.provider);
+      // If we just deactivated the selected provider, jump to another active one.
+      if (!res.provider.isActive && selProviderId === p.id) {
+        const nextActive = draft?.providers.find((x) => x.isActive && x.id !== p.id);
+        if (nextActive) setSelProviderId(nextActive.id);
+      }
+      toast.success(`${res.provider.name} ${res.provider.isActive ? "activated" : "deactivated"}.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't update provider.");
+    }
   }
   function patchService(id: string, patch: Partial<BookableServiceDraft>) {
     setDraft((d) =>
@@ -176,12 +296,21 @@ function BookingSettingsPage() {
       const { data: sess } = await supabase.auth.getSession();
       const token = sess.session?.access_token;
       if (!token) throw new Error("Not signed in.");
+      const flatHours = Object.entries(draft.hoursByProvider).flatMap(([providerId, rows]) =>
+        rows.map((h) => ({
+          providerId,
+          dayOfWeek: h.dayOfWeek,
+          openTime: h.openTime,
+          closeTime: h.closeTime,
+          isClosed: h.isClosed,
+        })),
+      );
       await saveSchedulingSetupFn({
         data: {
           accessToken: token,
           viewAsUserId,
           settings: draft.settings,
-          hours: draft.hours,
+          hours: flatHours,
           services: draft.services.map((s) => ({
             id: s.id,
             durationMin: s.durationMin,
@@ -325,12 +454,123 @@ function BookingSettingsPage() {
               </div>
             </section>
 
+            {/* ── Providers ── */}
+            <section className="rounded-xl border border-rule bg-white px-5 py-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Users className="h-4 w-4 text-emerald" />
+                <h3 className="text-[14px] font-semibold text-ink">Providers</h3>
+              </div>
+              <p className="text-[12px] text-ink-soft mb-3 leading-relaxed">
+                Everyone who takes appointments. Each provider keeps their own hours and their own
+                column on the calendar. Deactivate (rather than delete) anyone no longer booking —
+                their past appointments stay intact.
+              </p>
+              <div className="divide-y divide-rule">
+                {draft.providers.map((p) => (
+                  <div key={p.id} className="flex items-center gap-3 py-2.5">
+                    <input
+                      type="text"
+                      value={nameDrafts[p.id] ?? p.name}
+                      onChange={(e) =>
+                        setNameDrafts((m) => ({ ...m, [p.id]: e.target.value }))
+                      }
+                      onBlur={() => void commitRename(p)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                      }}
+                      className={cn(
+                        "flex-1 min-w-0 rounded-md border border-transparent bg-transparent px-2 py-1 text-[14px] text-ink outline-none hover:border-rule focus:border-emerald focus:ring-2 focus:ring-emerald/30",
+                        !p.isActive && "text-ink-faint italic",
+                      )}
+                    />
+                    {!p.isActive && (
+                      <span className="text-[10px] uppercase tracking-wider font-semibold text-ink-faint">
+                        Inactive
+                      </span>
+                    )}
+                    <Toggle checked={p.isActive} onChange={() => void onToggleProviderActive(p)} />
+                  </div>
+                ))}
+              </div>
+              {addingProvider ? (
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-rule/60">
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="Provider name"
+                    value={newProviderName}
+                    onChange={(e) => setNewProviderName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void onAddProvider();
+                      if (e.key === "Escape") {
+                        setAddingProvider(false);
+                        setNewProviderName("");
+                      }
+                    }}
+                    className="flex-1 rounded-md border border-rule bg-white px-3 py-2 text-[14px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void onAddProvider()}
+                    disabled={providerBusy || !newProviderName.trim()}
+                    className="inline-flex items-center gap-1 rounded-md bg-emerald px-3 py-2 text-[13px] font-medium text-paper hover:opacity-95 transition disabled:opacity-50"
+                  >
+                    {providerBusy ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Plus className="h-3.5 w-3.5" />
+                    )}{" "}
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingProvider(false);
+                      setNewProviderName("");
+                    }}
+                    className="rounded-md border border-rule px-3 py-2 text-[13px] text-ink-soft hover:text-ink transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAddingProvider(true)}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-1.5 text-[13px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add provider
+                </button>
+              )}
+            </section>
+
             {/* ── Business hours ── */}
             <section className="rounded-xl border border-rule bg-white px-5 py-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Clock className="h-4 w-4 text-emerald" />
-                <h3 className="text-[14px] font-semibold text-ink">Business hours</h3>
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-emerald" />
+                  <h3 className="text-[14px] font-semibold text-ink">Business hours</h3>
+                </div>
+                {activeProviders.length > 1 && (
+                  <select
+                    value={selProviderId}
+                    onChange={(e) => setSelProviderId(e.target.value)}
+                    className="rounded-md border border-rule bg-white px-3 py-1.5 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                  >
+                    {activeProviders.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
+              {activeProviders.length > 1 && (
+                <p className="text-[12px] text-ink-soft mb-3 -mt-1">
+                  Editing hours for <strong>{selProviderName}</strong>. Each provider has their own
+                  week.
+                </p>
+              )}
 
               {/* Bulk edit: select days → apply hours */}
               <div className="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b border-rule/60 text-[12px]">
@@ -353,7 +593,7 @@ function BookingSettingsPage() {
 
               <div className="space-y-1.5">
                 {DAY_ORDER.map((dow) => {
-                  const h = draft.hours.find((x) => x.dayOfWeek === dow);
+                  const h = selHours.find((x) => x.dayOfWeek === dow);
                   if (!h) return null;
                   return (
                     <div

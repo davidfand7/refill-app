@@ -77,12 +77,22 @@ export interface BookableServiceDraft {
   onlineBookable: boolean;
 }
 
+export interface ProviderRow {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
 export interface SchedulingSetupBundle {
+  /** Primary (earliest active) provider — kept for back-compat / default selection. */
   providerId: string;
+  /** All providers (active + inactive), ordered by created_at. */
+  providers: ProviderRow[];
   /** Tenant slug — used to build the public booking link /s/<slug>. */
   slug: string;
   settings: SchedulingSettingsDraft;
-  hours: SchedulingHoursDraft[];
+  /** providerId → that provider's 7 weekday hours rows. */
+  hoursByProvider: Record<string, SchedulingHoursDraft[]>;
   services: BookableServiceDraft[];
 }
 
@@ -103,6 +113,31 @@ function hhmm(t: string): string {
 }
 
 // ── Idempotent seed ──────────────────────────────────────────────────────────
+
+/** Ensure a provider has all 7 weekday hours rows (Mon–Fri 9–5, weekends closed). */
+export async function seedProviderHours(sb: Sb, providerId: string): Promise<void> {
+  const { data: hoursRows } = await sb
+    .from("scheduling_hours")
+    .select("day_of_week")
+    .eq("provider_id", providerId);
+  const existing = new Set((hoursRows ?? []).map((r) => r.day_of_week));
+  const toInsert = [];
+  for (let d = 0; d < 7; d++) {
+    if (existing.has(d)) continue;
+    const weekend = d === 0 || d === 6;
+    toInsert.push({
+      provider_id: providerId,
+      day_of_week: d,
+      open_time: "09:00",
+      close_time: "17:00",
+      is_closed: weekend,
+    });
+  }
+  if (toInsert.length) {
+    const { error } = await sb.from("scheduling_hours").insert(toInsert);
+    if (error) throw new Error(`Couldn't seed hours: ${error.message}`);
+  }
+}
 
 export async function ensureSetup(sb: Sb, tenantId: string, ownerUserId: string): Promise<string> {
   // 1. Provider — the MVP single provider, mapped to the owner's auth user.
@@ -140,27 +175,7 @@ export async function ensureSetup(sb: Sb, tenantId: string, ownerUserId: string)
   }
 
   // 3. Hours — ensure all 7 weekdays exist (Mon–Fri open 9–5, weekends closed).
-  const { data: hoursRows } = await sb
-    .from("scheduling_hours")
-    .select("day_of_week")
-    .eq("provider_id", providerId);
-  const existing = new Set((hoursRows ?? []).map((r) => r.day_of_week));
-  const toInsert = [];
-  for (let d = 0; d < 7; d++) {
-    if (existing.has(d)) continue;
-    const weekend = d === 0 || d === 6;
-    toInsert.push({
-      provider_id: providerId,
-      day_of_week: d,
-      open_time: "09:00",
-      close_time: "17:00",
-      is_closed: weekend,
-    });
-  }
-  if (toInsert.length) {
-    const { error } = await sb.from("scheduling_hours").insert(toInsert);
-    if (error) throw new Error(`Couldn't seed hours: ${error.message}`);
-  }
+  await seedProviderHours(sb, providerId);
 
   return providerId;
 }
@@ -183,10 +198,27 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
     const providerId = await ensureSetup(sb, tenantId, effectiveUserId);
 
+    // All providers (active + inactive) so the list can show/reactivate any.
+    const { data: providerRows } = await sb
+      .from("scheduling_providers")
+      .select("id, name, is_active, created_at")
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: true });
+    const providers: ProviderRow[] = (providerRows ?? []).map((p) => ({
+      id: p.id,
+      name: p.name,
+      isActive: p.is_active,
+    }));
+    const providerIds = providers.map((p) => p.id);
+
     const [{ data: settingsRow }, { data: hoursRows }, { data: serviceRows }, { data: tenantRow }] =
       await Promise.all([
         sb.from("scheduling_settings").select("*").eq("tenant_id", tenantId).maybeSingle(),
-        sb.from("scheduling_hours").select("*").eq("provider_id", providerId).order("day_of_week"),
+        sb
+          .from("scheduling_hours")
+          .select("*")
+          .in("provider_id", providerIds.length ? providerIds : [providerId])
+          .order("day_of_week"),
         sb
           .from("services")
           .select("id, name, duration_min, buffer_min, online_bookable, hidden_at")
@@ -209,12 +241,16 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
         }
       : { ...DEFAULT_SETTINGS };
 
-    const hours: SchedulingHoursDraft[] = (hoursRows ?? []).map((h) => ({
-      dayOfWeek: h.day_of_week,
-      openTime: hhmm(h.open_time),
-      closeTime: hhmm(h.close_time),
-      isClosed: h.is_closed,
-    }));
+    const hoursByProvider: Record<string, SchedulingHoursDraft[]> = {};
+    for (const pid of providerIds) hoursByProvider[pid] = [];
+    for (const h of hoursRows ?? []) {
+      (hoursByProvider[h.provider_id] ??= []).push({
+        dayOfWeek: h.day_of_week,
+        openTime: hhmm(h.open_time),
+        closeTime: hhmm(h.close_time),
+        isClosed: h.is_closed,
+      });
+    }
 
     const services: BookableServiceDraft[] = (serviceRows ?? []).map((s) => ({
       id: s.id,
@@ -224,12 +260,13 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
       onlineBookable: s.online_bookable,
     }));
 
-    return { providerId, slug: tenantRow?.slug ?? "", settings, hours, services };
+    return { providerId, providers, slug: tenantRow?.slug ?? "", settings, hoursByProvider, services };
   });
 
 // ── saveSchedulingSetupFn ────────────────────────────────────────────────────
 
 const hoursDraftSchema = z.object({
+  providerId: z.string().uuid(),
   dayOfWeek: z.number().int().min(0).max(6),
   openTime: z.string().regex(/^\d{2}:\d{2}$/),
   closeTime: z.string().regex(/^\d{2}:\d{2}$/),
@@ -258,7 +295,8 @@ const saveInput = z.object({
   accessToken: z.string().min(10),
   viewAsUserId: z.string().uuid().optional(),
   settings: settingsDraftSchema,
-  hours: z.array(hoursDraftSchema).max(7),
+  // Provider-keyed: up to 7 rows × a reasonable provider count.
+  hours: z.array(hoursDraftSchema).max(7 * 50),
   services: z.array(serviceDraftSchema).max(200),
 });
 
@@ -280,8 +318,22 @@ export const saveSchedulingSetupFn = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
-    const providerId = await ensureSetup(sb, tenantId, effectiveUserId);
+    await ensureSetup(sb, tenantId, effectiveUserId);
     const nowIso = new Date().toISOString();
+
+    // Guard: every hours row's providerId must belong to this tenant.
+    if (data.hours.length) {
+      const { data: ownProviders } = await sb
+        .from("scheduling_providers")
+        .select("id")
+        .eq("tenant_id", tenantId);
+      const ownIds = new Set((ownProviders ?? []).map((p) => p.id));
+      for (const h of data.hours) {
+        if (!ownIds.has(h.providerId)) {
+          throw new Error("Hours reference a provider that isn't part of this spa.");
+        }
+      }
+    }
 
     // 1. Settings — upsert on the unique tenant_id.
     const { error: sErr } = await sb.from("scheduling_settings").upsert(
@@ -301,11 +353,11 @@ export const saveSchedulingSetupFn = createServerFn({ method: "POST" })
     );
     if (sErr) throw new Error(`Couldn't save settings: ${sErr.message}`);
 
-    // 2. Hours — upsert on the unique (provider_id, day_of_week).
+    // 2. Hours — upsert on the unique (provider_id, day_of_week), per provider.
     if (data.hours.length) {
       const { error: hErr } = await sb.from("scheduling_hours").upsert(
         data.hours.map((h) => ({
-          provider_id: providerId,
+          provider_id: h.providerId,
           day_of_week: h.dayOfWeek,
           open_time: h.openTime,
           close_time: h.closeTime,
@@ -333,4 +385,111 @@ export const saveSchedulingSetupFn = createServerFn({ method: "POST" })
     }
 
     return { ok: true };
+  });
+
+// ── createProviderFn ─────────────────────────────────────────────────────────
+// Provider management is persisted immediately (separate from the batched Save),
+// so adding a provider never collides with unsaved hours/settings edits. The new
+// provider seeds a default Mon–Fri 9–5 week so its hours grid is usable at once.
+
+const createProviderInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+  name: z.string().trim().min(1).max(80),
+});
+
+export const createProviderFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => createProviderInput.parse(raw))
+  .handler(
+    async ({ data }): Promise<{ provider: ProviderRow; hours: SchedulingHoursDraft[] }> => {
+      const { effectiveUserId } = await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
+      const sb = admin();
+      const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+      await ensureSetup(sb, tenantId, effectiveUserId);
+
+      const { data: created, error } = await sb
+        .from("scheduling_providers")
+        .insert({ tenant_id: tenantId, name: data.name })
+        .select("id, name, is_active")
+        .single();
+      if (error || !created) {
+        throw new Error(`Couldn't add provider: ${error?.message ?? "unknown"}`);
+      }
+
+      await seedProviderHours(sb, created.id);
+      const { data: hoursRows } = await sb
+        .from("scheduling_hours")
+        .select("day_of_week, open_time, close_time, is_closed")
+        .eq("provider_id", created.id)
+        .order("day_of_week");
+
+      return {
+        provider: { id: created.id, name: created.name, isActive: created.is_active },
+        hours: (hoursRows ?? []).map((h) => ({
+          dayOfWeek: h.day_of_week,
+          openTime: hhmm(h.open_time),
+          closeTime: hhmm(h.close_time),
+          isClosed: h.is_closed,
+        })),
+      };
+    },
+  );
+
+// ── updateProviderFn ─────────────────────────────────────────────────────────
+// Rename and/or activate-deactivate. Never hard-deletes (preserves appointment
+// history). Refuses to deactivate the last active provider — a spa must always
+// have at least one bookable provider.
+
+const updateProviderInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+  providerId: z.string().uuid(),
+  name: z.string().trim().min(1).max(80).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const updateProviderFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => updateProviderInput.parse(raw))
+  .handler(async ({ data }): Promise<{ provider: ProviderRow }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+
+    // Ownership guard + last-active-provider guard.
+    const { data: providers } = await sb
+      .from("scheduling_providers")
+      .select("id, is_active")
+      .eq("tenant_id", tenantId);
+    const target = (providers ?? []).find((p) => p.id === data.providerId);
+    if (!target) throw new Error("That provider isn't part of this spa.");
+    if (data.isActive === false && target.is_active) {
+      const activeCount = (providers ?? []).filter((p) => p.is_active).length;
+      if (activeCount <= 1) {
+        throw new Error("You need at least one active provider. Add another before deactivating this one.");
+      }
+    }
+
+    const patch: { name?: string; is_active?: boolean; updated_at: string } = {
+      updated_at: new Date().toISOString(),
+    };
+    if (data.name !== undefined) patch.name = data.name;
+    if (data.isActive !== undefined) patch.is_active = data.isActive;
+
+    const { data: updated, error } = await sb
+      .from("scheduling_providers")
+      .update(patch)
+      .eq("id", data.providerId)
+      .eq("tenant_id", tenantId)
+      .select("id, name, is_active")
+      .single();
+    if (error || !updated) {
+      throw new Error(`Couldn't update provider: ${error?.message ?? "unknown"}`);
+    }
+    return { provider: { id: updated.id, name: updated.name, isActive: updated.is_active } };
   });

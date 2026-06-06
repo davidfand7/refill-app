@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.50.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.50.0 &mdash; Multiple providers, each with their own hours. </strong>Your spa can now run more than one provider &mdash; perfect for part-time injectors, an aesthetician a couple days a week, or a rotating laser tech. On the <strong>Online booking</strong> page there&rsquo;s a new <strong>Providers</strong> section: add a provider, rename anyone inline, and flip them active/inactive (we never delete &mdash; past appointments stay intact, and you always keep at least one active provider). Each new provider starts with a sensible <strong>Mon&ndash;Fri 9&ndash;5</strong> week, and <strong>Business hours</strong> now has a provider picker so every provider keeps their own schedule. The calendar foundation was already provider-aware under the hood &mdash; this is the surface that lets you actually run a team. <strong>Touched</strong>: <code>src/server/scheduling-settings.functions.ts</code> (provider list/create/update fns, per-provider hours save, <code>hoursByProvider</code> bundle), <code>src/routes/app.refill.settings.booking.tsx</code> (Providers section + per-provider hours grid), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.49.0",
     date: "June 2026",
     items: [
