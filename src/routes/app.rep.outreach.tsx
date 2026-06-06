@@ -21,7 +21,7 @@
 
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookmarkPlus, Send, Sparkles, X } from "lucide-react";
+import { BookmarkPlus, Link2, Send, Sparkles, X } from "lucide-react";
 import { z } from "zod";
 
 import { TemplateEditor } from "@/components/refill/TemplateEditor";
@@ -38,6 +38,7 @@ import {
   type OutreachTemplate,
 } from "@/server/refill-outreach";
 import {
+  getMyRecruitStats,
   getOutreachSendMode,
   sendOutreachEmail,
   type SendMode,
@@ -60,6 +61,10 @@ const outreachSearchSchema = z.object({
   spaName: z.string().min(1).max(120).optional(),
   icp: z.coerce.number().int().min(1).max(3).optional(),
   channel: z.string().min(1).max(40).optional(),
+  // v1.47.0 P3a: which book is open. prospects = rep→spa (audience 'spa'),
+  // recruits = rep→rep (audience 'rep'). /app/rep/recruit redirects here with
+  // tab=recruits.
+  tab: z.enum(["prospects", "recruits"]).optional(),
 });
 
 export const Route = createFileRoute("/app/rep/outreach")({
@@ -84,6 +89,15 @@ type SendResult = {
   renderedBody: string;
   replyTo: string;
   message: string;
+};
+
+// v1.47.0 P3a: live recruit-pitch stats (rep audience only). Rendered as chips
+// so the rep sees exactly what substitutes into [my commission rate] /
+// [my month earnings] / [my downstream count] before sending.
+type RecruitStats = {
+  myCommissionRate: string;
+  myMonthEarnings: string | null;
+  myDownstreamCount: string | null;
 };
 
 // v1.44 client-side preview substitution. Mirrors the spa-outreach subset of
@@ -118,6 +132,14 @@ function OutreachPage() {
   // v407 Pinch #16: read URL params for form pre-fill. validateSearch above
   // already coerced + bounded the values; anything missing comes back undefined.
   const prefill = Route.useSearch();
+
+  // v1.47.0 P3a: which book is open — 'spa' (Prospects) or 'rep' (Recruits).
+  // Scopes templates, sends, drafts, and stats. Initial from the URL tab param
+  // (so /app/rep/recruit can redirect here as ?tab=recruits).
+  const [audience, setAudience] = useState<"spa" | "rep">(
+    prefill.tab === "recruits" ? "rep" : "spa",
+  );
+  const [stats, setStats] = useState<RecruitStats | null>(null);
 
   const [rep, setRep] = useState<RepAccountRow | null>(null);
   const [templates, setTemplates] = useState<OutreachTemplate[]>([]);
@@ -200,35 +222,45 @@ function OutreachPage() {
       try {
         const viewAsUserId =
           typeof window !== "undefined" ? getAdminViewAsUserId() : undefined;
-        const [repRes, tplRes, modeRes, sendsRes, draftsRes] = await Promise.all([
-          getMyRepAccount({ data: { accessToken, viewAsUserId } }),
-          listOutreachTemplates({ data: { accessToken } }).catch(() => ({
-            templates: [],
-          })),
-          // v404 Pinch #14b: fetch send-mode alongside profile/templates so
-          // the button labels render correctly on first paint, not after a
-          // post-click reveal. Fail-soft to dry-run framing if it errors.
-          getOutreachSendMode({ data: { accessToken } }).catch(() => ({
-            liveEnabled: false,
-          })),
-          // v405.3 Pinch #13: pull past-sends history alongside the rest so
-          // the panel hydrates on first paint. Fail-soft to empty array if
-          // the query errors (e.g. caller is admin with no rep profile yet).
-          listMyOutreachSends({ data: { accessToken } }).catch(() => ({
-            sends: [],
-          })),
-          // v1.47.0 P1: pull this rep's saved drafts alongside the rest so a
-          // matching draft hydrates on first paint. Fail-soft to empty.
-          listOutreachDrafts({ data: { accessToken } }).catch(() => ({
-            drafts: [],
-          })),
-        ]);
+        const [repRes, tplRes, modeRes, sendsRes, draftsRes, statsRes] =
+          await Promise.all([
+            getMyRepAccount({ data: { accessToken, viewAsUserId } }),
+            // v1.47.0 P3a: templates scoped to the active book's audience.
+            listOutreachTemplates({ data: { accessToken, audience } }).catch(
+              () => ({ templates: [] }),
+            ),
+            // v404 Pinch #14b: fetch send-mode alongside profile/templates so
+            // the button labels render correctly on first paint, not after a
+            // post-click reveal. Fail-soft to dry-run framing if it errors.
+            getOutreachSendMode({ data: { accessToken } }).catch(() => ({
+              liveEnabled: false,
+            })),
+            // v405.3 Pinch #13 + P3a: past-sends scoped to this book's purpose.
+            listMyOutreachSends({
+              data: {
+                accessToken,
+                purpose: audience === "rep" ? "rep_recruit" : "spa_outreach",
+              },
+            }).catch(() => ({ sends: [] })),
+            // v1.47.0 P1 + P3a: this rep's saved drafts for the active audience.
+            listOutreachDrafts({ data: { accessToken, audience } }).catch(
+              () => ({ drafts: [] }),
+            ),
+            // v1.47.0 P3a: recruit-pitch stats (used only by the Recruits tab;
+            // fetched unconditionally so a tab switch has them ready).
+            getMyRecruitStats({ data: { accessToken } }).catch(() => ({
+              myCommissionRate: "3%",
+              myMonthEarnings: null,
+              myDownstreamCount: null,
+            })),
+          ]);
         if (cancelled) return;
         setRep(repRes.rep);
         setTemplates(tplRes.templates);
         setLiveEnabled(modeRes.liveEnabled);
         setSends(sendsRes.sends);
         setDrafts(draftsRes.drafts);
+        setStats(statsRes);
       } catch (err) {
         if (!cancelled) {
           setError(
@@ -242,7 +274,15 @@ function OutreachPage() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, accessToken]);
+  }, [authLoading, accessToken, audience]);
+
+  // v1.47.0 P3a: switching books clears the selected template + any send/batch
+  // result so a Prospects template never lingers on the Recruits tab.
+  useEffect(() => {
+    setSelected(null);
+    setResult(null);
+    setBatchResult(null);
+  }, [audience]);
 
   const grouped = useMemo(() => groupByIcp(templates), [templates]);
 
@@ -272,11 +312,14 @@ function OutreachPage() {
       const res = await sendOutreachEmail({
         data: {
           accessToken,
+          audience,
           icp: selected.icp,
           channel: selected.channel,
           recipientEmail: form.recipientEmail,
           recipientFirstName: form.firstName,
-          sourceContext: rep ? `rep:${rep.displayName}` : undefined,
+          sourceContext: rep
+            ? `${audience === "rep" ? "recruit" : "rep"}:${rep.displayName}`
+            : undefined,
           context: {
             firstName: form.firstName,
             spaName: form.spaName || undefined,
@@ -303,7 +346,10 @@ function OutreachPage() {
       // the send already succeeded; a refresh miss is non-fatal.
       try {
         const { sends: latest } = await listMyOutreachSends({
-          data: { accessToken },
+          data: {
+            accessToken,
+            purpose: audience === "rep" ? "rep_recruit" : "spa_outreach",
+          },
         });
         setSends(latest);
       } catch {
@@ -385,8 +431,13 @@ function OutreachPage() {
       // Refresh drafts (sent ones now stamped) + sends history.
       try {
         const [draftsRes, sendsRes] = await Promise.all([
-          listOutreachDrafts({ data: { accessToken } }),
-          listMyOutreachSends({ data: { accessToken } }),
+          listOutreachDrafts({ data: { accessToken, audience } }),
+          listMyOutreachSends({
+            data: {
+              accessToken,
+              purpose: audience === "rep" ? "rep_recruit" : "spa_outreach",
+            },
+          }),
         ]);
         setDrafts(draftsRes.drafts);
         setSends(sendsRes.sends);
@@ -435,12 +486,29 @@ function OutreachPage() {
 
   return (
     <Page wide>
-      <Heading>Outreach</Heading>
-      <Lede>
-        Pick a template, fill in the prospect&apos;s details, and the email
-        goes out as <strong>{rep.displayName}</strong>. Replies route back
-        through the platform so you can track conversion.
-      </Lede>
+      <OutreachTabs audience={audience} onChange={setAudience} />
+
+      {audience === "rep" ? (
+        <>
+          <Heading>Recruit reps</Heading>
+          <Lede>
+            Invite peer reps into your downstream. You earn{" "}
+            <strong>1% cascade, lifetime</strong>, on every dollar of recovered
+            revenue from spas your sub-reps introduce — on top of your own 3%
+            direct rate. The compounding scales beyond your own hours.
+          </Lede>
+          {stats && <RecruitStatsBar stats={stats} />}
+        </>
+      ) : (
+        <>
+          <Heading>Outreach</Heading>
+          <Lede>
+            Pick a template, fill in the prospect&apos;s details, and the email
+            goes out as <strong>{rep.displayName}</strong>. Replies route back
+            through the platform so you can track conversion.
+          </Lede>
+        </>
+      )}
 
       {templates.length === 0 ? (
         <EmptyTemplates />
@@ -455,6 +523,7 @@ function OutreachPage() {
                 <IcpSection
                   key={icp}
                   icp={icp}
+                  audience={audience}
                   templates={tpls}
                   selectedId={selected?.id}
                   onPick={(t) => {
@@ -465,6 +534,7 @@ function OutreachPage() {
                 />
               );
             })}
+            {audience === "rep" && <ShareLinkAffordance />}
           </div>
 
           {/* Right column: detail + send */}
@@ -473,6 +543,7 @@ function OutreachPage() {
               <>
                 <SendPanel
                   template={selected}
+                  audience={audience}
                   form={form}
                   onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
                   onClose={() => {
@@ -656,6 +727,145 @@ function formatRelativeShort(iso: string): string {
   });
 }
 
+// ─── v1.47.0 P3a: Prospects / Recruits tab bar ───────────────────────────
+function OutreachTabs({
+  audience,
+  onChange,
+}: {
+  audience: "spa" | "rep";
+  onChange: (a: "spa" | "rep") => void;
+}) {
+  const tabs: { key: "spa" | "rep"; label: string }[] = [
+    { key: "spa", label: "Prospects" },
+    { key: "rep", label: "Recruits" },
+  ];
+  return (
+    <div
+      className="inline-flex items-center gap-1 rounded-lg border p-1 mb-5"
+      style={{ borderColor: "#e6e2d6", background: "#fbfaf7" }}
+      role="tablist"
+      aria-label="Outreach book"
+    >
+      {tabs.map((t) => {
+        const active = audience === t.key;
+        return (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(t.key)}
+            className="rounded-md px-4 py-1.5 text-[13px] font-semibold transition"
+            style={{
+              background: active ? "#fff" : "transparent",
+              color: active ? "#056048" : "#8a9098",
+              boxShadow: active ? "0 1px 2px rgba(0,0,0,0.06)" : undefined,
+            }}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── v1.47.0 P3a: recruit-pitch live-stat chips (Recruits tab only) ───────
+function RecruitStatsBar({ stats }: { stats: RecruitStats }) {
+  return (
+    <div
+      className="mt-5 flex flex-wrap items-center gap-2"
+      role="status"
+      aria-label="Your live recruit pitch stats"
+    >
+      <StatChip label="[my commission rate]" value={stats.myCommissionRate} accent />
+      <StatChip
+        label="[my month earnings]"
+        value={stats.myMonthEarnings ? `$${stats.myMonthEarnings}` : "—"}
+        muted={!stats.myMonthEarnings}
+      />
+      <StatChip
+        label="[my downstream count]"
+        value={stats.myDownstreamCount ?? "—"}
+        muted={!stats.myDownstreamCount}
+      />
+    </div>
+  );
+}
+
+function StatChip({
+  label,
+  value,
+  accent,
+  muted,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  muted?: boolean;
+}) {
+  return (
+    <div
+      className="inline-flex items-baseline gap-2 rounded-full border px-3 py-1"
+      style={{
+        background: accent ? "#e8f3ed" : muted ? "#fbfaf7" : "#fff",
+        borderColor: accent ? "#cfe4d8" : "#e6e2d6",
+      }}
+    >
+      <span
+        className="text-[10px] uppercase tracking-wider font-mono"
+        style={{ color: "#8a9098" }}
+      >
+        {label}
+      </span>
+      <span
+        className="text-[13px] font-semibold tabular-nums"
+        style={{ color: accent ? "#056048" : muted ? "#8a9098" : "#1c2024" }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function ShareLinkAffordance() {
+  return (
+    <Link
+      to="/app/rep/referral-links"
+      className="block rounded-lg border p-4 transition hover:shadow-sm"
+      style={{
+        borderColor: "#e6e2d6",
+        background: "#fbfaf7",
+        borderStyle: "dashed",
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <div
+          className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0"
+          style={{ background: "#e8f3ed", color: "#056048" }}
+        >
+          <Link2 className="h-4 w-4" />
+        </div>
+        <div className="min-w-0">
+          <div
+            className="text-[13px] font-semibold mb-0.5"
+            style={{ color: "#1c2024" }}
+          >
+            Or just share your link
+          </div>
+          <div
+            className="text-[12px] leading-[1.5]"
+            style={{ color: "#5a6068" }}
+          >
+            iMessage, Slack DM, Instagram, in person — every channel that
+            isn&apos;t email. Grab the short URL and send.
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 function groupByIcp(
   templates: OutreachTemplate[],
 ): Map<number, OutreachTemplate[]> {
@@ -670,21 +880,31 @@ function groupByIcp(
 
 function IcpSection({
   icp,
+  audience,
   templates,
   selectedId,
   onPick,
 }: {
   icp: number;
+  audience: "spa" | "rep";
   templates: OutreachTemplate[];
   selectedId?: string;
   onPick: (t: OutreachTemplate) => void;
 }) {
+  // v1.47.0 P3a: ICP labels differ by book. Prospects (spa) = the spa-outreach
+  // ladder; Recruits (rep) = peer-rep warmth.
   const label =
-    icp === 1
-      ? "ICP 1 · warm intro"
-      : icp === 2
-        ? "ICP 2 · cold spa"
-        : "ICP 3 · Acuity-detected";
+    audience === "rep"
+      ? icp === 1
+        ? "ICP 1 · warm peer"
+        : icp === 2
+          ? "ICP 2 · cold peer"
+          : "ICP 3"
+      : icp === 1
+        ? "ICP 1 · warm intro"
+        : icp === 2
+          ? "ICP 2 · cold spa"
+          : "ICP 3 · Acuity-detected";
   return (
     <div>
       <div
@@ -787,6 +1007,7 @@ function BatchScaffold({
 
 function SendPanel({
   template,
+  audience,
   form,
   onChange,
   onClose,
@@ -803,6 +1024,7 @@ function SendPanel({
   draftSavedAt,
 }: {
   template: OutreachTemplate;
+  audience: "spa" | "rep";
   form: {
     recipientEmail: string;
     firstName: string;
@@ -987,26 +1209,32 @@ function SendPanel({
               onChange={(v) => onChange({ firstName: v })}
               placeholder="Kelly"
             />
-            <Field
-              label="Spa name"
-              value={form.spaName}
-              onChange={(v) => onChange({ spaName: v })}
-              placeholder="Lakeside Aesthetics"
-            />
-            <div className="grid grid-cols-2 gap-3">
-              <Field
-                label="$ recovered (optional)"
-                value={form.rejuvRecoveredAmount}
-                onChange={(v) => onChange({ rejuvRecoveredAmount: v })}
-                placeholder="4,275"
-              />
-              <Field
-                label="Weeks (optional)"
-                value={form.rejuvRecoveredWeeks}
-                onChange={(v) => onChange({ rejuvRecoveredWeeks: v })}
-                placeholder="5"
-              />
-            </div>
+            {/* v1.47.0 P3a: spa-name + Rejuv-figure fields are spa-outreach
+                only. Recruit (rep→rep) templates reference none of these. */}
+            {audience === "spa" && (
+              <>
+                <Field
+                  label="Spa name"
+                  value={form.spaName}
+                  onChange={(v) => onChange({ spaName: v })}
+                  placeholder="Lakeside Aesthetics"
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <Field
+                    label="$ recovered (optional)"
+                    value={form.rejuvRecoveredAmount}
+                    onChange={(v) => onChange({ rejuvRecoveredAmount: v })}
+                    placeholder="4,275"
+                  />
+                  <Field
+                    label="Weeks (optional)"
+                    value={form.rejuvRecoveredWeeks}
+                    onChange={(v) => onChange({ rejuvRecoveredWeeks: v })}
+                    placeholder="5"
+                  />
+                </div>
+              </>
+            )}
           </div>
 
           {/* v1.47.0 P1: persist the current edit as a draft WITHOUT sending.

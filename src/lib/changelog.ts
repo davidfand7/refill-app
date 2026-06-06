@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.47.2",
+    date: "June 2026",
+    items: [
+      "<strong>v1.47.2 &mdash; Outreach composer, P3a: Prospects + Recruits unified as tabs (one page, two books). </strong>Grasshopper&rsquo;s call: rep&rsquo;s two outreach books &mdash; spas they&rsquo;re pitching (Prospects) and reps they&rsquo;re recruiting (Recruits) &mdash; now live side-by-side as tabs on <code>/app/rep/outreach</code> instead of two separate pages. The whole data layer is already audience-keyed (<code>outreach_drafts.audience</code>, <code>outreach_templates.audience</code>, <code>outreach_engagement_events.purpose</code>), so the tab just scopes everything: template library, saved drafts, batch send, and past-sends all filter by the active book&rsquo;s audience. <strong>What ships</strong>: (1) A Prospects | Recruits tab bar; switching re-scopes the page (re-fetches templates/sends/drafts/stats for that audience, clears the selected template so a spa template never lingers on Recruits). (2) The Recruits tab carries everything the old standalone page had &mdash; live-stat chips (<code>[my commission rate]</code> / <code>[my month earnings]</code> / <code>[my downstream count]</code> from <code>getMyRecruitStats</code>), the &lsquo;or just share your link&rsquo; affordance, recruit-tone heading + ICP labels (warm peer / cold peer), no spa-name field, and the <code>kelly@getrefill.app</code> rep-voice From line (server-side, unchanged). Prospects keeps the spa-name + Rejuv-figure fields. (3) <code>/app/rep/recruit</code> is retired &mdash; it now redirects to <code>/app/rep/outreach?tab=recruits</code>, so existing links / nav chips / bookmarks keep working. This also absorbs the plan&rsquo;s P5 (recruit parity): the Recruits tab IS the recruit composer, sharing 100% of the P3/P4 roster + bulk machinery via the audience param &mdash; one build, both books. <strong>Touched</strong>: <code>src/routes/app.rep.outreach.tsx</code> (audience tab state, scoped loads, tab bar + chips + share-link + audience-aware SendPanel/IcpSection), <code>src/routes/app.rep.recruit.tsx</code> (now a redirect), <code>src/lib/changelog.ts</code> (this entry). No dep change, no schema change, no wrangler.jsonc change. <strong>Next</strong>: P3b = the recipient roster (+ Recipient dialog, infinite add, per-account tweak) inside each tab.",
+    ],
+  },
+  {
     version: "v1.47.1",
     date: "June 2026",
     items: [
