@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.61.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.61.0 &mdash; A tidy Bookable services list. </strong>The services list no longer dumps your whole catalog on you. It now shows just your <strong>active</strong> (bookable) services, with a <strong>search box</strong> to find any service and a <strong>Show inactive (N)</strong> expander for the rest. Turning a service&rsquo;s <strong>Bookable</strong> toggle off tucks it into inactive; on brings it back &mdash; so the list stays focused on what you actually book. <strong>Touched</strong>: <code>src/routes/app.refill.settings.booking.tsx</code> (search + active/inactive grouping), <code>src/lib/changelog.ts</code>. No catalog changes &mdash; the Bookable toggle is the active line.",
+    ],
+  },
+  {
     version: "v1.60.0",
     date: "June 2026",
     items: [

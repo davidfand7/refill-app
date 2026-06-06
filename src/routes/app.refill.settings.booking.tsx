@@ -111,6 +111,9 @@ function BookingSettingsPage() {
   // Provider→services assignment panel (turn-down per provider).
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
   const [providerSearch, setProviderSearch] = useState("");
+  // Bookable-services list declutter: search + show-inactive.
+  const [svcSearch, setSvcSearch] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   // Which bookable service is expanded to its per-provider override panel.
   const [expandedSvc, setExpandedSvc] = useState<string | null>(null);
   // Transient override input buffers, keyed `${providerId}|${serviceId}|${field}`.
@@ -174,6 +177,15 @@ function BookingSettingsPage() {
   }, [draft]);
   const selHours = draft?.hoursByProvider[selProviderId] ?? [];
   const selProviderName = draft?.providers.find((p) => p.id === selProviderId)?.name ?? "";
+
+  // Bookable-services list: default to active (bookable); search/show-inactive reveal the rest.
+  const svcQuery = svcSearch.trim().toLowerCase();
+  const inactiveCount = (draft?.services ?? []).filter((s) => !s.onlineBookable).length;
+  const visibleServices = (draft?.services ?? []).filter((s) => {
+    if (svcQuery) return s.name.toLowerCase().includes(svcQuery); // searching → all matches
+    if (showInactive) return true; // show everything
+    return s.onlineBookable; // default → active only
+  });
 
   // Keep the selected provider valid (e.g. after deactivating the selected one).
   useEffect(() => {
@@ -1185,8 +1197,32 @@ function BookingSettingsPage() {
               </div>
               <p className="text-[12px] text-ink-soft mb-3 leading-relaxed">
                 Choose which services patients can book online, and set how long each takes
-                (plus any cleanup buffer between appointments).
+                (plus any cleanup buffer between appointments). Turning <strong>Bookable</strong> off
+                tucks a service into <em>inactive</em> to keep this list tidy.
               </p>
+              {draft.services.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <div className="relative flex-1 min-w-[180px]">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-faint" />
+                    <input
+                      type="text"
+                      value={svcSearch}
+                      onChange={(e) => setSvcSearch(e.target.value)}
+                      placeholder="Search all services…"
+                      className="w-full rounded-md border border-rule bg-white pl-8 pr-3 py-1.5 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                    />
+                  </div>
+                  {!svcQuery && inactiveCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowInactive((v) => !v)}
+                      className="rounded-md border border-rule px-3 py-1.5 text-[12px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition"
+                    >
+                      {showInactive ? "Hide inactive" : `Show inactive (${inactiveCount})`}
+                    </button>
+                  )}
+                </div>
+              )}
               {draft.services.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-rule bg-paper/40 px-4 py-6 text-center">
                   <p className="text-[13px] text-ink-soft">
@@ -1205,7 +1241,14 @@ function BookingSettingsPage() {
                     <span className="text-right">Buffer</span>
                     <span className="text-right">Bookable</span>
                   </div>
-                  {draft.services.map((s) => {
+                  {visibleServices.length === 0 && (
+                    <p className="text-[13px] text-ink-soft py-4">
+                      {svcQuery
+                        ? "No services match your search."
+                        : "No active services yet — search above to find one and turn it Bookable, or set up by provider."}
+                    </p>
+                  )}
+                  {visibleServices.map((s) => {
                     const canExpand = activeProviders.length > 1 || activeResourceTypes.length > 0;
                     const expanded = canExpand && expandedSvc === s.id;
                     return (
