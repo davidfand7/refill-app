@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.49.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.49.0 &mdash; Click any open time to book + pick the day right in the dialog. </strong>Two ways to add a booking now: <strong>click an open slot</strong> on the Day or Week calendar (it opens Add booking pre-filled with that day + time, snapped to 5 min), or hit <strong>Add booking</strong> and choose everything in the dialog. The dialog now has its own <strong>Day</strong> (calendar) + <strong>Time</strong> fields, both editable &mdash; so whether you start from the calendar or the button, you can confirm or change the day before booking. Clicking an existing appointment or block won&rsquo;t start a new booking. <strong>Touched</strong>: <code>src/routes/app.refill.schedule.tsx</code> (slot-click → seed dialog; editable Day/Time fields; click-guards on cards/blocks), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.48.12",
     date: "June 2026",
     items: [

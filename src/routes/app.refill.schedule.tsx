@@ -66,7 +66,7 @@ function SchedulePage() {
   const [loading, setLoading] = useState(true);
   const [day, setDay] = useState<DaySchedule | null>(null);
   const [range, setRange] = useState<RangeSchedule | null>(null);
-  const [bookOpen, setBookOpen] = useState(false);
+  const [bookSeed, setBookSeed] = useState<{ date: string; time: string } | null>(null);
   const [blockOpen, setBlockOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<DayAppointment | null>(null);
   const [zoomIdx, setZoomIdx] = useState<number>(() => {
@@ -195,7 +195,7 @@ function SchedulePage() {
             <button type="button" onClick={() => setBlockOpen(true)} className="inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-2 text-[13px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition">
               <Ban className="h-3.5 w-3.5" /> Block
             </button>
-            <button type="button" onClick={() => setBookOpen(true)} className="inline-flex items-center gap-1.5 rounded-md bg-emerald px-3 py-2 text-[13px] font-semibold text-paper shadow-sm hover:opacity-95 transition">
+            <button type="button" onClick={() => setBookSeed({ date: dateIso, time: "09:00" })} className="inline-flex items-center gap-1.5 rounded-md bg-emerald px-3 py-2 text-[13px] font-semibold text-paper shadow-sm hover:opacity-95 transition">
               <CalendarPlus className="h-3.5 w-3.5" /> Add booking
             </button>
           </div>
@@ -206,7 +206,13 @@ function SchedulePage() {
             <Loader2 className="h-4 w-4 animate-spin" /> Loading schedule…
           </div>
         ) : view === "day" && day ? (
-          <DayGrid day={day} tz={tz} pxPerMin={dayPpm} onCancel={setCancelTarget} />
+          <DayGrid
+            day={day}
+            tz={tz}
+            pxPerMin={dayPpm}
+            onCancel={setCancelTarget}
+            onBook={(d, t) => setBookSeed({ date: d, time: t })}
+          />
         ) : view === "week" && range ? (
           <WeekGrid
             range={range}
@@ -214,6 +220,7 @@ function SchedulePage() {
             pxPerMin={weekPpm}
             weekStart={span.fromDate}
             onCancel={setCancelTarget}
+            onBook={(d, t) => setBookSeed({ date: d, time: t })}
             onPickDay={(iso) => {
               setDateIso(iso);
               setView("day");
@@ -233,7 +240,7 @@ function SchedulePage() {
         ) : null}
       </div>
 
-      <BookDialog open={bookOpen} onClose={() => setBookOpen(false)} services={services} timezone={tz} dateIso={dateIso} viewAsUserId={viewAsUserId} onBooked={() => { setBookOpen(false); void load(); }} />
+      <BookDialog open={!!bookSeed} initialDate={bookSeed?.date ?? dateIso} initialTime={bookSeed?.time ?? "09:00"} onClose={() => setBookSeed(null)} services={services} timezone={tz} viewAsUserId={viewAsUserId} onBooked={() => { setBookSeed(null); void load(); }} />
       <BlockDialog open={blockOpen} onClose={() => setBlockOpen(false)} timezone={tz} dateIso={dateIso} viewAsUserId={viewAsUserId} onBlocked={() => { setBlockOpen(false); void load(); }} />
       <CancelDialog appt={cancelTarget} tz={tz} viewAsUserId={viewAsUserId} onClose={() => setCancelTarget(null)} onCancelled={() => { setCancelTarget(null); void load(); }} />
     </div>
@@ -242,7 +249,19 @@ function SchedulePage() {
 
 // ── Day grid (positioned, single column) ─────────────────────────────────────
 
-function DayGrid({ day, tz, pxPerMin, onCancel }: { day: DaySchedule; tz: string; pxPerMin: number; onCancel: (a: DayAppointment) => void }) {
+function DayGrid({
+  day,
+  tz,
+  pxPerMin,
+  onCancel,
+  onBook,
+}: {
+  day: DaySchedule;
+  tz: string;
+  pxPerMin: number;
+  onCancel: (a: DayAppointment) => void;
+  onBook: (dateIso: string, time: string) => void;
+}) {
   const win = useMemo(() => {
     let start = day.open.isOpen ? day.open.openMin : 9 * 60;
     let end = day.open.isOpen ? day.open.closeMin : 17 * 60;
@@ -260,10 +279,17 @@ function DayGrid({ day, tz, pxPerMin, onCancel }: { day: DaySchedule; tz: string
   const height = (win.end - win.start) * pxPerMin;
   const top = (iso: string) => (localMinutes(iso, tz) - win.start) * pxPerMin;
 
+  function bgClick(e: { currentTarget: HTMLDivElement; clientY: number }) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mins = win.start + (e.clientY - rect.top) / pxPerMin;
+    onBook(day.dateIso, minToHHMM(snap5(mins, win)));
+  }
+
   return (
     <div className="rounded-xl border border-rule bg-white p-4">
       {!day.open.isOpen && <div className="mb-3 text-[12px] text-ink-faint">Closed this day (per business hours).</div>}
-      <div className="relative" style={{ height }}>
+      <div className="relative cursor-pointer" style={{ height }} onClick={bgClick} title="Click an open time to book">
+        <div className="absolute inset-0 left-14 hover:bg-emerald-soft/10 transition-colors" />
         {hourMarks(win).map((m) => (
           <div key={m} className="absolute left-0 right-0 border-t border-rule/60" style={{ top: (m - win.start) * pxPerMin }}>
             <span className="absolute -top-2 left-0 text-[11px] text-ink-faint tabular-nums bg-white pr-1">{fmtHour(m)}</span>
@@ -279,7 +305,7 @@ function DayGrid({ day, tz, pxPerMin, onCancel }: { day: DaySchedule; tz: string
           <ApptCard key={a.id} a={a} tz={tz} left="left-14" top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} />
         ))}
         {day.appointments.length === 0 && day.blocks.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center text-[13px] text-ink-faint">No bookings this day.</div>
+          <div className="absolute inset-0 flex items-center justify-center text-[13px] text-ink-faint pointer-events-none">No bookings this day.</div>
         )}
       </div>
     </div>
@@ -294,6 +320,7 @@ function WeekGrid({
   pxPerMin,
   weekStart,
   onCancel,
+  onBook,
   onPickDay,
 }: {
   range: RangeSchedule;
@@ -301,6 +328,7 @@ function WeekGrid({
   pxPerMin: number;
   weekStart: string;
   onCancel: (a: DayAppointment) => void;
+  onBook: (dateIso: string, time: string) => void;
   onPickDay: (iso: string) => void;
 }) {
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
@@ -368,7 +396,16 @@ function WeekGrid({
             const dayAppts = apptsByDay.get(d) ?? [];
             const dayBlocks = blocksByDay.get(d) ?? [];
             return (
-              <div key={d} className="relative border-l border-rule/60">
+              <div
+                key={d}
+                className="relative border-l border-rule/60 cursor-pointer hover:bg-emerald-soft/10 transition-colors"
+                title="Click an open time to book"
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const mins = win.start + (e.clientY - rect.top) / pxPerMin;
+                  onBook(d, minToHHMM(snap5(mins, win)));
+                }}
+              >
                 {hourMarks(win).map((m) => (
                   <div key={m} className="absolute left-0 right-0 border-t border-rule/40" style={{ top: (m - win.start) * pxPerMin }} />
                 ))}
@@ -475,11 +512,12 @@ function ApptCard({
   return (
     <div
       className={cn(
-        "absolute right-0 rounded-md border px-2 py-0.5 shadow-sm overflow-hidden group",
+        "absolute right-0 rounded-md border px-2 py-0.5 shadow-sm overflow-hidden group cursor-default",
         left,
         held ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200",
       )}
       style={{ top, height }}
+      onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-start justify-between gap-1">
         <div className="min-w-0">
@@ -494,7 +532,7 @@ function ApptCard({
           )}
         </div>
         {!held && (
-          <button type="button" onClick={() => onCancel(a)} className="opacity-0 group-hover:opacity-100 transition text-ink-faint hover:text-bad shrink-0" aria-label="Cancel appointment">
+          <button type="button" onClick={(e) => { e.stopPropagation(); onCancel(a); }} className="opacity-0 group-hover:opacity-100 transition text-ink-faint hover:text-bad shrink-0" aria-label="Cancel appointment">
             <X className="h-3 w-3" />
           </button>
         )}
@@ -506,8 +544,9 @@ function ApptCard({
 function BlockBand({ left, top, height, reason, compact }: { left: string; top: number; height: number; reason: string | null; compact?: boolean }) {
   return (
     <div
-      className={cn("absolute right-0 rounded bg-[repeating-linear-gradient(45deg,#e7e1d6,#e7e1d6_6px,#f3ede2_6px,#f3ede2_12px)] border border-rule", left)}
+      className={cn("absolute right-0 rounded bg-[repeating-linear-gradient(45deg,#e7e1d6,#e7e1d6_6px,#f3ede2_6px,#f3ede2_12px)] border border-rule cursor-default", left)}
       style={{ top, height }}
+      onClick={(e) => e.stopPropagation()}
     >
       {!compact && <span className="absolute top-0.5 left-2 text-[11px] text-ink-soft">{reason ?? "Blocked"}</span>}
     </div>
@@ -521,7 +560,8 @@ function BookDialog({
   onClose,
   services,
   timezone,
-  dateIso,
+  initialDate,
+  initialTime,
   viewAsUserId,
   onBooked,
 }: {
@@ -529,16 +569,26 @@ function BookDialog({
   onClose: () => void;
   services: ServiceLite[];
   timezone: string;
-  dateIso: string;
+  initialDate: string;
+  initialTime: string;
   viewAsUserId?: string;
   onBooked: () => void;
 }) {
   const [serviceId, setServiceId] = useState("");
-  const [time, setTime] = useState("09:00");
+  const [date, setDate] = useState(initialDate);
+  const [time, setTime] = useState(initialTime);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Reseed date+time whenever the dialog is (re)opened from a slot click or button.
+  useEffect(() => {
+    if (open) {
+      setDate(initialDate);
+      setTime(initialTime);
+    }
+  }, [open, initialDate, initialTime]);
 
   async function submit() {
     if (!serviceId || !name.trim() || busy) return;
@@ -547,7 +597,7 @@ function BookDialog({
       const { data: sess } = await supabase.auth.getSession();
       const token = sess.session?.access_token;
       if (!token) throw new Error("Not signed in.");
-      const [y, m, d] = dateIso.split("-").map((n) => parseInt(n, 10));
+      const [y, m, d] = date.split("-").map((n) => parseInt(n, 10));
       const [hh, mm] = time.split(":").map((n) => parseInt(n, 10));
       const startIso = zonedWallClockToUtc(y, m, d, hh, mm, timezone).toISOString();
       const r = await ownerCreateAppointmentFn({
@@ -568,7 +618,7 @@ function BookDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Add booking</DialogTitle>
-          <DialogDescription>Book a patient in on {fmtDayLabel(dateIso)}.</DialogDescription>
+          <DialogDescription>Pick the day, time, and service to book a patient in.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           <Labeled label="Service">
@@ -579,7 +629,10 @@ function BookDialog({
               ))}
             </select>
           </Labeled>
-          <Labeled label="Time"><TimeSelect value={time} onChange={setTime} className={`${inputCls} tabular-nums`} /></Labeled>
+          <div className="grid grid-cols-2 gap-3">
+            <Labeled label="Day"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Labeled>
+            <Labeled label="Time"><TimeSelect value={time} onChange={setTime} className={`${inputCls} tabular-nums`} /></Labeled>
+          </div>
           <Labeled label="Patient name"><input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} /></Labeled>
           <div className="grid grid-cols-2 gap-3">
             <Labeled label="Email (optional)"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} /></Labeled>
@@ -776,6 +829,17 @@ function groupBlocksByDay(blocks: DayBlock[], tz: string): Map<string, DayBlock[
     else m.set(k, [b]);
   }
   return m;
+}
+
+function snap5(mins: number, win: { start: number; end: number }): number {
+  const snapped = Math.round(mins / 5) * 5;
+  return Math.max(win.start, Math.min(win.end - 5, snapped));
+}
+
+function minToHHMM(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
 function todayIso(): string {
