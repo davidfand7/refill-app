@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.47.11",
+    date: "June 2026",
+    items: [
+      "<strong>v1.47.11 &mdash; Save-as-template dialog: one consistent prompt, Grasshopper&rsquo;s wording. </strong>The save-as-template dialog showed different headlines depending on how it was opened (the inline &lsquo;Save as template&rsquo; link vs. the Send-all prompt). Now it&rsquo;s one line everywhere: <strong>&lsquo;You&rsquo;ve made changes to this template &mdash; save it as a new template?&rsquo;</strong> with a consistent sub-line (&lsquo;Name it to keep it under &ldquo;My templates&rdquo; and reuse it anytime&rsquo;). The footer buttons still adapt to context &mdash; the Send-all path keeps <code>Send without saving</code> / <code>Save &amp; send</code>, the standalone path keeps <code>Cancel</code> / <code>Save template</code> &mdash; but the question the rep reads is identical regardless of where it&rsquo;s invoked. <strong>Touched</strong>: <code>src/routes/app.rep.outreach.tsx</code> (SaveTemplateDialog title + description unified), <code>src/lib/changelog.ts</code> (this entry). No dep change, no schema change, no wrangler.jsonc change.",
+    ],
+  },
+  {
     version: "v1.47.10",
     date: "June 2026",
     items: [

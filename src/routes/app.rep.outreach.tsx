@@ -902,12 +902,12 @@ function SaveTemplateDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="font-serif">
-            {mode === "send" ? "Save your edited message?" : "Save as template"}
+            You&apos;ve made changes to this template &mdash; save it as a new
+            template?
           </DialogTitle>
           <DialogDescription>
-            {mode === "send"
-              ? "You've edited this template. Name it to keep it as a reusable template — or send this batch without saving."
-              : "Give your edited message a name. It'll show under “My templates” so you can reuse it anytime."}
+            Name it to keep it under &ldquo;My templates&rdquo; and reuse it
+            anytime.
           </DialogDescription>
         </DialogHeader>
         <div className="py-1">
