@@ -21,10 +21,18 @@
 
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookmarkPlus, Link2, Send, Sparkles, X } from "lucide-react";
+import { BookmarkPlus, Link2, Send, Sparkles, UserPlus, X } from "lucide-react";
 import { z } from "zod";
 
 import { TemplateEditor } from "@/components/refill/TemplateEditor";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { getAdminViewAsUserId } from "@/lib/admin-view-as";
 import { useAuth } from "@/lib/auth";
 import {
@@ -44,6 +52,7 @@ import {
   type SendMode,
 } from "@/server/refill-outreach-send";
 import {
+  deleteOutreachDraft,
   listOutreachDrafts,
   saveOutreachDraft,
   sendOutreachBatch,
@@ -451,6 +460,62 @@ function OutreachPage() {
     }
   };
 
+  // v1.47.0 P3b: roster mutations. Add = save a draft with null overrides (the
+  // recipient floats on the shared body). Tweak = save a per-account
+  // body_override. Reset = clear it. Remove = delete the draft row. Each keeps
+  // the local drafts state in sync so the roster updates without a refetch.
+  const handleAddRecipient = async (r: RosterRecipient) => {
+    if (!accessToken || !selected) return;
+    const { draft } = await saveOutreachDraft({
+      data: {
+        accessToken,
+        templateId: selected.id,
+        icp: selected.icp,
+        channel: selected.channel,
+        audience: selected.audience,
+        recipientEmail: r.email,
+        recipientFirstName: r.firstName || null,
+        spaName: r.spaName || null,
+        subjectOverride: null,
+        bodyOverride: null,
+      },
+    });
+    setDrafts((prev) => [draft, ...prev.filter((d) => d.id !== draft.id)]);
+  };
+
+  const persistDraftOverride = async (
+    draft: OutreachDraft,
+    bodyOverride: string | null,
+  ) => {
+    if (!accessToken) return;
+    const { draft: updated } = await saveOutreachDraft({
+      data: {
+        accessToken,
+        templateId: draft.templateId,
+        icp: draft.icp,
+        channel: draft.channel,
+        audience: draft.audience,
+        recipientEmail: draft.recipientEmail,
+        recipientFirstName: draft.recipientFirstName,
+        spaName: draft.spaName,
+        subjectOverride: draft.subjectOverride,
+        bodyOverride,
+      },
+    });
+    setDrafts((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+  };
+
+  const handleTweakSave = (draft: OutreachDraft, bodyOverride: string) =>
+    persistDraftOverride(draft, bodyOverride);
+  const handleResetTweak = (draft: OutreachDraft) =>
+    persistDraftOverride(draft, null);
+
+  const handleRemoveRecipient = async (draft: OutreachDraft) => {
+    if (!accessToken) return;
+    await deleteOutreachDraft({ data: { accessToken, id: draft.id } });
+    setDrafts((prev) => prev.filter((d) => d.id !== draft.id));
+  };
+
   if (authLoading || !loaded) {
     return <Pulse label="Loading outreach…" />;
   }
@@ -562,15 +627,22 @@ function OutreachPage() {
                   savingDraft={savingDraft}
                   draftSavedAt={draftSavedAt}
                 />
-                <BatchScaffold
-                  unsentCount={
-                    drafts.filter(
-                      (d) => d.templateId === selected.id && !d.sentAt,
-                    ).length
-                  }
+                <RecipientRoster
+                  audience={audience}
+                  template={selected}
+                  roster={drafts.filter(
+                    (d) => d.templateId === selected.id && !d.sentAt,
+                  )}
+                  sharedSubjectOverride={subjectOverride}
+                  sharedBodyOverride={bodyOverride}
+                  liveEnabled={liveEnabled}
                   sendingBatch={sendingBatch}
                   batchResult={batchResult}
-                  onSendBatch={handleSendBatch}
+                  onAddRecipient={handleAddRecipient}
+                  onTweakSave={handleTweakSave}
+                  onResetTweak={handleResetTweak}
+                  onRemove={handleRemoveRecipient}
+                  onSendAll={handleSendBatch}
                 />
               </>
             ) : (
@@ -950,47 +1022,379 @@ function IcpSection({
   );
 }
 
-// v1.47.0 P2 temp scaffold — dry-run-send all saved drafts for the selected
-// template + a one-line result. P3 replaces this with the real recipient list.
-function BatchScaffold({
-  unsentCount,
+// ─── v1.47.0 P3b: recipient roster ───────────────────────────────────────
+// The real multi-recipient list for the selected template (edit model A).
+// Each row is a saved draft; rows with a body_override carry the "edited"
+// badge. + Recipient opens a dialog to stack recipients one at a time
+// (infinite add). Tweak expands an inline editor that saves a per-account
+// override. Send all fires the whole roster through sendOutreachBatch.
+
+type RosterRecipient = { email: string; firstName: string; spaName: string };
+
+function AddRecipientDialog({
+  open,
+  audience,
+  onClose,
+  onAdd,
+}: {
+  open: boolean;
+  audience: "spa" | "rep";
+  onClose: () => void;
+  onAdd: (r: RosterRecipient) => Promise<void>;
+}) {
+  const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [spaName, setSpaName] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [added, setAdded] = useState(0);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Reset the running counter each time the dialog re-opens.
+  useEffect(() => {
+    if (open) {
+      setAdded(0);
+      setErr(null);
+    }
+  }, [open]);
+
+  const save = async () => {
+    const e = email.trim().toLowerCase();
+    if (!e || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) {
+      setErr("Enter a valid email.");
+      return;
+    }
+    setAdding(true);
+    setErr(null);
+    try {
+      await onAdd({ email: e, firstName: firstName.trim(), spaName: spaName.trim() });
+      setAdded((n) => n + 1);
+      setEmail("");
+      setFirstName("");
+      setSpaName("");
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Couldn't add recipient.");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-serif">Add recipient</DialogTitle>
+          <DialogDescription>
+            {audience === "rep"
+              ? "Add a peer rep to this batch. Save & add another to keep stacking."
+              : "Add a spa to this batch. Save & add another to keep stacking."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <Field
+            label="Recipient email"
+            value={email}
+            onChange={setEmail}
+            placeholder="kelly@example.com"
+            type="email"
+          />
+          <Field
+            label="First name"
+            value={firstName}
+            onChange={setFirstName}
+            placeholder="Kelly"
+          />
+          {audience === "spa" && (
+            <Field
+              label="Spa name"
+              value={spaName}
+              onChange={setSpaName}
+              placeholder="Lakeside Aesthetics"
+            />
+          )}
+          {err && (
+            <div className="text-[12px]" style={{ color: "#8a1616" }}>
+              {err}
+            </div>
+          )}
+          {added > 0 && !err && (
+            <div className="text-[12px]" style={{ color: "#056048" }}>
+              ✓ {added} added to this batch
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border px-4 py-2 text-[13px] font-semibold transition hover:bg-[#fbfaf7]"
+            style={{ borderColor: "#e6e2d6", background: "#fff", color: "#1c2024" }}
+          >
+            Done
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={adding || !email}
+            className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-[13px] font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: "#056048", color: "#fbfaf7" }}
+          >
+            <UserPlus className="h-3.5 w-3.5" />
+            {adding ? "Saving…" : "Save & add another"}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RecipientRow({
+  draft,
+  audience,
+  template,
+  sharedSubjectOverride,
+  sharedBodyOverride,
+  onTweakSave,
+  onResetTweak,
+  onRemove,
+}: {
+  draft: OutreachDraft;
+  audience: "spa" | "rep";
+  template: OutreachTemplate;
+  sharedSubjectOverride: string | null;
+  sharedBodyOverride: string | null;
+  onTweakSave: (draft: OutreachDraft, bodyOverride: string) => Promise<void>;
+  onResetTweak: (draft: OutreachDraft) => Promise<void>;
+  onRemove: (draft: OutreachDraft) => Promise<void>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  // Effective body this recipient will send with: per-account override wins,
+  // else the composer's shared body, else the template default.
+  const effectiveBody =
+    draft.bodyOverride ?? sharedBodyOverride ?? template.body;
+  const [draftBody, setDraftBody] = useState(effectiveBody);
+  const edited = draft.bodyOverride !== null || draft.subjectOverride !== null;
+
+  const openTweak = () => {
+    setDraftBody(draft.bodyOverride ?? sharedBodyOverride ?? template.body);
+    setExpanded(true);
+  };
+  const saveTweak = async () => {
+    setBusy(true);
+    try {
+      await onTweakSave(draft, draftBody);
+      setExpanded(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const resetTweak = async () => {
+    setBusy(true);
+    try {
+      await onResetTweak(draft);
+      setExpanded(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <li className="px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span
+              className="text-[13px] font-medium truncate"
+              style={{ color: "#1c2024" }}
+            >
+              {draft.recipientFirstName || draft.recipientEmail}
+            </span>
+            {edited && (
+              <span
+                className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
+                style={{ background: "#fdf6e6", color: "#8a6d10" }}
+              >
+                edited
+              </span>
+            )}
+          </div>
+          <div
+            className="text-[12px] mt-0.5 truncate"
+            style={{ color: "#8a9098" }}
+          >
+            {draft.recipientEmail}
+            {audience === "spa" && draft.spaName ? ` · ${draft.spaName}` : ""}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => (expanded ? setExpanded(false) : openTweak())}
+            className="text-[12px] font-semibold underline-offset-2 hover:underline"
+            style={{ color: "#056048" }}
+          >
+            {expanded ? "Close" : "Tweak"}
+          </button>
+          <button
+            type="button"
+            onClick={() => onRemove(draft)}
+            aria-label="Remove recipient"
+            className="rounded p-1 transition hover:bg-[#fbfaf7]"
+            style={{ color: "#8a9098" }}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+      {expanded && (
+        <div className="mt-3">
+          <div
+            className="text-[11px] uppercase tracking-wider font-semibold mb-1"
+            style={{ color: "#8a9098" }}
+          >
+            Body for {draft.recipientFirstName || draft.recipientEmail}
+          </div>
+          <TemplateEditor
+            value={draftBody}
+            onChange={setDraftBody}
+            rows={8}
+            ariaLabel={`Body for ${draft.recipientEmail}`}
+            placeholderHints={["[first name]", "[spa name]", "$[exact figure]", "[N] weeks"]}
+          />
+          <div className="mt-2 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={saveTweak}
+              disabled={busy}
+              className="rounded-md px-3 py-1.5 text-[12px] font-semibold transition disabled:opacity-50"
+              style={{ background: "#056048", color: "#fbfaf7" }}
+            >
+              {busy ? "Saving…" : "Save override"}
+            </button>
+            {edited && (
+              <button
+                type="button"
+                onClick={resetTweak}
+                disabled={busy}
+                className="text-[12px] underline-offset-2 hover:underline disabled:opacity-50"
+                style={{ color: "#5a6068" }}
+              >
+                Reset to shared
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function RecipientRoster({
+  audience,
+  template,
+  roster,
+  sharedSubjectOverride,
+  sharedBodyOverride,
+  liveEnabled,
   sendingBatch,
   batchResult,
-  onSendBatch,
+  onAddRecipient,
+  onTweakSave,
+  onResetTweak,
+  onRemove,
+  onSendAll,
 }: {
-  unsentCount: number;
+  audience: "spa" | "rep";
+  template: OutreachTemplate;
+  roster: OutreachDraft[];
+  sharedSubjectOverride: string | null;
+  sharedBodyOverride: string | null;
+  liveEnabled: boolean | null;
   sendingBatch: boolean;
   batchResult: { sent: number; failed: number; total: number } | null;
-  onSendBatch: () => void;
+  onAddRecipient: (r: RosterRecipient) => Promise<void>;
+  onTweakSave: (draft: OutreachDraft, bodyOverride: string) => Promise<void>;
+  onResetTweak: (draft: OutreachDraft) => Promise<void>;
+  onRemove: (draft: OutreachDraft) => Promise<void>;
+  onSendAll: () => void;
 }) {
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const count = roster.length;
+
   return (
     <div
-      className="mt-4 rounded-xl border border-dashed bg-white p-4"
+      className="mt-4 rounded-xl border bg-white p-4"
       style={{ borderColor: "#e6e2d6" }}
     >
-      <div
-        className="text-[11px] uppercase tracking-wider font-semibold mb-2"
-        style={{ color: "#8a9098" }}
-      >
-        P2 · batch send (temp)
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <div
+          className="text-[11px] uppercase tracking-wider font-semibold"
+          style={{ color: "#8a9098" }}
+        >
+          Recipients{count > 0 ? ` · ${count}` : ""}
+        </div>
+        <button
+          type="button"
+          onClick={() => setDialogOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[12px] font-semibold transition hover:bg-[#fbfaf7]"
+          style={{ borderColor: "#e6e2d6", background: "#fff", color: "#1c2024" }}
+        >
+          <UserPlus className="h-3.5 w-3.5" style={{ color: "#056048" }} />
+          Recipient
+        </button>
       </div>
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-[13px]" style={{ color: "#5a6068" }}>
-          {unsentCount === 0
-            ? "No unsent saved drafts for this template."
-            : `${unsentCount} unsent saved draft${unsentCount === 1 ? "" : "s"} for this template.`}
+
+      {count === 0 ? (
+        <p className="text-[13px] py-3" style={{ color: "#8a9098" }}>
+          No recipients yet. Add one with <strong>+ Recipient</strong> — or save
+          a draft above. (Bulk CSV upload lands next.)
+        </p>
+      ) : (
+        <ul
+          className="divide-y rounded-lg border mt-2"
+          style={{ borderColor: "#f0ebe0" }}
+        >
+          {roster.map((d) => (
+            <RecipientRow
+              key={d.id}
+              draft={d}
+              audience={audience}
+              template={template}
+              sharedSubjectOverride={sharedSubjectOverride}
+              sharedBodyOverride={sharedBodyOverride}
+              onTweakSave={onTweakSave}
+              onResetTweak={onResetTweak}
+              onRemove={onRemove}
+            />
+          ))}
+        </ul>
+      )}
+
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <span className="text-[12px]" style={{ color: "#8a9098" }}>
+          {liveEnabled === true
+            ? "OUTREACH_LIVE is ON — Send all fires real emails."
+            : "Dry-run — Send all logs rows, no email fires."}
         </span>
         <button
           type="button"
-          onClick={onSendBatch}
-          disabled={sendingBatch || unsentCount === 0}
+          onClick={onSendAll}
+          disabled={sendingBatch || count === 0 || liveEnabled === null}
           className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-[13px] font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ background: "#056048", color: "#fbfaf7" }}
+          style={{
+            background: liveEnabled === true ? "#b91c1c" : "#056048",
+            color: "#fbfaf7",
+          }}
         >
           <Send className="h-3.5 w-3.5" />
-          {sendingBatch ? "Sending…" : "Send all (dry-run)"}
+          {sendingBatch
+            ? "Sending…"
+            : liveEnabled === true
+              ? `Send all LIVE (${count})`
+              : `Send all (${count})`}
         </button>
       </div>
+
       {batchResult && (
         <div
           className="mt-3 rounded-md px-3 py-2 text-[12.5px]"
@@ -998,9 +1402,16 @@ function BatchScaffold({
         >
           Batch complete — {batchResult.sent} sent
           {batchResult.failed > 0 ? `, ${batchResult.failed} failed` : ""} of{" "}
-          {batchResult.total}. Re-click skips already-sent rows.
+          {batchResult.total}. Re-send skips already-sent rows.
         </div>
       )}
+
+      <AddRecipientDialog
+        open={dialogOpen}
+        audience={audience}
+        onClose={() => setDialogOpen(false)}
+        onAdd={onAddRecipient}
+      />
     </div>
   );
 }

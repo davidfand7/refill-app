@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.47.3",
+    date: "June 2026",
+    items: [
+      "<strong>v1.47.3 &mdash; Outreach composer, P3b: the real recipient roster (+ Recipient, per-account tweak, Send all). </strong>The temp &lsquo;batch send&rsquo; scaffold is replaced by the actual multi-recipient list (edit model A). <strong>What ships</strong>: (1) A <strong>Recipients</strong> roster under the composer in both tabs &mdash; each row is a saved draft (<code>name · email · spa</code>), rows with a per-account override carry an <strong>&lsquo;edited&rsquo;</strong> badge, and a ✕ removes one. (2) <strong>+ Recipient</strong> opens a dialog (email, first name, spa name for Prospects) with <strong>Save &amp; add another</strong> &mdash; stack recipients infinitely without leaving the dialog, a running &lsquo;N added&rsquo; counter confirms each. Every add persists immediately as a draft on the shared body (NULL override = floats with the composer). (3) <strong>Tweak</strong> on a row inline-expands a TipTap editor seeded with that recipient&rsquo;s effective body (override ?? shared ?? template) → <strong>Save override</strong> badges the row, <strong>Reset to shared</strong> clears it. The model-A payoff: edit the shared body up top and every untweaked recipient updates at send time; only the tweaked ones hold their own copy. (4) <strong>Send all (N)</strong> fires the whole roster through the v1.47.1 <code>sendOutreachBatch</code> engine (server-batch, concurrency-3, idempotent), with the live/dry-run telegraph. Uses the house <code>ui/dialog</code> primitive for consistency. <strong>Note</strong>: the inline single-recipient fields + Save-draft stay this ship as a quick-add path (they feed the same roster); the fold-into-dialog cleanup is the next pass once the roster&rsquo;s confirmed. <strong>Touched</strong>: <code>src/routes/app.rep.outreach.tsx</code> (RecipientRoster + AddRecipientDialog + RecipientRow + add/tweak/reset/remove handlers, replacing the temp BatchScaffold), <code>src/lib/changelog.ts</code> (this entry). No dep change, no schema change, no wrangler.jsonc change. <strong>Next</strong>: P4 = upload-to-start (CSV + paste, smart column mapping, validate/dedup) as a front-door + in the roster.",
+    ],
+  },
+  {
     version: "v1.47.2",
     date: "June 2026",
     items: [
