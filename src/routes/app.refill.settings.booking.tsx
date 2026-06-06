@@ -22,7 +22,10 @@ import {
   CalendarClock,
   CheckCircle2,
   Clock,
+  Copy,
+  ExternalLink,
   Globe,
+  Link2,
   Loader2,
   Sparkles,
 } from "lucide-react";
@@ -190,6 +193,45 @@ function BookingSettingsPage() {
           </div>
         ) : (
           <>
+            {/* ── Your public booking link ── */}
+            {draft.slug && (
+              <section className="rounded-xl border border-rule bg-white px-5 py-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Link2 className="h-4 w-4 text-emerald" />
+                  <h3 className="text-[14px] font-semibold text-ink">Your booking link</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 min-w-0 truncate rounded-md border border-rule bg-paper/60 px-3 py-2 text-[13px] text-ink">
+                    {bookingUrl(draft.slug)}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard
+                        .writeText(bookingUrl(draft.slug))
+                        .then(() => toast.success("Booking link copied."))
+                        .catch(() => toast.error("Couldn't copy."));
+                    }}
+                    className="inline-flex items-center gap-1 rounded-md border border-rule px-2.5 py-2 text-[12px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition"
+                  >
+                    <Copy className="h-3.5 w-3.5" /> Copy
+                  </button>
+                  <a
+                    href={bookingUrl(draft.slug)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded-md border border-rule px-2.5 py-2 text-[12px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" /> Open
+                  </a>
+                </div>
+                <p className="text-[12px] text-ink-soft mt-2 leading-relaxed">
+                  Share this with patients. It goes live once <strong>Online booking</strong> is on and
+                  at least one service is marked bookable below.
+                </p>
+              </section>
+            )}
+
             {/* ── Master + timezone ── */}
             <section className="rounded-xl border border-rule bg-white px-5 py-4 space-y-4">
               <div className="flex items-start gap-3">
@@ -458,6 +500,11 @@ function BookingSettingsPage() {
 }
 
 // ── Small field helpers ──────────────────────────────────────────────────────
+
+function bookingUrl(slug: string): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://getrefill.app";
+  return `${origin}/s/${slug}`;
+}
 
 function clampInt(raw: string, min: number, max: number): number {
   const n = parseInt(raw, 10);

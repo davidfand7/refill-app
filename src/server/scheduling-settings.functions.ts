@@ -79,6 +79,8 @@ export interface BookableServiceDraft {
 
 export interface SchedulingSetupBundle {
   providerId: string;
+  /** Tenant slug — used to build the public booking link /s/<slug>. */
+  slug: string;
   settings: SchedulingSettingsDraft;
   hours: SchedulingHoursDraft[];
   services: BookableServiceDraft[];
@@ -181,16 +183,18 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
     const providerId = await ensureSetup(sb, tenantId, effectiveUserId);
 
-    const [{ data: settingsRow }, { data: hoursRows }, { data: serviceRows }] = await Promise.all([
-      sb.from("scheduling_settings").select("*").eq("tenant_id", tenantId).maybeSingle(),
-      sb.from("scheduling_hours").select("*").eq("provider_id", providerId).order("day_of_week"),
-      sb
-        .from("services")
-        .select("id, name, duration_min, buffer_min, online_bookable, hidden_at")
-        .eq("tenant_id", tenantId)
-        .is("hidden_at", null)
-        .order("name"),
-    ]);
+    const [{ data: settingsRow }, { data: hoursRows }, { data: serviceRows }, { data: tenantRow }] =
+      await Promise.all([
+        sb.from("scheduling_settings").select("*").eq("tenant_id", tenantId).maybeSingle(),
+        sb.from("scheduling_hours").select("*").eq("provider_id", providerId).order("day_of_week"),
+        sb
+          .from("services")
+          .select("id, name, duration_min, buffer_min, online_bookable, hidden_at")
+          .eq("tenant_id", tenantId)
+          .is("hidden_at", null)
+          .order("name"),
+        sb.from("tenants").select("slug").eq("id", tenantId).maybeSingle(),
+      ]);
 
     const settings: SchedulingSettingsDraft = settingsRow
       ? {
@@ -220,7 +224,7 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
       onlineBookable: s.online_bookable,
     }));
 
-    return { providerId, settings, hours, services };
+    return { providerId, slug: tenantRow?.slug ?? "", settings, hours, services };
   });
 
 // ── saveSchedulingSetupFn ────────────────────────────────────────────────────

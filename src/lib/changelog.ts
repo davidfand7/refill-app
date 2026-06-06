@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.48.2",
+    date: "June 2026",
+    items: [
+      "<strong>v1.48.2 &mdash; Your booking link, front and center. </strong>The Online booking settings page now shows your shareable public link (<code>/s/&lt;your-slug&gt;</code>) right at the top, with one-tap <strong>Copy</strong> and <strong>Open</strong> &mdash; no more guessing the URL. It notes that the link goes live once Online booking is on and a service is marked bookable. <strong>Touched</strong>: <code>src/server/scheduling-settings.functions.ts</code> (returns tenant slug), <code>src/routes/app.refill.settings.booking.tsx</code> (booking-link card), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.48.1",
     date: "June 2026",
     items: [
