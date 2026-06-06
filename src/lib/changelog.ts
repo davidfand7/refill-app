@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.48.10",
+    date: "June 2026",
+    items: [
+      "<strong>v1.48.10 &mdash; Add-booking service list shows only bookable services. </strong>The <strong>Add booking</strong> dialog on the calendar was listing your entire catalog; it now shows only services you&rsquo;ve marked <strong>Bookable</strong> on the Online booking page &mdash; matching what patients can book. <strong>Touched</strong>: <code>src/server/scheduling-owner.functions.ts</code> (day + range loaders filter services to <code>online_bookable</code>), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.48.9",
     date: "June 2026",
     items: [

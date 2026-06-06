@@ -177,8 +177,9 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
           .or(`provider_id.is.null,provider_id.eq.${providerId}`),
         sb
           .from("services")
-          .select("id, name, duration_min, hidden_at")
+          .select("id, name, duration_min, hidden_at, online_bookable")
           .eq("tenant_id", tenantId)
+          .eq("online_bookable", true)
           .is("hidden_at", null)
           .order("name"),
       ]);
@@ -291,8 +292,9 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
           .or(`provider_id.is.null,provider_id.eq.${providerId}`),
         sb
           .from("services")
-          .select("id, name, duration_min, hidden_at")
+          .select("id, name, duration_min, hidden_at, online_bookable")
           .eq("tenant_id", tenantId)
+          .eq("online_bookable", true)
           .is("hidden_at", null)
           .order("name"),
       ]);
