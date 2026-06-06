@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.68.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.68.0 &mdash; Internal cleanup (no visible changes). </strong>Consolidation pass that splits the two largest screens into focused, reusable pieces so they&rsquo;re faster and safer to build on: the <strong>Online booking</strong> settings page (business-hours and booking-rules sections + shared field controls pulled into their own files; the repeated save-on-the-spot logic collapsed into one helper) and the <strong>Schedule</strong> calendar (Day/Week/Month grids, the appointment dialogs, and the date helpers split out of a single 1,300-line file into a lean orchestrator). Behavior is identical &mdash; this is purely under-the-hood. <strong>Touched</strong>: <code>src/routes/app.refill.settings.booking.tsx</code>, <code>src/routes/app.refill.schedule.tsx</code>, new <code>src/components/refill/booking/*</code> + <code>src/components/refill/schedule/*</code> + <code>src/lib/use-drag-autoscroll.ts</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.67.0",
     date: "June 2026",
     items: [
