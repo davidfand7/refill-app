@@ -94,6 +94,12 @@ export const Route = createFileRoute("/app/rep/outreach")({
 const REJUV_RECOVERED_DEFAULT = "12,400";
 const REJUV_RECOVERED_WEEKS_DEFAULT = "8";
 
+// v1.47.7: localStorage key for the per-(audience, template) shared composer
+// body, so a composed message survives refresh / navigation.
+function sharedBodyKey(audience: "spa" | "rep", templateId: string): string {
+  return `refill:sharedbody:${audience}:${templateId}`;
+}
+
 // v1.47.0 P3a: live recruit-pitch stats (rep audience only). Rendered as chips
 // so the rep sees exactly what substitutes into [my commission rate] /
 // [my month earnings] / [my downstream count] before sending.
@@ -175,11 +181,53 @@ function OutreachPage() {
     failed: number;
     total: number;
   } | null>(null);
+  // v1.47.7: the fold left the shared composer body as ephemeral state — edit
+  // it, refresh, and it was gone (no Save persisted it). Autosave the shared
+  // subject/body per (audience, template) to localStorage so composing sticks.
+  // On template/tab change, restore any saved draft for that slot; else clear.
   useEffect(() => {
+    setBatchResult(null);
+    if (!selected || typeof window === "undefined") {
+      setSubjectOverride(null);
+      setBodyOverride(null);
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(sharedBodyKey(audience, selected.id));
+      if (raw) {
+        const saved = JSON.parse(raw) as {
+          subjectOverride?: string | null;
+          bodyOverride?: string | null;
+        };
+        setSubjectOverride(saved.subjectOverride ?? null);
+        setBodyOverride(saved.bodyOverride ?? null);
+        return;
+      }
+    } catch {
+      // Corrupt/blocked storage — fall through to a clean slate.
+    }
     setSubjectOverride(null);
     setBodyOverride(null);
-    setBatchResult(null);
-  }, [selected?.id]);
+  }, [selected?.id, audience]);
+
+  // Autosave the shared composer body as the rep types. Clears the slot when
+  // both overrides are null (back to the template default).
+  useEffect(() => {
+    if (!selected || typeof window === "undefined") return;
+    const key = sharedBodyKey(audience, selected.id);
+    try {
+      if (subjectOverride === null && bodyOverride === null) {
+        window.localStorage.removeItem(key);
+      } else {
+        window.localStorage.setItem(
+          key,
+          JSON.stringify({ subjectOverride, bodyOverride }),
+        );
+      }
+    } catch {
+      // Storage full/blocked — non-fatal; the body still works in-session.
+    }
+  }, [subjectOverride, bodyOverride, selected?.id, audience]);
 
   useEffect(() => {
     if (authLoading) return;

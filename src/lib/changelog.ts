@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.47.7",
+    date: "June 2026",
+    items: [
+      "<strong>v1.47.7 &mdash; Fix: the shared composer body now persists (autosaves as you type). </strong>Grasshopper composed a message (&lsquo;Hi this is Kelly…&rsquo;) and it vanished — nowhere to find it. <strong>Root cause</strong>: the v1.47.5 fold removed the &lsquo;Save draft&rsquo; button but never replaced it with persistence, so the shared subject/body lived only in React state — edit it, refresh or switch templates, and it was gone. My gap, not a missed button. <strong>Fix</strong>: the shared composer now <strong>autosaves as you type</strong> to <code>localStorage</code>, keyed per <code>(audience, template)</code> — no Save button to hunt for, it just sticks. On returning to a template (same browser) the composed body restores; clearing back to the template default removes the saved slot. Per-recipient tweaks were already persisted server-side (unchanged); this closes the gap for the shared body. <strong>Note</strong>: this is per-browser persistence for now — a follow-up can promote it to a server table so a composed body follows the rep across devices. <strong>Touched</strong>: <code>src/routes/app.rep.outreach.tsx</code> (sharedBodyKey + load/autosave effects replacing the ephemeral reset), <code>src/lib/changelog.ts</code> (this entry). No dep change, no schema change, no wrangler.jsonc change.",
+    ],
+  },
+  {
     version: "v1.47.6",
     date: "June 2026",
     items: [
