@@ -3475,6 +3475,35 @@ export type Database = {
           },
         ]
       }
+      scheduling_reminder_sends: {
+        Row: {
+          appointment_id: string
+          id: string
+          kind: string
+          sent_at: string
+        }
+        Insert: {
+          appointment_id: string
+          id?: string
+          kind: string
+          sent_at?: string
+        }
+        Update: {
+          appointment_id?: string
+          id?: string
+          kind?: string
+          sent_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduling_reminder_sends_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "emma_appointments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scheduling_resources: {
         Row: {
           created_at: string

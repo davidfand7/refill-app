@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.48.5",
+    date: "June 2026",
+    items: [
+      "<strong>v1.48.5 &mdash; Appointment reminder cron. </strong>A scheduled job now sends each patient a reminder email before their appointment (at your configured lead time, default 24h) and clears expired holds as a backstop. Reminders are dedupe-safe &mdash; a patient is never reminded twice &mdash; via a UNIQUE claim-then-send. Runs every 5 minutes on the same pg_cron&rarr;Worker mechanism as the existing sweep. <strong>Touched</strong>: new <code>src/routes/api.cron.scheduling-reminders.ts</code> (release holds + send reminders), new migrations <code>scheduling_reminder_sends</code> (dedupe table) + cron registration, <code>src/integrations/supabase/types.ts</code>, <code>src/lib/changelog.ts</code>. <strong>Activation needs two dashboard pastes</strong> (the dedupe table + the cron registration). Next: the $5/$5 billing meter + the recovery&rarr;native-slot loop.",
+    ],
+  },
+  {
     version: "v1.48.4",
     date: "June 2026",
     items: [

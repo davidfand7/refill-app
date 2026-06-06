@@ -66,6 +66,7 @@ import { Route as AppAdminAgentsRouteImport } from './routes/app.admin.agents'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api.webhooks.stripe'
 import { Route as ApiTwilioInboundRouteImport } from './routes/api.twilio.inbound'
 import { Route as ApiResendInboundLiteRouteImport } from './routes/api.resend.inbound-lite'
+import { Route as ApiCronSchedulingRemindersRouteImport } from './routes/api.cron.scheduling-reminders'
 import { Route as ApiCronRefillTrialDripRouteImport } from './routes/api.cron.refill-trial-drip'
 import { Route as ApiCronRefillInvoiceRouteImport } from './routes/api.cron.refill-invoice'
 import { Route as ApiCronLightModeSilenceRouteImport } from './routes/api.cron.light-mode-silence'
@@ -414,6 +415,12 @@ const ApiResendInboundLiteRoute = ApiResendInboundLiteRouteImport.update({
   path: '/api/resend/inbound-lite',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronSchedulingRemindersRoute =
+  ApiCronSchedulingRemindersRouteImport.update({
+    id: '/api/cron/scheduling-reminders',
+    path: '/api/cron/scheduling-reminders',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiCronRefillTrialDripRoute = ApiCronRefillTrialDripRouteImport.update({
   id: '/api/cron/refill-trial-drip',
   path: '/api/cron/refill-trial-drip',
@@ -798,6 +805,7 @@ export interface FileRoutesByFullPath {
   '/api/cron/light-mode-silence': typeof ApiCronLightModeSilenceRoute
   '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
+  '/api/cron/scheduling-reminders': typeof ApiCronSchedulingRemindersRoute
   '/api/resend/inbound-lite': typeof ApiResendInboundLiteRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
@@ -917,6 +925,7 @@ export interface FileRoutesByTo {
   '/api/cron/light-mode-silence': typeof ApiCronLightModeSilenceRoute
   '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
+  '/api/cron/scheduling-reminders': typeof ApiCronSchedulingRemindersRoute
   '/api/resend/inbound-lite': typeof ApiResendInboundLiteRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
@@ -1036,6 +1045,7 @@ export interface FileRoutesById {
   '/api/cron/light-mode-silence': typeof ApiCronLightModeSilenceRoute
   '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
+  '/api/cron/scheduling-reminders': typeof ApiCronSchedulingRemindersRoute
   '/api/resend/inbound-lite': typeof ApiResendInboundLiteRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
@@ -1159,6 +1169,7 @@ export interface FileRouteTypes {
     | '/api/cron/light-mode-silence'
     | '/api/cron/refill-invoice'
     | '/api/cron/refill-trial-drip'
+    | '/api/cron/scheduling-reminders'
     | '/api/resend/inbound-lite'
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
@@ -1278,6 +1289,7 @@ export interface FileRouteTypes {
     | '/api/cron/light-mode-silence'
     | '/api/cron/refill-invoice'
     | '/api/cron/refill-trial-drip'
+    | '/api/cron/scheduling-reminders'
     | '/api/resend/inbound-lite'
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
@@ -1396,6 +1408,7 @@ export interface FileRouteTypes {
     | '/api/cron/light-mode-silence'
     | '/api/cron/refill-invoice'
     | '/api/cron/refill-trial-drip'
+    | '/api/cron/scheduling-reminders'
     | '/api/resend/inbound-lite'
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
@@ -1515,6 +1528,7 @@ export interface RootRouteChildren {
   ApiCronLightModeSilenceRoute: typeof ApiCronLightModeSilenceRoute
   ApiCronRefillInvoiceRoute: typeof ApiCronRefillInvoiceRoute
   ApiCronRefillTrialDripRoute: typeof ApiCronRefillTrialDripRoute
+  ApiCronSchedulingRemindersRoute: typeof ApiCronSchedulingRemindersRoute
   ApiResendInboundLiteRoute: typeof ApiResendInboundLiteRoute
   ApiTwilioInboundRoute: typeof ApiTwilioInboundRoute
   ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
@@ -1940,6 +1954,13 @@ declare module '@tanstack/react-router' {
       path: '/api/resend/inbound-lite'
       fullPath: '/api/resend/inbound-lite'
       preLoaderRoute: typeof ApiResendInboundLiteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/scheduling-reminders': {
+      id: '/api/cron/scheduling-reminders'
+      path: '/api/cron/scheduling-reminders'
+      fullPath: '/api/cron/scheduling-reminders'
+      preLoaderRoute: typeof ApiCronSchedulingRemindersRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/cron/refill-trial-drip': {
@@ -2605,6 +2626,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronLightModeSilenceRoute: ApiCronLightModeSilenceRoute,
   ApiCronRefillInvoiceRoute: ApiCronRefillInvoiceRoute,
   ApiCronRefillTrialDripRoute: ApiCronRefillTrialDripRoute,
+  ApiCronSchedulingRemindersRoute: ApiCronSchedulingRemindersRoute,
   ApiResendInboundLiteRoute: ApiResendInboundLiteRoute,
   ApiTwilioInboundRoute: ApiTwilioInboundRoute,
   ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
