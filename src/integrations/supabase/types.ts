@@ -3475,6 +3475,54 @@ export type Database = {
           },
         ]
       }
+      scheduling_provider_services: {
+        Row: {
+          buffer_min: number | null
+          created_at: string
+          duration_min: number | null
+          id: string
+          price: number | null
+          provider_id: string
+          service_id: string
+          updated_at: string
+        }
+        Insert: {
+          buffer_min?: number | null
+          created_at?: string
+          duration_min?: number | null
+          id?: string
+          price?: number | null
+          provider_id: string
+          service_id: string
+          updated_at?: string
+        }
+        Update: {
+          buffer_min?: number | null
+          created_at?: string
+          duration_min?: number | null
+          id?: string
+          price?: number | null
+          provider_id?: string
+          service_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduling_provider_services_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "scheduling_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduling_provider_services_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "services"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scheduling_reminder_sends: {
         Row: {
           appointment_id: string

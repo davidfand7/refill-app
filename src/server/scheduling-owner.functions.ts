@@ -440,13 +440,22 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
       return { ok: false, reason: "That service isn't available.", code: "invalid" };
     }
 
+    // Per-provider duration override (NULL ⇒ inherit the catalog duration).
+    const { data: override } = await sb
+      .from("scheduling_provider_services")
+      .select("duration_min")
+      .eq("provider_id", providerId)
+      .eq("service_id", svc.id)
+      .maybeSingle();
+    const effectiveDuration = override?.duration_min ?? svc.duration_min;
+
     const { data: created, error } = await sb
       .from("emma_appointments")
       .insert({
         user_id: effectiveUserId,
         provider_id: providerId,
         scheduled_at: data.startIso,
-        duration_min: svc.duration_min,
+        duration_min: effectiveDuration,
         status: "confirmed",
         source: "native-manual",
         booking_name: data.patientName,

@@ -74,6 +74,9 @@ export interface BookableServiceDraft {
   name: string;
   durationMin: number;
   bufferMin: number;
+  /** Catalog base price (read-only here; edited on the catalog page). Used as
+   *  the inherited placeholder for per-provider price overrides. */
+  price: number;
   onlineBookable: boolean;
 }
 
@@ -81,6 +84,15 @@ export interface ProviderRow {
   id: string;
   name: string;
   isActive: boolean;
+}
+
+/** A per-provider override row. NULL field = inherit the service's value. */
+export interface ProviderServiceOverrideRow {
+  providerId: string;
+  serviceId: string;
+  durationMin: number | null;
+  bufferMin: number | null;
+  price: number | null;
 }
 
 export interface SchedulingSetupBundle {
@@ -94,6 +106,8 @@ export interface SchedulingSetupBundle {
   /** providerId → that provider's 7 weekday hours rows. */
   hoursByProvider: Record<string, SchedulingHoursDraft[]>;
   services: BookableServiceDraft[];
+  /** Per-provider duration/buffer/price overrides (only rows that exist). */
+  providerServices: ProviderServiceOverrideRow[];
 }
 
 const DEFAULT_SETTINGS: SchedulingSettingsDraft = {
@@ -221,12 +235,24 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
           .order("day_of_week"),
         sb
           .from("services")
-          .select("id, name, duration_min, buffer_min, online_bookable, hidden_at")
+          .select("id, name, duration_min, buffer_min, service_price, online_bookable, hidden_at")
           .eq("tenant_id", tenantId)
           .is("hidden_at", null)
           .order("name"),
         sb.from("tenants").select("slug").eq("id", tenantId).maybeSingle(),
       ]);
+
+    const { data: psRows } = await sb
+      .from("scheduling_provider_services")
+      .select("provider_id, service_id, duration_min, buffer_min, price")
+      .in("provider_id", providerIds.length ? providerIds : [providerId]);
+    const providerServices: ProviderServiceOverrideRow[] = (psRows ?? []).map((r) => ({
+      providerId: r.provider_id,
+      serviceId: r.service_id,
+      durationMin: r.duration_min,
+      bufferMin: r.buffer_min,
+      price: r.price,
+    }));
 
     const settings: SchedulingSettingsDraft = settingsRow
       ? {
@@ -257,10 +283,19 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
       name: s.name,
       durationMin: s.duration_min,
       bufferMin: s.buffer_min,
+      price: s.service_price,
       onlineBookable: s.online_bookable,
     }));
 
-    return { providerId, providers, slug: tenantRow?.slug ?? "", settings, hoursByProvider, services };
+    return {
+      providerId,
+      providers,
+      slug: tenantRow?.slug ?? "",
+      settings,
+      hoursByProvider,
+      services,
+      providerServices,
+    };
   });
 
 // ── saveSchedulingSetupFn ────────────────────────────────────────────────────
@@ -492,4 +527,87 @@ export const updateProviderFn = createServerFn({ method: "POST" })
       throw new Error(`Couldn't update provider: ${error?.message ?? "unknown"}`);
     }
     return { provider: { id: updated.id, name: updated.name, isActive: updated.is_active } };
+  });
+
+// ── setProviderServiceOverrideFn ─────────────────────────────────────────────
+// Sets (or clears) a provider's per-service duration/buffer/price override.
+// NULL on a field = inherit the service's catalog value. When ALL three become
+// NULL the row is deleted (keeps the table to genuine overrides only). Persisted
+// immediately, like the rest of provider management.
+
+const psOverrideInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+  providerId: z.string().uuid(),
+  serviceId: z.string().uuid(),
+  durationMin: z.number().int().positive().max(1440).nullable(),
+  bufferMin: z.number().int().min(0).max(1440).nullable(),
+  price: z.number().min(0).max(1_000_000).nullable(),
+});
+
+export const setProviderServiceOverrideFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => psOverrideInput.parse(raw))
+  .handler(async ({ data }): Promise<{ row: ProviderServiceOverrideRow | null }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+
+    // Ownership: provider + service must both belong to this tenant.
+    const [{ data: prov }, { data: svc }] = await Promise.all([
+      sb
+        .from("scheduling_providers")
+        .select("id")
+        .eq("id", data.providerId)
+        .eq("tenant_id", tenantId)
+        .maybeSingle(),
+      sb
+        .from("services")
+        .select("id")
+        .eq("id", data.serviceId)
+        .eq("tenant_id", tenantId)
+        .maybeSingle(),
+    ]);
+    if (!prov) throw new Error("That provider isn't part of this spa.");
+    if (!svc) throw new Error("That service isn't part of this spa.");
+
+    const allNull = data.durationMin === null && data.bufferMin === null && data.price === null;
+    if (allNull) {
+      // No overrides left → drop the row (pure inherit).
+      const { error } = await sb
+        .from("scheduling_provider_services")
+        .delete()
+        .eq("provider_id", data.providerId)
+        .eq("service_id", data.serviceId);
+      if (error) throw new Error(`Couldn't clear override: ${error.message}`);
+      return { row: null };
+    }
+
+    const { data: row, error } = await sb
+      .from("scheduling_provider_services")
+      .upsert(
+        {
+          provider_id: data.providerId,
+          service_id: data.serviceId,
+          duration_min: data.durationMin,
+          buffer_min: data.bufferMin,
+          price: data.price,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "provider_id,service_id" },
+      )
+      .select("provider_id, service_id, duration_min, buffer_min, price")
+      .single();
+    if (error || !row) throw new Error(`Couldn't save override: ${error?.message ?? "unknown"}`);
+    return {
+      row: {
+        providerId: row.provider_id,
+        serviceId: row.service_id,
+        durationMin: row.duration_min,
+        bufferMin: row.buffer_min,
+        price: row.price,
+      },
+    };
   });

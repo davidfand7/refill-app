@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.52.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.52.0 &mdash; Per-provider time &amp; price (a thing Acuity can&rsquo;t do). </strong>Med spas really do price by provider &mdash; a senior injector commands more than an RN, and a faster provider runs a shorter appointment. Now each bookable service can carry <strong>per-provider overrides</strong>: on the <strong>Online booking</strong> page, expand a service to set a different <strong>duration</strong> or <strong>price</strong> for any provider. Leave a field blank and it simply <strong>inherits</strong> your catalog value (shown as a ghost placeholder), so a single-provider spa never sees any of this &mdash; the complexity only appears when you use it. Owner bookings already honor each provider&rsquo;s effective duration. <strong>Touched</strong>: new table <code>scheduling_provider_services</code> (provider×service map + nullable duration/buffer/price overrides), new <code>src/lib/provider-service.ts</code> (the inherit-by-default resolver), <code>src/server/scheduling-settings.functions.ts</code> (load overrides + <code>setProviderServiceOverrideFn</code>), <code>src/server/scheduling-owner.functions.ts</code> (booking uses effective duration), <code>src/routes/app.refill.settings.booking.tsx</code> (expandable per-provider override panel), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.51.0",
     date: "June 2026",
     items: [
