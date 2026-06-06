@@ -8,7 +8,7 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, Plus, Ban, X, ZoomIn, ZoomOut } from "lucide-react";
 
@@ -143,6 +143,28 @@ function SchedulePage() {
   const services: ServiceLite[] = (view === "day" ? day?.services : range?.services) ?? [];
   const providers: ProviderLite[] = (view === "day" ? day?.providers : range?.providers) ?? [];
 
+  /** Drag-to-move: reschedule (and, in multi-column day, reassign provider). */
+  async function onMove(appt: DayAppointment, startIso: string, providerId?: string) {
+    // No-op if nothing changed.
+    if (appt.startIso === startIso && (providerId === undefined || providerId === appt.providerId)) {
+      return;
+    }
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Please sign in.");
+      const r = await ownerUpdateAppointmentFn({
+        data: { accessToken: token, viewAsUserId, appointmentId: appt.id, startIso, providerId },
+      });
+      if (!r.ok) toast.error(r.reason);
+      else toast.success("Appointment moved.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't move the appointment.");
+    } finally {
+      void load();
+    }
+  }
+
   function navPrev() {
     setDateIso((d) => (view === "day" ? addDays(d, -1) : view === "week" ? addDays(d, -7) : addMonths(d, -1)));
   }
@@ -235,6 +257,7 @@ function SchedulePage() {
             pxPerMin={dayPpm}
             onCancel={setCancelTarget}
             onEdit={setEditTarget}
+            onMove={onMove}
             onBook={(d, t, pid) => setBookSeed({ date: d, time: t, providerId: pid })}
           />
         ) : view === "week" && range ? (
@@ -247,6 +270,7 @@ function SchedulePage() {
             onProviderChange={setWeekProviderId}
             onCancel={setCancelTarget}
             onEdit={setEditTarget}
+            onMove={onMove}
             onBook={(d, t) =>
               setBookSeed({
                 date: d,
@@ -289,6 +313,7 @@ function DayGrid({
   pxPerMin,
   onCancel,
   onEdit,
+  onMove,
   onBook,
 }: {
   day: DaySchedule;
@@ -296,8 +321,10 @@ function DayGrid({
   pxPerMin: number;
   onCancel: (a: DayAppointment) => void;
   onEdit: (a: DayAppointment) => void;
+  onMove: (appt: DayAppointment, startIso: string, providerId?: string) => void;
   onBook: (dateIso: string, time: string, providerId?: string) => void;
 }) {
+  const dragged = useRef<DayAppointment | null>(null);
   // Shared time window across every provider's band + all appts + all blocks.
   const win = useMemo(() => {
     let start = 24 * 60;
@@ -328,6 +355,25 @@ function DayGrid({
   const top = (iso: string) => (localMinutes(iso, tz) - win.start) * pxPerMin;
   const providers = day.providers;
 
+  // Drop a dragged appointment at the pointer's time (and provider, if multi-col).
+  function dropAt(
+    e: { preventDefault: () => void; currentTarget: HTMLDivElement; clientY: number },
+    providerId?: string,
+  ) {
+    e.preventDefault();
+    const appt = dragged.current;
+    dragged.current = null;
+    if (!appt) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mins = snap5(win.start + (e.clientY - rect.top) / pxPerMin, win);
+    const [y, mo, d] = day.dateIso.split("-").map((n) => parseInt(n, 10));
+    const startIso = zonedWallClockToUtc(y, mo, d, Math.floor(mins / 60), mins % 60, tz).toISOString();
+    onMove(appt, startIso, providerId);
+  }
+  const setDragged = (a: DayAppointment) => {
+    dragged.current = a;
+  };
+
   // ── Single provider: render exactly as before (loved layout, unchanged). ──
   if (providers.length <= 1) {
     const solo = providers[0];
@@ -344,7 +390,14 @@ function DayGrid({
     return (
       <div className="rounded-xl border border-rule bg-white p-4">
         {!band.isOpen && <div className="mb-3 text-[12px] text-ink-faint">Closed this day (per business hours).</div>}
-        <div className="relative cursor-pointer" style={{ height }} onClick={bgClick} title="Click an open time to book">
+        <div
+          className="relative cursor-pointer"
+          style={{ height }}
+          onClick={bgClick}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => dropAt(e, solo?.id)}
+          title="Click an open time to book"
+        >
           <div className="absolute inset-0 left-14 hover:bg-emerald-soft/10 transition-colors" />
           {hourMarks(win).map((m) => (
             <div key={m} className="absolute left-0 right-0 border-t border-rule/60" style={{ top: (m - win.start) * pxPerMin }}>
@@ -358,7 +411,7 @@ function DayGrid({
             <BlockBand key={b.id} left="left-14" top={top(b.startIso)} height={Math.max(14, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} />
           ))}
           {day.appointments.map((a) => (
-            <ApptCard key={a.id} a={a} tz={tz} left="left-14" top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit}  />
+            <ApptCard key={a.id} a={a} tz={tz} left="left-14" top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit} onDragStartAppt={setDragged} />
           ))}
           {day.appointments.length === 0 && day.blocks.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center text-[13px] text-ink-faint pointer-events-none">No bookings this day.</div>
@@ -409,6 +462,8 @@ function DayGrid({
                   const mins = win.start + (e.clientY - rect.top) / pxPerMin;
                   onBook(day.dateIso, minToHHMM(snap5(mins, win)), p.id);
                 }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => dropAt(e, p.id)}
               >
                 {hourMarks(win).map((m) => (
                   <div key={m} className="absolute left-0 right-0 border-t border-rule/40" style={{ top: (m - win.start) * pxPerMin }} />
@@ -420,7 +475,7 @@ function DayGrid({
                   <BlockBand key={b.id} left="left-0" top={top(b.startIso)} height={Math.max(10, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} compact />
                 ))}
                 {colAppts.map((a) => (
-                  <ApptCard key={a.id} a={a} tz={tz} left="left-0" top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit}  compact={compact} />
+                  <ApptCard key={a.id} a={a} tz={tz} left="left-0" top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit} onDragStartAppt={setDragged} compact={compact} />
                 ))}
               </div>
             );
@@ -442,6 +497,7 @@ function WeekGrid({
   onProviderChange,
   onCancel,
   onEdit,
+  onMove,
   onBook,
   onPickDay,
 }: {
@@ -453,9 +509,11 @@ function WeekGrid({
   onProviderChange: (id: string) => void;
   onCancel: (a: DayAppointment) => void;
   onEdit: (a: DayAppointment) => void;
+  onMove: (appt: DayAppointment, startIso: string, providerId?: string) => void;
   onBook: (dateIso: string, time: string) => void;
   onPickDay: (iso: string) => void;
 }) {
+  const dragged = useRef<DayAppointment | null>(null);
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
   const providers = range.providers;
   // Effective filter — fall back to "all" if the chosen provider is gone.
@@ -513,6 +571,25 @@ function WeekGrid({
   const height = (win.end - win.start) * pxPerMin;
   const top = (iso: string) => (localMinutes(iso, tz) - win.start) * pxPerMin;
   const today = todayIso();
+
+  // Drop a dragged appointment onto a day column at the pointer's time.
+  function dropAt(
+    e: { preventDefault: () => void; currentTarget: HTMLDivElement; clientY: number },
+    dateIso: string,
+  ) {
+    e.preventDefault();
+    const appt = dragged.current;
+    dragged.current = null;
+    if (!appt) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mins = snap5(win.start + (e.clientY - rect.top) / pxPerMin, win);
+    const [y, mo, d] = dateIso.split("-").map((n) => parseInt(n, 10));
+    const startIso = zonedWallClockToUtc(y, mo, d, Math.floor(mins / 60), mins % 60, tz).toISOString();
+    onMove(appt, startIso); // week view keeps the same provider
+  }
+  const setDragged = (a: DayAppointment) => {
+    dragged.current = a;
+  };
 
   return (
     <div>
@@ -589,6 +666,8 @@ function WeekGrid({
                   const mins = win.start + (e.clientY - rect.top) / pxPerMin;
                   onBook(d, minToHHMM(snap5(mins, win)));
                 }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => dropAt(e, d)}
               >
                 {hourMarks(win).map((m) => (
                   <div key={m} className="absolute left-0 right-0 border-t border-rule/40" style={{ top: (m - win.start) * pxPerMin }} />
@@ -600,7 +679,7 @@ function WeekGrid({
                   <BlockBand key={b.id} left="left-0" top={top(b.startIso)} height={Math.max(10, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} compact />
                 ))}
                 {dayAppts.map((a) => (
-                  <ApptCard key={a.id} a={a} tz={tz} left="left-0" top={top(a.startIso)} height={Math.max(MIN_WEEK_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit}  compact />
+                  <ApptCard key={a.id} a={a} tz={tz} left="left-0" top={top(a.startIso)} height={Math.max(MIN_WEEK_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit} onDragStartAppt={setDragged} compact />
                 ))}
               </div>
             );
@@ -684,6 +763,7 @@ function ApptCard({
   height,
   onCancel,
   onEdit,
+  onDragStartAppt,
   compact,
 }: {
   a: DayAppointment;
@@ -693,11 +773,13 @@ function ApptCard({
   height: number;
   onCancel: (a: DayAppointment) => void;
   onEdit: (a: DayAppointment) => void;
+  onDragStartAppt?: (a: DayAppointment) => void;
   compact?: boolean;
 }) {
   const held = a.status === "held";
   return (
     <div
+      draggable={!held}
       className={cn(
         "absolute right-0 rounded-md border px-2 py-0.5 shadow-sm overflow-hidden group cursor-pointer",
         left,
@@ -709,7 +791,12 @@ function ApptCard({
         e.stopPropagation();
         if (!held) onEdit(a);
       }}
-      title={held ? undefined : "Double-click to view / edit"}
+      onDragStart={(e) => {
+        if (held) return;
+        e.dataTransfer.effectAllowed = "move";
+        onDragStartAppt?.(a);
+      }}
+      title={held ? undefined : "Double-click to edit · drag to move"}
     >
       <div className="flex items-start justify-between gap-1">
         <div className="min-w-0">

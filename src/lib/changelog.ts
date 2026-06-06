@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.63.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.63.0 &mdash; Drag an appointment to move it. </strong>On the calendar, <strong>grab a booking and drop it</strong> on a new time to reschedule &mdash; and in the multi-provider <strong>Day</strong> view, drop it in another provider&rsquo;s column to reassign at the same time. Works in Week too (drop on any day). Drops snap to 5 minutes; if the new spot overlaps another appointment it&rsquo;s refused with a clear message. Pair it with double-click-to-edit for the full toolkit. <strong>Touched</strong>: <code>src/routes/app.refill.schedule.tsx</code> (draggable cards + drop targets on day/week columns → <code>ownerUpdateAppointmentFn</code>), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.62.0",
     date: "June 2026",
     items: [
