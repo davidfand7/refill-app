@@ -3592,6 +3592,7 @@ export type Database = {
       }
       scheduling_settings: {
         Row: {
+          booking_lead_option: string
           created_at: string
           hold_minutes: number
           id: string
@@ -3606,6 +3607,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          booking_lead_option?: string
           created_at?: string
           hold_minutes?: number
           id?: string
@@ -3620,6 +3622,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          booking_lead_option?: string
           created_at?: string
           hold_minutes?: number
           id?: string

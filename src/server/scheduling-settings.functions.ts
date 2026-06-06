@@ -58,6 +58,8 @@ export interface SchedulingHoursDraft {
   isClosed: boolean;
 }
 
+export type BookingLeadOption = "best_deal" | "first_available";
+
 export interface SchedulingSettingsDraft {
   timezone: string;
   onlineBookingEnabled: boolean;
@@ -67,6 +69,8 @@ export interface SchedulingSettingsDraft {
   holdMinutes: number;
   reminderLeadHours: number;
   samedayReminderEnabled: boolean;
+  /** Which smart option leads on the public page when prices vary. */
+  bookingLeadOption: BookingLeadOption;
 }
 
 export interface BookableServiceDraft {
@@ -119,6 +123,7 @@ const DEFAULT_SETTINGS: SchedulingSettingsDraft = {
   holdMinutes: 5,
   reminderLeadHours: 24,
   samedayReminderEnabled: true,
+  bookingLeadOption: "best_deal",
 };
 
 /** "HH:MM:SS" or "HH:MM" → "HH:MM". */
@@ -264,6 +269,10 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
           holdMinutes: settingsRow.hold_minutes,
           reminderLeadHours: settingsRow.reminder_lead_hours,
           samedayReminderEnabled: settingsRow.sameday_reminder_enabled,
+          bookingLeadOption:
+            settingsRow.booking_lead_option === "first_available"
+              ? "first_available"
+              : "best_deal",
         }
       : { ...DEFAULT_SETTINGS };
 
@@ -317,6 +326,7 @@ const settingsDraftSchema = z.object({
   holdMinutes: z.number().int().positive().max(120),
   reminderLeadHours: z.number().int().min(0).max(336),
   samedayReminderEnabled: z.boolean(),
+  bookingLeadOption: z.enum(["best_deal", "first_available"]),
 });
 
 const serviceDraftSchema = z.object({
@@ -382,6 +392,7 @@ export const saveSchedulingSetupFn = createServerFn({ method: "POST" })
         hold_minutes: data.settings.holdMinutes,
         reminder_lead_hours: data.settings.reminderLeadHours,
         sameday_reminder_enabled: data.settings.samedayReminderEnabled,
+        booking_lead_option: data.settings.bookingLeadOption,
         updated_at: nowIso,
       },
       { onConflict: "tenant_id" },

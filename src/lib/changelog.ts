@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.55.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.55.0 &mdash; Choose which booking option leads. </strong>New setting on the <strong>Online booking</strong> page: when a service is priced differently across providers and patients see both smart options, you choose which one shows <strong>first</strong> &mdash; <strong>Best deal</strong> or <strong>First available</strong>. The default is <strong>Best deal leads</strong>. (When every provider charges the same for a service, only First available shows, so this has no effect there.) <strong>Touched</strong>: new column <code>scheduling_settings.booking_lead_option</code> (default <code>best_deal</code>), <code>src/server/scheduling-settings.functions.ts</code> + <code>src/server/scheduling.functions.ts</code> (read/write + expose to the public page), <code>src/routes/app.refill.settings.booking.tsx</code> (the setting control), <code>src/routes/s.$slug.tsx</code> (orders the two smart cards by the setting), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.54.0",
     date: "June 2026",
     items: [

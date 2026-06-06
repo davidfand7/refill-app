@@ -785,6 +785,34 @@ function BookingSettingsPage() {
                     Also send a same-day reminder
                   </label>
                 </div>
+
+                {/* Smart-option default — which leads when prices vary by provider. */}
+                <div className="sm:col-span-2 pt-1 border-t border-rule/60">
+                  <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1.5 block mt-3">
+                    When prices vary by provider, lead with
+                  </label>
+                  <div className="inline-flex rounded-md border border-rule overflow-hidden">
+                    {(["best_deal", "first_available"] as const).map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => patchSettings({ bookingLeadOption: opt })}
+                        className={cn(
+                          "px-3 py-1.5 text-[13px] font-medium transition",
+                          draft.settings.bookingLeadOption === opt
+                            ? "bg-emerald text-paper"
+                            : "text-ink-soft hover:text-ink",
+                        )}
+                      >
+                        {opt === "best_deal" ? "Best deal" : "First available"}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[12px] text-ink-soft mt-1.5 leading-relaxed">
+                    Patients always see both. This picks which appears first — and only matters for
+                    services you price differently per provider.
+                  </p>
+                </div>
               </div>
             </section>
 

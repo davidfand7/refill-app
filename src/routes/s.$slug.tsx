@@ -290,49 +290,57 @@ function PublicBookingPage() {
             <p className="text-stone-500 text-sm mb-4">Who would you like to see?</p>
 
             <div className="space-y-2">
-              {/* First available — the soonest opening across the team. */}
-              <button
-                type="button"
-                onClick={() => {
-                  setProviderChoice(FIRST);
-                  setScreen("time");
-                }}
-                className="w-full text-left rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 hover:border-emerald-500 transition-colors flex items-center justify-between gap-3"
-              >
-                <span className="flex items-center gap-2.5 min-w-0">
-                  <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="min-w-0">
-                    <span className="block text-[15px] font-medium text-stone-900">First available</span>
-                    <span className="block text-[13px] text-emerald-700">
-                      Soonest opening with any of our team
-                    </span>
-                  </span>
-                </span>
-                <span className="text-[13px] text-stone-500 shrink-0">from ${selService.fromPrice}</span>
-              </button>
-
-              {/* Best deal — only when providers actually price this differently. */}
-              {pricesVary && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setProviderChoice(BEST);
-                    setScreen("time");
-                  }}
-                  className="w-full text-left rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 hover:border-amber-500 transition-colors flex items-center justify-between gap-3"
-                >
-                  <span className="flex items-center gap-2.5 min-w-0">
-                    <BadgeDollarSign className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span className="min-w-0">
-                      <span className="block text-[15px] font-medium text-stone-900">Best deal</span>
-                      <span className="block text-[13px] text-amber-700">
-                        Lowest price with an opening
+              {/* Smart options. Order leads with the spa's chosen default
+                  (Best deal vs First available); Best deal only when prices vary. */}
+              {(() => {
+                const firstCard = (
+                  <button
+                    key="first"
+                    type="button"
+                    onClick={() => {
+                      setProviderChoice(FIRST);
+                      setScreen("time");
+                    }}
+                    className="w-full text-left rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 hover:border-emerald-500 transition-colors flex items-center justify-between gap-3"
+                  >
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="min-w-0">
+                        <span className="block text-[15px] font-medium text-stone-900">First available</span>
+                        <span className="block text-[13px] text-emerald-700">
+                          Soonest opening with any of our team
+                        </span>
                       </span>
                     </span>
-                  </span>
-                  <span className="text-[13px] text-stone-600 font-medium shrink-0">${bestPrice}</span>
-                </button>
-              )}
+                    <span className="text-[13px] text-stone-500 shrink-0">from ${selService.fromPrice}</span>
+                  </button>
+                );
+                const bestCard = pricesVary ? (
+                  <button
+                    key="best"
+                    type="button"
+                    onClick={() => {
+                      setProviderChoice(BEST);
+                      setScreen("time");
+                    }}
+                    className="w-full text-left rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 hover:border-amber-500 transition-colors flex items-center justify-between gap-3"
+                  >
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <BadgeDollarSign className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span className="min-w-0">
+                        <span className="block text-[15px] font-medium text-stone-900">Best deal</span>
+                        <span className="block text-[13px] text-amber-700">
+                          Lowest price with an opening
+                        </span>
+                      </span>
+                    </span>
+                    <span className="text-[13px] text-stone-600 font-medium shrink-0">${bestPrice}</span>
+                  </button>
+                ) : null;
+                return ctx.leadOption === "best_deal"
+                  ? [bestCard, firstCard]
+                  : [firstCard, bestCard];
+              })()}
 
               {providers.map((p) => (
                 <button

@@ -261,6 +261,8 @@ export type PublicBookingContext =
       tenantId: string;
       spaName: string;
       timezone: string;
+      /** Which smart option leads when a service is priced differently by provider. */
+      leadOption: "best_deal" | "first_available";
       services: PublicServiceOption[];
     }
   | { ok: false; reason: string };
@@ -278,12 +280,13 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
 
     const { data: settings } = await sb
       .from("scheduling_settings")
-      .select("timezone, online_booking_enabled")
+      .select("timezone, online_booking_enabled, booking_lead_option")
       .eq("tenant_id", tenant.id)
       .maybeSingle();
     if (!settings || !settings.online_booking_enabled) {
       return { ok: false, reason: "Online booking isn't available for this practice right now." };
     }
+    const leadOption = settings.booking_lead_option === "first_available" ? "first_available" : "best_deal";
 
     const [{ data: services }, providers] = await Promise.all([
       sb
@@ -352,6 +355,7 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
       tenantId: tenant.id,
       spaName: tenant.name,
       timezone: settings.timezone,
+      leadOption,
       services: serviceOptions,
     };
   });
