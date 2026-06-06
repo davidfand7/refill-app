@@ -57,40 +57,33 @@ function admin() {
 
 type Sb = ReturnType<typeof admin>;
 
-// ── Shared loader ────────────────────────────────────────────────────────────
+// ── Shared loaders (multi-provider, v1.53.0) ─────────────────────────────────
 
-interface SchedulingContext {
+/** Tenant settings + the requested service's catalog base, with the public
+ *  gates (online booking on, service bookable). Provider-independent. */
+interface BaseContext {
   tenantId: string;
-  providerId: string;
-  /** The auth user the provider acts as (stamped as emma_appointments.user_id). */
-  ownerUserId: string;
   settings: SlotEngineSettings;
   holdMinutes: number;
-  service: { id: string; durationMin: number; bufferMin: number; onlineBookable: boolean };
+  service: {
+    id: string;
+    durationMin: number;
+    bufferMin: number;
+    price: number;
+    onlineBookable: boolean;
+  };
 }
 
-/**
- * Resolve the tenant's single active provider + settings + the requested
- * service. MVP = one provider per tenant; multi-provider later picks by id.
- */
-async function loadContext(
+async function loadBaseContext(
   sb: Sb,
   tenantId: string,
   serviceId: string,
-): Promise<{ ok: true; ctx: SchedulingContext } | { ok: false; reason: string }> {
-  const [{ data: settingsRow }, { data: provider }, { data: svc }] = await Promise.all([
+): Promise<{ ok: true; base: BaseContext } | { ok: false; reason: string }> {
+  const [{ data: settingsRow }, { data: svc }] = await Promise.all([
     sb.from("scheduling_settings").select("*").eq("tenant_id", tenantId).maybeSingle(),
     sb
-      .from("scheduling_providers")
-      .select("id, user_id")
-      .eq("tenant_id", tenantId)
-      .eq("is_active", true)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle(),
-    sb
       .from("services")
-      .select("id, duration_min, buffer_min, online_bookable, tenant_id, hidden_at")
+      .select("id, duration_min, buffer_min, service_price, online_bookable, tenant_id, hidden_at")
       .eq("id", serviceId)
       .maybeSingle(),
   ]);
@@ -99,8 +92,6 @@ async function loadContext(
   if (!settingsRow.online_booking_enabled) {
     return { ok: false, reason: "Online booking is currently turned off." };
   }
-  if (!provider) return { ok: false, reason: "No bookable provider is configured." };
-  if (!provider.user_id) return { ok: false, reason: "Provider is not linked to an account." };
   if (!svc || svc.tenant_id !== tenantId || svc.hidden_at) {
     return { ok: false, reason: "That service isn't available." };
   }
@@ -108,10 +99,8 @@ async function loadContext(
 
   return {
     ok: true,
-    ctx: {
+    base: {
       tenantId,
-      providerId: provider.id,
-      ownerUserId: provider.user_id,
       settings: {
         timezone: settingsRow.timezone,
         slotGranularityMin: settingsRow.slot_granularity_min,
@@ -123,34 +112,82 @@ async function loadContext(
         id: svc.id,
         durationMin: svc.duration_min,
         bufferMin: svc.buffer_min,
+        price: svc.service_price,
         onlineBookable: svc.online_bookable,
       },
     },
   };
 }
 
-/** Load provider hours, blocks overlapping [from,to], and busy appointments. */
+interface ActiveProvider {
+  id: string;
+  name: string;
+  userId: string | null;
+}
+
+/** Active providers for a tenant, ordered by created_at. (v1 rule: every active
+ *  provider offers every online-bookable service; per-service opt-out is a later
+ *  refinement.) */
+async function loadActiveProviders(sb: Sb, tenantId: string): Promise<ActiveProvider[]> {
+  const { data } = await sb
+    .from("scheduling_providers")
+    .select("id, name, user_id, created_at")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+  return (data ?? []).map((p) => ({ id: p.id, name: p.name, userId: p.user_id }));
+}
+
+type Override = { durationMin: number | null; bufferMin: number | null; price: number | null };
+
+/** providerId → override row for the given service (NULL fields = inherit). */
+async function loadOverrideMap(
+  sb: Sb,
+  providerIds: string[],
+  serviceId: string,
+): Promise<Map<string, Override>> {
+  const m = new Map<string, Override>();
+  if (!providerIds.length) return m;
+  const { data } = await sb
+    .from("scheduling_provider_services")
+    .select("provider_id, duration_min, buffer_min, price")
+    .eq("service_id", serviceId)
+    .in("provider_id", providerIds);
+  for (const r of data ?? []) {
+    m.set(r.provider_id, { durationMin: r.duration_min, bufferMin: r.buffer_min, price: r.price });
+  }
+  return m;
+}
+
+/** effective = override ?? base, for one provider. */
+function effective(base: BaseContext, ov?: Override): { durationMin: number; bufferMin: number; price: number } {
+  return {
+    durationMin: ov?.durationMin ?? base.service.durationMin,
+    bufferMin: ov?.bufferMin ?? base.service.bufferMin,
+    price: ov?.price ?? base.service.price,
+  };
+}
+
+/** Load one provider's hours, overlapping blocks, and busy set for [from,to].
+ *  bufferMin is the EFFECTIVE buffer for this provider×service. */
 async function loadEngineInputs(
   sb: Sb,
-  ctx: SchedulingContext,
+  providerId: string,
+  bufferMin: number,
   fromIso: string,
   toIso: string,
 ): Promise<{ hours: ProviderHoursRow[]; blocks: BlockInterval[]; busy: ExistingAppointment[] }> {
   const [{ data: hoursRows }, { data: blockRows }, { data: busyRows }] = await Promise.all([
-    sb.from("scheduling_hours").select("*").eq("provider_id", ctx.providerId),
-    // Whole-practice blocks (provider_id null) OR this provider's blocks, that
-    // overlap the window. tstzrange && is expressed via the during column.
+    sb.from("scheduling_hours").select("*").eq("provider_id", providerId),
+    // Whole-practice blocks (provider_id null) OR this provider's blocks.
     sb
       .from("scheduling_blocks")
       .select("during, provider_id")
-      .or(`provider_id.is.null,provider_id.eq.${ctx.providerId}`),
-    // Non-cancelled appointments for this provider in/around the window. We pull
-    // a generous margin (the column index is on scheduled_at) and let the engine
-    // do exact interval math.
+      .or(`provider_id.is.null,provider_id.eq.${providerId}`),
     sb
       .from("emma_appointments")
       .select("scheduled_at, duration_min, status, slot_held_until")
-      .eq("provider_id", ctx.providerId)
+      .eq("provider_id", providerId)
       .neq("status", "cancelled")
       .gte("scheduled_at", new Date(new Date(fromIso).getTime() - 24 * 60 * 60_000).toISOString())
       .lt("scheduled_at", new Date(new Date(toIso).getTime() + 24 * 60 * 60_000).toISOString()),
@@ -168,12 +205,6 @@ async function loadEngineInputs(
     .filter((x): x is BlockInterval => x !== null);
 
   const nowMs = Date.now();
-  // Busy = real appointments + LIVE holds. An expired hold (slot_held_until in
-  // the past) is treated as free on the read side; the engine therefore offers
-  // the slot, and the inline release in holdSlot clears the stale row so the
-  // EXCLUDE insert succeeds. We approximate each existing appt's trailing buffer
-  // with the service's buffer (emma_appointments doesn't snapshot per-appt
-  // buffer in MVP) so back-to-back gaps stay symmetric for same-service books.
   const busy: ExistingAppointment[] = (busyRows ?? [])
     .filter((a) => {
       if (a.status !== "held") return true;
@@ -182,7 +213,7 @@ async function loadEngineInputs(
     .map((a) => ({
       startMs: new Date(a.scheduled_at).getTime(),
       durationMin: a.duration_min,
-      bufferMin: ctx.service.bufferMin,
+      bufferMin,
     }));
 
   return { hours, blocks, busy };
@@ -205,13 +236,32 @@ function parseTstzRange(lit: string | null): BlockInterval | null {
 
 const slugInput = z.object({ slug: z.string().min(1).max(80) });
 
+/** A provider a patient can choose for a service, with their effective price. */
+export interface PublicProviderOption {
+  id: string;
+  name: string;
+  price: number;
+  durationMin: number;
+}
+
+export interface PublicServiceOption {
+  id: string;
+  name: string;
+  /** Catalog base duration (display fallback). */
+  durationMin: number;
+  /** Lowest effective price across offering providers (the "from $X"). */
+  fromPrice: number;
+  /** Active providers who offer this service (v1: all active), with effective price/duration. */
+  providers: PublicProviderOption[];
+}
+
 export type PublicBookingContext =
   | {
       ok: true;
       tenantId: string;
       spaName: string;
       timezone: string;
-      services: Array<{ id: string; name: string; durationMin: number }>;
+      services: PublicServiceOption[];
     }
   | { ok: false; reason: string };
 
@@ -235,24 +285,72 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
       return { ok: false, reason: "Online booking isn't available for this practice right now." };
     }
 
-    const { data: services } = await sb
-      .from("services")
-      .select("id, name, duration_min, online_bookable, hidden_at")
-      .eq("tenant_id", tenant.id)
-      .eq("online_bookable", true)
-      .is("hidden_at", null)
-      .order("name");
+    const [{ data: services }, providers] = await Promise.all([
+      sb
+        .from("services")
+        .select("id, name, duration_min, buffer_min, service_price, online_bookable, hidden_at")
+        .eq("tenant_id", tenant.id)
+        .eq("online_bookable", true)
+        .is("hidden_at", null)
+        .order("name"),
+      loadActiveProviders(sb, tenant.id),
+    ]);
+
+    const bookableProviders = providers.filter((p) => p.userId); // must be account-linked to book
+    const providerIds = bookableProviders.map((p) => p.id);
+
+    // All overrides for these providers across the bookable services, in one read.
+    const serviceIds = (services ?? []).map((s) => s.id);
+    const overridesByService = new Map<string, Map<string, Override>>();
+    if (providerIds.length && serviceIds.length) {
+      const { data: ovRows } = await sb
+        .from("scheduling_provider_services")
+        .select("provider_id, service_id, duration_min, buffer_min, price")
+        .in("provider_id", providerIds)
+        .in("service_id", serviceIds);
+      for (const r of ovRows ?? []) {
+        let m = overridesByService.get(r.service_id);
+        if (!m) {
+          m = new Map();
+          overridesByService.set(r.service_id, m);
+        }
+        m.set(r.provider_id, {
+          durationMin: r.duration_min,
+          bufferMin: r.buffer_min,
+          price: r.price,
+        });
+      }
+    }
+
+    const serviceOptions: PublicServiceOption[] = (services ?? []).map((s) => {
+      const ovMap = overridesByService.get(s.id);
+      const providerOpts: PublicProviderOption[] = bookableProviders.map((p) => {
+        const ov = ovMap?.get(p.id);
+        return {
+          id: p.id,
+          name: p.name,
+          price: ov?.price ?? s.service_price,
+          durationMin: ov?.durationMin ?? s.duration_min,
+        };
+      });
+      const fromPrice = providerOpts.length
+        ? Math.min(...providerOpts.map((p) => p.price))
+        : s.service_price;
+      return {
+        id: s.id,
+        name: s.name,
+        durationMin: s.duration_min,
+        fromPrice,
+        providers: providerOpts,
+      };
+    });
 
     return {
       ok: true,
       tenantId: tenant.id,
       spaName: tenant.name,
       timezone: settings.timezone,
-      services: (services ?? []).map((s) => ({
-        id: s.id,
-        name: s.name,
-        durationMin: s.duration_min,
-      })),
+      services: serviceOptions,
     };
   });
 
@@ -261,34 +359,89 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
 const listInput = z.object({
   tenantId: z.string().uuid(),
   serviceId: z.string().uuid(),
+  /** Omit for "first available" (union across the team). */
+  providerId: z.string().uuid().optional(),
   fromIso: z.string().min(10),
   toIso: z.string().min(10),
 });
 
+/** A bookable slot tagged with the provider it belongs to. */
+export interface PublicSlot {
+  startIso: string;
+  endIso: string;
+  startMs: number;
+  providerId: string;
+}
+
 export type ListSlotsResult =
-  | { ok: true; slots: Slot[]; timezone: string }
+  | { ok: true; slots: PublicSlot[]; timezone: string }
   | { ok: false; reason: string };
 
 export const listAvailableSlots = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => listInput.parse(input))
   .handler(async ({ data }): Promise<ListSlotsResult> => {
     const sb = admin();
-    const loaded = await loadContext(sb, data.tenantId, data.serviceId);
+    const loaded = await loadBaseContext(sb, data.tenantId, data.serviceId);
     if (!loaded.ok) return { ok: false, reason: loaded.reason };
-    const { ctx } = loaded;
+    const { base } = loaded;
 
-    const { hours, blocks, busy } = await loadEngineInputs(sb, ctx, data.fromIso, data.toIso);
-    const slots = availableSlots({
-      settings: ctx.settings,
-      hours,
-      blocks,
-      busy,
-      service: { durationMin: ctx.service.durationMin, bufferMin: ctx.service.bufferMin },
-      rangeStart: new Date(data.fromIso),
-      rangeEnd: new Date(data.toIso),
-      now: new Date(),
-    });
-    return { ok: true, slots, timezone: ctx.settings.timezone };
+    const providers = await loadActiveProviders(sb, data.tenantId);
+    let targets = providers.filter((p) => p.userId); // account-linked = bookable
+    if (data.providerId) {
+      targets = targets.filter((p) => p.id === data.providerId);
+      if (!targets.length) return { ok: false, reason: "That provider isn't available." };
+    }
+    if (!targets.length) return { ok: false, reason: "No bookable provider is configured." };
+
+    const overrides = await loadOverrideMap(
+      sb,
+      targets.map((p) => p.id),
+      data.serviceId,
+    );
+
+    // Compute each provider's slots with THEIR effective duration/buffer.
+    const perProvider = await Promise.all(
+      targets.map(async (p) => {
+        const eff = effective(base, overrides.get(p.id));
+        const { hours, blocks, busy } = await loadEngineInputs(
+          sb,
+          p.id,
+          eff.bufferMin,
+          data.fromIso,
+          data.toIso,
+        );
+        const slots = availableSlots({
+          settings: base.settings,
+          hours,
+          blocks,
+          busy,
+          service: { durationMin: eff.durationMin, bufferMin: eff.bufferMin },
+          rangeStart: new Date(data.fromIso),
+          rangeEnd: new Date(data.toIso),
+          now: new Date(),
+        });
+        return { providerId: p.id, slots };
+      }),
+    );
+
+    // Merge. For "first available" (multiple providers), dedupe by start time —
+    // keep the first provider in provider order (the spa's listed seniority) so
+    // assignment is deterministic; a single-provider/specific query is 1:1.
+    const byStart = new Map<number, PublicSlot>();
+    for (const { providerId, slots } of perProvider) {
+      for (const s of slots) {
+        if (!byStart.has(s.startMs)) {
+          byStart.set(s.startMs, {
+            startIso: s.startIso,
+            endIso: s.endIso,
+            startMs: s.startMs,
+            providerId,
+          });
+        }
+      }
+    }
+    const merged = Array.from(byStart.values()).sort((a, b) => a.startMs - b.startMs);
+    return { ok: true, slots: merged, timezone: base.settings.timezone };
   });
 
 // ── holdSlot ─────────────────────────────────────────────────────────────────
@@ -296,6 +449,8 @@ export const listAvailableSlots = createServerFn({ method: "GET" })
 const holdInput = z.object({
   tenantId: z.string().uuid(),
   serviceId: z.string().uuid(),
+  /** The provider that owns the chosen slot (carried from listAvailableSlots). */
+  providerId: z.string().uuid(),
   startIso: z.string().min(10),
 });
 
@@ -307,40 +462,50 @@ export const holdSlot = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => holdInput.parse(input))
   .handler(async ({ data }): Promise<HoldResult> => {
     const sb = admin();
-    const loaded = await loadContext(sb, data.tenantId, data.serviceId);
+    const loaded = await loadBaseContext(sb, data.tenantId, data.serviceId);
     if (!loaded.ok) return { ok: false, reason: loaded.reason, code: "invalid" };
-    const { ctx } = loaded;
+    const { base } = loaded;
+
+    // Validate the target provider belongs to the tenant, is active, and is
+    // account-linked (native bookings stamp emma_appointments.user_id).
+    const provider = (await loadActiveProviders(sb, data.tenantId)).find(
+      (p) => p.id === data.providerId,
+    );
+    if (!provider) return { ok: false, reason: "That provider isn't available.", code: "invalid" };
+    if (!provider.userId) {
+      return { ok: false, reason: "That provider isn't set up to take bookings.", code: "invalid" };
+    }
+    const eff = effective(base, (await loadOverrideMap(sb, [provider.id], data.serviceId)).get(provider.id));
 
     const startMs = new Date(data.startIso).getTime();
     if (Number.isNaN(startMs)) return { ok: false, reason: "Invalid time.", code: "invalid" };
 
-    // 1. Release expired holds for this provider so a stale row can't block a
-    //    slot the engine considers free. Targeted, race-safe: only flips rows
-    //    that are STILL held and already past their expiry.
+    // 1. Release this provider's expired holds so a stale row can't block a slot
+    //    the engine considers free.
     await sb
       .from("emma_appointments")
       .update({ status: "cancelled", updated_at: new Date().toISOString() })
-      .eq("provider_id", ctx.providerId)
+      .eq("provider_id", provider.id)
       .eq("status", "held")
       .lt("slot_held_until", new Date().toISOString());
 
-    // 2. Re-validate the requested start against the LIVE engine — never trust
-    //    the client. Generate slots for the day containing startIso and require
-    //    an exact match (guards off-grid / out-of-hours / too-soon requests).
-    const dayStart = new Date(startMs - 12 * 60 * 60_000); // wide enough to catch the day in any tz
+    // 2. Re-validate the requested start against the LIVE engine for THIS provider
+    //    — never trust the client.
+    const dayStart = new Date(startMs - 12 * 60 * 60_000);
     const dayEnd = new Date(startMs + 12 * 60 * 60_000);
     const { hours, blocks, busy } = await loadEngineInputs(
       sb,
-      ctx,
+      provider.id,
+      eff.bufferMin,
       dayStart.toISOString(),
       dayEnd.toISOString(),
     );
     const slots = availableSlots({
-      settings: ctx.settings,
+      settings: base.settings,
       hours,
       blocks,
       busy,
-      service: { durationMin: ctx.service.durationMin, bufferMin: ctx.service.bufferMin },
+      service: { durationMin: eff.durationMin, bufferMin: eff.bufferMin },
       rangeStart: dayStart,
       rangeEnd: dayEnd,
       now: new Date(),
@@ -349,18 +514,17 @@ export const holdSlot = createServerFn({ method: "POST" })
       return { ok: false, reason: "That time is no longer available.", code: "taken" };
     }
 
-    // 3. Insert the hold. The EXCLUDE constraint is the real concurrency arbiter:
-    //    a simultaneous hold for an overlapping slot makes exactly one of the two
-    //    inserts fail with 23P01.
+    // 3. Insert the hold. The EXCLUDE constraint (keyed per provider) is the real
+    //    concurrency arbiter — a simultaneous overlapping hold for this provider
+    //    makes exactly one insert fail with 23P01.
     const token = crypto.randomUUID();
-    const nowIso = new Date().toISOString();
-    const heldUntilIso = new Date(Date.now() + ctx.holdMinutes * 60_000).toISOString();
+    const heldUntilIso = new Date(Date.now() + base.holdMinutes * 60_000).toISOString();
 
     const { error: insErr } = await sb.from("emma_appointments").insert({
-      user_id: ctx.ownerUserId,
-      provider_id: ctx.providerId,
+      user_id: provider.userId,
+      provider_id: provider.id,
       scheduled_at: data.startIso,
-      duration_min: ctx.service.durationMin,
+      duration_min: eff.durationMin,
       status: "held",
       source: "native-online",
       slot_held_until: heldUntilIso,
@@ -368,7 +532,6 @@ export const holdSlot = createServerFn({ method: "POST" })
     });
 
     if (insErr) {
-      // 23P01 = exclusion_violation = the slot was taken in the race.
       if (insErr.code === "23P01") {
         return { ok: false, reason: "That time was just taken.", code: "taken" };
       }

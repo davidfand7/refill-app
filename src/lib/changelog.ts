@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.53.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.53.0 &mdash; Patients can pick their provider &mdash; or let us find the soonest. </strong>Your public booking page (<code>/s/&lt;slug&gt;</code>) is now multi-provider. After choosing a service, a patient picks <strong>who</strong> they want to see &mdash; each provider shown with <strong>their</strong> price &mdash; or taps <strong>First available</strong> to grab the soonest opening across your whole team (we quietly assign whoever&rsquo;s free, and reveal &ldquo;with [name]&rdquo; before they confirm). Per-provider pricing now shows up for patients (services that vary read &ldquo;from $X&rdquo;), and the slot times honor each provider&rsquo;s own duration. Single-provider spas see the same simple flow as before. <strong>Touched</strong>: <code>src/server/scheduling.functions.ts</code> (multi-provider context with per-provider prices; <code>listAvailableSlots</code> unions across the team and tags each slot with its provider; <code>holdSlot</code> holds the chosen provider with their effective duration), <code>src/routes/s.$slug.tsx</code> (stepped Service → Provider → Time → Contact flow with a First-available option), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.52.0",
     date: "June 2026",
     items: [

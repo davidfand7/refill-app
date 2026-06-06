@@ -12,14 +12,17 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   AlertTriangle,
   CalendarCheck,
   CheckCircle2,
   ChevronLeft,
+  ChevronRight,
   Clock,
   Loader2,
+  Sparkles,
+  User,
 } from "lucide-react";
 import {
   getPublicBookingContextFn,
@@ -27,8 +30,9 @@ import {
   holdSlot,
   confirmBooking,
   type PublicBookingContext,
+  type PublicServiceOption,
+  type PublicSlot,
 } from "@/server/scheduling.functions";
-import type { Slot } from "@/lib/scheduling-slots";
 
 export const Route = createFileRoute("/s/$slug")({
   component: PublicBookingPage,
@@ -36,25 +40,39 @@ export const Route = createFileRoute("/s/$slug")({
 
 type Ctx = Extract<PublicBookingContext, { ok: true }>;
 
-type Step =
-  | { k: "loading" }
-  | { k: "error"; msg: string }
-  | { k: "pick" }
-  | { k: "contact"; token: string; slot: Slot; serviceName: string }
-  | { k: "confirmed"; startIso: string };
+type Screen = "loading" | "error" | "service" | "provider" | "time" | "contact" | "confirmed";
 
 const RANGE_DAYS = 30;
+const FIRST = "first" as const; // "first available" sentinel for provider choice
 
 function PublicBookingPage() {
   const { slug } = Route.useParams();
-  const [step, setStep] = useState<Step>({ k: "loading" });
+  const [screen, setScreen] = useState<Screen>("loading");
+  const [errMsg, setErrMsg] = useState("");
   const [ctx, setCtx] = useState<Ctx | null>(null);
   const [serviceId, setServiceId] = useState<string | null>(null);
-  const [slots, setSlots] = useState<Slot[]>([]);
+  const [providerChoice, setProviderChoice] = useState<string | null>(null); // FIRST | providerId
+  const [slots, setSlots] = useState<PublicSlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
+  const [held, setHeld] = useState<{ token: string; slot: PublicSlot } | null>(null);
+  const [confirmed, setConfirmed] = useState<{ startIso: string; providerName: string | null } | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", email: "", phone: "" });
   const [submitting, setSubmitting] = useState(false);
+
+  const tz = ctx?.timezone ?? "America/Los_Angeles";
+  const selService = useMemo(
+    () => ctx?.services.find((s) => s.id === serviceId) ?? null,
+    [ctx, serviceId],
+  );
+  const providers = selService?.providers ?? [];
+  const multiProvider = providers.length > 1;
+
+  /** Resolve a provider name from an id (for "with X" copy). */
+  const nameOf = useCallback(
+    (pid: string | null) => providers.find((p) => p.id === pid)?.name ?? null,
+    [providers],
+  );
 
   // Load the practice context.
   useEffect(() => {
@@ -64,69 +82,82 @@ function PublicBookingPage() {
         const r = await getPublicBookingContextFn({ data: { slug } });
         if (cancelled) return;
         if (!r.ok) {
-          setStep({ k: "error", msg: r.reason });
+          setErrMsg(r.reason);
+          setScreen("error");
           return;
         }
         setCtx(r);
         if (r.services.length === 0) {
-          setStep({ k: "error", msg: "This practice has no services available to book online yet." });
+          setErrMsg("This practice has no services available to book online yet.");
+          setScreen("error");
           return;
         }
-        if (r.services.length === 1) setServiceId(r.services[0].id);
-        setStep({ k: "pick" });
+        if (r.services.length === 1) {
+          setServiceId(r.services[0].id);
+          startService(r.services[0]);
+        } else {
+          setScreen("service");
+        }
       } catch (e) {
         if (!cancelled) {
-          setStep({ k: "error", msg: e instanceof Error ? e.message : "Couldn't load this page." });
+          setErrMsg(e instanceof Error ? e.message : "Couldn't load this page.");
+          setScreen("error");
         }
       }
     })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
-  // Load slots whenever a service is selected.
-  useEffect(() => {
-    if (!ctx || !serviceId) return;
-    let cancelled = false;
+  /** Advance from a chosen service: skip the provider step for solo spas. */
+  function startService(s: PublicServiceOption) {
+    setServiceId(s.id);
+    setBanner(null);
+    if (s.providers.length <= 1) {
+      setProviderChoice(s.providers[0]?.id ?? FIRST);
+      setScreen("time");
+    } else {
+      setProviderChoice(null);
+      setScreen("provider");
+    }
+  }
+
+  const loadSlots = useCallback(async () => {
+    if (!ctx || !serviceId || !providerChoice) return;
     setSlotsLoading(true);
     setBanner(null);
-    void (async () => {
-      try {
-        const now = new Date();
-        const to = new Date(now.getTime() + RANGE_DAYS * 24 * 60 * 60_000);
-        const r = await listAvailableSlots({
-          data: {
-            tenantId: ctx.tenantId,
-            serviceId,
-            fromIso: now.toISOString(),
-            toIso: to.toISOString(),
-          },
-        });
-        if (cancelled) return;
-        setSlots(r.ok ? r.slots : []);
-        if (!r.ok) setBanner(r.reason);
-      } catch (e) {
-        if (!cancelled) setBanner(e instanceof Error ? e.message : "Couldn't load times.");
-      } finally {
-        if (!cancelled) setSlotsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [ctx, serviceId]);
+    try {
+      const now = new Date();
+      const to = new Date(now.getTime() + RANGE_DAYS * 24 * 60 * 60_000);
+      const r = await listAvailableSlots({
+        data: {
+          tenantId: ctx.tenantId,
+          serviceId,
+          providerId: providerChoice === FIRST ? undefined : providerChoice,
+          fromIso: now.toISOString(),
+          toIso: to.toISOString(),
+        },
+      });
+      setSlots(r.ok ? r.slots : []);
+      if (!r.ok) setBanner(r.reason);
+    } catch (e) {
+      setBanner(e instanceof Error ? e.message : "Couldn't load times.");
+    } finally {
+      setSlotsLoading(false);
+    }
+  }, [ctx, serviceId, providerChoice]);
 
-  const tz = ctx?.timezone ?? "America/Los_Angeles";
-  const selectedService = useMemo(
-    () => ctx?.services.find((s) => s.id === serviceId) ?? null,
-    [ctx, serviceId],
-  );
+  // Load slots when we reach the time step (service + provider chosen).
+  useEffect(() => {
+    if (screen === "time") void loadSlots();
+  }, [screen, loadSlots]);
 
   // Group slots by local day for rendering.
   const dayGroups = useMemo(() => {
-    const groups: Array<{ key: string; heading: string; slots: Slot[] }> = [];
-    const byKey = new Map<string, { heading: string; slots: Slot[] }>();
+    const groups: Array<{ key: string; heading: string; slots: PublicSlot[] }> = [];
+    const byKey = new Map<string, { heading: string; slots: PublicSlot[] }>();
     for (const s of slots) {
       const key = dayKey(s.startIso, tz);
       let g = byKey.get(key);
@@ -140,25 +171,25 @@ function PublicBookingPage() {
     return groups;
   }, [slots, tz]);
 
-  async function onPickSlot(slot: Slot) {
-    if (!ctx || !serviceId || !selectedService) return;
+  async function onPickSlot(slot: PublicSlot) {
+    if (!ctx || !serviceId) return;
     setBanner(null);
     try {
-      const r = await holdSlot({ data: { tenantId: ctx.tenantId, serviceId, startIso: slot.startIso } });
+      const r = await holdSlot({
+        data: {
+          tenantId: ctx.tenantId,
+          serviceId,
+          providerId: slot.providerId,
+          startIso: slot.startIso,
+        },
+      });
       if (!r.ok) {
-        // Slot taken / no longer available → refresh and tell them gently.
         setBanner(r.reason);
-        // Re-trigger slot load by nudging the effect.
-        setServiceId((id) => id); // no-op; explicit reload below
-        const now = new Date();
-        const to = new Date(now.getTime() + RANGE_DAYS * 24 * 60 * 60_000);
-        const fresh = await listAvailableSlots({
-          data: { tenantId: ctx.tenantId, serviceId, fromIso: now.toISOString(), toIso: to.toISOString() },
-        });
-        setSlots(fresh.ok ? fresh.slots : []);
+        await loadSlots(); // refresh — someone may have just taken it
         return;
       }
-      setStep({ k: "contact", token: r.token, slot, serviceName: selectedService.name });
+      setHeld({ token: r.token, slot });
+      setScreen("contact");
     } catch (e) {
       setBanner(e instanceof Error ? e.message : "Couldn't hold that time.");
     }
@@ -166,25 +197,27 @@ function PublicBookingPage() {
 
   async function onConfirm(e: FormEvent) {
     e.preventDefault();
-    if (step.k !== "contact" || submitting) return;
+    if (!held || submitting) return;
     if (!form.name.trim() || !form.email.trim()) return;
     setSubmitting(true);
     try {
       const r = await confirmBooking({
         data: {
-          token: step.token,
+          token: held.token,
           name: form.name.trim(),
           email: form.email.trim(),
           phone: form.phone.trim() || undefined,
         },
       });
       if (!r.ok) {
-        // Hold likely expired — bounce back to slot pick.
         setBanner(r.reason);
-        setStep({ k: "pick" });
+        setScreen("time");
+        setHeld(null);
+        await loadSlots();
         return;
       }
-      setStep({ k: "confirmed", startIso: r.startIso });
+      setConfirmed({ startIso: r.startIso, providerName: nameOf(held.slot.providerId) });
+      setScreen("confirmed");
     } catch (err) {
       setBanner(err instanceof Error ? err.message : "Couldn't confirm the booking.");
     } finally {
@@ -192,115 +225,188 @@ function PublicBookingPage() {
     }
   }
 
+  const heldProviderName = held ? nameOf(held.slot.providerId) : null;
+
   return (
     <main className="min-h-screen bg-[#fafaf7] text-stone-900 flex items-start justify-center px-5 py-12 sm:py-16">
       <div className="w-full max-w-md">
-        {step.k === "loading" && (
+        {screen === "loading" && (
           <div className="flex items-center gap-3 text-stone-500">
             <Loader2 className="w-4 h-4 animate-spin" />
             <span className="text-sm">Loading…</span>
           </div>
         )}
 
-        {step.k === "error" && (
-          <ErrorCard title="Booking unavailable" body={step.msg} />
-        )}
+        {screen === "error" && <ErrorCard title="Booking unavailable" body={errMsg} />}
 
-        {step.k === "pick" && ctx && (
+        {/* ── Step 1: pick a service ── */}
+        {screen === "service" && ctx && (
           <div className="bg-white border border-stone-200 rounded-xl p-7 shadow-sm">
-            <div className="flex items-center gap-2 text-stone-400 text-xs uppercase tracking-wider font-medium mb-3">
+            <div className="flex items-center gap-2 text-stone-400 text-xs uppercase tracking-wider font-medium mb-4">
               <CalendarCheck className="w-3.5 h-3.5" />
               Book with {ctx.spaName}
             </div>
-
-            {/* Service picker (hidden when only one service). */}
-            {ctx.services.length > 1 && (
-              <label className="block mb-5">
-                <span className="block text-sm font-medium text-stone-700 mb-1.5">Service</span>
-                <select
-                  value={serviceId ?? ""}
-                  onChange={(e) => setServiceId(e.target.value || null)}
-                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2.5 text-[15px] text-stone-900 focus:border-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-200"
+            <h1 className="text-xl font-semibold text-stone-900 leading-tight mb-4">
+              What would you like to book?
+            </h1>
+            <div className="space-y-2">
+              {ctx.services.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => startService(s)}
+                  className="w-full text-left rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 hover:border-stone-900 hover:bg-white transition-colors flex items-center justify-between gap-3"
                 >
-                  <option value="">Choose a service…</option>
-                  {ctx.services.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} · {s.durationMin} min
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
+                  <span className="min-w-0">
+                    <span className="block text-[15px] font-medium text-stone-900 truncate">{s.name}</span>
+                    <span className="block text-[13px] text-stone-500">
+                      {s.durationMin} min · {priceLabel(s)}
+                    </span>
+                  </span>
+                  <ChevronRight className="w-4 h-4 text-stone-400 shrink-0" />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
-            {selectedService && (
-              <h1 className="text-xl font-semibold text-stone-900 leading-tight mb-1">
-                {selectedService.name}
-                <span className="text-stone-400 font-normal text-base"> · {selectedService.durationMin} min</span>
-              </h1>
-            )}
-            {!serviceId && ctx.services.length > 1 && (
-              <p className="text-stone-500 text-sm">Pick a service to see available times.</p>
-            )}
+        {/* ── Step 2: pick a provider (only when >1) ── */}
+        {screen === "provider" && ctx && selService && (
+          <div className="bg-white border border-stone-200 rounded-xl p-7 shadow-sm">
+            <BackLink
+              show={ctx.services.length > 1}
+              label="Back to services"
+              onClick={() => setScreen("service")}
+            />
+            <h1 className="text-xl font-semibold text-stone-900 leading-tight mb-1">
+              {selService.name}
+            </h1>
+            <p className="text-stone-500 text-sm mb-4">Who would you like to see?</p>
+
+            <div className="space-y-2">
+              {/* First available — the soonest opening across the team. */}
+              <button
+                type="button"
+                onClick={() => {
+                  setProviderChoice(FIRST);
+                  setScreen("time");
+                }}
+                className="w-full text-left rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 hover:border-emerald-500 transition-colors flex items-center justify-between gap-3"
+              >
+                <span className="flex items-center gap-2.5 min-w-0">
+                  <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="min-w-0">
+                    <span className="block text-[15px] font-medium text-stone-900">First available</span>
+                    <span className="block text-[13px] text-emerald-700">
+                      Soonest opening with any of our team
+                    </span>
+                  </span>
+                </span>
+                <span className="text-[13px] text-stone-500 shrink-0">from ${selService.fromPrice}</span>
+              </button>
+
+              {providers.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => {
+                    setProviderChoice(p.id);
+                    setScreen("time");
+                  }}
+                  className="w-full text-left rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 hover:border-stone-900 hover:bg-white transition-colors flex items-center justify-between gap-3"
+                >
+                  <span className="flex items-center gap-2.5 min-w-0">
+                    <span className="w-7 h-7 rounded-full bg-stone-200 flex items-center justify-center shrink-0">
+                      <User className="w-3.5 h-3.5 text-stone-500" />
+                    </span>
+                    <span className="block text-[15px] font-medium text-stone-900 truncate">{p.name}</span>
+                  </span>
+                  <span className="text-[13px] text-stone-500 shrink-0">
+                    ${p.price}
+                    {p.durationMin !== selService.durationMin && ` · ${p.durationMin} min`}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Step 3: pick a time ── */}
+        {screen === "time" && ctx && selService && (
+          <div className="bg-white border border-stone-200 rounded-xl p-7 shadow-sm">
+            <BackLink
+              show={multiProvider || ctx.services.length > 1}
+              label={multiProvider ? "Back to providers" : "Back to services"}
+              onClick={() => setScreen(multiProvider ? "provider" : "service")}
+            />
+            <h1 className="text-xl font-semibold text-stone-900 leading-tight mb-0.5">
+              {selService.name}
+            </h1>
+            <p className="text-stone-500 text-sm mb-4">
+              {providerChoice === FIRST
+                ? "First available"
+                : `with ${nameOf(providerChoice) ?? "your provider"}`}{" "}
+              · {selService.durationMin} min
+            </p>
 
             {banner && (
-              <div className="mt-3 text-[13px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <div className="mb-3 text-[13px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                 {banner}
               </div>
             )}
 
-            {serviceId && (
-              <div className="mt-5">
-                {slotsLoading ? (
-                  <div className="flex items-center gap-2 text-stone-500 text-sm py-4">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Finding open times…
+            {slotsLoading ? (
+              <div className="flex items-center gap-2 text-stone-500 text-sm py-4">
+                <Loader2 className="w-4 h-4 animate-spin" /> Finding open times…
+              </div>
+            ) : dayGroups.length === 0 ? (
+              <p className="text-stone-500 text-sm py-4">
+                No open times in the next {RANGE_DAYS} days. Please check back soon.
+              </p>
+            ) : (
+              <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1">
+                {dayGroups.map((g) => (
+                  <div key={g.key}>
+                    <div className="text-[13px] font-semibold text-stone-700 mb-2">{g.heading}</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {g.slots.map((s) => (
+                        <button
+                          key={`${s.startIso}-${s.providerId}`}
+                          type="button"
+                          onClick={() => onPickSlot(s)}
+                          className="rounded-lg border border-stone-200 bg-stone-50 px-2 py-2 text-[14px] text-stone-800 hover:border-stone-900 hover:bg-white transition-colors tabular-nums"
+                        >
+                          {fmtTime(s.startIso, tz)}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                ) : dayGroups.length === 0 ? (
-                  <p className="text-stone-500 text-sm py-4">
-                    No open times in the next {RANGE_DAYS} days. Please check back soon.
-                  </p>
-                ) : (
-                  <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1">
-                    {dayGroups.map((g) => (
-                      <div key={g.key}>
-                        <div className="text-[13px] font-semibold text-stone-700 mb-2">{g.heading}</div>
-                        <div className="grid grid-cols-3 gap-2">
-                          {g.slots.map((s) => (
-                            <button
-                              key={s.startIso}
-                              type="button"
-                              onClick={() => onPickSlot(s)}
-                              className="rounded-lg border border-stone-200 bg-stone-50 px-2 py-2 text-[14px] text-stone-800 hover:border-stone-900 hover:bg-white transition-colors tabular-nums"
-                            >
-                              {fmtTime(s.startIso, tz)}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                ))}
               </div>
             )}
           </div>
         )}
 
-        {step.k === "contact" && ctx && (
+        {/* ── Step 4: contact ── */}
+        {screen === "contact" && ctx && held && (
           <form onSubmit={onConfirm} className="bg-white border border-stone-200 rounded-xl p-7 shadow-sm">
-            <button
-              type="button"
-              onClick={() => setStep({ k: "pick" })}
-              className="inline-flex items-center gap-1 text-stone-500 hover:text-stone-800 text-[13px] mb-3"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" /> Choose a different time
-            </button>
+            <BackLink
+              show
+              label="Choose a different time"
+              onClick={() => {
+                setHeld(null);
+                setScreen("time");
+              }}
+            />
 
             <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 mb-5">
               <div className="flex items-center gap-2 text-emerald-900 text-[13px] font-medium">
                 <Clock className="w-3.5 h-3.5" />
-                {step.serviceName}
+                {selService?.name}
+                {heldProviderName && <span className="text-emerald-700 font-normal">· with {heldProviderName}</span>}
               </div>
               <div className="text-emerald-800 text-[15px] font-semibold mt-0.5">
-                {fmtDayHeading(step.slot.startIso, tz)} at {fmtTime(step.slot.startIso, tz)}
+                {fmtDayHeading(held.slot.startIso, tz)} at {fmtTime(held.slot.startIso, tz)}
               </div>
               <div className="text-emerald-700 text-[12px] mt-0.5">
                 Held for you for a few minutes — finish below to confirm.
@@ -358,20 +464,42 @@ function PublicBookingPage() {
           </form>
         )}
 
-        {step.k === "confirmed" && ctx && (
+        {/* ── Done ── */}
+        {screen === "confirmed" && ctx && confirmed && (
           <div className="bg-white border border-stone-200 rounded-xl p-7 shadow-sm">
             <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center mb-4">
               <CheckCircle2 className="w-5 h-5 text-emerald-700" />
             </div>
             <h1 className="text-2xl font-semibold text-stone-900 leading-tight">You're booked!</h1>
             <p className="mt-3 text-stone-600 leading-relaxed text-[15px]">
-              {fmtDayHeading(step.startIso, tz)} at {fmtTime(step.startIso, tz)} with {ctx.spaName}.
+              {fmtDayHeading(confirmed.startIso, tz)} at {fmtTime(confirmed.startIso, tz)}
+              {confirmed.providerName ? ` with ${confirmed.providerName}` : ` with ${ctx.spaName}`}.
               A confirmation is on its way to your email.
             </p>
           </div>
         )}
       </div>
     </main>
+  );
+}
+
+/** "$350" or "from $320" when providers price the service differently. */
+function priceLabel(s: PublicServiceOption): string {
+  const prices = s.providers.map((p) => p.price);
+  const varies = prices.length > 1 && new Set(prices).size > 1;
+  return varies ? `from $${s.fromPrice}` : `$${s.fromPrice}`;
+}
+
+function BackLink({ show, label, onClick }: { show: boolean; label: string; onClick: () => void }) {
+  if (!show) return null;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1 text-stone-500 hover:text-stone-800 text-[13px] mb-3"
+    >
+      <ChevronLeft className="w-3.5 h-3.5" /> {label}
+    </button>
   );
 }
 
