@@ -541,6 +541,84 @@ export const ownerCreateBlockFn = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// ── ownerUpdateAppointmentFn ─────────────────────────────────────────────────
+// Reschedule / reassign / rename an existing appointment. Partial update; the
+// per-provider EXCLUDE constraint arbitrates conflicts (23P01 → friendly error).
+
+const updateApptInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+  appointmentId: z.string().uuid(),
+  startIso: z.string().min(10).optional(),
+  providerId: z.string().uuid().optional(),
+  durationMin: z.number().int().positive().max(1440).optional(),
+  patientName: z.string().min(1).max(120).optional(),
+  patientEmail: z.string().email().max(200).optional(),
+  patientPhone: z.string().max(40).optional(),
+});
+
+export const ownerUpdateAppointmentFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => updateApptInput.parse(raw))
+  .handler(async ({ data }): Promise<OwnerCreateResult> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+
+    const { data: provs } = await sb
+      .from("scheduling_providers")
+      .select("id, is_active")
+      .eq("tenant_id", tenantId);
+    const tenantProviderIds = new Set((provs ?? []).map((p) => p.id));
+
+    // Ownership: the appointment must belong to one of this tenant's providers.
+    const { data: appt } = await sb
+      .from("emma_appointments")
+      .select("id, provider_id")
+      .eq("id", data.appointmentId)
+      .maybeSingle();
+    if (!appt || !appt.provider_id || !tenantProviderIds.has(appt.provider_id)) {
+      return { ok: false, reason: "That appointment isn't part of this spa.", code: "invalid" };
+    }
+
+    if (data.providerId && !tenantProviderIds.has(data.providerId)) {
+      return { ok: false, reason: "That provider isn't available.", code: "invalid" };
+    }
+
+    const patch: {
+      updated_at: string;
+      scheduled_at?: string;
+      provider_id?: string;
+      duration_min?: number;
+      booking_name?: string;
+      booking_email?: string | null;
+      booking_phone?: string | null;
+    } = { updated_at: new Date().toISOString() };
+    if (data.startIso !== undefined) patch.scheduled_at = data.startIso;
+    if (data.providerId !== undefined) patch.provider_id = data.providerId;
+    if (data.durationMin !== undefined) patch.duration_min = data.durationMin;
+    if (data.patientName !== undefined) patch.booking_name = data.patientName;
+    if (data.patientEmail !== undefined) patch.booking_email = data.patientEmail || null;
+    if (data.patientPhone !== undefined) patch.booking_phone = data.patientPhone || null;
+
+    const { data: updated, error } = await sb
+      .from("emma_appointments")
+      .update(patch)
+      .eq("id", data.appointmentId)
+      .select("id")
+      .single();
+
+    if (error) {
+      if (error.code === "23P01") {
+        return { ok: false, reason: "That time overlaps another appointment.", code: "conflict" };
+      }
+      return { ok: false, reason: `Couldn't update: ${error.message}`, code: "invalid" };
+    }
+    return { ok: true, id: updated.id };
+  });
+
 // ── ownerCancelAppointmentFn ─────────────────────────────────────────────────
 
 const cancelInput = z.object({

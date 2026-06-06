@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.62.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.62.0 &mdash; Double-click an appointment to view &amp; edit it. </strong>On the calendar, <strong>double-click any booking</strong> to open it &mdash; change the <strong>day, time, provider, duration, or patient name</strong>, or cancel it, all in one place. Moving it to a time that overlaps another appointment is blocked with a clear message (the database keeps it honest). Until now you could only add or cancel; now you can reschedule and reassign too. (Drag-to-move on the grid is coming next.) <strong>Touched</strong>: <code>src/server/scheduling-owner.functions.ts</code> (<code>ownerUpdateAppointmentFn</code>, EXCLUDE-guarded), <code>src/routes/app.refill.schedule.tsx</code> (double-click → Edit dialog), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.61.0",
     date: "June 2026",
     items: [

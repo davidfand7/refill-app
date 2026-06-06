@@ -20,6 +20,7 @@ import {
   getDayScheduleFn,
   getRangeScheduleFn,
   ownerCreateAppointmentFn,
+  ownerUpdateAppointmentFn,
   ownerCreateBlockFn,
   ownerCancelAppointmentFn,
   type DaySchedule,
@@ -89,6 +90,7 @@ function SchedulePage() {
   const [weekProviderId, setWeekProviderId] = useState<string>("all");
   const [blockOpen, setBlockOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<DayAppointment | null>(null);
+  const [editTarget, setEditTarget] = useState<DayAppointment | null>(null);
   const [zoomIdx, setZoomIdx] = useState<number>(() => {
     if (typeof window === "undefined") return DEFAULT_ZOOM_IDX;
     const v = parseInt(window.localStorage.getItem(ZOOM_KEY) ?? "", 10);
@@ -232,6 +234,7 @@ function SchedulePage() {
             tz={tz}
             pxPerMin={dayPpm}
             onCancel={setCancelTarget}
+            onEdit={setEditTarget}
             onBook={(d, t, pid) => setBookSeed({ date: d, time: t, providerId: pid })}
           />
         ) : view === "week" && range ? (
@@ -243,6 +246,7 @@ function SchedulePage() {
             providerId={weekProviderId}
             onProviderChange={setWeekProviderId}
             onCancel={setCancelTarget}
+            onEdit={setEditTarget}
             onBook={(d, t) =>
               setBookSeed({
                 date: d,
@@ -272,6 +276,7 @@ function SchedulePage() {
       <BookDialog open={!!bookSeed} initialDate={bookSeed?.date ?? dateIso} initialTime={bookSeed?.time ?? "09:00"} initialProviderId={bookSeed?.providerId} providers={providers} onClose={() => setBookSeed(null)} services={services} timezone={tz} viewAsUserId={viewAsUserId} onBooked={() => { setBookSeed(null); void load(); }} />
       <BlockDialog open={blockOpen} onClose={() => setBlockOpen(false)} timezone={tz} dateIso={dateIso} viewAsUserId={viewAsUserId} onBlocked={() => { setBlockOpen(false); void load(); }} />
       <CancelDialog appt={cancelTarget} tz={tz} viewAsUserId={viewAsUserId} onClose={() => setCancelTarget(null)} onCancelled={() => { setCancelTarget(null); void load(); }} />
+      <EditDialog appt={editTarget} tz={tz} providers={providers} viewAsUserId={viewAsUserId} onClose={() => setEditTarget(null)} onSaved={() => { setEditTarget(null); void load(); }} onCancelAppt={(a) => { setEditTarget(null); setCancelTarget(a); }} />
     </div>
   );
 }
@@ -283,12 +288,14 @@ function DayGrid({
   tz,
   pxPerMin,
   onCancel,
+  onEdit,
   onBook,
 }: {
   day: DaySchedule;
   tz: string;
   pxPerMin: number;
   onCancel: (a: DayAppointment) => void;
+  onEdit: (a: DayAppointment) => void;
   onBook: (dateIso: string, time: string, providerId?: string) => void;
 }) {
   // Shared time window across every provider's band + all appts + all blocks.
@@ -351,7 +358,7 @@ function DayGrid({
             <BlockBand key={b.id} left="left-14" top={top(b.startIso)} height={Math.max(14, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} />
           ))}
           {day.appointments.map((a) => (
-            <ApptCard key={a.id} a={a} tz={tz} left="left-14" top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} />
+            <ApptCard key={a.id} a={a} tz={tz} left="left-14" top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit}  />
           ))}
           {day.appointments.length === 0 && day.blocks.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center text-[13px] text-ink-faint pointer-events-none">No bookings this day.</div>
@@ -413,7 +420,7 @@ function DayGrid({
                   <BlockBand key={b.id} left="left-0" top={top(b.startIso)} height={Math.max(10, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} compact />
                 ))}
                 {colAppts.map((a) => (
-                  <ApptCard key={a.id} a={a} tz={tz} left="left-0" top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} compact={compact} />
+                  <ApptCard key={a.id} a={a} tz={tz} left="left-0" top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit}  compact={compact} />
                 ))}
               </div>
             );
@@ -434,6 +441,7 @@ function WeekGrid({
   providerId,
   onProviderChange,
   onCancel,
+  onEdit,
   onBook,
   onPickDay,
 }: {
@@ -444,6 +452,7 @@ function WeekGrid({
   providerId: string; // "all" or a providerId
   onProviderChange: (id: string) => void;
   onCancel: (a: DayAppointment) => void;
+  onEdit: (a: DayAppointment) => void;
   onBook: (dateIso: string, time: string) => void;
   onPickDay: (iso: string) => void;
 }) {
@@ -591,7 +600,7 @@ function WeekGrid({
                   <BlockBand key={b.id} left="left-0" top={top(b.startIso)} height={Math.max(10, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} compact />
                 ))}
                 {dayAppts.map((a) => (
-                  <ApptCard key={a.id} a={a} tz={tz} left="left-0" top={top(a.startIso)} height={Math.max(MIN_WEEK_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} compact />
+                  <ApptCard key={a.id} a={a} tz={tz} left="left-0" top={top(a.startIso)} height={Math.max(MIN_WEEK_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit}  compact />
                 ))}
               </div>
             );
@@ -674,6 +683,7 @@ function ApptCard({
   top,
   height,
   onCancel,
+  onEdit,
   compact,
 }: {
   a: DayAppointment;
@@ -682,18 +692,24 @@ function ApptCard({
   top: number;
   height: number;
   onCancel: (a: DayAppointment) => void;
+  onEdit: (a: DayAppointment) => void;
   compact?: boolean;
 }) {
   const held = a.status === "held";
   return (
     <div
       className={cn(
-        "absolute right-0 rounded-md border px-2 py-0.5 shadow-sm overflow-hidden group cursor-default",
+        "absolute right-0 rounded-md border px-2 py-0.5 shadow-sm overflow-hidden group cursor-pointer",
         left,
         held ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200",
       )}
       style={{ top, height }}
       onClick={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        if (!held) onEdit(a);
+      }}
+      title={held ? undefined : "Double-click to view / edit"}
     >
       <div className="flex items-start justify-between gap-1">
         <div className="min-w-0">
@@ -955,6 +971,120 @@ function CancelDialog({
           <button type="button" disabled={busy} onClick={confirm} className="inline-flex items-center gap-1.5 rounded-lg bg-bad px-4 py-2 text-sm font-medium text-paper hover:opacity-90 transition disabled:opacity-40">
             {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Cancel appointment
           </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditDialog({
+  appt,
+  tz,
+  providers,
+  viewAsUserId,
+  onClose,
+  onSaved,
+  onCancelAppt,
+}: {
+  appt: DayAppointment | null;
+  tz: string;
+  providers: ProviderLite[];
+  viewAsUserId?: string;
+  onClose: () => void;
+  onSaved: () => void;
+  onCancelAppt: (a: DayAppointment) => void;
+}) {
+  const [providerId, setProviderId] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("09:00");
+  const [duration, setDuration] = useState(30);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (appt) {
+      setProviderId(appt.providerId ?? "");
+      setDate(dayKey(appt.startIso, tz));
+      setTime(minToHHMM(localMinutes(appt.startIso, tz)));
+      setDuration(appt.durationMin);
+      setName(appt.patientName ?? "");
+    }
+  }, [appt, tz]);
+
+  async function save() {
+    if (!appt || busy || !date) return;
+    setBusy(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Not signed in.");
+      const [y, m, d] = date.split("-").map((n) => parseInt(n, 10));
+      const [hh, mm] = time.split(":").map((n) => parseInt(n, 10));
+      const startIso = zonedWallClockToUtc(y, m, d, hh, mm, tz).toISOString();
+      const r = await ownerUpdateAppointmentFn({
+        data: {
+          accessToken: token,
+          viewAsUserId,
+          appointmentId: appt.id,
+          startIso,
+          providerId: providerId || undefined,
+          durationMin: duration,
+          patientName: name.trim() || undefined,
+        },
+      });
+      if (!r.ok) {
+        toast.error(r.reason);
+        return;
+      }
+      toast.success("Appointment updated.");
+      onSaved();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't update.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open={!!appt} onOpenChange={(o) => !busy && !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Edit appointment</DialogTitle>
+          <DialogDescription>
+            {appt?.patientName ? `${appt.patientName} — ` : ""}reschedule, reassign, or update.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          {providers.length > 1 && (
+            <Labeled label="Provider">
+              <select value={providerId} onChange={(e) => setProviderId(e.target.value)} className={inputCls}>
+                {providers.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </Labeled>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <Labeled label="Day"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Labeled>
+            <Labeled label="Time"><TimeSelect value={time} onChange={setTime} className={`${inputCls} tabular-nums`} /></Labeled>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Labeled label="Duration (min)">
+              <input type="number" min={5} max={1440} step={5} value={duration} onChange={(e) => setDuration(Math.max(5, Math.min(1440, Math.round((parseInt(e.target.value || "5", 10)) / 5) * 5)))} className={`${inputCls} tabular-nums`} />
+            </Labeled>
+            <Labeled label="Patient name"><input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} /></Labeled>
+          </div>
+        </div>
+        <DialogFooter className="sm:justify-between">
+          <button type="button" disabled={busy} onClick={() => appt && onCancelAppt(appt)} className="inline-flex items-center gap-1.5 rounded-lg border border-bad/30 bg-white px-4 py-2 text-sm text-bad hover:bg-bad/5 transition disabled:opacity-40">
+            Cancel appointment
+          </button>
+          <div className="flex items-center gap-2">
+            <button type="button" disabled={busy} onClick={onClose} className={btnGhost}>Close</button>
+            <button type="button" disabled={busy || !date} onClick={save} className={btnPrimary}>
+              {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Save
+            </button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
