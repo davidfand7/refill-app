@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.54.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.54.0 &mdash; &ldquo;Best deal&rdquo; booking. </strong>A new smart option on the patient booking page, right under <strong>First available</strong>: <strong>Best deal</strong> finds the soonest opening with your <strong>lowest-priced</strong> provider for that service (ties are pooled together). It only appears when your providers actually price the service differently &mdash; if everyone charges the same, it stays hidden (no pointless choice). So <em>First available</em> optimizes for time, <em>Best deal</em> optimizes for price, and patients pick what matters to them. <strong>Touched</strong>: <code>src/server/scheduling.functions.ts</code> (<code>listAvailableSlots</code> gains a server-resolved <code>cheapestOnly</code> mode that unions across the lowest-price provider(s)), <code>src/routes/s.$slug.tsx</code> (Best deal option, shown only when prices vary), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.53.1",
     date: "June 2026",
     items: [

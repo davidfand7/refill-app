@@ -363,6 +363,8 @@ const listInput = z.object({
   serviceId: z.string().uuid(),
   /** Omit for "first available" (union across the team). */
   providerId: z.string().uuid().optional(),
+  /** "Best deal": union only across the lowest-priced provider(s). */
+  cheapestOnly: z.boolean().optional(),
   fromIso: z.string().min(10),
   toIso: z.string().min(10),
 });
@@ -400,6 +402,14 @@ export const listAvailableSlots = createServerFn({ method: "GET" })
       targets.map((p) => p.id),
       data.serviceId,
     );
+
+    // "Best deal": restrict to the lowest effective-price provider(s) (price is
+    // resolved server-side — never trust a client-supplied price). Ties union.
+    if (data.cheapestOnly && !data.providerId && targets.length > 1) {
+      const priceOf = (id: string) => effective(base, overrides.get(id)).price;
+      const minPrice = Math.min(...targets.map((p) => priceOf(p.id)));
+      targets = targets.filter((p) => priceOf(p.id) === minPrice);
+    }
 
     // Compute each provider's slots with THEIR effective duration/buffer.
     const perProvider = await Promise.all(

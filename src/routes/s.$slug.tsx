@@ -15,6 +15,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   AlertTriangle,
+  BadgeDollarSign,
   CalendarCheck,
   CheckCircle2,
   ChevronLeft,
@@ -44,6 +45,7 @@ type Screen = "loading" | "error" | "service" | "provider" | "time" | "contact" 
 
 const RANGE_DAYS = 30;
 const FIRST = "first" as const; // "first available" sentinel for provider choice
+const BEST = "best" as const; // "best deal" sentinel (cheapest provider with an opening)
 
 function PublicBookingPage() {
   const { slug } = Route.useParams();
@@ -67,6 +69,8 @@ function PublicBookingPage() {
   );
   const providers = selService?.providers ?? [];
   const multiProvider = providers.length > 1;
+  const pricesVary = useMemo(() => new Set(providers.map((p) => p.price)).size > 1, [providers]);
+  const bestPrice = providers.length ? Math.min(...providers.map((p) => p.price)) : 0;
 
   /** Resolve a provider name from an id (for "with X" copy). */
   const nameOf = useCallback(
@@ -135,7 +139,9 @@ function PublicBookingPage() {
         data: {
           tenantId: ctx.tenantId,
           serviceId,
-          providerId: providerChoice === FIRST ? undefined : providerChoice,
+          providerId:
+            providerChoice === FIRST || providerChoice === BEST ? undefined : providerChoice,
+          cheapestOnly: providerChoice === BEST ? true : undefined,
           fromIso: now.toISOString(),
           toIso: to.toISOString(),
         },
@@ -305,6 +311,29 @@ function PublicBookingPage() {
                 <span className="text-[13px] text-stone-500 shrink-0">from ${selService.fromPrice}</span>
               </button>
 
+              {/* Best deal — only when providers actually price this differently. */}
+              {pricesVary && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProviderChoice(BEST);
+                    setScreen("time");
+                  }}
+                  className="w-full text-left rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 hover:border-amber-500 transition-colors flex items-center justify-between gap-3"
+                >
+                  <span className="flex items-center gap-2.5 min-w-0">
+                    <BadgeDollarSign className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block text-[15px] font-medium text-stone-900">Best deal</span>
+                      <span className="block text-[13px] text-amber-700">
+                        Lowest price with an opening
+                      </span>
+                    </span>
+                  </span>
+                  <span className="text-[13px] text-stone-600 font-medium shrink-0">${bestPrice}</span>
+                </button>
+              )}
+
               {providers.map((p) => (
                 <button
                   key={p.id}
@@ -345,7 +374,9 @@ function PublicBookingPage() {
             <p className="text-stone-500 text-sm mb-4">
               {providerChoice === FIRST
                 ? "First available"
-                : `with ${nameOf(providerChoice) ?? "your provider"}`}{" "}
+                : providerChoice === BEST
+                  ? "Best deal"
+                  : `with ${nameOf(providerChoice) ?? "your provider"}`}{" "}
               · {selService.durationMin} min
             </p>
 
