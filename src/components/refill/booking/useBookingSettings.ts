@@ -697,3 +697,6 @@ export function useBookingSettings({
     patchService, commitCategoryRename, onAddService, onDeleteService, onSave,
   };
 }
+
+/** Everything the booking-settings page (and its section components) consume. */
+export type BookingSettings = ReturnType<typeof useBookingSettings>;

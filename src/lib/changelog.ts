@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.68.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.68.1 &mdash; Internal cleanup, part 2 (no visible changes). </strong>Finished the <strong>Online booking</strong> settings refactor: all of its state and save-logic now live in a single <code>useBookingSettings</code> hook, and the big Providers, Rooms, and Bookable-services sections each became their own component file. The screen file dropped from ~2,100 lines to ~250. Purely under-the-hood &mdash; behavior is identical. <strong>Touched</strong>: <code>src/routes/app.refill.settings.booking.tsx</code>, new <code>src/components/refill/booking/{useBookingSettings,ProvidersSection,RoomsSection,BookableServicesSection}.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.68.0",
     date: "June 2026",
     items: [
