@@ -200,6 +200,61 @@ function parseTstzRange(lit: string | null): BlockInterval | null {
   return { startMs: s, endMs: e };
 }
 
+// ── getPublicBookingContext (slug → tenant + bookable services) ──────────────
+
+const slugInput = z.object({ slug: z.string().min(1).max(80) });
+
+export type PublicBookingContext =
+  | {
+      ok: true;
+      tenantId: string;
+      spaName: string;
+      timezone: string;
+      services: Array<{ id: string; name: string; durationMin: number }>;
+    }
+  | { ok: false; reason: string };
+
+export const getPublicBookingContextFn = createServerFn({ method: "GET" })
+  .inputValidator((input: unknown) => slugInput.parse(input))
+  .handler(async ({ data }): Promise<PublicBookingContext> => {
+    const sb = admin();
+    const { data: tenant } = await sb
+      .from("tenants")
+      .select("id, name")
+      .ilike("slug", data.slug) // slug charset is [a-z0-9-]; case-insensitive exact
+      .maybeSingle();
+    if (!tenant) return { ok: false, reason: "We couldn't find that practice." };
+
+    const { data: settings } = await sb
+      .from("scheduling_settings")
+      .select("timezone, online_booking_enabled")
+      .eq("tenant_id", tenant.id)
+      .maybeSingle();
+    if (!settings || !settings.online_booking_enabled) {
+      return { ok: false, reason: "Online booking isn't available for this practice right now." };
+    }
+
+    const { data: services } = await sb
+      .from("services")
+      .select("id, name, duration_min, online_bookable, hidden_at")
+      .eq("tenant_id", tenant.id)
+      .eq("online_bookable", true)
+      .is("hidden_at", null)
+      .order("name");
+
+    return {
+      ok: true,
+      tenantId: tenant.id,
+      spaName: tenant.name,
+      timezone: settings.timezone,
+      services: (services ?? []).map((s) => ({
+        id: s.id,
+        name: s.name,
+        durationMin: s.duration_min,
+      })),
+    };
+  });
+
 // ── listAvailableSlots ───────────────────────────────────────────────────────
 
 const listInput = z.object({

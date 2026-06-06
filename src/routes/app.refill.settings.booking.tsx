@@ -161,8 +161,15 @@ function BookingSettingsPage() {
       <div>
         <PageHeader title="Online booking" description="Set up your native scheduler." />
         <SettingsTabStrip active="booking" />
-        <div className="px-6 lg:px-10 py-10 text-[14px] text-ink-soft">
-          Select a spa to configure online booking.
+        <div className="px-6 lg:px-10 py-10 max-w-md">
+          <div className="rounded-xl border border-dashed border-rule bg-paper/40 px-5 py-6">
+            <p className="text-[14px] font-medium text-ink">Pick a spa to configure</p>
+            <p className="text-[13px] text-ink-soft mt-1.5 leading-relaxed">
+              Online booking is a per-spa setting. Use the <strong>persona switcher</strong> in the
+              upper-right to view as the spa you want to set up, then this page will load its hours
+              and services.
+            </p>
+          </div>
         </div>
       </div>
     );

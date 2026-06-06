@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.48.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.48.1 &mdash; Public self-booking page is live. </strong>Patients can now book themselves at <code>/s/&lt;your-slug&gt;</code> &mdash; pick a service, see real open times computed live from your hours + existing appointments, and confirm with their name + email. The slot they pick is <strong>held</strong> during checkout and the booking is double-book-proof at the database layer (if two people grab the same time, one gets a friendly &lsquo;just taken&rsquo; and fresh times). Times render in your practice timezone. Also: the Online booking settings page now <strong>guides you to the persona switcher</strong> when you land on it outside a spa view (instead of a dead-end &lsquo;select a spa&rsquo;). <strong>Touched</strong>: new <code>src/routes/s.$slug.tsx</code> (public booking flow), <code>src/server/scheduling.functions.ts</code> (getPublicBookingContextFn), <code>src/routes/app.refill.settings.booking.tsx</code> (empty-state guide), <code>src/lib/changelog.ts</code>. Still to come: owner calendar grid, confirmation emails + reminders, and the $5/$5 billing meter.",
+    ],
+  },
+  {
     version: "v1.48.0",
     date: "June 2026",
     items: [
