@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.47.5",
+    date: "June 2026",
+    items: [
+      "<strong>v1.47.5 &mdash; Outreach composer: the fold. One clean flow — shared message → roster → send. </strong>Now that the roster (+ Recipient dialog · upload · per-account tweak · Send all) owns adding and sending, the old inline single-recipient path is removed. <strong>What changed</strong>: SendPanel is now purely the <strong>shared composer</strong> — subject + body (the one message the whole batch sends with) + a live preview + the shared Rejuv figures (Prospects). Gone: the inline Recipient-email / First-name / Spa-name fields, the per-recipient &lsquo;Save draft&rsquo; button, the single &lsquo;Send (dry-run)&rsquo; button, and the single-send result panel — all superseded by the roster. Per-recipient identity lives only in the roster now (one way to add: + Recipient or Upload), and <strong>[first name] / [spa name] stay literal in the preview</strong> with a note that they fill per recipient at send. The preview substitutes only the shared figures. Removed the now-dead single-send/save handlers, state, and the <code>SendResultPanel</code> + <code>SendResult</code> type; trimmed the unused imports. The composer reads top-to-bottom exactly as the model works: shape the shared message, build the recipient list, send all. <strong>Touched</strong>: <code>src/routes/app.rep.outreach.tsx</code> (strip single-send/save plumbing + slim SendPanel to the shared composer), <code>src/lib/changelog.ts</code> (this entry). No dep change, no schema change, no wrangler.jsonc change. <strong>v1.47 outreach composer is now feature-complete on the locked spec</strong> (P0→P4, P5 absorbed, fold done). Remaining work is the parked Zoho-contacts phase (history-dedup, reusable cross-template lists, true upload-before-template).",
+    ],
+  },
+  {
     version: "v1.47.4",
     date: "June 2026",
     items: [

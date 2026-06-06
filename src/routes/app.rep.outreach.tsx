@@ -20,16 +20,8 @@
  */
 
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  BookmarkPlus,
-  Link2,
-  Send,
-  Sparkles,
-  Upload,
-  UserPlus,
-  X,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link2, Send, Upload, UserPlus, X } from "lucide-react";
 import { z } from "zod";
 
 import { TemplateEditor } from "@/components/refill/TemplateEditor";
@@ -60,8 +52,6 @@ import {
 import {
   getMyRecruitStats,
   getOutreachSendMode,
-  sendOutreachEmail,
-  type SendMode,
 } from "@/server/refill-outreach-send";
 import {
   deleteOutreachDraft,
@@ -103,15 +93,6 @@ export const Route = createFileRoute("/app/rep/outreach")({
 // ship promote them to a per-rep tenant config column.
 const REJUV_RECOVERED_DEFAULT = "12,400";
 const REJUV_RECOVERED_WEEKS_DEFAULT = "8";
-
-type SendResult = {
-  mode: SendMode;
-  eventId: string;
-  renderedSubject: string | null;
-  renderedBody: string;
-  replyTo: string;
-  message: string;
-};
 
 // v1.47.0 P3a: live recruit-pitch stats (rep audience only). Rendered as chips
 // so the rep sees exactly what substitutes into [my commission rate] /
@@ -168,38 +149,26 @@ function OutreachPage() {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<OutreachTemplate | null>(null);
-  const [sending, setSending] = useState(false);
-  const [result, setResult] = useState<SendResult | null>(null);
   // v404 Pinch #14b: pre-click send-mode affordance. Null until resolved.
   const [liveEnabled, setLiveEnabled] = useState<boolean | null>(null);
   // v405.3 Pinch #13: past-sends history. Refetched after every send so the
   // panel updates without a page reload.
   const [sends, setSends] = useState<OutreachSendRow[]>([]);
-  // v407 Pinch #16: form initial state hydrates from URL search params for
-  // recipient fields + falls back to Rejuv default constants for the two
-  // effectively-fixed stats. Reps stop retyping the same numbers every send.
+  // v1.47.0 fold: the composer holds only SHARED context now — the Rejuv
+  // figures that apply to the whole batch. Per-recipient email/name/spa live
+  // on the roster (via the + Recipient dialog / upload), not here.
   const [form, setForm] = useState({
-    recipientEmail: prefill.to ?? "",
-    firstName: prefill.firstName ?? "",
-    spaName: prefill.spaName ?? "",
     rejuvRecoveredAmount: REJUV_RECOVERED_DEFAULT,
     rejuvRecoveredWeeks: REJUV_RECOVERED_WEEKS_DEFAULT,
   });
-  // v1.44 per-send overrides. null = use template default; string = rep
-  // tweaked. Reset to null when the template selection changes so each new
-  // template starts from its own default, not the prior template's edits.
+  // v1.44 → v1.47 shared-body overrides. null = use template default; string =
+  // rep edited the SHARED body. Reset on template change so each template
+  // starts from its own default. Untweaked recipients float on this body.
   const [subjectOverride, setSubjectOverride] = useState<string | null>(null);
   const [bodyOverride, setBodyOverride] = useState<string | null>(null);
-  // v1.47.0 P1: persisted drafts for this rep. A saved draft = one row keyed by
-  // (rep, recipient_email, template). draftSavedAt drives the "Saved ✓" chip;
-  // hydratedKeyRef ensures we auto-load a matching draft only ONCE per
-  // (template, email) so "Reset to default" isn't fought by a re-hydrate.
+  // v1.47.0: the rep's saved drafts = the roster (one row per recipient+template).
   const [drafts, setDrafts] = useState<OutreachDraft[]>([]);
-  const [savingDraft, setSavingDraft] = useState(false);
-  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
-  const hydratedKeyRef = useRef<string | null>(null);
-  // v1.47.0 P2 (temp scaffold): batch dry-run of all saved drafts for the
-  // selected template. P3 replaces this strip with the real recipient list.
+  // v1.47.0 P2→P3: batch send of the whole roster.
   const [sendingBatch, setSendingBatch] = useState(false);
   const [batchResult, setBatchResult] = useState<{
     sent: number;
@@ -209,29 +178,8 @@ function OutreachPage() {
   useEffect(() => {
     setSubjectOverride(null);
     setBodyOverride(null);
-    setDraftSavedAt(null);
-    hydratedKeyRef.current = null;
+    setBatchResult(null);
   }, [selected?.id]);
-
-  // v1.47.0 P1: when a saved draft matches the current (template, recipient),
-  // hydrate its overrides so a saved edit reappears after a refresh — the proof
-  // that Save persisted without sending. Once-per-key; only fills when the rep
-  // hasn't started a fresh edit, so it never clobbers in-progress work.
-  useEffect(() => {
-    if (!selected) return;
-    const email = form.recipientEmail.trim().toLowerCase();
-    if (!email) return;
-    const key = `${selected.id}::${email}`;
-    if (hydratedKeyRef.current === key) return;
-    const match = drafts.find(
-      (d) => d.templateId === selected.id && d.recipientEmail === email,
-    );
-    if (!match) return;
-    hydratedKeyRef.current = key;
-    if (match.subjectOverride !== null) setSubjectOverride(match.subjectOverride);
-    if (match.bodyOverride !== null) setBodyOverride(match.bodyOverride);
-    setDraftSavedAt(match.updatedAt);
-  }, [selected?.id, form.recipientEmail, drafts]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -302,7 +250,6 @@ function OutreachPage() {
   // result so a Prospects template never lingers on the Recruits tab.
   useEffect(() => {
     setSelected(null);
-    setResult(null);
     setBatchResult(null);
   }, [audience]);
 
@@ -321,107 +268,7 @@ function OutreachPage() {
     if (match) setSelected(match);
   }, [templates, prefill.icp, prefill.channel, selected]);
 
-  const handleSend = async () => {
-    if (!accessToken || !selected || sending) return;
-    if (!form.recipientEmail || !form.firstName) {
-      setError("Recipient email + first name are required.");
-      return;
-    }
-    setSending(true);
-    setError(null);
-    setResult(null);
-    try {
-      const res = await sendOutreachEmail({
-        data: {
-          accessToken,
-          audience,
-          icp: selected.icp,
-          channel: selected.channel,
-          recipientEmail: form.recipientEmail,
-          recipientFirstName: form.firstName,
-          sourceContext: rep
-            ? `${audience === "rep" ? "recruit" : "rep"}:${rep.displayName}`
-            : undefined,
-          context: {
-            firstName: form.firstName,
-            spaName: form.spaName || undefined,
-            rejuvRecoveredAmount: form.rejuvRecoveredAmount || undefined,
-            rejuvRecoveredWeeks: form.rejuvRecoveredWeeks || undefined,
-          },
-          // v1.44: rep tweaked the template before sending. Only pass the
-          // override fields when actually dirty so the server keeps using the
-          // template defaults otherwise (preserves the analytics path).
-          ...(bodyOverride !== null ? { bodyOverride } : {}),
-          ...(subjectOverride !== null ? { subjectOverride } : {}),
-        },
-      });
-      setResult({
-        mode: res.mode,
-        eventId: res.eventId,
-        renderedSubject: res.renderedSubject,
-        renderedBody: res.renderedBody,
-        replyTo: res.replyTo,
-        message: res.message,
-      });
-      // v405.3 Pinch #13: refresh history immediately so the rep sees the
-      // send they just dispatched at the top of the panel. Fail-soft —
-      // the send already succeeded; a refresh miss is non-fatal.
-      try {
-        const { sends: latest } = await listMyOutreachSends({
-          data: {
-            accessToken,
-            purpose: audience === "rep" ? "rep_recruit" : "spa_outreach",
-          },
-        });
-        setSends(latest);
-      } catch {
-        // Ignore — the next page load will pick it up.
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Send failed.");
-    } finally {
-      setSending(false);
-    }
-  };
-
-  // v1.47.0 P1: persist the current edit as a draft WITHOUT sending. Upserts on
-  // (rep, recipient_email, template) so re-saving the same recipient updates in
-  // place. Marks the (template, email) key as hydrated so the just-saved values
-  // aren't re-loaded over a continued edit.
-  const handleSaveDraft = async () => {
-    if (!accessToken || !selected || savingDraft) return;
-    if (!form.recipientEmail) {
-      setError("Recipient email is required to save a draft.");
-      return;
-    }
-    setSavingDraft(true);
-    setError(null);
-    try {
-      const { draft } = await saveOutreachDraft({
-        data: {
-          accessToken,
-          templateId: selected.id,
-          icp: selected.icp,
-          channel: selected.channel,
-          audience: selected.audience,
-          recipientEmail: form.recipientEmail,
-          recipientFirstName: form.firstName || null,
-          spaName: form.spaName || null,
-          subjectOverride,
-          bodyOverride,
-        },
-      });
-      setDraftSavedAt(draft.updatedAt);
-      hydratedKeyRef.current = `${selected.id}::${draft.recipientEmail}`;
-      setDrafts((prev) => [draft, ...prev.filter((d) => d.id !== draft.id)]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save draft.");
-    } finally {
-      setSavingDraft(false);
-    }
-  };
-
-  // v1.47.0 P2 (temp scaffold): dry-run send every unsent saved draft for the
+  // v1.47.0 P2→P3: dry-run send every unsent saved draft for the
   // selected template. Forces dryRun:true so this gate never fires real email.
   // Shared subject/body = the composer's current overrides (null/untouched =>
   // the dispatch helper falls to the template default per recipient).
@@ -440,8 +287,8 @@ function OutreachPage() {
           audience: selected.audience,
           sharedSubject: subjectOverride ?? undefined,
           sharedBody: bodyOverride ?? undefined,
+          // Shared context only; per-recipient spa name comes from each draft row.
           context: {
-            spaName: form.spaName || undefined,
             rejuvRecoveredAmount: form.rejuvRecoveredAmount || undefined,
             rejuvRecoveredWeeks: form.rejuvRecoveredWeeks || undefined,
           },
@@ -652,21 +499,11 @@ function OutreachPage() {
                   audience={audience}
                   form={form}
                   onChange={(patch) => setForm((prev) => ({ ...prev, ...patch }))}
-                  onClose={() => {
-                    setSelected(null);
-                    setResult(null);
-                  }}
-                  onSend={handleSend}
-                  sending={sending}
-                  result={result}
-                  liveEnabled={liveEnabled}
+                  onClose={() => setSelected(null)}
                   subjectOverride={subjectOverride}
                   bodyOverride={bodyOverride}
                   onSubjectOverrideChange={setSubjectOverride}
                   onBodyOverrideChange={setBodyOverride}
-                  onSaveDraft={handleSaveDraft}
-                  savingDraft={savingDraft}
-                  draftSavedAt={draftSavedAt}
                 />
                 <RecipientRoster
                   audience={audience}
@@ -1480,78 +1317,62 @@ function RecipientRoster({
   );
 }
 
+// v1.47.0 fold: SendPanel is now the SHARED COMPOSER only — the one body the
+// whole batch sends with. Per-recipient identity (email/name/spa) + Save +
+// Send live on the RecipientRoster below; this panel just shapes the message.
 function SendPanel({
   template,
   audience,
   form,
   onChange,
   onClose,
-  onSend,
-  sending,
-  result,
-  liveEnabled,
   subjectOverride,
   bodyOverride,
   onSubjectOverrideChange,
   onBodyOverrideChange,
-  onSaveDraft,
-  savingDraft,
-  draftSavedAt,
 }: {
   template: OutreachTemplate;
   audience: "spa" | "rep";
   form: {
-    recipientEmail: string;
-    firstName: string;
-    spaName: string;
     rejuvRecoveredAmount: string;
     rejuvRecoveredWeeks: string;
   };
   onChange: (patch: Partial<typeof form>) => void;
   onClose: () => void;
-  onSend: () => void;
-  sending: boolean;
-  result: SendResult | null;
-  liveEnabled: boolean | null;
   subjectOverride: string | null;
   bodyOverride: string | null;
   onSubjectOverrideChange: (v: string | null) => void;
   onBodyOverrideChange: (v: string | null) => void;
-  onSaveDraft: () => void;
-  savingDraft: boolean;
-  draftSavedAt: string | null;
 }) {
-  // v1.44 effective subject/body: rep override wins, falls back to template.
-  // The textareas seed from the override OR the template (so users can start
-  // typing without an explicit "edit" toggle). First keystroke promotes the
-  // value to "override" (dirty); Reset wipes back to null = template.
+  // Shared subject/body: rep override wins, falls back to template default.
   const effectiveSubject = subjectOverride ?? template.subject ?? "";
   const effectiveBody = bodyOverride ?? template.body;
   const isDirty = subjectOverride !== null || bodyOverride !== null;
 
-  // Live post-substitution preview mirrors what the recipient will read,
-  // using the same placeholder set the server fn substitutes at send time.
+  // Preview substitutes only the SHARED context (Rejuv figures). [first name]
+  // / [spa name] stay literal here because they vary per recipient — they fill
+  // at send time from each roster row.
   const previewBody = useMemo(
     () =>
       applyOutreachSubstitutions(effectiveBody, {
-        firstName: form.firstName,
-        spaName: form.spaName,
+        firstName: "",
+        spaName: "",
         rejuvRecoveredAmount: form.rejuvRecoveredAmount,
         rejuvRecoveredWeeks: form.rejuvRecoveredWeeks,
       }),
-    [effectiveBody, form.firstName, form.spaName, form.rejuvRecoveredAmount, form.rejuvRecoveredWeeks],
+    [effectiveBody, form.rejuvRecoveredAmount, form.rejuvRecoveredWeeks],
   );
   const previewSubject = useMemo(
     () =>
       effectiveSubject
         ? applyOutreachSubstitutions(effectiveSubject, {
-            firstName: form.firstName,
-            spaName: form.spaName,
+            firstName: "",
+            spaName: "",
             rejuvRecoveredAmount: form.rejuvRecoveredAmount,
             rejuvRecoveredWeeks: form.rejuvRecoveredWeeks,
           })
         : null,
-    [effectiveSubject, form.firstName, form.spaName, form.rejuvRecoveredAmount, form.rejuvRecoveredWeeks],
+    [effectiveSubject, form.rejuvRecoveredAmount, form.rejuvRecoveredWeeks],
   );
 
   return (
@@ -1565,7 +1386,7 @@ function SendPanel({
             className="text-[11px] uppercase tracking-wider font-semibold"
             style={{ color: "#8a9098" }}
           >
-            ICP {template.icp} · {template.channel}
+            Shared message · ICP {template.icp} · {template.channel}
             {isDirty && (
               <span
                 className="ml-2 rounded-full px-1.5 py-0.5 text-[9px]"
@@ -1587,269 +1408,106 @@ function SendPanel({
         </button>
       </div>
 
-      {!result ? (
-        <>
-          {/* v1.44 inline editor: subject + body editable per-send. Server
-              still substitutes placeholders at send time so [first name]
-              etc. fill from the recipient fields below. Template defaults
-              auto-seed the textareas; Reset to default wipes back to the
-              shared library version. */}
-          {template.subject !== null && (
-            <Field
-              label="Subject"
-              value={effectiveSubject}
-              onChange={(v) => onSubjectOverrideChange(v)}
-              placeholder="Email subject"
-            />
-          )}
-          <div className="mt-3">
-            <div className="flex items-baseline justify-between gap-2 mb-1">
-              <span
-                className="text-[11px] uppercase tracking-wider font-semibold"
-                style={{ color: "#8a9098" }}
-              >
-                Body
-              </span>
-              {isDirty && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onSubjectOverrideChange(null);
-                    onBodyOverrideChange(null);
-                  }}
-                  className="text-[11px] underline-offset-2 hover:underline"
-                  style={{ color: "#056048" }}
-                >
-                  Reset to default
-                </button>
-              )}
-            </div>
-            {/* v1.45.0: TipTap WYSIWYG replaces the raw-HTML textarea. Placeholders
-                like [first name] render as inline chips; reps see compose-like
-                formatting instead of <p>/<strong> markup. */}
-            <TemplateEditor
-              value={effectiveBody}
-              onChange={(html) => onBodyOverrideChange(html)}
-              rows={10}
-              ariaLabel="Email body"
-              placeholderHints={[
-                "[first name]",
-                "[spa name]",
-                "$[exact figure]",
-                "[N] weeks",
-              ]}
-            />
-          </div>
-
-          {/* Live preview of what the recipient will see after substitution. */}
-          <details className="mt-4" open>
-            <summary
-              className="text-[12px] cursor-pointer"
-              style={{ color: "#5a6068" }}
-            >
-              Preview as recipient
-            </summary>
-            {previewSubject && (
-              <div
-                className="mt-2 text-[13px] font-semibold"
-                style={{ color: "#1c2024" }}
-              >
-                {previewSubject}
-              </div>
-            )}
-            <div
-              className="mt-2 rounded-md border p-3 text-[13px] leading-[1.55] max-h-64 overflow-y-auto"
-              style={{
-                borderColor: "#f0ebe0",
-                background: "#fbfaf7",
-                color: "#1c2024",
-              }}
-              dangerouslySetInnerHTML={{ __html: previewBody }}
-            />
-          </details>
-
-          <hr className="my-4" style={{ borderColor: "#f0ebe0" }} />
-
-          <div className="space-y-3">
-            <Field
-              label="Recipient email"
-              value={form.recipientEmail}
-              onChange={(v) => onChange({ recipientEmail: v })}
-              placeholder="kelly@example.com"
-              type="email"
-            />
-            <Field
-              label="First name"
-              value={form.firstName}
-              onChange={(v) => onChange({ firstName: v })}
-              placeholder="Kelly"
-            />
-            {/* v1.47.0 P3a: spa-name + Rejuv-figure fields are spa-outreach
-                only. Recruit (rep→rep) templates reference none of these. */}
-            {audience === "spa" && (
-              <>
-                <Field
-                  label="Spa name"
-                  value={form.spaName}
-                  onChange={(v) => onChange({ spaName: v })}
-                  placeholder="Lakeside Aesthetics"
-                />
-                <div className="grid grid-cols-2 gap-3">
-                  <Field
-                    label="$ recovered (optional)"
-                    value={form.rejuvRecoveredAmount}
-                    onChange={(v) => onChange({ rejuvRecoveredAmount: v })}
-                    placeholder="4,275"
-                  />
-                  <Field
-                    label="Weeks (optional)"
-                    value={form.rejuvRecoveredWeeks}
-                    onChange={(v) => onChange({ rejuvRecoveredWeeks: v })}
-                    placeholder="5"
-                  />
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* v1.47.0 P1: persist the current edit as a draft WITHOUT sending.
-              Upserts on (rep, recipient, template); a saved draft re-hydrates
-              its overrides on the next visit. Disabled until a recipient email
-              is present (the draft key needs it). */}
-          <div className="mt-4 flex items-center gap-3">
+      {/* The shared body every recipient sends with — unless they're tweaked
+          in the roster below. Edit here and every untweaked recipient follows. */}
+      {template.subject !== null && (
+        <Field
+          label="Subject"
+          value={effectiveSubject}
+          onChange={(v) => onSubjectOverrideChange(v)}
+          placeholder="Email subject"
+        />
+      )}
+      <div className="mt-3">
+        <div className="flex items-baseline justify-between gap-2 mb-1">
+          <span
+            className="text-[11px] uppercase tracking-wider font-semibold"
+            style={{ color: "#8a9098" }}
+          >
+            Body
+          </span>
+          {isDirty && (
             <button
               type="button"
-              onClick={onSaveDraft}
-              disabled={savingDraft || !form.recipientEmail}
-              className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-[13px] font-semibold transition hover:bg-[#fbfaf7] disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ borderColor: "#e6e2d6", background: "#fff", color: "#1c2024" }}
-            >
-              <BookmarkPlus className="h-3.5 w-3.5" style={{ color: "#056048" }} />
-              {savingDraft ? "Saving…" : "Save draft"}
-            </button>
-            {draftSavedAt && !savingDraft && (
-              <span className="text-[12px] font-medium" style={{ color: "#056048" }}>
-                ✓ Saved — reopens with this edit
-              </span>
-            )}
-          </div>
-
-          {/* v404 Pinch #14b: button telegraphs the send mode BEFORE click.
-              LIVE renders in danger-red to break muscle-memory; dry-run keeps
-              the emerald. liveEnabled === null means we haven't resolved yet
-              (defensive — fall through to dry-run framing). */}
-          <button
-            type="button"
-            onClick={onSend}
-            disabled={sending || liveEnabled === null}
-            className="mt-3 inline-flex items-center gap-2 rounded-md px-5 py-2.5 text-[14px] font-semibold shadow-sm transition disabled:opacity-50 disabled:cursor-not-allowed"
-            style={{
-              background: liveEnabled === true ? "#b91c1c" : "#056048",
-              color: "#fbfaf7",
-            }}
-          >
-            <Send className="h-4 w-4" />
-            {sending
-              ? "Sending…"
-              : liveEnabled === true
-                ? "Send LIVE"
-                : "Send (dry-run)"}
-          </button>
-          <p
-            className="text-[12px] mt-2"
-            style={{ color: "#8a9098" }}
-          >
-            <Sparkles
-              className="inline h-3 w-3 mr-0.5"
-              style={{
-                color: liveEnabled === true ? "#b91c1c" : "#8a6d10",
+              onClick={() => {
+                onSubjectOverrideChange(null);
+                onBodyOverrideChange(null);
               }}
-            />
-            {liveEnabled === true
-              ? "OUTREACH_LIVE is ON — clicking Send fires a real Resend email."
-              : "OUTREACH_LIVE is OFF — clicking Send logs a dry-run row, no email fires."}
-            {" "}Sends with your name in the From line. Replies route back
-            through the platform — you&apos;ll see them in your inbox.
-          </p>
-        </>
-      ) : (
-        <SendResultPanel result={result} />
-      )}
-    </div>
-  );
-}
-
-function SendResultPanel({ result }: { result: SendResult }) {
-  const modeBadge =
-    result.mode === "live"
-      ? { bg: "#e8f3ed", fg: "#056048", label: "Live · sent" }
-      : result.mode === "test"
-        ? { bg: "#fdf6e6", fg: "#8a6d10", label: "Test render" }
-        : { bg: "#f0ebe0", fg: "#5a6068", label: "Dry run · queued" };
-
-  return (
-    <div>
-      <div className="flex items-center gap-2 mb-3">
-        <span
-          className="text-[11px] font-semibold uppercase tracking-wide rounded-full px-2.5 py-0.5"
-          style={{ background: modeBadge.bg, color: modeBadge.fg }}
-        >
-          {modeBadge.label}
-        </span>
+              className="text-[11px] underline-offset-2 hover:underline"
+              style={{ color: "#056048" }}
+            >
+              Reset to default
+            </button>
+          )}
+        </div>
+        <TemplateEditor
+          value={effectiveBody}
+          onChange={(html) => onBodyOverrideChange(html)}
+          rows={10}
+          ariaLabel="Shared email body"
+          placeholderHints={[
+            "[first name]",
+            "[spa name]",
+            "$[exact figure]",
+            "[N] weeks",
+          ]}
+        />
       </div>
-      <p
-        className="text-[13px] leading-[1.55] mb-3"
-        style={{ color: "#5a6068" }}
-      >
-        {result.message}
-      </p>
-      {result.renderedSubject && (
-        <div className="mb-3">
-          <div
-            className="text-[10px] uppercase tracking-wider font-semibold mb-1"
-            style={{ color: "#8a9098" }}
-          >
-            Subject
-          </div>
-          <div
-            className="text-[13px] font-semibold"
-            style={{ color: "#1c2024" }}
-          >
-            {result.renderedSubject}
-          </div>
-        </div>
-      )}
-      <div className="mb-3">
-        <div
-          className="text-[10px] uppercase tracking-wider font-semibold mb-1"
-          style={{ color: "#8a9098" }}
-        >
-          Reply-To
-        </div>
-        <div
-          className="text-[12px] font-mono break-all"
+
+      {/* Live preview — shared figures fill, names stay literal (per recipient). */}
+      <details className="mt-4" open>
+        <summary
+          className="text-[12px] cursor-pointer"
           style={{ color: "#5a6068" }}
         >
-          {result.replyTo}
-        </div>
-      </div>
-      <div>
+          Preview · <span style={{ color: "#8a9098" }}>[first name] / [spa name] fill per recipient</span>
+        </summary>
+        {previewSubject && (
+          <div
+            className="mt-2 text-[13px] font-semibold"
+            style={{ color: "#1c2024" }}
+          >
+            {previewSubject}
+          </div>
+        )}
         <div
-          className="text-[10px] uppercase tracking-wider font-semibold mb-1"
-          style={{ color: "#8a9098" }}
-        >
-          Body preview
-        </div>
-        <div
-          className="rounded-md border p-3 text-[13px] leading-[1.55] max-h-64 overflow-y-auto"
+          className="mt-2 rounded-md border p-3 text-[13px] leading-[1.55] max-h-64 overflow-y-auto"
           style={{
             borderColor: "#f0ebe0",
             background: "#fbfaf7",
             color: "#1c2024",
           }}
-          dangerouslySetInnerHTML={{ __html: result.renderedBody }}
+          dangerouslySetInnerHTML={{ __html: previewBody }}
         />
-      </div>
+      </details>
+
+      {/* v1.47.0: Rejuv figures are SHARED across the whole batch (spa-outreach
+          only). Per-recipient first name + spa name live on the roster. */}
+      {audience === "spa" && (
+        <>
+          <hr className="my-4" style={{ borderColor: "#f0ebe0" }} />
+          <div
+            className="text-[11px] uppercase tracking-wider font-semibold mb-2"
+            style={{ color: "#8a9098" }}
+          >
+            Shared figures
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <Field
+              label="$ recovered (optional)"
+              value={form.rejuvRecoveredAmount}
+              onChange={(v) => onChange({ rejuvRecoveredAmount: v })}
+              placeholder="4,275"
+            />
+            <Field
+              label="Weeks (optional)"
+              value={form.rejuvRecoveredWeeks}
+              onChange={(v) => onChange({ rejuvRecoveredWeeks: v })}
+              placeholder="5"
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }
