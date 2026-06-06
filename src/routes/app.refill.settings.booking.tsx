@@ -323,6 +323,30 @@ function BookingSettingsPage() {
     const v = ov?.[field] ?? null;
     return v === null ? "" : String(v);
   }
+  /** Does this provider offer this service? (no row OR offered=true) */
+  function offersService(providerId: string, serviceId: string): boolean {
+    const ov = overrideFor(providerId, serviceId);
+    return ov ? ov.offered : true;
+  }
+  /** Persist a provider×service row from the full desired state (delete when
+   *  pure default: offered + no overrides). */
+  async function persistPS(
+    providerId: string,
+    serviceId: string,
+    next: { offered: boolean; durationMin: number | null; bufferMin: number | null; price: number | null },
+  ) {
+    try {
+      const res = await withToken((token) =>
+        setProviderServiceOverrideFn({
+          data: { accessToken: token, viewAsUserId, providerId, serviceId, ...next },
+        }),
+      );
+      if (res === undefined) return;
+      syncOverride(providerId, serviceId, res.row);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save.");
+    }
+  }
   async function commitOverride(
     providerId: string,
     serviceId: string,
@@ -337,6 +361,7 @@ function BookingSettingsPage() {
     });
     const cur = overrideFor(providerId, serviceId);
     const base = {
+      offered: cur?.offered ?? true,
       durationMin: cur?.durationMin ?? null,
       bufferMin: cur?.bufferMin ?? null,
       price: cur?.price ?? null,
@@ -347,26 +372,16 @@ function BookingSettingsPage() {
     else if (field === "durationMin") parsed = clampInt(t, 1, 1440);
     else parsed = Math.max(0, Math.min(1_000_000, Math.round((parseFloat(t) || 0) * 100) / 100));
     if (parsed === base[field]) return; // no change
-    const next = { ...base, [field]: parsed };
-    try {
-      const res = await withToken((token) =>
-        setProviderServiceOverrideFn({
-          data: {
-            accessToken: token,
-            viewAsUserId,
-            providerId,
-            serviceId,
-            durationMin: next.durationMin,
-            bufferMin: next.bufferMin,
-            price: next.price,
-          },
-        }),
-      );
-      if (res === undefined) return;
-      syncOverride(providerId, serviceId, res.row);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't save override.");
-    }
+    await persistPS(providerId, serviceId, { ...base, [field]: parsed });
+  }
+  async function toggleOffered(providerId: string, serviceId: string, nextOffered: boolean) {
+    const cur = overrideFor(providerId, serviceId);
+    await persistPS(providerId, serviceId, {
+      offered: nextOffered,
+      durationMin: cur?.durationMin ?? null,
+      bufferMin: cur?.bufferMin ?? null,
+      price: cur?.price ?? null,
+    });
   }
   function patchService(id: string, patch: Partial<BookableServiceDraft>) {
     setDraft((d) =>
@@ -903,57 +918,79 @@ function BookingSettingsPage() {
                             <div className="text-[11px] text-ink-soft mb-2">
                               Per-provider time &amp; price{" "}
                               <span className="text-ink-faint">
-                                — blank inherits {s.durationMin} min · ${s.price}
+                                — blank inherits {s.durationMin} min · ${s.price}; uncheck to hide a
+                                provider from this service
                               </span>
                             </div>
                             <div className="space-y-1.5">
-                              {activeProviders.map((p) => (
-                                <div key={p.id} className="grid grid-cols-[1fr_84px_84px] gap-2 items-center">
-                                  <span className="text-[12px] text-ink truncate">{p.name}</span>
-                                  <div className="flex items-center justify-end gap-1">
-                                    <input
-                                      type="number"
-                                      min={1}
-                                      max={1440}
-                                      placeholder={String(s.durationMin)}
-                                      value={psFieldValue(p.id, s.id, "durationMin")}
-                                      onChange={(e) =>
-                                        setPsDrafts((m) => ({
-                                          ...m,
-                                          [`${p.id}|${s.id}|durationMin`]: e.target.value,
-                                        }))
-                                      }
-                                      onBlur={(e) => void commitOverride(p.id, s.id, "durationMin", e.target.value)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") e.currentTarget.blur();
-                                      }}
-                                      className="w-12 rounded-md border border-rule bg-white px-1.5 py-1 text-[12px] text-ink text-right outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums placeholder:text-ink-faint/60"
-                                    />
-                                    <span className="text-[11px] text-ink-faint">m</span>
+                              {activeProviders.map((p) => {
+                                const offers = offersService(p.id, s.id);
+                                return (
+                                  <div key={p.id} className="grid grid-cols-[1fr_84px_84px] gap-2 items-center">
+                                    <label className="flex items-center gap-1.5 text-[12px] min-w-0 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={offers}
+                                        onChange={(e) => void toggleOffered(p.id, s.id, e.target.checked)}
+                                        className="h-3.5 w-3.5 rounded border-rule accent-emerald shrink-0"
+                                      />
+                                      <span className={cn("truncate", offers ? "text-ink" : "text-ink-faint line-through")}>
+                                        {p.name}
+                                      </span>
+                                    </label>
+                                    <div className="flex items-center justify-end gap-1">
+                                      <input
+                                        type="number"
+                                        min={1}
+                                        max={1440}
+                                        disabled={!offers}
+                                        placeholder={String(s.durationMin)}
+                                        value={psFieldValue(p.id, s.id, "durationMin")}
+                                        onChange={(e) =>
+                                          setPsDrafts((m) => ({
+                                            ...m,
+                                            [`${p.id}|${s.id}|durationMin`]: e.target.value,
+                                          }))
+                                        }
+                                        onBlur={(e) => void commitOverride(p.id, s.id, "durationMin", e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") e.currentTarget.blur();
+                                        }}
+                                        className={cn(
+                                          "w-12 rounded-md border border-rule bg-white px-1.5 py-1 text-[12px] text-ink text-right outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums placeholder:text-ink-faint/60",
+                                          !offers && "opacity-40",
+                                        )}
+                                      />
+                                      <span className="text-[11px] text-ink-faint">m</span>
+                                    </div>
+                                    <div className="flex items-center justify-end gap-1">
+                                      <span className="text-[11px] text-ink-faint">$</span>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        step="0.01"
+                                        disabled={!offers}
+                                        placeholder={String(s.price)}
+                                        value={psFieldValue(p.id, s.id, "price")}
+                                        onChange={(e) =>
+                                          setPsDrafts((m) => ({
+                                            ...m,
+                                            [`${p.id}|${s.id}|price`]: e.target.value,
+                                          }))
+                                        }
+                                        onBlur={(e) => void commitOverride(p.id, s.id, "price", e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter") e.currentTarget.blur();
+                                        }}
+                                        className={cn(
+                                          "w-14 rounded-md border border-rule bg-white px-1.5 py-1 text-[12px] text-ink text-right outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums placeholder:text-ink-faint/60",
+                                          !offers && "opacity-40",
+                                        )}
+                                      />
+                                    </div>
                                   </div>
-                                  <div className="flex items-center justify-end gap-1">
-                                    <span className="text-[11px] text-ink-faint">$</span>
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      step="0.01"
-                                      placeholder={String(s.price)}
-                                      value={psFieldValue(p.id, s.id, "price")}
-                                      onChange={(e) =>
-                                        setPsDrafts((m) => ({
-                                          ...m,
-                                          [`${p.id}|${s.id}|price`]: e.target.value,
-                                        }))
-                                      }
-                                      onBlur={(e) => void commitOverride(p.id, s.id, "price", e.target.value)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") e.currentTarget.blur();
-                                      }}
-                                      className="w-14 rounded-md border border-rule bg-white px-1.5 py-1 text-[12px] text-ink text-right outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums placeholder:text-ink-faint/60"
-                                    />
-                                  </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )}

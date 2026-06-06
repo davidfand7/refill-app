@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.56.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.56.0 &mdash; Choose which services each provider performs. </strong>In the <strong>Online booking</strong> page, expand any service and you&rsquo;ll see an <strong>&ldquo;offers this&rdquo; checkbox</strong> next to every provider &mdash; uncheck it and that provider is hidden from this service everywhere patients book (the provider list, First available, and Best deal). Perfect for an aesthetician who doesn&rsquo;t do injectables, or a tech who only runs the laser. By default everyone offers everything (nothing changes until you opt someone out), and a service no one performs simply won&rsquo;t show on the booking page. <strong>Touched</strong>: new column <code>scheduling_provider_services.offered</code> (default true), <code>src/server/scheduling-settings.functions.ts</code> (offered in the override row + save), <code>src/server/scheduling.functions.ts</code> (filters non-offering providers out of context, slots, hold), <code>src/routes/app.refill.settings.booking.tsx</code> (the checkbox), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.55.0",
     date: "June 2026",
     items: [

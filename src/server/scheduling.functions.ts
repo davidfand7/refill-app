@@ -138,9 +138,15 @@ async function loadActiveProviders(sb: Sb, tenantId: string): Promise<ActiveProv
   return (data ?? []).map((p) => ({ id: p.id, name: p.name, userId: p.user_id }));
 }
 
-type Override = { durationMin: number | null; bufferMin: number | null; price: number | null };
+type Override = {
+  offered: boolean;
+  durationMin: number | null;
+  bufferMin: number | null;
+  price: number | null;
+};
 
-/** providerId → override row for the given service (NULL fields = inherit). */
+/** providerId → override row for the given service (NULL fields = inherit;
+ *  offered=false = provider does not perform the service). */
 async function loadOverrideMap(
   sb: Sb,
   providerIds: string[],
@@ -150,13 +156,23 @@ async function loadOverrideMap(
   if (!providerIds.length) return m;
   const { data } = await sb
     .from("scheduling_provider_services")
-    .select("provider_id, duration_min, buffer_min, price")
+    .select("provider_id, offered, duration_min, buffer_min, price")
     .eq("service_id", serviceId)
     .in("provider_id", providerIds);
   for (const r of data ?? []) {
-    m.set(r.provider_id, { durationMin: r.duration_min, bufferMin: r.buffer_min, price: r.price });
+    m.set(r.provider_id, {
+      offered: r.offered,
+      durationMin: r.duration_min,
+      bufferMin: r.buffer_min,
+      price: r.price,
+    });
   }
   return m;
+}
+
+/** A provider offers a service unless an explicit row says offered=false. */
+function offersService(ov: Override | undefined): boolean {
+  return ov ? ov.offered : true;
 }
 
 /** effective = override ?? base, for one provider. */
@@ -310,7 +326,7 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
     if (providerIds.length && serviceIds.length) {
       const { data: ovRows } = await sb
         .from("scheduling_provider_services")
-        .select("provider_id, service_id, duration_min, buffer_min, price")
+        .select("provider_id, service_id, offered, duration_min, buffer_min, price")
         .in("provider_id", providerIds)
         .in("service_id", serviceIds);
       for (const r of ovRows ?? []) {
@@ -320,6 +336,7 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
           overridesByService.set(r.service_id, m);
         }
         m.set(r.provider_id, {
+          offered: r.offered,
           durationMin: r.duration_min,
           bufferMin: r.buffer_min,
           price: r.price,
@@ -327,28 +344,34 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
       }
     }
 
-    const serviceOptions: PublicServiceOption[] = (services ?? []).map((s) => {
-      const ovMap = overridesByService.get(s.id);
-      const providerOpts: PublicProviderOption[] = bookableProviders.map((p) => {
-        const ov = ovMap?.get(p.id);
+    const serviceOptions: PublicServiceOption[] = (services ?? [])
+      .map((s) => {
+        const ovMap = overridesByService.get(s.id);
+        // Only providers who actually offer this service (no row OR offered=true).
+        const providerOpts: PublicProviderOption[] = bookableProviders
+          .filter((p) => offersService(ovMap?.get(p.id)))
+          .map((p) => {
+            const ov = ovMap?.get(p.id);
+            return {
+              id: p.id,
+              name: p.name,
+              price: ov?.price ?? s.service_price,
+              durationMin: ov?.durationMin ?? s.duration_min,
+            };
+          });
+        const fromPrice = providerOpts.length
+          ? Math.min(...providerOpts.map((p) => p.price))
+          : s.service_price;
         return {
-          id: p.id,
-          name: p.name,
-          price: ov?.price ?? s.service_price,
-          durationMin: ov?.durationMin ?? s.duration_min,
+          id: s.id,
+          name: s.name,
+          durationMin: s.duration_min,
+          fromPrice,
+          providers: providerOpts,
         };
-      });
-      const fromPrice = providerOpts.length
-        ? Math.min(...providerOpts.map((p) => p.price))
-        : s.service_price;
-      return {
-        id: s.id,
-        name: s.name,
-        durationMin: s.duration_min,
-        fromPrice,
-        providers: providerOpts,
-      };
-    });
+      })
+      // Hide a service no active provider performs.
+      .filter((s) => s.providers.length > 0);
 
     return {
       ok: true,
@@ -406,6 +429,12 @@ export const listAvailableSlots = createServerFn({ method: "GET" })
       targets.map((p) => p.id),
       data.serviceId,
     );
+
+    // Drop providers who don't perform this service (explicit offered=false).
+    targets = targets.filter((p) => offersService(overrides.get(p.id)));
+    if (!targets.length) {
+      return { ok: false, reason: "No provider offers this service right now." };
+    }
 
     // "Best deal": restrict to the lowest effective-price provider(s) (price is
     // resolved server-side — never trust a client-supplied price). Ties union.
@@ -494,7 +523,11 @@ export const holdSlot = createServerFn({ method: "POST" })
     if (!ownerUserId) {
       return { ok: false, reason: "This practice isn't set up to take bookings yet.", code: "invalid" };
     }
-    const eff = effective(base, (await loadOverrideMap(sb, [provider.id], data.serviceId)).get(provider.id));
+    const ov = (await loadOverrideMap(sb, [provider.id], data.serviceId)).get(provider.id);
+    if (!offersService(ov)) {
+      return { ok: false, reason: "That provider doesn't offer this service.", code: "invalid" };
+    }
+    const eff = effective(base, ov);
 
     const startMs = new Date(data.startIso).getTime();
     if (Number.isNaN(startMs)) return { ok: false, reason: "Invalid time.", code: "invalid" };

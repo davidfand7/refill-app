@@ -90,10 +90,12 @@ export interface ProviderRow {
   isActive: boolean;
 }
 
-/** A per-provider override row. NULL field = inherit the service's value. */
+/** A per-provider override row. NULL field = inherit the service's value.
+ *  `offered=false` = this provider does not perform the service. */
 export interface ProviderServiceOverrideRow {
   providerId: string;
   serviceId: string;
+  offered: boolean;
   durationMin: number | null;
   bufferMin: number | null;
   price: number | null;
@@ -249,11 +251,12 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
 
     const { data: psRows } = await sb
       .from("scheduling_provider_services")
-      .select("provider_id, service_id, duration_min, buffer_min, price")
+      .select("provider_id, service_id, offered, duration_min, buffer_min, price")
       .in("provider_id", providerIds.length ? providerIds : [providerId]);
     const providerServices: ProviderServiceOverrideRow[] = (psRows ?? []).map((r) => ({
       providerId: r.provider_id,
       serviceId: r.service_id,
+      offered: r.offered,
       durationMin: r.duration_min,
       bufferMin: r.buffer_min,
       price: r.price,
@@ -551,6 +554,7 @@ const psOverrideInput = z.object({
   viewAsUserId: z.string().uuid().optional(),
   providerId: z.string().uuid(),
   serviceId: z.string().uuid(),
+  offered: z.boolean(),
   durationMin: z.number().int().positive().max(1440).nullable(),
   bufferMin: z.number().int().min(0).max(1440).nullable(),
   price: z.number().min(0).max(1_000_000).nullable(),
@@ -584,9 +588,9 @@ export const setProviderServiceOverrideFn = createServerFn({ method: "POST" })
     if (!prov) throw new Error("That provider isn't part of this spa.");
     if (!svc) throw new Error("That service isn't part of this spa.");
 
-    const allNull = data.durationMin === null && data.bufferMin === null && data.price === null;
-    if (allNull) {
-      // No overrides left → drop the row (pure inherit).
+    const noOverride = data.durationMin === null && data.bufferMin === null && data.price === null;
+    if (data.offered && noOverride) {
+      // Pure default (offers it, all inherited) → drop the row entirely.
       const { error } = await sb
         .from("scheduling_provider_services")
         .delete()
@@ -602,6 +606,7 @@ export const setProviderServiceOverrideFn = createServerFn({ method: "POST" })
         {
           provider_id: data.providerId,
           service_id: data.serviceId,
+          offered: data.offered,
           duration_min: data.durationMin,
           buffer_min: data.bufferMin,
           price: data.price,
@@ -609,13 +614,14 @@ export const setProviderServiceOverrideFn = createServerFn({ method: "POST" })
         },
         { onConflict: "provider_id,service_id" },
       )
-      .select("provider_id, service_id, duration_min, buffer_min, price")
+      .select("provider_id, service_id, offered, duration_min, buffer_min, price")
       .single();
     if (error || !row) throw new Error(`Couldn't save override: ${error?.message ?? "unknown"}`);
     return {
       row: {
         providerId: row.provider_id,
         serviceId: row.service_id,
+        offered: row.offered,
         durationMin: row.duration_min,
         bufferMin: row.buffer_min,
         price: row.price,

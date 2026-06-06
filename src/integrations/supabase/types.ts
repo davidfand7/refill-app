@@ -3481,6 +3481,7 @@ export type Database = {
           created_at: string
           duration_min: number | null
           id: string
+          offered: boolean
           price: number | null
           provider_id: string
           service_id: string
@@ -3491,6 +3492,7 @@ export type Database = {
           created_at?: string
           duration_min?: number | null
           id?: string
+          offered?: boolean
           price?: number | null
           provider_id: string
           service_id: string
@@ -3501,6 +3503,7 @@ export type Database = {
           created_at?: string
           duration_min?: number | null
           id?: string
+          offered?: boolean
           price?: number | null
           provider_id?: string
           service_id?: string
