@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.66.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.66.0 &mdash; Bookable services, grouped by category + drag to move. </strong>The services list is now organized into <strong>collapsible category groups</strong> (with a count on each header), so a long catalog is easy to scan. Each row has a <strong>drag handle</strong> &mdash; grab a service and drop it on another category&rsquo;s header to <strong>move it there</strong> (then <strong>Save changes</strong> to keep it). Search and Show-inactive still work across all groups. <strong>Touched</strong>: <code>src/routes/app.refill.settings.booking.tsx</code> (category grouping, collapse, drag-to-recategorize), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.65.1",
     date: "June 2026",
     items: [

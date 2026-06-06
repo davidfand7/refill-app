@@ -16,7 +16,7 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   CalendarClock,
@@ -27,6 +27,7 @@ import {
   DoorOpen,
   ExternalLink,
   Globe,
+  GripVertical,
   Link2,
   Loader2,
   Plus,
@@ -123,6 +124,9 @@ function BookingSettingsPage() {
   // Bookable-services list declutter: search + show-inactive.
   const [svcSearch, setSvcSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  // Services list: collapsible categories + drag-to-recategorize.
+  const [collapsedSvcCats, setCollapsedSvcCats] = useState<Set<string>>(new Set());
+  const draggedSvcRef = useRef<string | null>(null);
   // Add-service form.
   const [addingSvc, setAddingSvc] = useState(false);
   const [newSvcName, setNewSvcName] = useState("");
@@ -201,6 +205,21 @@ function BookingSettingsPage() {
     if (showInactive) return true; // show everything
     return s.onlineBookable; // default → active only
   });
+  // Group the list by category (known categories first, then any extras), each
+  // sorted by name — and a per-category count for the headers.
+  const svcCat = (s: BookableServiceDraft) => s.category?.trim() || "other";
+  const catRank = (c: string) => {
+    const i = (SERVICE_CATEGORIES as readonly string[]).indexOf(c);
+    return i < 0 ? SERVICE_CATEGORIES.length : i;
+  };
+  const sortedVisible = [...visibleServices].sort(
+    (a, b) =>
+      catRank(svcCat(a)) - catRank(svcCat(b)) ||
+      svcCat(a).localeCompare(svcCat(b)) ||
+      a.name.localeCompare(b.name),
+  );
+  const svcCatCounts = new Map<string, number>();
+  for (const s of visibleServices) svcCatCounts.set(svcCat(s), (svcCatCounts.get(svcCat(s)) ?? 0) + 1);
 
   // Keep the selected provider valid (e.g. after deactivating the selected one).
   useEffect(() => {
@@ -1393,13 +1412,61 @@ function BookingSettingsPage() {
                         : "No active services yet — search above to find one and turn it Bookable, or set up by provider."}
                     </p>
                   )}
-                  {visibleServices.map((s) => {
+                  {sortedVisible.map((s, idx) => {
                     const canExpand = true; // every service expands to edit details / room / per-provider
                     const expanded = canExpand && expandedSvc === s.id;
+                    const cat = svcCat(s);
+                    const showHeader = idx === 0 || svcCat(sortedVisible[idx - 1]) !== cat;
+                    const collapsed = collapsedSvcCats.has(cat);
                     return (
-                      <div key={s.id} className="py-1">
+                      <Fragment key={s.id}>
+                        {showHeader && (
+                          <div
+                            className="flex items-center gap-2 pt-3 pb-1"
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={() => {
+                              const id = draggedSvcRef.current;
+                              draggedSvcRef.current = null;
+                              if (id) patchService(id, { category: cat });
+                            }}
+                            title="Drop a service here to move it to this category"
+                          >
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setCollapsedSvcCats((p) => {
+                                  const n = new Set(p);
+                                  if (n.has(cat)) n.delete(cat);
+                                  else n.add(cat);
+                                  return n;
+                                })
+                              }
+                              className="shrink-0 text-ink-faint hover:text-ink transition"
+                              aria-label={collapsed ? "Expand category" : "Collapse category"}
+                            >
+                              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", collapsed && "-rotate-90")} />
+                            </button>
+                            <span className="text-[12px] font-semibold text-ink capitalize">{cat}</span>
+                            <span className="text-[11px] text-ink-faint tabular-nums">
+                              {svcCatCounts.get(cat) ?? 0}
+                            </span>
+                            <span className="flex-1 border-t border-rule/40 ml-1" />
+                          </div>
+                        )}
+                        {!collapsed && (
+                      <div className="py-1">
                         <div className="grid grid-cols-[1fr_136px_136px_72px] gap-2 items-center py-1.5">
                           <div className="flex items-center gap-1 min-w-0">
+                            <span
+                              draggable
+                              onDragStart={() => {
+                                draggedSvcRef.current = s.id;
+                              }}
+                              className="shrink-0 cursor-grab active:cursor-grabbing text-ink-faint/40 hover:text-ink-faint"
+                              title="Drag to another category"
+                            >
+                              <GripVertical className="h-3.5 w-3.5" />
+                            </span>
                             {canExpand && (
                               <button
                                 type="button"
@@ -1605,6 +1672,8 @@ function BookingSettingsPage() {
                           </div>
                         )}
                       </div>
+                        )}
+                      </Fragment>
                     );
                   })}
                 </div>
