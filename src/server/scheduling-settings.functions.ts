@@ -757,3 +757,116 @@ export const setProviderServiceOverrideFn = createServerFn({ method: "POST" })
       },
     };
   });
+
+// ── assignProviderServiceFn ──────────────────────────────────────────────────
+// The provider-centric view of the same offered map. Turning a service ON for a
+// provider:
+//   • If the service wasn't bookable yet → make it bookable AND opt every OTHER
+//     active provider out, so it starts "bookable by THIS provider" (honoring
+//     "add a service to a provider"). The owner can add others afterward.
+//   • If it was already bookable → just ensure this provider performs it.
+// Turning OFF = opt this provider out (offered=false). Opt-out semantics are
+// unchanged, so the loved per-service view stays perfectly in sync.
+
+const assignPSInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+  providerId: z.string().uuid(),
+  serviceId: z.string().uuid(),
+  performs: z.boolean(),
+});
+
+export const assignProviderServiceFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => assignPSInput.parse(raw))
+  .handler(
+    async ({
+      data,
+    }): Promise<{ serviceId: string; onlineBookable: boolean; rows: ProviderServiceOverrideRow[] }> => {
+      const { effectiveUserId } = await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
+      const sb = admin();
+      const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+      const nowIso = new Date().toISOString();
+
+      const [{ data: prov }, { data: svc }] = await Promise.all([
+        sb
+          .from("scheduling_providers")
+          .select("id")
+          .eq("id", data.providerId)
+          .eq("tenant_id", tenantId)
+          .maybeSingle(),
+        sb
+          .from("services")
+          .select("id, online_bookable")
+          .eq("id", data.serviceId)
+          .eq("tenant_id", tenantId)
+          .maybeSingle(),
+      ]);
+      if (!prov) throw new Error("That provider isn't part of this spa.");
+      if (!svc) throw new Error("That service isn't part of this spa.");
+
+      if (data.performs) {
+        if (!svc.online_bookable) {
+          // Make bookable, and opt every OTHER active provider out → bookable by this one.
+          await sb
+            .from("services")
+            .update({ online_bookable: true, updated_at: nowIso })
+            .eq("id", data.serviceId)
+            .eq("tenant_id", tenantId);
+          const { data: provs } = await sb
+            .from("scheduling_providers")
+            .select("id")
+            .eq("tenant_id", tenantId)
+            .eq("is_active", true);
+          const others = (provs ?? []).map((p) => p.id).filter((id) => id !== data.providerId);
+          if (others.length) {
+            await sb.from("scheduling_provider_services").upsert(
+              others.map((id) => ({ provider_id: id, service_id: data.serviceId, offered: false })),
+              { onConflict: "provider_id,service_id", ignoreDuplicates: true },
+            );
+          }
+        }
+        // Ensure THIS provider performs it: clear any explicit opt-out row.
+        const { data: existing } = await sb
+          .from("scheduling_provider_services")
+          .select("id, offered")
+          .eq("provider_id", data.providerId)
+          .eq("service_id", data.serviceId)
+          .maybeSingle();
+        if (existing && existing.offered === false) {
+          await sb
+            .from("scheduling_provider_services")
+            .update({ offered: true, updated_at: nowIso })
+            .eq("id", existing.id);
+        }
+      } else {
+        // Opt this provider out (preserve any price/duration override on the row).
+        await sb.from("scheduling_provider_services").upsert(
+          { provider_id: data.providerId, service_id: data.serviceId, offered: false, updated_at: nowIso },
+          { onConflict: "provider_id,service_id" },
+        );
+      }
+
+      const [{ data: svc2 }, { data: rows }] = await Promise.all([
+        sb.from("services").select("online_bookable").eq("id", data.serviceId).maybeSingle(),
+        sb
+          .from("scheduling_provider_services")
+          .select("provider_id, service_id, offered, duration_min, buffer_min, price")
+          .eq("service_id", data.serviceId),
+      ]);
+      return {
+        serviceId: data.serviceId,
+        onlineBookable: svc2?.online_bookable ?? false,
+        rows: (rows ?? []).map((r) => ({
+          providerId: r.provider_id,
+          serviceId: r.service_id,
+          offered: r.offered,
+          durationMin: r.duration_min,
+          bufferMin: r.buffer_min,
+          price: r.price,
+        })),
+      };
+    },
+  );

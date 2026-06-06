@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.60.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.60.0 &mdash; Set up services from the provider side. </strong>Each provider in the <strong>Providers</strong> list now has a turn-down with a <strong>search box</strong> &mdash; find a service and check it to say this provider performs it. If the service wasn&rsquo;t bookable yet, checking it <strong>makes it bookable and assigns it to that provider</strong> (the others start opted-out, so you build each provider&rsquo;s menu cleanly). It&rsquo;s the same data as the per-service view you already have &mdash; edit from whichever side you like; they stay in sync. Empty search shows that provider&rsquo;s current services; typing searches your whole catalog. <strong>Touched</strong>: <code>src/server/scheduling-settings.functions.ts</code> (<code>assignProviderServiceFn</code>), <code>src/routes/app.refill.settings.booking.tsx</code> (provider service-assignment panel), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.59.0",
     date: "June 2026",
     items: [

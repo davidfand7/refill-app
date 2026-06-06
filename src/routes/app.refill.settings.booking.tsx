@@ -30,6 +30,7 @@ import {
   Link2,
   Loader2,
   Plus,
+  Search,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -39,6 +40,7 @@ import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
+  assignProviderServiceFn,
   createProviderFn,
   createResourceFn,
   getSchedulingSetupFn,
@@ -106,6 +108,9 @@ function BookingSettingsPage() {
   const [providerBusy, setProviderBusy] = useState(false);
   // Transient rename buffers, keyed by providerId (so renaming never trips dirty).
   const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
+  // Provider→services assignment panel (turn-down per provider).
+  const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
+  const [providerSearch, setProviderSearch] = useState("");
   // Which bookable service is expanded to its per-provider override panel.
   const [expandedSvc, setExpandedSvc] = useState<string | null>(null);
   // Transient override input buffers, keyed `${providerId}|${serviceId}|${field}`.
@@ -315,6 +320,42 @@ function BookingSettingsPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't update provider.");
     }
+  }
+
+  // ── Provider → services assignment (opt-out model, immediate persist) ────
+  /** Does this provider perform this service? (bookable AND not opted out) */
+  function performsService(providerId: string, serviceId: string): boolean {
+    const svc = draft?.services.find((s) => s.id === serviceId);
+    if (!svc?.onlineBookable) return false;
+    const row = draft?.providerServices.find(
+      (r) => r.providerId === providerId && r.serviceId === serviceId,
+    );
+    return row ? row.offered : true; // opt-out: no row = performs
+  }
+  async function togglePerforms(providerId: string, serviceId: string, next: boolean) {
+    let res;
+    try {
+      res = await withToken((token) =>
+        assignProviderServiceFn({ data: { accessToken: token, viewAsUserId, providerId, serviceId, performs: next } }),
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't update.");
+      return;
+    }
+    if (!res) return;
+    // The op may have flipped the service bookable + rewritten its provider rows.
+    const merge = (b: SchedulingSetupBundle): SchedulingSetupBundle => ({
+      ...b,
+      services: b.services.map((s) =>
+        s.id === res.serviceId ? { ...s, onlineBookable: res.onlineBookable } : s,
+      ),
+      providerServices: [
+        ...b.providerServices.filter((r) => r.serviceId !== res.serviceId),
+        ...res.rows,
+      ],
+    });
+    setServer((s) => (s ? merge(s) : s));
+    setDraft((d) => (d ? merge(d) : d));
   }
 
   // ── Per-provider service overrides (immediate persist) ───────────────────
@@ -663,31 +704,100 @@ function BookingSettingsPage() {
                 their past appointments stay intact.
               </p>
               <div className="divide-y divide-rule">
-                {draft.providers.map((p) => (
-                  <div key={p.id} className="flex items-center gap-3 py-2.5">
-                    <input
-                      type="text"
-                      value={nameDrafts[p.id] ?? p.name}
-                      onChange={(e) =>
-                        setNameDrafts((m) => ({ ...m, [p.id]: e.target.value }))
-                      }
-                      onBlur={() => void commitRename(p)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") e.currentTarget.blur();
-                      }}
-                      className={cn(
-                        "flex-1 min-w-0 rounded-md border border-transparent bg-transparent px-2 py-1 text-[14px] text-ink outline-none hover:border-rule focus:border-emerald focus:ring-2 focus:ring-emerald/30",
-                        !p.isActive && "text-ink-faint italic",
+                {draft.providers.map((p) => {
+                  const expanded = expandedProvider === p.id;
+                  const q = providerSearch.trim().toLowerCase();
+                  const panelList = q
+                    ? draft.services.filter((s) => s.name.toLowerCase().includes(q))
+                    : draft.services.filter((s) => performsService(p.id, s.id));
+                  return (
+                    <div key={p.id} className="py-1">
+                      <div className="flex items-center gap-2 py-1.5">
+                        {p.isActive ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExpandedProvider(expanded ? null : p.id);
+                              setProviderSearch("");
+                            }}
+                            className="shrink-0 text-ink-faint hover:text-ink transition"
+                            title="Services this provider performs"
+                            aria-label="Services this provider performs"
+                          >
+                            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !expanded && "-rotate-90")} />
+                          </button>
+                        ) : (
+                          <span className="w-3.5 shrink-0" />
+                        )}
+                        <input
+                          type="text"
+                          value={nameDrafts[p.id] ?? p.name}
+                          onChange={(e) => setNameDrafts((m) => ({ ...m, [p.id]: e.target.value }))}
+                          onBlur={() => void commitRename(p)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") e.currentTarget.blur();
+                          }}
+                          className={cn(
+                            "flex-1 min-w-0 rounded-md border border-transparent bg-transparent px-2 py-1 text-[14px] text-ink outline-none hover:border-rule focus:border-emerald focus:ring-2 focus:ring-emerald/30",
+                            !p.isActive && "text-ink-faint italic",
+                          )}
+                        />
+                        {!p.isActive && (
+                          <span className="text-[10px] uppercase tracking-wider font-semibold text-ink-faint">
+                            Inactive
+                          </span>
+                        )}
+                        <Toggle checked={p.isActive} onChange={() => void onToggleProviderActive(p)} />
+                      </div>
+
+                      {expanded && p.isActive && (
+                        <div className="ml-5 mb-2 mt-1 rounded-lg border border-rule/60 bg-paper/30 px-3 py-2.5">
+                          <div className="relative mb-2">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-faint" />
+                            <input
+                              type="text"
+                              value={providerSearch}
+                              onChange={(e) => setProviderSearch(e.target.value)}
+                              placeholder="Search services to add…"
+                              className="w-full rounded-md border border-rule bg-white pl-8 pr-3 py-1.5 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                            />
+                          </div>
+                          {panelList.length === 0 ? (
+                            <p className="text-[12px] text-ink-soft py-1.5">
+                              {q
+                                ? "No services match."
+                                : "No services yet — search above to add the ones this provider performs."}
+                            </p>
+                          ) : (
+                            <div className="space-y-0.5 max-h-64 overflow-y-auto">
+                              {panelList.map((s) => {
+                                const performs = performsService(p.id, s.id);
+                                return (
+                                  <label
+                                    key={s.id}
+                                    className="flex items-center justify-between gap-2 py-1 px-1 rounded hover:bg-white cursor-pointer"
+                                  >
+                                    <span className="text-[13px] text-ink truncate">{s.name}</span>
+                                    <input
+                                      type="checkbox"
+                                      checked={performs}
+                                      onChange={(e) => void togglePerforms(p.id, s.id, e.target.checked)}
+                                      className="h-4 w-4 rounded border-rule accent-emerald shrink-0"
+                                    />
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <p className="text-[11px] text-ink-faint mt-2 leading-relaxed">
+                            Checking a service makes it bookable and assigns it to{" "}
+                            <strong>{p.name}</strong>.
+                          </p>
+                        </div>
                       )}
-                    />
-                    {!p.isActive && (
-                      <span className="text-[10px] uppercase tracking-wider font-semibold text-ink-faint">
-                        Inactive
-                      </span>
-                    )}
-                    <Toggle checked={p.isActive} onChange={() => void onToggleProviderActive(p)} />
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
               </div>
               {addingProvider ? (
                 <div className="flex items-center gap-2 mt-3 pt-3 border-t border-rule/60">
