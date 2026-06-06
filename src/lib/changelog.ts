@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.48.7",
+    date: "June 2026",
+    items: [
+      "<strong>v1.48.7 &mdash; Calendar zoom + readable appointment cards. </strong>Day/Week grids are now denser by default so a 30-minute appointment is tall enough to show the patient name AND the time without clipping, and a new <strong>zoom stepper</strong> (the &minus;/+ control next to the view toggle) lets you size the grid to taste &mdash; your choice is remembered in your browser. Cards always show the name; the time line appears whenever the card is tall enough. <strong>Touched</strong>: <code>src/routes/app.refill.schedule.tsx</code> (pixels-per-minute zoom on Day/Week, height-aware card content), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.48.6",
     date: "June 2026",
     items: [

@@ -10,7 +10,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, Plus, Ban, X } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, Plus, Ban, X, ZoomIn, ZoomOut } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/integrations/supabase/client";
@@ -45,8 +45,11 @@ export const Route = createFileRoute("/app/refill/schedule")({
 type View = "day" | "week" | "month";
 type ServiceLite = { id: string; name: string; durationMin: number };
 
-const DAY_PX_PER_MIN = 0.9;
-const WEEK_PX_PER_MIN = 0.7;
+// Zoom = pixels-per-minute for the positioned grids. Default is "comfortable"
+// so a 30-min appt is tall enough to show name + time without clipping.
+const ZOOM_LEVELS = [0.7, 1.0, 1.4, 2.0, 2.8];
+const DEFAULT_ZOOM_IDX = 2; // 1.4 px/min
+const ZOOM_KEY = "refill.schedule.zoom";
 const WD_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function SchedulePage() {
@@ -61,6 +64,18 @@ function SchedulePage() {
   const [bookOpen, setBookOpen] = useState(false);
   const [blockOpen, setBlockOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<DayAppointment | null>(null);
+  const [zoomIdx, setZoomIdx] = useState<number>(() => {
+    if (typeof window === "undefined") return DEFAULT_ZOOM_IDX;
+    const v = parseInt(window.localStorage.getItem(ZOOM_KEY) ?? "", 10);
+    return Number.isFinite(v) && v >= 0 && v < ZOOM_LEVELS.length ? v : DEFAULT_ZOOM_IDX;
+  });
+  function setZoom(next: number) {
+    const clamped = Math.max(0, Math.min(ZOOM_LEVELS.length - 1, next));
+    setZoomIdx(clamped);
+    if (typeof window !== "undefined") window.localStorage.setItem(ZOOM_KEY, String(clamped));
+  }
+  const dayPpm = ZOOM_LEVELS[zoomIdx];
+  const weekPpm = ZOOM_LEVELS[zoomIdx] * 0.7;
 
   // The visible date span (for week/month range loads).
   const span = useMemo(() => computeSpan(view, dateIso), [view, dateIso]);
@@ -145,6 +160,17 @@ function SchedulePage() {
             <span className="ml-2 text-[15px] font-semibold text-ink">{label}</span>
           </div>
           <div className="flex items-center gap-2">
+            {/* Zoom (positioned views only) */}
+            {view !== "month" && (
+              <div className="inline-flex items-center rounded-md border border-rule overflow-hidden">
+                <button type="button" onClick={() => setZoom(zoomIdx - 1)} disabled={zoomIdx === 0} className="p-1.5 text-ink-soft hover:text-ink disabled:opacity-30 transition" aria-label="Zoom out">
+                  <ZoomOut className="h-4 w-4" />
+                </button>
+                <button type="button" onClick={() => setZoom(zoomIdx + 1)} disabled={zoomIdx === ZOOM_LEVELS.length - 1} className="p-1.5 text-ink-soft hover:text-ink disabled:opacity-30 transition border-l border-rule" aria-label="Zoom in">
+                  <ZoomIn className="h-4 w-4" />
+                </button>
+              </div>
+            )}
             {/* View toggle */}
             <div className="inline-flex rounded-md border border-rule overflow-hidden">
               {(["day", "week", "month"] as View[]).map((v) => (
@@ -175,11 +201,12 @@ function SchedulePage() {
             <Loader2 className="h-4 w-4 animate-spin" /> Loading schedule…
           </div>
         ) : view === "day" && day ? (
-          <DayGrid day={day} tz={tz} onCancel={setCancelTarget} />
+          <DayGrid day={day} tz={tz} pxPerMin={dayPpm} onCancel={setCancelTarget} />
         ) : view === "week" && range ? (
           <WeekGrid
             range={range}
             tz={tz}
+            pxPerMin={weekPpm}
             weekStart={span.fromDate}
             onCancel={setCancelTarget}
             onPickDay={(iso) => {
@@ -210,7 +237,7 @@ function SchedulePage() {
 
 // ── Day grid (positioned, single column) ─────────────────────────────────────
 
-function DayGrid({ day, tz, onCancel }: { day: DaySchedule; tz: string; onCancel: (a: DayAppointment) => void }) {
+function DayGrid({ day, tz, pxPerMin, onCancel }: { day: DaySchedule; tz: string; pxPerMin: number; onCancel: (a: DayAppointment) => void }) {
   const win = useMemo(() => {
     let start = day.open.isOpen ? day.open.openMin : 9 * 60;
     let end = day.open.isOpen ? day.open.closeMin : 17 * 60;
@@ -225,26 +252,26 @@ function DayGrid({ day, tz, onCancel }: { day: DaySchedule; tz: string; onCancel
     return padWindow(start, end);
   }, [day, tz]);
 
-  const height = (win.end - win.start) * DAY_PX_PER_MIN;
-  const top = (iso: string) => (localMinutes(iso, tz) - win.start) * DAY_PX_PER_MIN;
+  const height = (win.end - win.start) * pxPerMin;
+  const top = (iso: string) => (localMinutes(iso, tz) - win.start) * pxPerMin;
 
   return (
     <div className="rounded-xl border border-rule bg-white p-4">
       {!day.open.isOpen && <div className="mb-3 text-[12px] text-ink-faint">Closed this day (per business hours).</div>}
       <div className="relative" style={{ height }}>
         {hourMarks(win).map((m) => (
-          <div key={m} className="absolute left-0 right-0 border-t border-rule/60" style={{ top: (m - win.start) * DAY_PX_PER_MIN }}>
+          <div key={m} className="absolute left-0 right-0 border-t border-rule/60" style={{ top: (m - win.start) * pxPerMin }}>
             <span className="absolute -top-2 left-0 text-[11px] text-ink-faint tabular-nums bg-white pr-1">{fmtHour(m)}</span>
           </div>
         ))}
         {day.open.isOpen && (
-          <div className="absolute left-14 right-0 bg-emerald-soft/40 rounded" style={{ top: (day.open.openMin - win.start) * DAY_PX_PER_MIN, height: (day.open.closeMin - day.open.openMin) * DAY_PX_PER_MIN }} />
+          <div className="absolute left-14 right-0 bg-emerald-soft/40 rounded" style={{ top: (day.open.openMin - win.start) * pxPerMin, height: (day.open.closeMin - day.open.openMin) * pxPerMin }} />
         )}
         {day.blocks.map((b) => (
-          <BlockBand key={b.id} left="left-14" top={top(b.startIso)} height={Math.max(14, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * DAY_PX_PER_MIN)} reason={b.reason} />
+          <BlockBand key={b.id} left="left-14" top={top(b.startIso)} height={Math.max(14, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} />
         ))}
         {day.appointments.map((a) => (
-          <ApptCard key={a.id} a={a} tz={tz} left="left-14" top={top(a.startIso)} height={Math.max(18, a.durationMin * DAY_PX_PER_MIN)} onCancel={onCancel} showTimes />
+          <ApptCard key={a.id} a={a} tz={tz} left="left-14" top={top(a.startIso)} height={Math.max(18, a.durationMin * pxPerMin)} onCancel={onCancel} />
         ))}
         {day.appointments.length === 0 && day.blocks.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center text-[13px] text-ink-faint">No bookings this day.</div>
@@ -259,12 +286,14 @@ function DayGrid({ day, tz, onCancel }: { day: DaySchedule; tz: string; onCancel
 function WeekGrid({
   range,
   tz,
+  pxPerMin,
   weekStart,
   onCancel,
   onPickDay,
 }: {
   range: RangeSchedule;
   tz: string;
+  pxPerMin: number;
   weekStart: string;
   onCancel: (a: DayAppointment) => void;
   onPickDay: (iso: string) => void;
@@ -298,8 +327,8 @@ function WeekGrid({
     return padWindow(start, end);
   }, [range, tz]);
 
-  const height = (win.end - win.start) * WEEK_PX_PER_MIN;
-  const top = (iso: string) => (localMinutes(iso, tz) - win.start) * WEEK_PX_PER_MIN;
+  const height = (win.end - win.start) * pxPerMin;
+  const top = (iso: string) => (localMinutes(iso, tz) - win.start) * pxPerMin;
   const today = todayIso();
 
   return (
@@ -323,7 +352,7 @@ function WeekGrid({
           {/* hour rail */}
           <div className="relative">
             {hourMarks(win).map((m) => (
-              <div key={m} className="absolute right-1 text-[10px] text-ink-faint tabular-nums" style={{ top: (m - win.start) * WEEK_PX_PER_MIN - 6 }}>
+              <div key={m} className="absolute right-1 text-[10px] text-ink-faint tabular-nums" style={{ top: (m - win.start) * pxPerMin - 6 }}>
                 {fmtHour(m)}
               </div>
             ))}
@@ -336,16 +365,16 @@ function WeekGrid({
             return (
               <div key={d} className="relative border-l border-rule/60">
                 {hourMarks(win).map((m) => (
-                  <div key={m} className="absolute left-0 right-0 border-t border-rule/40" style={{ top: (m - win.start) * WEEK_PX_PER_MIN }} />
+                  <div key={m} className="absolute left-0 right-0 border-t border-rule/40" style={{ top: (m - win.start) * pxPerMin }} />
                 ))}
                 {h && !h.isClosed && (
-                  <div className="absolute left-0 right-0 bg-emerald-soft/30" style={{ top: (h.openMin - win.start) * WEEK_PX_PER_MIN, height: (h.closeMin - h.openMin) * WEEK_PX_PER_MIN }} />
+                  <div className="absolute left-0 right-0 bg-emerald-soft/30" style={{ top: (h.openMin - win.start) * pxPerMin, height: (h.closeMin - h.openMin) * pxPerMin }} />
                 )}
                 {dayBlocks.map((b) => (
-                  <BlockBand key={b.id} left="left-0" top={top(b.startIso)} height={Math.max(10, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * WEEK_PX_PER_MIN)} reason={b.reason} compact />
+                  <BlockBand key={b.id} left="left-0" top={top(b.startIso)} height={Math.max(10, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} compact />
                 ))}
                 {dayAppts.map((a) => (
-                  <ApptCard key={a.id} a={a} tz={tz} left="left-0" top={top(a.startIso)} height={Math.max(16, a.durationMin * WEEK_PX_PER_MIN)} onCancel={onCancel} compact />
+                  <ApptCard key={a.id} a={a} tz={tz} left="left-0" top={top(a.startIso)} height={Math.max(16, a.durationMin * pxPerMin)} onCancel={onCancel} compact />
                 ))}
               </div>
             );
@@ -427,7 +456,6 @@ function ApptCard({
   top,
   height,
   onCancel,
-  showTimes,
   compact,
 }: {
   a: DayAppointment;
@@ -436,7 +464,6 @@ function ApptCard({
   top: number;
   height: number;
   onCancel: (a: DayAppointment) => void;
-  showTimes?: boolean;
   compact?: boolean;
 }) {
   const held = a.status === "held";
@@ -451,11 +478,11 @@ function ApptCard({
     >
       <div className="flex items-start justify-between gap-1">
         <div className="min-w-0">
-          <div className={cn("font-semibold text-ink truncate", compact ? "text-[10px]" : "text-[12px]")}>
+          <div className={cn("font-semibold text-ink truncate leading-tight", compact ? "text-[11px]" : "text-[12px]")}>
             {a.patientName ?? (held ? "Hold" : "Booked")}
           </div>
-          {(showTimes || !compact) && (
-            <div className="text-[11px] text-ink-soft tabular-nums">
+          {height >= 30 && (
+            <div className="text-[11px] text-ink-soft tabular-nums leading-tight">
               {fmtTime(a.startIso, tz)}–{fmtTime(a.endIso, tz)}
               {held && " · holding"}
             </div>
