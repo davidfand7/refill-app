@@ -78,6 +78,10 @@ export interface OutreachTemplate {
   body: string;
   loomUrl: string | null;
   notes: string | null;
+  // v1.47.8: rep-private templates. name = display name the rep gave it;
+  // ownerRepUserId = the rep who owns it (null for the global library).
+  name: string | null;
+  ownerRepUserId: string | null;
   version: number;
   isActive: boolean;
   createdAt: string;
@@ -153,6 +157,8 @@ function rowToTemplate(r: Row): OutreachTemplate {
     body: r.body,
     loomUrl: r.loom_url,
     notes: r.notes,
+    name: r.name,
+    ownerRepUserId: r.owner_rep_user_id,
     version: r.version,
     isActive: r.is_active,
     createdAt: r.created_at,
@@ -168,17 +174,22 @@ export const listOutreachTemplates = createServerFn({ method: "POST" })
     async ({ data }): Promise<{ templates: OutreachTemplate[] }> => {
       const sb = admin();
       // v397 Phase 2E: reps + admins can read the shared template library.
-      await requireRepOrAdmin(sb, data.accessToken);
+      const principal = await requireRepOrAdmin(sb, data.accessToken);
 
       // v408: filter by audience. Defaults to 'spa' for back-compat with
       // existing rep outreach page callers that don't pass the param.
       const audience = data.audience ?? "spa";
 
+      // v1.47.8: return the global library (owner NULL) PLUS this principal's
+      // own saved templates (owner = them). The UI groups the rep-owned ones
+      // under "My templates". Rep templates have generated-unique channels, so
+      // they never collide with the shared library.
       const { data: rows, error } = await sb
         .from("outreach_templates")
         .select("*")
         .eq("is_active", true)
         .eq("audience", audience)
+        .or(`owner_rep_user_id.is.null,owner_rep_user_id.eq.${principal.userId}`)
         .order("icp", { ascending: true })
         .order("channel", { ascending: true });
       if (error) {
@@ -188,6 +199,59 @@ export const listOutreachTemplates = createServerFn({ method: "POST" })
       return { templates: (rows ?? []).map(rowToTemplate) };
     },
   );
+
+// ─── saveAsRepTemplate — promote an edited message to a rep-private template ─
+// v1.47.8: the rep edited a template's body and wants to keep it. We insert a
+// new rep-OWNED row (owner_rep_user_id = them) with a generated-unique channel
+// so it never collides with the global library, and a display name they chose.
+// It then shows up in their picker under "My templates" via listOutreachTemplates.
+
+const saveRepTemplateInput = z.object({
+  accessToken: z.string().min(1),
+  icp: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  audience: z.enum(["spa", "rep"]).optional(),
+  name: z.string().min(1).max(120),
+  subject: z.string().max(300).nullable().optional(),
+  body: z.string().min(1).max(20000),
+});
+
+function repTemplateChannel(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 24);
+  return `my_${slug || "tpl"}_${crypto.randomUUID().slice(0, 8)}`;
+}
+
+export const saveAsRepTemplate = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => saveRepTemplateInput.parse(raw))
+  .handler(async ({ data }): Promise<OutreachTemplate> => {
+    const sb = admin();
+    const principal = await requireRepOrAdmin(sb, data.accessToken);
+    const audience = data.audience ?? "spa";
+
+    const { data: row, error } = await sb
+      .from("outreach_templates")
+      .insert({
+        icp: data.icp,
+        channel: repTemplateChannel(data.name),
+        audience,
+        subject: data.subject ?? null,
+        body: data.body,
+        name: data.name.trim(),
+        owner_rep_user_id: principal.userId,
+        created_by: principal.userId,
+        is_active: true,
+        version: 1,
+      })
+      .select("*")
+      .single();
+    if (error || !row) {
+      throw new Error(`Couldn't save template: ${error?.message ?? "no row"}`);
+    }
+    return rowToTemplate(row);
+  });
 
 // ─── getActiveTemplate — send-time hot path ──────────────────────────────
 

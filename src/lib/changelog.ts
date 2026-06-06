@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.47.8",
+    date: "June 2026",
+    items: [
+      "<strong>v1.47.8 &mdash; Save an edited message as your own reusable template (+ a fold-regression fix). </strong>Grasshopper&rsquo;s GAP: an edited template IS a new template &mdash; so when you edit and go to send, name it and keep it. <strong>What ships</strong>: (1) <strong>Server</strong> &mdash; <code>outreach_templates</code> gains <code>owner_rep_user_id</code> (NULL = global/admin library, set = rep-private) + <code>name</code>; new <code>saveAsRepTemplate</code> fn inserts a rep-OWNED template with a generated-unique channel (no collision with the shared library); <code>listOutreachTemplates</code> now returns the global library PLUS the rep&rsquo;s own. (2) <strong>UI</strong> &mdash; a <strong>My templates</strong> group in the picker (shown by name) so saved ones are one click away; a <strong>Save as template</strong> link in the composer (appears once you&rsquo;ve edited the body) to save without sending; and on <strong>Send all</strong>, if the body&rsquo;s been edited, a dialog prompts <em>&lsquo;Save your edited message?&rsquo;</em> &rarr; name it then <strong>Save &amp; send</strong>, or <strong>Send without saving</strong> &mdash; exactly the flow Grasshopper described. Rep-private scope (chosen over a shared library) keeps each rep&rsquo;s shelf their own and the admin-curated library uncluttered. The v1.47.7 autosave stays underneath as a mid-edit safety net. (3) <strong>Bug fix</strong>: the v1.47.5 fold removed the <code>result</code>/<code>setResult</code> state but left two <code>onPick</code> handlers calling <code>setResult(null)</code> &mdash; a dangling reference that threw on every template pick (React swallowed it after the select already ran, so it looked fine but errored in console). Removed both. Surfaced because <code>vite build</code> uses esbuild (no type-check); a real <code>tsc --noEmit</code> on the touched files now passes clean. <strong>Touched</strong>: <code>supabase/migrations/20260701000000_v1_47_8_rep_private_templates.sql</code> (Phase A, applied via dashboard), <code>types.ts</code>, <code>src/server/refill-outreach.ts</code> (<code>saveAsRepTemplate</code> + list widening), <code>src/routes/app.rep.outreach.tsx</code> (My-templates group, Save-as-template button, save-on-send dialog, setResult fix), <code>src/lib/changelog.ts</code> (this entry). No dep change, no wrangler.jsonc change.",
+    ],
+  },
+  {
     version: "v1.47.7",
     date: "June 2026",
     items: [

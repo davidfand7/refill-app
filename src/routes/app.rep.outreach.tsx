@@ -21,7 +21,7 @@
 
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Link2, Send, Upload, UserPlus, X } from "lucide-react";
+import { Link2, Save, Send, Upload, UserPlus, X } from "lucide-react";
 import { z } from "zod";
 
 import { TemplateEditor } from "@/components/refill/TemplateEditor";
@@ -46,6 +46,7 @@ import {
 import {
   listMyOutreachSends,
   listOutreachTemplates,
+  saveAsRepTemplate,
   type OutreachSendRow,
   type OutreachTemplate,
 } from "@/server/refill-outreach";
@@ -181,6 +182,11 @@ function OutreachPage() {
     failed: number;
     total: number;
   } | null>(null);
+  // v1.47.8: save-as-template. mode 'save' = standalone save; mode 'send' =
+  // prompted on Send all when the body's been edited (save then send).
+  const [saveTplOpen, setSaveTplOpen] = useState(false);
+  const [saveTplMode, setSaveTplMode] = useState<"save" | "send">("save");
+  const [savingTpl, setSavingTpl] = useState(false);
   // v1.47.7: the fold left the shared composer body as ephemeral state — edit
   // it, refresh, and it was gone (no Save persisted it). Autosave the shared
   // subject/body per (audience, template) to localStorage so composing sticks.
@@ -301,7 +307,16 @@ function OutreachPage() {
     setBatchResult(null);
   }, [audience]);
 
-  const grouped = useMemo(() => groupByIcp(templates), [templates]);
+  // v1.47.8: the global library groups by ICP; the rep's own saved templates
+  // get their own "My templates" section (shown by name, not channel).
+  const grouped = useMemo(
+    () => groupByIcp(templates.filter((t) => !t.ownerRepUserId)),
+    [templates],
+  );
+  const myTemplates = useMemo(
+    () => templates.filter((t) => t.ownerRepUserId),
+    [templates],
+  );
 
   // v407 Pinch #16: auto-select template when the URL specifies icp + channel.
   // Runs after templates load (the auto-pick can't happen until the library
@@ -452,6 +467,69 @@ function OutreachPage() {
     return { inserted: res.inserted, skipped: res.skipped };
   };
 
+  // v1.47.8: clicking Send all when the shared body has been edited prompts to
+  // save it as a reusable template first; an unedited send goes straight through.
+  const handleSendAllClick = () => {
+    const edited = subjectOverride !== null || bodyOverride !== null;
+    if (edited) {
+      setSaveTplMode("send");
+      setSaveTplOpen(true);
+    } else {
+      handleSendBatch();
+    }
+  };
+
+  // v1.47.8: persist the edited message as a rep-private named template. In
+  // 'send' mode (prompted from Send all) it then dispatches the batch; in
+  // 'save' mode (standalone button) it switches to the freshly-saved template.
+  const handleSaveTemplate = async (name: string) => {
+    if (!accessToken || !selected || savingTpl) return;
+    setSavingTpl(true);
+    setError(null);
+    try {
+      const tpl = await saveAsRepTemplate({
+        data: {
+          accessToken,
+          icp: selected.icp,
+          audience: selected.audience,
+          name,
+          subject: subjectOverride !== null ? subjectOverride : selected.subject,
+          body: bodyOverride ?? selected.body,
+        },
+      });
+      // Refresh the library so "My templates" shows the new one.
+      try {
+        const { templates: latest } = await listOutreachTemplates({
+          data: { accessToken, audience },
+        });
+        setTemplates(latest);
+      } catch {
+        // Non-fatal — next load picks it up.
+      }
+      setSaveTplOpen(false);
+      if (saveTplMode === "send") {
+        await handleSendBatch();
+      } else {
+        // Save-only: switch to the freshly-saved template (its body IS the edit),
+        // clearing the overrides + the old autosave slot for a clean slate.
+        if (typeof window !== "undefined") {
+          try {
+            window.localStorage.removeItem(sharedBodyKey(selected.audience, selected.id));
+          } catch {
+            // ignore
+          }
+        }
+        setSubjectOverride(null);
+        setBodyOverride(null);
+        setSelected(tpl);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save template.");
+    } finally {
+      setSavingTpl(false);
+    }
+  };
+
   if (authLoading || !loaded) {
     return <Pulse label="Loading outreach…" />;
   }
@@ -529,12 +607,21 @@ function OutreachPage() {
                   selectedId={selected?.id}
                   onPick={(t) => {
                     setSelected(t);
-                    setResult(null);
                     setError(null);
                   }}
                 />
               );
             })}
+            {myTemplates.length > 0 && (
+              <MyTemplatesSection
+                templates={myTemplates}
+                selectedId={selected?.id}
+                onPick={(t) => {
+                  setSelected(t);
+                  setError(null);
+                }}
+              />
+            )}
             {audience === "rep" && <ShareLinkAffordance />}
           </div>
 
@@ -552,6 +639,10 @@ function OutreachPage() {
                   bodyOverride={bodyOverride}
                   onSubjectOverrideChange={setSubjectOverride}
                   onBodyOverrideChange={setBodyOverride}
+                  onSaveAsTemplate={() => {
+                    setSaveTplMode("save");
+                    setSaveTplOpen(true);
+                  }}
                 />
                 <RecipientRoster
                   audience={audience}
@@ -569,7 +660,7 @@ function OutreachPage() {
                   onTweakSave={handleTweakSave}
                   onResetTweak={handleResetTweak}
                   onRemove={handleRemoveRecipient}
-                  onSendAll={handleSendBatch}
+                  onSendAll={handleSendAllClick}
                 />
               </>
             ) : (
@@ -592,6 +683,18 @@ function OutreachPage() {
           history below the template grid so every visit to /outreach is
           aware of prior work — no more first-touch-every-time feel. */}
       {sends.length > 0 && <PastSendsPanel sends={sends} />}
+
+      <SaveTemplateDialog
+        open={saveTplOpen}
+        mode={saveTplMode}
+        busy={savingTpl}
+        onClose={() => setSaveTplOpen(false)}
+        onSave={handleSaveTemplate}
+        onSendWithoutSaving={() => {
+          setSaveTplOpen(false);
+          handleSendBatch();
+        }}
+      />
     </Page>
   );
 }
@@ -724,6 +827,121 @@ function formatRelativeShort(iso: string): string {
     month: "short",
     day: "numeric",
   });
+}
+
+// ─── v1.47.8: the rep's own saved templates (shown by name, not channel) ──
+function MyTemplatesSection({
+  templates,
+  selectedId,
+  onPick,
+}: {
+  templates: OutreachTemplate[];
+  selectedId?: string;
+  onPick: (t: OutreachTemplate) => void;
+}) {
+  return (
+    <div>
+      <div
+        className="text-[11px] uppercase tracking-wider font-semibold mb-2"
+        style={{ color: "#8a9098" }}
+      >
+        My templates
+      </div>
+      <div className="space-y-2">
+        {templates.map((t) => {
+          const isSelected = t.id === selectedId;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onPick(t)}
+              className="w-full text-left rounded-lg border p-3 transition hover:shadow-sm"
+              style={{
+                borderColor: isSelected ? "#056048" : "#e6e2d6",
+                background: isSelected ? "#f0f5ef" : "#fff",
+                boxShadow: isSelected ? "0 0 0 2px rgba(5,96,72,0.12)" : undefined,
+              }}
+            >
+              <div className="text-[13px] font-semibold" style={{ color: "#1c2024" }}>
+                {t.name ?? t.channel}
+              </div>
+              <div className="text-[12px] mt-0.5" style={{ color: "#8a9098" }}>
+                Saved template · ICP {t.icp}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── v1.47.8: name-and-save an edited message as a rep-private template ───
+function SaveTemplateDialog({
+  open,
+  mode,
+  busy,
+  onClose,
+  onSave,
+  onSendWithoutSaving,
+}: {
+  open: boolean;
+  mode: "save" | "send";
+  busy: boolean;
+  onClose: () => void;
+  onSave: (name: string) => void;
+  onSendWithoutSaving: () => void;
+}) {
+  const [name, setName] = useState("");
+  useEffect(() => {
+    if (open) setName("");
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-serif">
+            {mode === "send" ? "Save your edited message?" : "Save as template"}
+          </DialogTitle>
+          <DialogDescription>
+            {mode === "send"
+              ? "You've edited this template. Name it to keep it as a reusable template — or send this batch without saving."
+              : "Give your edited message a name. It'll show under “My templates” so you can reuse it anytime."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-1">
+          <Field
+            label="Template name"
+            value={name}
+            onChange={setName}
+            placeholder="e.g. Skinnovations intro"
+          />
+        </div>
+        <DialogFooter>
+          <button
+            type="button"
+            onClick={mode === "send" ? onSendWithoutSaving : onClose}
+            disabled={busy}
+            className="rounded-md border px-4 py-2 text-[13px] font-semibold transition hover:bg-[#fbfaf7] disabled:opacity-50"
+            style={{ borderColor: "#e6e2d6", background: "#fff", color: "#1c2024" }}
+          >
+            {mode === "send" ? "Send without saving" : "Cancel"}
+          </button>
+          <button
+            type="button"
+            onClick={() => onSave(name.trim())}
+            disabled={busy || !name.trim()}
+            className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-[13px] font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: "#056048", color: "#fbfaf7" }}
+          >
+            <Save className="h-3.5 w-3.5" />
+            {busy ? "Saving…" : mode === "send" ? "Save & send" : "Save template"}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 // ─── v1.47.0 P3a: Prospects / Recruits tab bar ───────────────────────────
@@ -1378,6 +1596,7 @@ function SendPanel({
   bodyOverride,
   onSubjectOverrideChange,
   onBodyOverrideChange,
+  onSaveAsTemplate,
 }: {
   template: OutreachTemplate;
   audience: "spa" | "rep";
@@ -1391,6 +1610,7 @@ function SendPanel({
   bodyOverride: string | null;
   onSubjectOverrideChange: (v: string | null) => void;
   onBodyOverrideChange: (v: string | null) => void;
+  onSaveAsTemplate: () => void;
 }) {
   // Shared subject/body: rep override wins, falls back to template default.
   const effectiveSubject = subjectOverride ?? template.subject ?? "";
@@ -1475,17 +1695,28 @@ function SendPanel({
             Body
           </span>
           {isDirty && (
-            <button
-              type="button"
-              onClick={() => {
-                onSubjectOverrideChange(null);
-                onBodyOverrideChange(null);
-              }}
-              className="text-[11px] underline-offset-2 hover:underline"
-              style={{ color: "#056048" }}
-            >
-              Reset to default
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={onSaveAsTemplate}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold underline-offset-2 hover:underline"
+                style={{ color: "#056048" }}
+              >
+                <Save className="h-3 w-3" />
+                Save as template
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onSubjectOverrideChange(null);
+                  onBodyOverrideChange(null);
+                }}
+                className="text-[11px] underline-offset-2 hover:underline"
+                style={{ color: "#8a9098" }}
+              >
+                Reset to default
+              </button>
+            </div>
           )}
         </div>
         <TemplateEditor
