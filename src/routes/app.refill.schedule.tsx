@@ -50,6 +50,10 @@ type ServiceLite = { id: string; name: string; durationMin: number };
 const ZOOM_LEVELS = [0.7, 1.0, 1.4, 2.0, 2.8];
 const DEFAULT_ZOOM_IDX = 2; // 1.4 px/min
 const ZOOM_KEY = "refill.schedule.zoom";
+// Minimum card heights so a short appointment is still tall enough to show
+// name + time without clipping (longer appts size by their real duration).
+const MIN_DAY_CARD_PX = 40;
+const MIN_WEEK_CARD_PX = 30;
 const WD_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function SchedulePage() {
@@ -271,7 +275,7 @@ function DayGrid({ day, tz, pxPerMin, onCancel }: { day: DaySchedule; tz: string
           <BlockBand key={b.id} left="left-14" top={top(b.startIso)} height={Math.max(14, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} />
         ))}
         {day.appointments.map((a) => (
-          <ApptCard key={a.id} a={a} tz={tz} left="left-14" top={top(a.startIso)} height={Math.max(18, a.durationMin * pxPerMin)} onCancel={onCancel} />
+          <ApptCard key={a.id} a={a} tz={tz} left="left-14" top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} />
         ))}
         {day.appointments.length === 0 && day.blocks.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center text-[13px] text-ink-faint">No bookings this day.</div>
@@ -374,7 +378,7 @@ function WeekGrid({
                   <BlockBand key={b.id} left="left-0" top={top(b.startIso)} height={Math.max(10, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} compact />
                 ))}
                 {dayAppts.map((a) => (
-                  <ApptCard key={a.id} a={a} tz={tz} left="left-0" top={top(a.startIso)} height={Math.max(16, a.durationMin * pxPerMin)} onCancel={onCancel} compact />
+                  <ApptCard key={a.id} a={a} tz={tz} left="left-0" top={top(a.startIso)} height={Math.max(MIN_WEEK_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} compact />
                 ))}
               </div>
             );

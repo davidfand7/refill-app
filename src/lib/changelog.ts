@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.48.8",
+    date: "June 2026",
+    items: [
+      "<strong>v1.48.8 &mdash; Short appointments no longer clip. </strong>Fix: a short appointment (e.g. 15 min) was sized purely by its duration, so its card was too short to fit the patient name AND the time &mdash; the time line got cut off. Cards now have a minimum height that always fits name + time, while longer appointments still size by their real duration (the standard calendar behavior). Applies to Day and Week. <strong>Touched</strong>: <code>src/routes/app.refill.schedule.tsx</code> (min card heights), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.48.7",
     date: "June 2026",
     items: [
