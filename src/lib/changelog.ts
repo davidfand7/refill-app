@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.65.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.65.1 &mdash; Buffer is a simple 5-minute picker. </strong>Cleanup <strong>Buffer</strong> on each service is now a single minutes dropdown (0–60 in 5-minute steps) instead of an hours+minutes pair — buffers are never hours. The duration H:M / minutes toggle is unchanged. <strong>Touched</strong>: <code>src/routes/app.refill.settings.booking.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.65.0",
     date: "June 2026",
     items: [

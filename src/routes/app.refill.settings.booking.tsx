@@ -1419,10 +1419,8 @@ function BookingSettingsPage() {
                             format={durFmt}
                             onChange={(m) => patchService(s.id, { durationMin: m })}
                           />
-                          <DurationField
+                          <BufferSelect
                             minutes={s.bufferMin}
-                            min={0}
-                            format={durFmt}
                             onChange={(m) => patchService(s.id, { bufferMin: m })}
                           />
                           <div className="flex justify-end">
@@ -1746,6 +1744,29 @@ function snap5(n: number, min: number): number {
 
 const DUR_INPUT_CLS =
   "rounded-md border border-rule bg-white px-1.5 py-1 text-[13px] text-ink text-right outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums";
+
+/** Buffer = cleanup minutes only (0–60 in 5-min steps), independent of the
+ *  duration H:M / minutes display toggle. */
+function BufferSelect({ minutes, onChange }: { minutes: number; onChange: (m: number) => void }) {
+  const opts = Array.from({ length: 13 }, (_, i) => i * 5); // 0…60
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <select
+        value={minutes}
+        onChange={(e) => onChange(parseInt(e.target.value, 10))}
+        className={cn(DUR_INPUT_CLS, "w-16 text-right")}
+      >
+        {!opts.includes(minutes) && <option value={minutes}>{minutes}</option>}
+        {opts.map((m) => (
+          <option key={m} value={m}>
+            {m}
+          </option>
+        ))}
+      </select>
+      <span className="text-[11px] text-ink-faint">m</span>
+    </div>
+  );
+}
 
 /**
  * Duration / buffer editor in 5-minute steps. Always stores minutes; renders as
