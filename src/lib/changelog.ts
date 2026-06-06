@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.48.4",
+    date: "June 2026",
+    items: [
+      "<strong>v1.48.4 &mdash; Booking confirmation emails. </strong>When a patient confirms online (or you book them in manually with an email), they now get a clean confirmation email &mdash; date + time in your timezone, from your spa&rsquo;s name &mdash; on the existing Refill email rails. Closes the &lsquo;confirmation on its way&rsquo; gap from the public booking flow. <strong>Touched</strong>: new <code>src/server/scheduling-email.ts</code> (reusable confirmation + reminder senders on the shared email template), <code>src/server/scheduling.functions.ts</code> (confirmBooking sends), <code>src/server/scheduling-owner.functions.ts</code> (manual book sends when an email is given), <code>src/lib/changelog.ts</code>. Next: the reminder cron (24h before) and the $5/$5 billing meter.",
+    ],
+  },
+  {
     version: "v1.48.3",
     date: "June 2026",
     items: [

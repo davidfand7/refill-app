@@ -42,6 +42,7 @@ import {
   type Slot,
   type SlotEngineSettings,
 } from "@/lib/scheduling-slots";
+import { sendBookingConfirmation } from "@/server/scheduling-email";
 
 function admin() {
   const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -410,7 +411,7 @@ export const confirmBooking = createServerFn({ method: "POST" })
       .eq("booking_token", data.token)
       .eq("status", "held")
       .gt("slot_held_until", nowIso)
-      .select("id, scheduled_at")
+      .select("id, scheduled_at, provider_id")
       .maybeSingle();
 
     if (error) return { ok: false, reason: `Confirm failed: ${error.message}`, code: "error" };
@@ -430,13 +431,36 @@ export const confirmBooking = createServerFn({ method: "POST" })
       return { ok: false, reason: "Booking not found.", code: "notfound" };
     }
 
-    // TODO(v1.48 Sunday — billing + notifications step):
-    //   1. Classify the booking → write a scheduling_billable_events row:
-    //        rescue-offer token consumed  → type 'slot_fill'       ($5)
-    //        campaign token present       → type 'campaign_booking'($5)
-    //        else organic                 → no billable row (free)
-    //   2. Send the confirmation email via the Resend rails (booking_email).
-    //   3. The reminder cron (24h + same-day) is a separate emma-sweep clone.
+    // Confirmation email (best-effort — never fails the booking). Resolve the
+    // spa display name + timezone from the appointment's provider → tenant.
+    let spaName = "Your appointment";
+    let timezone = "America/Los_Angeles";
+    if (updated.provider_id) {
+      const { data: prov } = await sb
+        .from("scheduling_providers")
+        .select("tenant_id")
+        .eq("id", updated.provider_id)
+        .maybeSingle();
+      if (prov) {
+        const [{ data: t }, { data: st }] = await Promise.all([
+          sb.from("tenants").select("name").eq("id", prov.tenant_id).maybeSingle(),
+          sb.from("scheduling_settings").select("timezone").eq("tenant_id", prov.tenant_id).maybeSingle(),
+        ]);
+        if (t?.name) spaName = t.name;
+        if (st?.timezone) timezone = st.timezone;
+      }
+    }
+    // Awaited, not fire-and-forget: the Worker isolate dies at response.
+    await sendBookingConfirmation({
+      to: data.email,
+      spaName,
+      startIso: updated.scheduled_at,
+      timezone,
+    });
+
+    // TODO(next ship — $5/$5 billing meter): classify the booking → write a
+    // scheduling_billable_events row (slot_fill if a rescue token was consumed,
+    // campaign_booking if a campaign token was present, else free).
 
     return { ok: true, appointmentId: updated.id, startIso: updated.scheduled_at };
   });

@@ -22,6 +22,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import { ensureSetup, getTenantIdForUser } from "@/server/scheduling-settings.functions";
 import { zonedWallClockToUtc, zonedDateParts } from "@/lib/scheduling-slots";
+import { sendBookingConfirmation } from "@/server/scheduling-email";
 
 function admin() {
   const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
@@ -275,6 +276,21 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
       }
       return { ok: false, reason: `Couldn't book: ${error.message}`, code: "invalid" };
     }
+
+    // Confirmation email when the owner supplied a patient email (best-effort).
+    if (data.patientEmail) {
+      const [{ data: t }, { data: st }] = await Promise.all([
+        sb.from("tenants").select("name").eq("id", tenantId).maybeSingle(),
+        sb.from("scheduling_settings").select("timezone").eq("tenant_id", tenantId).maybeSingle(),
+      ]);
+      await sendBookingConfirmation({
+        to: data.patientEmail,
+        spaName: t?.name ?? "Your appointment",
+        startIso: data.startIso,
+        timezone: st?.timezone ?? "America/Los_Angeles",
+      });
+    }
+
     return { ok: true, id: created.id };
   });
 
