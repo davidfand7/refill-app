@@ -95,6 +95,25 @@ const saveDraftInput = z.object({
   batchLabel: z.string().max(120).nullable().optional(),
 });
 
+const bulkDraftsInput = z.object({
+  accessToken: z.string().min(1),
+  templateId: z.string().uuid(),
+  icp: icpSchema,
+  channel: z.string().min(1).max(80),
+  audience: z.enum(["spa", "rep"]).optional(),
+  recipients: z
+    .array(
+      z.object({
+        email: z.string().email().max(254),
+        firstName: z.string().max(120).nullable().optional(),
+        spaName: z.string().max(200).nullable().optional(),
+      }),
+    )
+    .min(1)
+    .max(1000),
+  batchLabel: z.string().max(120).nullable().optional(),
+});
+
 const listDraftsInput = z.object({
   accessToken: z.string().min(1),
   templateId: z.string().uuid().optional(),
@@ -201,6 +220,69 @@ export const saveOutreachDraft = createServerFn({ method: "POST" })
     }
     return { draft: rowToDraft(row) };
   });
+
+// ─── saveOutreachDraftsBulk — paste / CSV bulk add (no-clobber) ───────────
+
+export const saveOutreachDraftsBulk = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => bulkDraftsInput.parse(raw))
+  .handler(
+    async ({
+      data,
+    }): Promise<{
+      inserted: number;
+      requested: number;
+      skipped: number;
+      drafts: OutreachDraft[];
+    }> => {
+      const sb = admin();
+      const principal = await requireRepOrAdmin(sb, data.accessToken);
+
+      // Dedup within the paste by lowercased email (keep first occurrence).
+      const seen = new Set<string>();
+      const deduped = data.recipients
+        .map((r) => ({ ...r, email: r.email.trim().toLowerCase() }))
+        .filter((r) => {
+          if (seen.has(r.email)) return false;
+          seen.add(r.email);
+          return true;
+        });
+
+      const rows = deduped.map((r) => ({
+        rep_user_id: principal.userId,
+        template_id: data.templateId,
+        icp: data.icp,
+        channel: data.channel,
+        audience: data.audience ?? "spa",
+        recipient_email: r.email,
+        recipient_first_name: r.firstName ?? null,
+        spa_name: r.spaName ?? null,
+        subject_override: null,
+        body_override: null,
+        batch_label: data.batchLabel ?? null,
+      }));
+
+      // ON CONFLICT DO NOTHING — a re-pasted CSV never clobbers an existing
+      // row (which may carry a hand-tweaked override). Returns only the
+      // newly-inserted rows, so requested - inserted = already-existing.
+      const { data: inserted, error } = await sb
+        .from("outreach_drafts")
+        .upsert(rows, {
+          onConflict: "rep_user_id,recipient_email,template_id",
+          ignoreDuplicates: true,
+        })
+        .select("*");
+      if (error) {
+        throw new Error(`Couldn't bulk-save drafts: ${error.message}`);
+      }
+      const insertedRows = inserted ?? [];
+      return {
+        inserted: insertedRows.length,
+        requested: deduped.length,
+        skipped: deduped.length - insertedRows.length,
+        drafts: insertedRows.map(rowToDraft),
+      };
+    },
+  );
 
 // ─── listOutreachDrafts — this rep's drafts (optionally per template) ─────
 

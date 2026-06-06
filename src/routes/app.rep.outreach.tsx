@@ -21,10 +21,22 @@
 
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookmarkPlus, Link2, Send, Sparkles, UserPlus, X } from "lucide-react";
+import {
+  BookmarkPlus,
+  Link2,
+  Send,
+  Sparkles,
+  Upload,
+  UserPlus,
+  X,
+} from "lucide-react";
 import { z } from "zod";
 
 import { TemplateEditor } from "@/components/refill/TemplateEditor";
+import {
+  RecipientBulkImport,
+  type ImportRecipient,
+} from "@/components/refill/RecipientBulkImport";
 import {
   Dialog,
   DialogContent,
@@ -55,6 +67,7 @@ import {
   deleteOutreachDraft,
   listOutreachDrafts,
   saveOutreachDraft,
+  saveOutreachDraftsBulk,
   sendOutreachBatch,
   type OutreachDraft,
 } from "@/server/refill-outreach-drafts";
@@ -516,6 +529,34 @@ function OutreachPage() {
     setDrafts((prev) => prev.filter((d) => d.id !== draft.id));
   };
 
+  // v1.47.0 P4: bulk add from paste/CSV. on-conflict-do-nothing means a
+  // re-paste never clobbers a tweaked override. Refetch the roster afterward
+  // so the new rows appear (bulk insert returns only the newly-added rows).
+  const handleBulkImport = async (
+    recipients: ImportRecipient[],
+  ): Promise<{ inserted: number; skipped: number }> => {
+    if (!accessToken || !selected) return { inserted: 0, skipped: 0 };
+    const res = await saveOutreachDraftsBulk({
+      data: {
+        accessToken,
+        templateId: selected.id,
+        icp: selected.icp,
+        channel: selected.channel,
+        audience: selected.audience,
+        recipients,
+      },
+    });
+    try {
+      const { drafts: latest } = await listOutreachDrafts({
+        data: { accessToken, audience },
+      });
+      setDrafts(latest);
+    } catch {
+      // Non-fatal — next load picks it up.
+    }
+    return { inserted: res.inserted, skipped: res.skipped };
+  };
+
   if (authLoading || !loaded) {
     return <Pulse label="Loading outreach…" />;
   }
@@ -639,6 +680,7 @@ function OutreachPage() {
                   sendingBatch={sendingBatch}
                   batchResult={batchResult}
                   onAddRecipient={handleAddRecipient}
+                  onBulkImport={handleBulkImport}
                   onTweakSave={handleTweakSave}
                   onResetTweak={handleResetTweak}
                   onRemove={handleRemoveRecipient}
@@ -1299,6 +1341,7 @@ function RecipientRoster({
   sendingBatch,
   batchResult,
   onAddRecipient,
+  onBulkImport,
   onTweakSave,
   onResetTweak,
   onRemove,
@@ -1313,12 +1356,16 @@ function RecipientRoster({
   sendingBatch: boolean;
   batchResult: { sent: number; failed: number; total: number } | null;
   onAddRecipient: (r: RosterRecipient) => Promise<void>;
+  onBulkImport: (
+    recipients: ImportRecipient[],
+  ) => Promise<{ inserted: number; skipped: number }>;
   onTweakSave: (draft: OutreachDraft, bodyOverride: string) => Promise<void>;
   onResetTweak: (draft: OutreachDraft) => Promise<void>;
   onRemove: (draft: OutreachDraft) => Promise<void>;
   onSendAll: () => void;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const count = roster.length;
 
   return (
@@ -1333,21 +1380,32 @@ function RecipientRoster({
         >
           Recipients{count > 0 ? ` · ${count}` : ""}
         </div>
-        <button
-          type="button"
-          onClick={() => setDialogOpen(true)}
-          className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[12px] font-semibold transition hover:bg-[#fbfaf7]"
-          style={{ borderColor: "#e6e2d6", background: "#fff", color: "#1c2024" }}
-        >
-          <UserPlus className="h-3.5 w-3.5" style={{ color: "#056048" }} />
-          Recipient
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setUploadOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[12px] font-semibold transition hover:bg-[#fbfaf7]"
+            style={{ borderColor: "#e6e2d6", background: "#fff", color: "#1c2024" }}
+          >
+            <Upload className="h-3.5 w-3.5" style={{ color: "#056048" }} />
+            Upload list
+          </button>
+          <button
+            type="button"
+            onClick={() => setDialogOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[12px] font-semibold transition hover:bg-[#fbfaf7]"
+            style={{ borderColor: "#e6e2d6", background: "#fff", color: "#1c2024" }}
+          >
+            <UserPlus className="h-3.5 w-3.5" style={{ color: "#056048" }} />
+            Recipient
+          </button>
+        </div>
       </div>
 
       {count === 0 ? (
         <p className="text-[13px] py-3" style={{ color: "#8a9098" }}>
-          No recipients yet. Add one with <strong>+ Recipient</strong> — or save
-          a draft above. (Bulk CSV upload lands next.)
+          No recipients yet. <strong>Upload a list</strong> to start, add one
+          with <strong>+ Recipient</strong>, or save a draft above.
         </p>
       ) : (
         <ul
@@ -1411,6 +1469,12 @@ function RecipientRoster({
         audience={audience}
         onClose={() => setDialogOpen(false)}
         onAdd={onAddRecipient}
+      />
+      <RecipientBulkImport
+        open={uploadOpen}
+        audience={audience}
+        onClose={() => setUploadOpen(false)}
+        onImport={onBulkImport}
       />
     </div>
   );

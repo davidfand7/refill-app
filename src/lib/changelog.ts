@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.47.4",
+    date: "June 2026",
+    items: [
+      "<strong>v1.47.4 &mdash; Outreach composer, P4: upload-to-start (paste / CSV, smart column mapping, validate + dedup) + nav cleanup. </strong>Grasshopper&rsquo;s &lsquo;let&rsquo;s do YOUR lean&rsquo; &mdash; bulk-load a recipient list so a rep can start from their spreadsheet instead of typing one by one. <strong>What ships</strong>: (1) NEW <code>src/components/refill/RecipientBulkImport.tsx</code> &mdash; an <strong>Upload list</strong> button in the roster opens a paste-or-CSV dialog. <strong>Paste</strong> handles spreadsheet copy (tab-delimited) natively; <strong>Upload</strong> reads a <code>.csv</code>. <strong>Smart column auto-detect</strong> maps email / first name / spa in any order via a forgiving alias map (and detects headerless data by spotting the <code>@</code> column); the rep can re-map any column with dropdowns + a &lsquo;first row is a header&rsquo; toggle. <strong>Validate + dedup, never silent-drop</strong>: a live &lsquo;47 valid · 2 need a fix · 1 duplicate merged&rsquo; readout, bad-email rows surfaced in a skipped list, dupes merged by lowercased email. (2) NEW server fn <code>saveOutreachDraftsBulk</code> &mdash; dedups the batch, bulk-upserts with <code>on conflict do nothing</code> so a re-pasted list never clobbers a hand-tweaked override, reports inserted-vs-skipped. Uploaded recipients are just drafts, so resume is free (upload 50, send 10, come back for the rest). (3) The empty roster now reads &lsquo;Upload a list to start.&rsquo; <strong>Nav cleanup</strong>: the standalone <strong>Recruit</strong> chip is retired from <code>RefillRepNav</code> &mdash; recruiting is the Recruits tab now, so one Outreach chip covers both books (<code>/app/rep/recruit</code> still redirects in). <strong>Parked for the Zoho-contacts phase</strong>: history-dedup (&lsquo;you&rsquo;ve emailed 3 of these&rsquo;) and reusable cross-template lists. <strong>Touched</strong>: NEW <code>RecipientBulkImport.tsx</code>, <code>src/server/refill-outreach-drafts.ts</code> (<code>saveOutreachDraftsBulk</code>), <code>src/routes/app.rep.outreach.tsx</code> (Upload button + bulk handler + modal wiring), <code>src/components/refill/RefillRepNav.tsx</code> (drop Recruit chip), <code>src/lib/changelog.ts</code> (this entry). No dep change, no schema change, no wrangler.jsonc change. <strong>Next</strong>: P3b-cleanup (fold the inline single-recipient fields into the dialog now the roster is proven).",
+    ],
+  },
+  {
     version: "v1.47.3",
     date: "June 2026",
     items: [
