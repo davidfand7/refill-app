@@ -578,7 +578,7 @@ function BookDialog({
               ))}
             </select>
           </Labeled>
-          <Labeled label="Time"><input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={`${inputCls} tabular-nums`} /></Labeled>
+          <Labeled label="Time"><input type="time" step={300} value={time} onChange={(e) => setTime(e.target.value)} className={`${inputCls} tabular-nums`} /></Labeled>
           <Labeled label="Patient name"><input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} /></Labeled>
           <div className="grid grid-cols-2 gap-3">
             <Labeled label="Email (optional)"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} /></Labeled>
@@ -649,8 +649,8 @@ function BlockDialog({
         </DialogHeader>
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
-            <Labeled label="From"><input type="time" value={start} onChange={(e) => setStart(e.target.value)} className={`${inputCls} tabular-nums`} /></Labeled>
-            <Labeled label="To"><input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className={`${inputCls} tabular-nums`} /></Labeled>
+            <Labeled label="From"><input type="time" step={300} value={start} onChange={(e) => setStart(e.target.value)} className={`${inputCls} tabular-nums`} /></Labeled>
+            <Labeled label="To"><input type="time" step={300} value={end} onChange={(e) => setEnd(e.target.value)} className={`${inputCls} tabular-nums`} /></Labeled>
           </div>
           <Labeled label="Reason (optional)"><input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Lunch, meeting, vacation…" className={inputCls} /></Labeled>
         </div>

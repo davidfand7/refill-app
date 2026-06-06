@@ -81,6 +81,9 @@ function BookingSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [server, setServer] = useState<SchedulingSetupBundle | null>(null);
   const [draft, setDraft] = useState<SchedulingSetupBundle | null>(null);
+  const [selDays, setSelDays] = useState<Set<number>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState("09:00");
+  const [bulkClose, setBulkClose] = useState("17:00");
 
   useEffect(() => {
     if (membership.status !== "tenant") return;
@@ -120,6 +123,42 @@ function BookingSettingsPage() {
     setDraft((d) =>
       d
         ? { ...d, hours: d.hours.map((h) => (h.dayOfWeek === dayOfWeek ? { ...h, ...patch } : h)) }
+        : d,
+    );
+  }
+  function toggleSelDay(dow: number) {
+    setSelDays((s) => {
+      const n = new Set(s);
+      if (n.has(dow)) n.delete(dow);
+      else n.add(dow);
+      return n;
+    });
+  }
+  function applyHoursToSelected() {
+    if (selDays.size === 0) return;
+    if (bulkOpen >= bulkClose) {
+      toast.error("Open time must be before close time.");
+      return;
+    }
+    setDraft((d) =>
+      d
+        ? {
+            ...d,
+            hours: d.hours.map((h) =>
+              selDays.has(h.dayOfWeek)
+                ? { ...h, openTime: bulkOpen, closeTime: bulkClose, isClosed: false }
+                : h,
+            ),
+          }
+        : d,
+    );
+    toast.success(`Applied ${bulkOpen}–${bulkClose} to ${selDays.size} day${selDays.size === 1 ? "" : "s"}.`);
+  }
+  function setSelectedClosed() {
+    if (selDays.size === 0) return;
+    setDraft((d) =>
+      d
+        ? { ...d, hours: d.hours.map((h) => (selDays.has(h.dayOfWeek) ? { ...h, isClosed: true } : h)) }
         : d,
     );
   }
@@ -291,6 +330,26 @@ function BookingSettingsPage() {
                 <Clock className="h-4 w-4 text-emerald" />
                 <h3 className="text-[14px] font-semibold text-ink">Business hours</h3>
               </div>
+
+              {/* Bulk edit: select days → apply hours */}
+              <div className="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b border-rule/60 text-[12px]">
+                <span className="text-ink-soft">Select:</span>
+                <button type="button" onClick={() => setSelDays(new Set([1, 2, 3, 4, 5]))} className="rounded border border-rule px-2 py-1 text-ink-soft hover:text-ink hover:border-emerald/40 transition">Weekdays</button>
+                <button type="button" onClick={() => setSelDays(new Set([0, 1, 2, 3, 4, 5, 6]))} className="rounded border border-rule px-2 py-1 text-ink-soft hover:text-ink hover:border-emerald/40 transition">All</button>
+                {selDays.size > 0 && (
+                  <button type="button" onClick={() => setSelDays(new Set())} className="rounded border border-rule px-2 py-1 text-ink-soft hover:text-ink hover:border-emerald/40 transition">Clear</button>
+                )}
+                {selDays.size > 0 && (
+                  <span className="ml-auto flex items-center gap-1.5">
+                    <span className="text-emerald font-medium mr-1">{selDays.size} day{selDays.size === 1 ? "" : "s"} →</span>
+                    <input type="time" step={300} value={bulkOpen} onChange={(e) => setBulkOpen(e.target.value)} className="rounded-md border border-rule bg-white px-2 py-1 text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums" />
+                    <input type="time" step={300} value={bulkClose} onChange={(e) => setBulkClose(e.target.value)} className="rounded-md border border-rule bg-white px-2 py-1 text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums" />
+                    <button type="button" onClick={applyHoursToSelected} className="rounded-md bg-emerald px-2.5 py-1 font-medium text-paper hover:opacity-95 transition">Apply</button>
+                    <button type="button" onClick={setSelectedClosed} className="rounded-md border border-rule px-2.5 py-1 text-ink-soft hover:text-ink transition">Set closed</button>
+                  </span>
+                )}
+              </div>
+
               <div className="space-y-1.5">
                 {DAY_ORDER.map((dow) => {
                   const h = draft.hours.find((x) => x.dayOfWeek === dow);
@@ -298,21 +357,32 @@ function BookingSettingsPage() {
                   return (
                     <div
                       key={dow}
-                      className="grid grid-cols-[110px_1fr] sm:grid-cols-[130px_auto_auto_1fr] items-center gap-2 py-1.5"
+                      className={cn(
+                        "grid grid-cols-[110px_1fr] sm:grid-cols-[150px_auto_auto_1fr] items-center gap-2 py-1.5 px-1 rounded-md",
+                        selDays.has(dow) && "bg-emerald-soft/20",
+                      )}
                     >
-                      <span className="text-[13px] font-medium text-ink">{DAY_LABELS[dow]}</span>
+                      <label className="flex items-center gap-2 text-[13px] font-medium text-ink cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selDays.has(dow)}
+                          onChange={() => toggleSelDay(dow)}
+                          className="h-3.5 w-3.5 rounded border-rule accent-emerald"
+                        />
+                        {DAY_LABELS[dow]}
+                      </label>
                       {h.isClosed ? (
                         <span className="text-[13px] text-ink-faint sm:col-span-2">Closed</span>
                       ) : (
                         <>
                           <input
-                            type="time"
+                            type="time" step={300}
                             value={h.openTime}
                             onChange={(e) => patchDay(dow, { openTime: e.target.value })}
                             className="rounded-md border border-rule bg-white px-2 py-1.5 text-[14px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums"
                           />
                           <input
-                            type="time"
+                            type="time" step={300}
                             value={h.closeTime}
                             onChange={(e) => patchDay(dow, { closeTime: e.target.value })}
                             className="rounded-md border border-rule bg-white px-2 py-1.5 text-[14px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums"

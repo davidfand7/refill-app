@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.48.9",
+    date: "June 2026",
+    items: [
+      "<strong>v1.48.9 &mdash; Bulk-set business hours + 5-minute time pickers. </strong>Two quality-of-life wins on the Online booking page. (1) <strong>Set hours for multiple days at once</strong>: tick the days (or use <em>Weekdays</em> / <em>All</em>), set an open + close time, and hit <strong>Apply</strong> &mdash; no more editing each day one by one (you can also bulk <em>Set closed</em>). (2) <strong>Time pickers now step in 5-minute increments</strong> everywhere in the scheduler (business hours, bulk apply, Add booking, Block time) instead of 1-minute. <strong>Touched</strong>: <code>src/routes/app.refill.settings.booking.tsx</code> (day multi-select + bulk-apply), <code>src/routes/app.refill.schedule.tsx</code>, both via <code>step={300}</code> on every time input, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.48.8",
     date: "June 2026",
     items: [
