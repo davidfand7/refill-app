@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.47.6",
+    date: "June 2026",
+    items: [
+      "<strong>v1.47.6 &mdash; Hotfix: re-adding a recipient who was already sent now re-activates them in the roster. </strong>Grasshopper added two recipients (<code>davidfand303@gmail.com</code> + <code>karen.aslak@gmail.com</code>) and the roster showed only one. <strong>Root cause</strong>: <code>davidfand303</code> had been <em>sent</em> earlier in testing (its draft row carried a <code>sent_at</code> timestamp). <code>saveOutreachDraft</code> upserts on <code>(rep, email, template)</code>, and the upsert <em>preserved</em> the existing <code>sent_at</code> — so re-adding him updated the stamped row, and the roster (which intentionally hides <code>sent_at</code>-set rows so a re-send skips them) silently dropped him. Karen was a fresh row, so she showed; the dialog&rsquo;s &lsquo;2 added&rsquo; counter was correct, one was just hidden. <strong>Fix</strong>: <code>saveOutreachDraft</code> now sets <code>sent_at = null</code> + <code>sent_event_id = null</code> on every save — adding or editing a recipient means they&rsquo;re an ACTIVE draft to send, period. <code>sendOutreachBatch</code> re-stamps at send, so single-batch idempotency (re-click skips sent) is unaffected. The bulk upload path keeps its skip-and-report behavior for already-sent emails (re-uploading a whole list shouldn&rsquo;t silently re-fire). Confirmed against the live rows. <strong>Touched</strong>: <code>src/server/refill-outreach-drafts.ts</code> (<code>saveOutreachDraft</code> re-activation), <code>src/lib/changelog.ts</code> (this entry). No dep change, no schema change, no wrangler.jsonc change.",
+    ],
+  },
+  {
     version: "v1.47.5",
     date: "June 2026",
     items: [

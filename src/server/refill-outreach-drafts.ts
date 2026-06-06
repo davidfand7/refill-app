@@ -208,6 +208,13 @@ export const saveOutreachDraft = createServerFn({ method: "POST" })
           subject_override: data.subjectOverride ?? null,
           body_override: data.bodyOverride ?? null,
           batch_label: data.batchLabel ?? null,
+          // Re-activate on save: adding/editing a recipient means they're an
+          // ACTIVE draft to send. Without this, re-adding someone who was sent
+          // earlier upserts their stamped row and the roster (which hides
+          // sent_at-set rows) silently drops them. sendOutreachBatch re-stamps
+          // these at send, so idempotency on a single batch is unaffected.
+          sent_at: null,
+          sent_event_id: null,
           updated_at: now,
         },
         { onConflict: "rep_user_id,recipient_email,template_id" },
