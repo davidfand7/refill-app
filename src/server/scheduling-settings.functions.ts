@@ -76,6 +76,7 @@ export interface SchedulingSettingsDraft {
 export interface BookableServiceDraft {
   id: string;
   name: string;
+  category: string;
   durationMin: number;
   bufferMin: number;
   /** Catalog base price (read-only here; edited on the catalog page). Used as
@@ -278,7 +279,7 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
         sb
           .from("services")
           .select(
-            "id, name, duration_min, buffer_min, service_price, online_bookable, required_resource_type, hidden_at",
+            "id, name, category, duration_min, buffer_min, service_price, online_bookable, required_resource_type, hidden_at",
           )
           .eq("tenant_id", tenantId)
           .is("hidden_at", null)
@@ -330,6 +331,7 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
     const services: BookableServiceDraft[] = (serviceRows ?? []).map((s) => ({
       id: s.id,
       name: s.name,
+      category: s.category,
       durationMin: s.duration_min,
       bufferMin: s.buffer_min,
       price: s.service_price,
@@ -768,6 +770,95 @@ export const setProviderServiceOverrideFn = createServerFn({ method: "POST" })
 // Turning OFF = opt this provider out (offered=false). Opt-out semantics are
 // unchanged, so the loved per-service view stays perfectly in sync.
 
+export interface ServiceAssignmentResult {
+  serviceId: string;
+  onlineBookable: boolean;
+  rows: ProviderServiceOverrideRow[];
+}
+
+/** Core assign/unassign for one (provider, service), shared by single + bulk. */
+async function applyAssignment(
+  sb: Sb,
+  tenantId: string,
+  providerId: string,
+  serviceId: string,
+  performs: boolean,
+  activeProviderIds: string[],
+  nowIso: string,
+): Promise<void> {
+  if (performs) {
+    const { data: svc } = await sb
+      .from("services")
+      .select("online_bookable")
+      .eq("id", serviceId)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (!svc) return;
+    if (!svc.online_bookable) {
+      // Make bookable + opt every OTHER active provider out → bookable by this one.
+      await sb
+        .from("services")
+        .update({ online_bookable: true, updated_at: nowIso })
+        .eq("id", serviceId)
+        .eq("tenant_id", tenantId);
+      const others = activeProviderIds.filter((id) => id !== providerId);
+      if (others.length) {
+        await sb.from("scheduling_provider_services").upsert(
+          others.map((id) => ({ provider_id: id, service_id: serviceId, offered: false })),
+          { onConflict: "provider_id,service_id", ignoreDuplicates: true },
+        );
+      }
+    }
+    // Ensure THIS provider performs it: clear any explicit opt-out row.
+    const { data: existing } = await sb
+      .from("scheduling_provider_services")
+      .select("id, offered")
+      .eq("provider_id", providerId)
+      .eq("service_id", serviceId)
+      .maybeSingle();
+    if (existing && existing.offered === false) {
+      await sb
+        .from("scheduling_provider_services")
+        .update({ offered: true, updated_at: nowIso })
+        .eq("id", existing.id);
+    }
+  } else {
+    await sb.from("scheduling_provider_services").upsert(
+      { provider_id: providerId, service_id: serviceId, offered: false, updated_at: nowIso },
+      { onConflict: "provider_id,service_id" },
+    );
+  }
+}
+
+/** Re-read bookable + all rows for a set of services (post-assignment state). */
+async function assignmentResults(sb: Sb, serviceIds: string[]): Promise<ServiceAssignmentResult[]> {
+  if (!serviceIds.length) return [];
+  const [{ data: svcs }, { data: rows }] = await Promise.all([
+    sb.from("services").select("id, online_bookable").in("id", serviceIds),
+    sb
+      .from("scheduling_provider_services")
+      .select("provider_id, service_id, offered, duration_min, buffer_min, price")
+      .in("service_id", serviceIds),
+  ]);
+  const bookableById = new Map((svcs ?? []).map((s) => [s.id, s.online_bookable]));
+  return serviceIds.map((sid) => ({
+    serviceId: sid,
+    onlineBookable: bookableById.get(sid) ?? false,
+    rows: (rows ?? [])
+      .filter((r) => r.service_id === sid)
+      .map((r) => ({
+        providerId: r.provider_id,
+        serviceId: r.service_id,
+        offered: r.offered,
+        durationMin: r.duration_min,
+        bufferMin: r.buffer_min,
+        price: r.price,
+      })),
+  }));
+}
+
+// ── assignProviderServiceFn ──────────────────────────────────────────────────
+
 const assignPSInput = z.object({
   accessToken: z.string().min(10),
   viewAsUserId: z.string().uuid().optional(),
@@ -778,95 +869,84 @@ const assignPSInput = z.object({
 
 export const assignProviderServiceFn = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => assignPSInput.parse(raw))
-  .handler(
-    async ({
-      data,
-    }): Promise<{ serviceId: string; onlineBookable: boolean; rows: ProviderServiceOverrideRow[] }> => {
-      const { effectiveUserId } = await resolveEffectiveUserId({
-        accessToken: data.accessToken,
-        viewAsUserId: data.viewAsUserId,
-      });
-      const sb = admin();
-      const tenantId = await getTenantIdForUser(sb, effectiveUserId);
-      const nowIso = new Date().toISOString();
+  .handler(async ({ data }): Promise<ServiceAssignmentResult> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const { data: prov } = await sb
+      .from("scheduling_providers")
+      .select("id")
+      .eq("id", data.providerId)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (!prov) throw new Error("That provider isn't part of this spa.");
+    const { data: provs } = await sb
+      .from("scheduling_providers")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("is_active", true);
+    const activeIds = (provs ?? []).map((p) => p.id);
 
-      const [{ data: prov }, { data: svc }] = await Promise.all([
-        sb
-          .from("scheduling_providers")
-          .select("id")
-          .eq("id", data.providerId)
-          .eq("tenant_id", tenantId)
-          .maybeSingle(),
-        sb
-          .from("services")
-          .select("id, online_bookable")
-          .eq("id", data.serviceId)
-          .eq("tenant_id", tenantId)
-          .maybeSingle(),
-      ]);
-      if (!prov) throw new Error("That provider isn't part of this spa.");
-      if (!svc) throw new Error("That service isn't part of this spa.");
+    await applyAssignment(
+      sb,
+      tenantId,
+      data.providerId,
+      data.serviceId,
+      data.performs,
+      activeIds,
+      new Date().toISOString(),
+    );
+    return (await assignmentResults(sb, [data.serviceId]))[0];
+  });
 
-      if (data.performs) {
-        if (!svc.online_bookable) {
-          // Make bookable, and opt every OTHER active provider out → bookable by this one.
-          await sb
-            .from("services")
-            .update({ online_bookable: true, updated_at: nowIso })
-            .eq("id", data.serviceId)
-            .eq("tenant_id", tenantId);
-          const { data: provs } = await sb
-            .from("scheduling_providers")
-            .select("id")
-            .eq("tenant_id", tenantId)
-            .eq("is_active", true);
-          const others = (provs ?? []).map((p) => p.id).filter((id) => id !== data.providerId);
-          if (others.length) {
-            await sb.from("scheduling_provider_services").upsert(
-              others.map((id) => ({ provider_id: id, service_id: data.serviceId, offered: false })),
-              { onConflict: "provider_id,service_id", ignoreDuplicates: true },
-            );
-          }
-        }
-        // Ensure THIS provider performs it: clear any explicit opt-out row.
-        const { data: existing } = await sb
-          .from("scheduling_provider_services")
-          .select("id, offered")
-          .eq("provider_id", data.providerId)
-          .eq("service_id", data.serviceId)
-          .maybeSingle();
-        if (existing && existing.offered === false) {
-          await sb
-            .from("scheduling_provider_services")
-            .update({ offered: true, updated_at: nowIso })
-            .eq("id", existing.id);
-        }
-      } else {
-        // Opt this provider out (preserve any price/duration override on the row).
-        await sb.from("scheduling_provider_services").upsert(
-          { provider_id: data.providerId, service_id: data.serviceId, offered: false, updated_at: nowIso },
-          { onConflict: "provider_id,service_id" },
-        );
-      }
+// ── assignProviderServicesBulkFn (category select/deselect) ──────────────────
 
-      const [{ data: svc2 }, { data: rows }] = await Promise.all([
-        sb.from("services").select("online_bookable").eq("id", data.serviceId).maybeSingle(),
-        sb
-          .from("scheduling_provider_services")
-          .select("provider_id, service_id, offered, duration_min, buffer_min, price")
-          .eq("service_id", data.serviceId),
-      ]);
-      return {
-        serviceId: data.serviceId,
-        onlineBookable: svc2?.online_bookable ?? false,
-        rows: (rows ?? []).map((r) => ({
-          providerId: r.provider_id,
-          serviceId: r.service_id,
-          offered: r.offered,
-          durationMin: r.duration_min,
-          bufferMin: r.buffer_min,
-          price: r.price,
-        })),
-      };
-    },
-  );
+const assignPSBulkInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+  providerId: z.string().uuid(),
+  serviceIds: z.array(z.string().uuid()).min(1).max(500),
+  performs: z.boolean(),
+});
+
+export const assignProviderServicesBulkFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => assignPSBulkInput.parse(raw))
+  .handler(async ({ data }): Promise<{ services: ServiceAssignmentResult[] }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const { data: prov } = await sb
+      .from("scheduling_providers")
+      .select("id")
+      .eq("id", data.providerId)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (!prov) throw new Error("That provider isn't part of this spa.");
+
+    // Only services belonging to this tenant.
+    const { data: ownSvcs } = await sb
+      .from("services")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .in("id", data.serviceIds);
+    const ids = (ownSvcs ?? []).map((s) => s.id);
+    if (!ids.length) return { services: [] };
+
+    const { data: provs } = await sb
+      .from("scheduling_providers")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("is_active", true);
+    const activeIds = (provs ?? []).map((p) => p.id);
+    const nowIso = new Date().toISOString();
+    for (const sid of ids) {
+      await applyAssignment(sb, tenantId, data.providerId, sid, data.performs, activeIds, nowIso);
+    }
+    return { services: await assignmentResults(sb, ids) };
+  });

@@ -16,7 +16,7 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   CalendarClock,
@@ -41,6 +41,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
   assignProviderServiceFn,
+  assignProviderServicesBulkFn,
   createProviderFn,
   createResourceFn,
   getSchedulingSetupFn,
@@ -49,6 +50,7 @@ import {
   updateProviderFn,
   updateResourceFn,
   type BookableServiceDraft,
+  type ServiceAssignmentResult,
   type ProviderRow,
   type ProviderServiceOverrideRow,
   type ResourceRow,
@@ -111,6 +113,8 @@ function BookingSettingsPage() {
   // Provider→services assignment panel (turn-down per provider).
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null);
   const [providerSearch, setProviderSearch] = useState("");
+  // Which service categories are expanded inside the open provider panel.
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   // Bookable-services list declutter: search + show-inactive.
   const [svcSearch, setSvcSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
@@ -344,30 +348,46 @@ function BookingSettingsPage() {
     );
     return row ? row.offered : true; // opt-out: no row = performs
   }
-  async function togglePerforms(providerId: string, serviceId: string, next: boolean) {
-    let res;
-    try {
-      res = await withToken((token) =>
-        assignProviderServiceFn({ data: { accessToken: token, viewAsUserId, providerId, serviceId, performs: next } }),
-      );
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Couldn't update.");
-      return;
-    }
-    if (!res) return;
-    // The op may have flipped the service bookable + rewritten its provider rows.
+  /** Apply assignment results (bookable flips + rewritten rows) to draft + server. */
+  function mergeAssignments(results: ServiceAssignmentResult[]) {
+    if (!results.length) return;
+    const bookableById = new Map(results.map((r) => [r.serviceId, r.onlineBookable]));
+    const touched = new Set(results.map((r) => r.serviceId));
     const merge = (b: SchedulingSetupBundle): SchedulingSetupBundle => ({
       ...b,
       services: b.services.map((s) =>
-        s.id === res.serviceId ? { ...s, onlineBookable: res.onlineBookable } : s,
+        bookableById.has(s.id) ? { ...s, onlineBookable: bookableById.get(s.id)! } : s,
       ),
       providerServices: [
-        ...b.providerServices.filter((r) => r.serviceId !== res.serviceId),
-        ...res.rows,
+        ...b.providerServices.filter((r) => !touched.has(r.serviceId)),
+        ...results.flatMap((r) => r.rows),
       ],
     });
     setServer((s) => (s ? merge(s) : s));
     setDraft((d) => (d ? merge(d) : d));
+  }
+  async function togglePerforms(providerId: string, serviceId: string, next: boolean) {
+    try {
+      const res = await withToken((token) =>
+        assignProviderServiceFn({ data: { accessToken: token, viewAsUserId, providerId, serviceId, performs: next } }),
+      );
+      if (!res) return;
+      mergeAssignments([res]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't update.");
+    }
+  }
+  async function toggleCategoryPerforms(providerId: string, serviceIds: string[], next: boolean) {
+    if (!serviceIds.length) return;
+    try {
+      const res = await withToken((token) =>
+        assignProviderServicesBulkFn({ data: { accessToken: token, viewAsUserId, providerId, serviceIds, performs: next } }),
+      );
+      if (!res) return;
+      mergeAssignments(res.services);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't update category.");
+    }
   }
 
   // ── Per-provider service overrides (immediate persist) ───────────────────
@@ -718,10 +738,6 @@ function BookingSettingsPage() {
               <div className="divide-y divide-rule">
                 {draft.providers.map((p) => {
                   const expanded = expandedProvider === p.id;
-                  const q = providerSearch.trim().toLowerCase();
-                  const panelList = q
-                    ? draft.services.filter((s) => s.name.toLowerCase().includes(q))
-                    : draft.services.filter((s) => performsService(p.id, s.id));
                   return (
                     <div key={p.id} className="py-1">
                       <div className="flex items-center gap-2 py-1.5">
@@ -731,6 +747,7 @@ function BookingSettingsPage() {
                             onClick={() => {
                               setExpandedProvider(expanded ? null : p.id);
                               setProviderSearch("");
+                              setExpandedCats(new Set());
                             }}
                             className="shrink-0 text-ink-faint hover:text-ink transition"
                             title="Services this provider performs"
@@ -762,51 +779,105 @@ function BookingSettingsPage() {
                         <Toggle checked={p.isActive} onChange={() => void onToggleProviderActive(p)} />
                       </div>
 
-                      {expanded && p.isActive && (
-                        <div className="ml-5 mb-2 mt-1 rounded-lg border border-rule/60 bg-paper/30 px-3 py-2.5">
-                          <div className="relative mb-2">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-faint" />
-                            <input
-                              type="text"
-                              value={providerSearch}
-                              onChange={(e) => setProviderSearch(e.target.value)}
-                              placeholder="Search services to add…"
-                              className="w-full rounded-md border border-rule bg-white pl-8 pr-3 py-1.5 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
-                            />
-                          </div>
-                          {panelList.length === 0 ? (
-                            <p className="text-[12px] text-ink-soft py-1.5">
-                              {q
-                                ? "No services match."
-                                : "No services yet — search above to add the ones this provider performs."}
-                            </p>
-                          ) : (
-                            <div className="space-y-0.5 max-h-64 overflow-y-auto">
-                              {panelList.map((s) => {
-                                const performs = performsService(p.id, s.id);
-                                return (
-                                  <label
-                                    key={s.id}
-                                    className="flex items-center justify-between gap-2 py-1 px-1 rounded hover:bg-white cursor-pointer"
-                                  >
-                                    <span className="text-[13px] text-ink truncate">{s.name}</span>
-                                    <input
-                                      type="checkbox"
-                                      checked={performs}
-                                      onChange={(e) => void togglePerforms(p.id, s.id, e.target.checked)}
-                                      className="h-4 w-4 rounded border-rule accent-emerald shrink-0"
-                                    />
-                                  </label>
-                                );
-                              })}
+                      {expanded && p.isActive && (() => {
+                        const q = providerSearch.trim().toLowerCase();
+                        const list = q
+                          ? draft.services.filter((s) => s.name.toLowerCase().includes(q))
+                          : draft.services;
+                        const byCat = new Map<string, BookableServiceDraft[]>();
+                        for (const s of list) {
+                          const cat = s.category?.trim() || "Other";
+                          (byCat.get(cat) ?? byCat.set(cat, []).get(cat)!).push(s);
+                        }
+                        const cats = Array.from(byCat.keys()).sort((a, b) => a.localeCompare(b));
+                        return (
+                          <div className="ml-5 mb-2 mt-1 rounded-lg border border-rule/60 bg-paper/30 px-3 py-2.5">
+                            <div className="relative mb-2">
+                              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-faint" />
+                              <input
+                                type="text"
+                                value={providerSearch}
+                                onChange={(e) => setProviderSearch(e.target.value)}
+                                placeholder="Search services…"
+                                className="w-full rounded-md border border-rule bg-white pl-8 pr-3 py-1.5 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                              />
                             </div>
-                          )}
-                          <p className="text-[11px] text-ink-faint mt-2 leading-relaxed">
-                            Checking a service makes it bookable and assigns it to{" "}
-                            <strong>{p.name}</strong>.
-                          </p>
-                        </div>
-                      )}
+                            {cats.length === 0 ? (
+                              <p className="text-[12px] text-ink-soft py-1.5">No services match.</p>
+                            ) : (
+                              <div className="space-y-0.5 max-h-80 overflow-y-auto">
+                                {cats.map((cat) => {
+                                  const svcs = byCat.get(cat)!;
+                                  const performed = svcs.filter((s) => performsService(p.id, s.id)).length;
+                                  const allOn = performed === svcs.length;
+                                  const someOn = performed > 0 && !allOn;
+                                  const open = !!q || expandedCats.has(cat);
+                                  const toggleCat = () =>
+                                    setExpandedCats((prev) => {
+                                      const n = new Set(prev);
+                                      if (n.has(cat)) n.delete(cat);
+                                      else n.add(cat);
+                                      return n;
+                                    });
+                                  return (
+                                    <div key={cat}>
+                                      <div className="flex items-center gap-2 py-1">
+                                        <button
+                                          type="button"
+                                          onClick={toggleCat}
+                                          className="shrink-0 text-ink-faint hover:text-ink transition"
+                                          aria-label={open ? "Collapse category" : "Expand category"}
+                                        >
+                                          <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !open && "-rotate-90")} />
+                                        </button>
+                                        <TriCheckbox
+                                          checked={allOn}
+                                          indeterminate={someOn}
+                                          onChange={() =>
+                                            void toggleCategoryPerforms(p.id, svcs.map((s) => s.id), !allOn)
+                                          }
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={toggleCat}
+                                          className="flex-1 min-w-0 text-left text-[13px] font-medium text-ink truncate"
+                                        >
+                                          {cat}
+                                        </button>
+                                        <span className="text-[11px] text-ink-faint tabular-nums shrink-0">
+                                          {performed}/{svcs.length}
+                                        </span>
+                                      </div>
+                                      {open && (
+                                        <div className="ml-6 space-y-0.5 pb-1">
+                                          {svcs.map((s) => (
+                                            <label
+                                              key={s.id}
+                                              className="flex items-center justify-between gap-2 py-0.5 px-1 rounded hover:bg-white cursor-pointer"
+                                            >
+                                              <span className="text-[13px] text-ink truncate">{s.name}</span>
+                                              <input
+                                                type="checkbox"
+                                                checked={performsService(p.id, s.id)}
+                                                onChange={(e) => void togglePerforms(p.id, s.id, e.target.checked)}
+                                                className="h-4 w-4 rounded border-rule accent-emerald shrink-0"
+                                              />
+                                            </label>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            <p className="text-[11px] text-ink-faint mt-2 leading-relaxed">
+                              Checking a service — or a whole category — makes it bookable and assigns
+                              it to <strong>{p.name}</strong>.
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}
@@ -1521,6 +1592,31 @@ function DurationField({
       </select>
       <span className="text-[11px] text-ink-faint">m</span>
     </div>
+  );
+}
+
+/** Checkbox with an indeterminate (some-selected) state. */
+function TriCheckbox({
+  checked,
+  indeterminate,
+  onChange,
+}: {
+  checked: boolean;
+  indeterminate: boolean;
+  onChange: () => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate && !checked;
+  }, [indeterminate, checked]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      className="h-4 w-4 rounded border-rule accent-emerald shrink-0"
+    />
   );
 }
 

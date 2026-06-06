@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.64.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.64.0 &mdash; Provider services, grouped by category. </strong>The per-provider service picker now organizes your catalog into <strong>category turn-downs</strong>, each with a <strong>select-all checkbox</strong> (tri-state &mdash; full / partial / none) plus the individual service checkboxes. Check a whole category to assign it to that provider in one move, or fine-tune service by service; the count (e.g. <code>6/9</code>) shows at a glance. Search still filters across everything and auto-opens matching categories. <strong>Touched</strong>: <code>src/server/scheduling-settings.functions.ts</code> (<code>category</code> in the bundle + <code>assignProviderServicesBulkFn</code>), <code>src/routes/app.refill.settings.booking.tsx</code> (category accordions + tri-state select-all), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.63.0",
     date: "June 2026",
     items: [
