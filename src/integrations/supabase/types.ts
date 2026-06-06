@@ -1994,7 +1994,9 @@ export type Database = {
           id: string
           is_active: boolean
           loom_url: string | null
+          name: string | null
           notes: string | null
+          owner_rep_user_id: string | null
           subject: string | null
           updated_at: string
           version: number
@@ -2009,7 +2011,9 @@ export type Database = {
           id?: string
           is_active?: boolean
           loom_url?: string | null
+          name?: string | null
           notes?: string | null
+          owner_rep_user_id?: string | null
           subject?: string | null
           updated_at?: string
           version?: number
@@ -2024,7 +2028,9 @@ export type Database = {
           id?: string
           is_active?: boolean
           loom_url?: string | null
+          name?: string | null
           notes?: string | null
+          owner_rep_user_id?: string | null
           subject?: string | null
           updated_at?: string
           version?: number
