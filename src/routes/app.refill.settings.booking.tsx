@@ -24,6 +24,7 @@ import {
   ChevronDown,
   Clock,
   Copy,
+  DoorOpen,
   ExternalLink,
   Globe,
   Link2,
@@ -39,13 +40,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
   createProviderFn,
+  createResourceFn,
   getSchedulingSetupFn,
   saveSchedulingSetupFn,
   setProviderServiceOverrideFn,
   updateProviderFn,
+  updateResourceFn,
   type BookableServiceDraft,
   type ProviderRow,
   type ProviderServiceOverrideRow,
+  type ResourceRow,
+  type ResourceType,
   type SchedulingHoursDraft,
   type SchedulingSettingsDraft,
   type SchedulingSetupBundle,
@@ -105,6 +110,12 @@ function BookingSettingsPage() {
   const [expandedSvc, setExpandedSvc] = useState<string | null>(null);
   // Transient override input buffers, keyed `${providerId}|${serviceId}|${field}`.
   const [psDrafts, setPsDrafts] = useState<Record<string, string>>({});
+  // Rooms/resources management.
+  const [addingResource, setAddingResource] = useState(false);
+  const [newResourceName, setNewResourceName] = useState("");
+  const [newResourceType, setNewResourceType] = useState<ResourceType>("room");
+  const [resourceBusy, setResourceBusy] = useState(false);
+  const [resourceNameDrafts, setResourceNameDrafts] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (membership.status !== "tenant") return;
@@ -383,6 +394,76 @@ function BookingSettingsPage() {
       price: cur?.price ?? null,
     });
   }
+
+  // ── Rooms / resources management (immediate persist) ─────────────────────
+  function syncResourceAdd(resource: ResourceRow) {
+    const merge = (b: SchedulingSetupBundle): SchedulingSetupBundle => ({
+      ...b,
+      resources: [...b.resources, resource],
+    });
+    setServer((s) => (s ? merge(s) : s));
+    setDraft((d) => (d ? merge(d) : d));
+  }
+  function syncResourceUpdate(resource: ResourceRow) {
+    const merge = (b: SchedulingSetupBundle): SchedulingSetupBundle => ({
+      ...b,
+      resources: b.resources.map((r) => (r.id === resource.id ? resource : r)),
+    });
+    setServer((s) => (s ? merge(s) : s));
+    setDraft((d) => (d ? merge(d) : d));
+  }
+  async function onAddResource() {
+    const name = newResourceName.trim();
+    if (!name) return;
+    setResourceBusy(true);
+    try {
+      const res = await withToken((token) =>
+        createResourceFn({ data: { accessToken: token, viewAsUserId, name, type: newResourceType } }),
+      );
+      if (!res) return;
+      syncResourceAdd(res.resource);
+      setNewResourceName("");
+      setNewResourceType("room");
+      setAddingResource(false);
+      toast.success(`Added ${res.resource.name}.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't add resource.");
+    } finally {
+      setResourceBusy(false);
+    }
+  }
+  async function commitResourceRename(r: ResourceRow) {
+    const next = (resourceNameDrafts[r.id] ?? r.name).trim();
+    setResourceNameDrafts((m) => {
+      const n = { ...m };
+      delete n[r.id];
+      return n;
+    });
+    if (!next || next === r.name) return;
+    try {
+      const res = await withToken((token) =>
+        updateResourceFn({ data: { accessToken: token, viewAsUserId, resourceId: r.id, name: next } }),
+      );
+      if (!res) return;
+      syncResourceUpdate(res.resource);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't rename resource.");
+    }
+  }
+  async function updateResource(r: ResourceRow, patch: { type?: ResourceType; isActive?: boolean }) {
+    try {
+      const res = await withToken((token) =>
+        updateResourceFn({ data: { accessToken: token, viewAsUserId, resourceId: r.id, ...patch } }),
+      );
+      if (!res) return;
+      syncResourceUpdate(res.resource);
+      if (patch.isActive !== undefined) {
+        toast.success(`${res.resource.name} ${res.resource.isActive ? "activated" : "deactivated"}.`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't update resource.");
+    }
+  }
   function patchService(id: string, patch: Partial<BookableServiceDraft>) {
     setDraft((d) =>
       d ? { ...d, services: d.services.map((s) => (s.id === id ? { ...s, ...patch } : s)) } : d,
@@ -640,6 +721,124 @@ function BookingSettingsPage() {
                   className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-1.5 text-[13px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition"
                 >
                   <Plus className="h-3.5 w-3.5" /> Add provider
+                </button>
+              )}
+            </section>
+
+            {/* ── Rooms & resources ── */}
+            <section className="rounded-xl border border-rule bg-white px-5 py-4">
+              <div className="flex items-center gap-2 mb-1">
+                <DoorOpen className="h-4 w-4 text-emerald" />
+                <h3 className="text-[14px] font-semibold text-ink">Rooms &amp; resources</h3>
+              </div>
+              <p className="text-[12px] text-ink-soft mb-3 leading-relaxed">
+                Treatment rooms, chairs, or devices an appointment occupies. Optional — add them if
+                two appointments shouldn&rsquo;t need the same room at once. (Requiring a room per
+                service comes next; for now this just sets up your list.)
+              </p>
+
+              {draft.resources.length > 0 && (
+                <div className="divide-y divide-rule">
+                  {draft.resources.map((r) => (
+                    <div key={r.id} className="flex items-center gap-2 py-2.5">
+                      <input
+                        type="text"
+                        value={resourceNameDrafts[r.id] ?? r.name}
+                        onChange={(e) =>
+                          setResourceNameDrafts((m) => ({ ...m, [r.id]: e.target.value }))
+                        }
+                        onBlur={() => void commitResourceRename(r)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") e.currentTarget.blur();
+                        }}
+                        className={cn(
+                          "flex-1 min-w-0 rounded-md border border-transparent bg-transparent px-2 py-1 text-[14px] text-ink outline-none hover:border-rule focus:border-emerald focus:ring-2 focus:ring-emerald/30",
+                          !r.isActive && "text-ink-faint italic",
+                        )}
+                      />
+                      <select
+                        value={r.type}
+                        onChange={(e) => void updateResource(r, { type: e.target.value as ResourceType })}
+                        className="rounded-md border border-rule bg-white px-2 py-1 text-[12px] text-ink-soft outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                      >
+                        <option value="room">Room</option>
+                        <option value="chair">Chair</option>
+                        <option value="device">Device</option>
+                      </select>
+                      {!r.isActive && (
+                        <span className="text-[10px] uppercase tracking-wider font-semibold text-ink-faint">
+                          Inactive
+                        </span>
+                      )}
+                      <Toggle
+                        checked={r.isActive}
+                        onChange={(v) => void updateResource(r, { isActive: v })}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {addingResource ? (
+                <div className="flex items-center gap-2 mt-3 pt-3 border-t border-rule/60">
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="e.g. Room 1, Laser bay"
+                    value={newResourceName}
+                    onChange={(e) => setNewResourceName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void onAddResource();
+                      if (e.key === "Escape") {
+                        setAddingResource(false);
+                        setNewResourceName("");
+                      }
+                    }}
+                    className="flex-1 rounded-md border border-rule bg-white px-3 py-2 text-[14px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                  />
+                  <select
+                    value={newResourceType}
+                    onChange={(e) => setNewResourceType(e.target.value as ResourceType)}
+                    className="rounded-md border border-rule bg-white px-2 py-2 text-[13px] text-ink-soft outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                  >
+                    <option value="room">Room</option>
+                    <option value="chair">Chair</option>
+                    <option value="device">Device</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void onAddResource()}
+                    disabled={resourceBusy || !newResourceName.trim()}
+                    className="inline-flex items-center gap-1 rounded-md bg-emerald px-3 py-2 text-[13px] font-medium text-paper hover:opacity-95 transition disabled:opacity-50"
+                  >
+                    {resourceBusy ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Plus className="h-3.5 w-3.5" />
+                    )}{" "}
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingResource(false);
+                      setNewResourceName("");
+                    }}
+                    className="rounded-md border border-rule px-3 py-2 text-[13px] text-ink-soft hover:text-ink transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAddingResource(true)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-1.5 text-[13px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition",
+                    draft.resources.length > 0 && "mt-3",
+                  )}
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add room or resource
                 </button>
               )}
             </section>

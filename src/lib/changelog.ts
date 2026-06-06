@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.57.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.57.0 &mdash; Rooms &amp; resources. </strong>New section on the <strong>Online booking</strong> page to manage the <strong>rooms, chairs, or devices</strong> your appointments occupy &mdash; add them, rename inline, set each one&rsquo;s type, and activate/deactivate (never deleted, so history stays intact). It&rsquo;s optional: a spa can have none. This is the setup half &mdash; next we&rsquo;ll let a service <strong>require</strong> a room so two appointments can&rsquo;t need the same one at once (the database already enforces no double-booking of a resource). <strong>Touched</strong>: <code>src/server/scheduling-settings.functions.ts</code> (resources in the bundle + <code>createResourceFn</code> / <code>updateResourceFn</code>), <code>src/routes/app.refill.settings.booking.tsx</code> (Rooms &amp; resources section), <code>src/lib/changelog.ts</code>. No schema change &mdash; the <code>scheduling_resources</code> table shipped with the v1.48.0 spine.",
+    ],
+  },
+  {
     version: "v1.56.0",
     date: "June 2026",
     items: [

@@ -90,6 +90,15 @@ export interface ProviderRow {
   isActive: boolean;
 }
 
+export type ResourceType = "room" | "chair" | "device";
+
+export interface ResourceRow {
+  id: string;
+  name: string;
+  type: ResourceType;
+  isActive: boolean;
+}
+
 /** A per-provider override row. NULL field = inherit the service's value.
  *  `offered=false` = this provider does not perform the service. */
 export interface ProviderServiceOverrideRow {
@@ -106,6 +115,8 @@ export interface SchedulingSetupBundle {
   providerId: string;
   /** All providers (active + inactive), ordered by created_at. */
   providers: ProviderRow[];
+  /** All rooms/resources (active + inactive), ordered by created_at. */
+  resources: ResourceRow[];
   /** Tenant slug — used to build the public booking link /s/<slug>. */
   slug: string;
   settings: SchedulingSettingsDraft;
@@ -131,6 +142,11 @@ const DEFAULT_SETTINGS: SchedulingSettingsDraft = {
 /** "HH:MM:SS" or "HH:MM" → "HH:MM". */
 function hhmm(t: string): string {
   return t.slice(0, 5);
+}
+
+/** Coerce a stored resource type to the known union (defaults to "room"). */
+function normalizeResourceType(t: string): ResourceType {
+  return t === "chair" || t === "device" ? t : "room";
 }
 
 // ── Idempotent seed ──────────────────────────────────────────────────────────
@@ -232,6 +248,18 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
     }));
     const providerIds = providers.map((p) => p.id);
 
+    const { data: resourceRows } = await sb
+      .from("scheduling_resources")
+      .select("id, name, type, is_active, created_at")
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: true });
+    const resources: ResourceRow[] = (resourceRows ?? []).map((r) => ({
+      id: r.id,
+      name: r.name,
+      type: normalizeResourceType(r.type),
+      isActive: r.is_active,
+    }));
+
     const [{ data: settingsRow }, { data: hoursRows }, { data: serviceRows }, { data: tenantRow }] =
       await Promise.all([
         sb.from("scheduling_settings").select("*").eq("tenant_id", tenantId).maybeSingle(),
@@ -302,6 +330,7 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
     return {
       providerId,
       providers,
+      resources,
       slug: tenantRow?.slug ?? "",
       settings,
       hoursByProvider,
@@ -541,6 +570,94 @@ export const updateProviderFn = createServerFn({ method: "POST" })
       throw new Error(`Couldn't update provider: ${error?.message ?? "unknown"}`);
     }
     return { provider: { id: updated.id, name: updated.name, isActive: updated.is_active } };
+  });
+
+// ── createResourceFn / updateResourceFn ──────────────────────────────────────
+// Rooms / chairs / devices. Unlike providers, a spa may have ZERO active
+// resources (they're optional until a service requires one), so there is no
+// last-active guard. Persisted immediately. Deactivate, never hard-delete.
+
+const RESOURCE_TYPES = ["room", "chair", "device"] as const;
+
+const createResourceInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+  name: z.string().trim().min(1).max(80),
+  type: z.enum(RESOURCE_TYPES),
+});
+
+export const createResourceFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => createResourceInput.parse(raw))
+  .handler(async ({ data }): Promise<{ resource: ResourceRow }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+
+    const { data: created, error } = await sb
+      .from("scheduling_resources")
+      .insert({ tenant_id: tenantId, name: data.name, type: data.type })
+      .select("id, name, type, is_active")
+      .single();
+    if (error || !created) {
+      throw new Error(`Couldn't add resource: ${error?.message ?? "unknown"}`);
+    }
+    return {
+      resource: {
+        id: created.id,
+        name: created.name,
+        type: normalizeResourceType(created.type),
+        isActive: created.is_active,
+      },
+    };
+  });
+
+const updateResourceInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+  resourceId: z.string().uuid(),
+  name: z.string().trim().min(1).max(80).optional(),
+  type: z.enum(RESOURCE_TYPES).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const updateResourceFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => updateResourceInput.parse(raw))
+  .handler(async ({ data }): Promise<{ resource: ResourceRow }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+
+    const patch: { name?: string; type?: ResourceType; is_active?: boolean; updated_at: string } = {
+      updated_at: new Date().toISOString(),
+    };
+    if (data.name !== undefined) patch.name = data.name;
+    if (data.type !== undefined) patch.type = data.type;
+    if (data.isActive !== undefined) patch.is_active = data.isActive;
+
+    const { data: updated, error } = await sb
+      .from("scheduling_resources")
+      .update(patch)
+      .eq("id", data.resourceId)
+      .eq("tenant_id", tenantId)
+      .select("id, name, type, is_active")
+      .single();
+    if (error || !updated) {
+      throw new Error(`Couldn't update resource: ${error?.message ?? "unknown"}`);
+    }
+    return {
+      resource: {
+        id: updated.id,
+        name: updated.name,
+        type: normalizeResourceType(updated.type),
+        isActive: updated.is_active,
+      },
+    };
   });
 
 // ── setProviderServiceOverrideFn ─────────────────────────────────────────────
