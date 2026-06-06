@@ -261,6 +261,13 @@ function BookingSettingsPage() {
   function patchSettings(patch: Partial<SchedulingSettingsDraft>) {
     setDraft((d) => (d ? { ...d, settings: { ...d.settings, ...patch } } : d));
   }
+  /** Apply the same immediate-persist transform to both the saved snapshot and
+   *  the working draft (the recurring pattern across provider/resource/service
+   *  ops that persist on the spot, outside the batched Save). */
+  function applyToBoth(fn: (b: SchedulingSetupBundle) => SchedulingSetupBundle) {
+    setServer((b) => (b ? fn(b) : b));
+    setDraft((b) => (b ? fn(b) : b));
+  }
   /** Map the selected provider's hours rows; no-op for other providers. */
   function mapSelectedHours(
     d: SchedulingSetupBundle,
@@ -327,16 +334,14 @@ function BookingSettingsPage() {
       providers: [...b.providers, provider],
       hoursByProvider: { ...b.hoursByProvider, [provider.id]: hours },
     });
-    setServer((s) => (s ? merge(s) : s));
-    setDraft((d) => (d ? merge(d) : d));
+    applyToBoth(merge);
   }
   function syncProviderUpdate(provider: ProviderRow) {
     const merge = (b: SchedulingSetupBundle): SchedulingSetupBundle => ({
       ...b,
       providers: b.providers.map((p) => (p.id === provider.id ? provider : p)),
     });
-    setServer((s) => (s ? merge(s) : s));
-    setDraft((d) => (d ? merge(d) : d));
+    applyToBoth(merge);
   }
   async function onAddProvider() {
     const name = newProviderName.trim();
@@ -421,8 +426,7 @@ function BookingSettingsPage() {
         ...results.flatMap((r) => r.rows),
       ],
     });
-    setServer((s) => (s ? merge(s) : s));
-    setDraft((d) => (d ? merge(d) : d));
+    applyToBoth(merge);
   }
   async function togglePerforms(providerId: string, serviceId: string, next: boolean) {
     try {
@@ -470,8 +474,7 @@ function BookingSettingsPage() {
         ...(row ? [row] : []),
       ],
     });
-    setServer((s) => (s ? merge(s) : s));
-    setDraft((d) => (d ? merge(d) : d));
+    applyToBoth(merge);
   }
   function psFieldValue(providerId: string, serviceId: string, field: "durationMin" | "price"): string {
     const key = `${providerId}|${serviceId}|${field}`;
@@ -547,16 +550,14 @@ function BookingSettingsPage() {
       ...b,
       resources: [...b.resources, resource],
     });
-    setServer((s) => (s ? merge(s) : s));
-    setDraft((d) => (d ? merge(d) : d));
+    applyToBoth(merge);
   }
   function syncResourceUpdate(resource: ResourceRow) {
     const merge = (b: SchedulingSetupBundle): SchedulingSetupBundle => ({
       ...b,
       resources: b.resources.map((r) => (r.id === resource.id ? resource : r)),
     });
-    setServer((s) => (s ? merge(s) : s));
-    setDraft((d) => (d ? merge(d) : d));
+    applyToBoth(merge);
   }
   async function onAddResource() {
     const name = newResourceName.trim();
@@ -631,8 +632,7 @@ function BookingSettingsPage() {
         ...b,
         services: b.services.map((s) => (s.category === oldCat ? { ...s, category: res.to } : s)),
       });
-      setServer((b) => (b ? apply(b) : b));
-      setDraft((b) => (b ? apply(b) : b));
+      applyToBoth(apply);
       setCollapsedSvcCats((p) => {
         if (!p.has(oldCat)) return p;
         const n = new Set(p);
@@ -666,8 +666,7 @@ function BookingSettingsPage() {
         ...b,
         services: [...b.services, res.service],
       });
-      setServer((s) => (s ? add(s) : s));
-      setDraft((d) => (d ? add(d) : d));
+      applyToBoth(add);
       setNewSvcName("");
       setNewSvcPrice("");
       setNewSvcCategory("other");
@@ -693,8 +692,7 @@ function BookingSettingsPage() {
         services: b.services.filter((x) => x.id !== s.id),
         providerServices: b.providerServices.filter((r) => r.serviceId !== s.id),
       });
-      setServer((b) => (b ? remove(b) : b));
-      setDraft((b) => (b ? remove(b) : b));
+      applyToBoth(remove);
       if (expandedSvc === s.id) setExpandedSvc(null);
       toast.success(`Deleted ${s.name}.`);
     } catch (err) {
