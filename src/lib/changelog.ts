@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.51.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.51.0 &mdash; A column for every provider on your calendar. </strong>When you run more than one provider, the <strong>Day</strong> view now shows a <strong>column per provider</strong> side by side &mdash; click any open time in a provider&rsquo;s column to book straight into <em>that</em> provider&rsquo;s day. <strong>Add booking</strong> gained a <strong>Provider</strong> picker, and <strong>Week</strong> view has an <strong>All / per-provider</strong> filter so you can zero in on one person&rsquo;s week (their own hours shade in). Single-provider spas see exactly the same calendar as before &mdash; the columns only appear once you&rsquo;ve added a second provider. Month view is unchanged. <strong>Touched</strong>: <code>src/server/scheduling-owner.functions.ts</code> (day/range loaders return active providers + per-provider hours + provider-tagged appointments; book accepts a provider; cancel ownership widened to all providers; whole-practice block query now tenant-scoped), <code>src/routes/app.refill.schedule.tsx</code> (multi-column day grid, week provider filter, Add-booking provider picker), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.50.0",
     date: "June 2026",
     items: [

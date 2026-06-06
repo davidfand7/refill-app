@@ -65,8 +65,21 @@ function localDayBounds(dateIso: string, tz: string): { startUtc: Date; endUtc: 
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+export interface ProviderLite {
+  id: string;
+  name: string;
+}
+
+/** Open band for one day, minutes-from-midnight (local). */
+export interface DayBand {
+  isOpen: boolean;
+  openMin: number;
+  closeMin: number;
+}
+
 export interface DayAppointment {
   id: string;
+  providerId: string | null;
   startIso: string;
   endIso: string;
   durationMin: number;
@@ -77,6 +90,8 @@ export interface DayAppointment {
 
 export interface DayBlock {
   id: string;
+  /** null = whole-practice block (shown in every provider column). */
+  providerId: string | null;
   startIso: string;
   endIso: string;
   reason: string | null;
@@ -84,10 +99,11 @@ export interface DayBlock {
 
 export interface DaySchedule {
   timezone: string;
-  providerId: string;
   dateIso: string;
-  /** Open band for the day, minutes-from-midnight (local). */
-  open: { isOpen: boolean; openMin: number; closeMin: number };
+  /** Active providers, ordered by created_at (the day-view columns). */
+  providers: ProviderLite[];
+  /** providerId → that provider's open band for this weekday. */
+  openByProvider: Record<string, DayBand>;
   appointments: DayAppointment[];
   blocks: DayBlock[];
   services: Array<{ id: string; name: string; durationMin: number }>;
@@ -95,6 +111,7 @@ export interface DaySchedule {
 
 type ApptRow = {
   id: string;
+  provider_id: string | null;
   scheduled_at: string;
   duration_min: number;
   status: string;
@@ -102,6 +119,20 @@ type ApptRow = {
   booking_name: string | null;
   patient_node_id: string | null;
 };
+
+/** Active providers for a tenant, ordered by created_at (column order). */
+async function loadActiveProviders(
+  sb: ReturnType<typeof admin>,
+  tenantId: string,
+): Promise<ProviderLite[]> {
+  const { data } = await sb
+    .from("scheduling_providers")
+    .select("id, name, created_at")
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+  return (data ?? []).map((p) => ({ id: p.id, name: p.name }));
+}
 
 /** Map raw appointment rows → DayAppointment[], resolving display names. */
 async function hydrateAppointments(
@@ -118,6 +149,7 @@ async function hydrateAppointments(
   }
   return rows.map((a) => ({
     id: a.id,
+    providerId: a.provider_id,
     startIso: a.scheduled_at,
     endIso: new Date(new Date(a.scheduled_at).getTime() + a.duration_min * 60_000).toISOString(),
     durationMin: a.duration_min,
@@ -144,7 +176,10 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
-    const providerId = await ensureSetup(sb, tenantId, effectiveUserId);
+    await ensureSetup(sb, tenantId, effectiveUserId);
+    const providers = await loadActiveProviders(sb, tenantId);
+    const providerIds = providers.map((p) => p.id);
+    const idFilter = providerIds.length ? providerIds : ["00000000-0000-0000-0000-000000000000"];
 
     const { data: settingsRow } = await sb
       .from("scheduling_settings")
@@ -155,26 +190,27 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
 
     const { startUtc, endUtc, weekday } = localDayBounds(data.dateIso, timezone);
 
-    const [{ data: apptRows }, { data: hoursRow }, { data: blockRows }, { data: serviceRows }] =
+    const [{ data: apptRows }, { data: hoursRows }, { data: blockRows }, { data: serviceRows }] =
       await Promise.all([
         sb
           .from("emma_appointments")
-          .select("id, scheduled_at, duration_min, status, source, booking_name, patient_node_id")
-          .eq("provider_id", providerId)
+          .select(
+            "id, provider_id, scheduled_at, duration_min, status, source, booking_name, patient_node_id",
+          )
+          .in("provider_id", idFilter)
           .neq("status", "cancelled")
           .gte("scheduled_at", startUtc.toISOString())
           .lt("scheduled_at", endUtc.toISOString())
           .order("scheduled_at"),
         sb
           .from("scheduling_hours")
-          .select("open_time, close_time, is_closed")
-          .eq("provider_id", providerId)
-          .eq("day_of_week", weekday)
-          .maybeSingle(),
+          .select("provider_id, open_time, close_time, is_closed")
+          .in("provider_id", idFilter)
+          .eq("day_of_week", weekday),
         sb
           .from("scheduling_blocks")
           .select("id, during, reason, provider_id")
-          .or(`provider_id.is.null,provider_id.eq.${providerId}`),
+          .eq("tenant_id", tenantId),
         sb
           .from("services")
           .select("id, name, duration_min, hidden_at, online_bookable")
@@ -195,6 +231,7 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
         if (r.endMs <= startUtc.getTime() || r.startMs >= endUtc.getTime()) return null;
         return {
           id: b.id,
+          providerId: b.provider_id,
           startIso: new Date(r.startMs).toISOString(),
           endIso: new Date(r.endMs).toISOString(),
           reason: b.reason,
@@ -202,19 +239,24 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
       })
       .filter((x): x is DayBlock => x !== null);
 
-    const open = hoursRow
-      ? {
-          isOpen: !hoursRow.is_closed,
-          openMin: toMinutes(hoursRow.open_time),
-          closeMin: toMinutes(hoursRow.close_time),
-        }
-      : { isOpen: false, openMin: 9 * 60, closeMin: 17 * 60 };
+    // Default every provider to closed; fill from their weekday hours row.
+    const openByProvider: Record<string, DayBand> = {};
+    for (const pid of providerIds) {
+      openByProvider[pid] = { isOpen: false, openMin: 9 * 60, closeMin: 17 * 60 };
+    }
+    for (const h of hoursRows ?? []) {
+      openByProvider[h.provider_id] = {
+        isOpen: !h.is_closed,
+        openMin: toMinutes(h.open_time),
+        closeMin: toMinutes(h.close_time),
+      };
+    }
 
     return {
       timezone,
-      providerId,
       dateIso: data.dateIso,
-      open,
+      providers,
+      openByProvider,
       appointments,
       blocks,
       services: (serviceRows ?? []).map((s) => ({
@@ -236,11 +278,12 @@ export interface WeeklyHoursRow {
 
 export interface RangeSchedule {
   timezone: string;
-  providerId: string;
+  /** Active providers, ordered by created_at. */
+  providers: ProviderLite[];
   appointments: DayAppointment[];
   blocks: DayBlock[];
-  /** The provider's weekly availability pattern (0..6). */
-  weeklyHours: WeeklyHoursRow[];
+  /** providerId → that provider's weekly availability pattern (0..6). */
+  weeklyHoursByProvider: Record<string, WeeklyHoursRow[]>;
   services: Array<{ id: string; name: string; durationMin: number }>;
 }
 
@@ -260,7 +303,10 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
-    const providerId = await ensureSetup(sb, tenantId, effectiveUserId);
+    await ensureSetup(sb, tenantId, effectiveUserId);
+    const providers = await loadActiveProviders(sb, tenantId);
+    const providerIds = providers.map((p) => p.id);
+    const idFilter = providerIds.length ? providerIds : ["00000000-0000-0000-0000-000000000000"];
 
     const { data: settingsRow } = await sb
       .from("scheduling_settings")
@@ -276,20 +322,22 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
       await Promise.all([
         sb
           .from("emma_appointments")
-          .select("id, scheduled_at, duration_min, status, source, booking_name, patient_node_id")
-          .eq("provider_id", providerId)
+          .select(
+            "id, provider_id, scheduled_at, duration_min, status, source, booking_name, patient_node_id",
+          )
+          .in("provider_id", idFilter)
           .neq("status", "cancelled")
           .gte("scheduled_at", startUtc.toISOString())
           .lt("scheduled_at", endUtc.toISOString())
           .order("scheduled_at"),
         sb
           .from("scheduling_hours")
-          .select("day_of_week, open_time, close_time, is_closed")
-          .eq("provider_id", providerId),
+          .select("provider_id, day_of_week, open_time, close_time, is_closed")
+          .in("provider_id", idFilter),
         sb
           .from("scheduling_blocks")
           .select("id, during, reason, provider_id")
-          .or(`provider_id.is.null,provider_id.eq.${providerId}`),
+          .eq("tenant_id", tenantId),
         sb
           .from("services")
           .select("id, name, duration_min, hidden_at, online_bookable")
@@ -307,25 +355,30 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
         if (r.endMs <= startUtc.getTime() || r.startMs >= endUtc.getTime()) return null;
         return {
           id: b.id,
+          providerId: b.provider_id,
           startIso: new Date(r.startMs).toISOString(),
           endIso: new Date(r.endMs).toISOString(),
           reason: b.reason,
         };
       })
       .filter((x): x is DayBlock => x !== null);
-    const weeklyHours: WeeklyHoursRow[] = (hoursRows ?? []).map((h) => ({
-      dayOfWeek: h.day_of_week,
-      openMin: toMinutes(h.open_time),
-      closeMin: toMinutes(h.close_time),
-      isClosed: h.is_closed,
-    }));
+    const weeklyHoursByProvider: Record<string, WeeklyHoursRow[]> = {};
+    for (const pid of providerIds) weeklyHoursByProvider[pid] = [];
+    for (const h of hoursRows ?? []) {
+      (weeklyHoursByProvider[h.provider_id] ??= []).push({
+        dayOfWeek: h.day_of_week,
+        openMin: toMinutes(h.open_time),
+        closeMin: toMinutes(h.close_time),
+        isClosed: h.is_closed,
+      });
+    }
 
     return {
       timezone,
-      providerId,
+      providers,
       appointments,
       blocks,
-      weeklyHours,
+      weeklyHoursByProvider,
       services: (serviceRows ?? []).map((s) => ({
         id: s.id,
         name: s.name,
@@ -340,6 +393,8 @@ const createApptInput = z.object({
   accessToken: z.string().min(10),
   viewAsUserId: z.string().uuid().optional(),
   serviceId: z.string().uuid(),
+  /** Which provider to book. Omitted → the primary provider (single-provider spas). */
+  providerId: z.string().uuid().optional(),
   startIso: z.string().min(10),
   patientName: z.string().min(1).max(120),
   patientEmail: z.string().email().max(200).optional(),
@@ -359,7 +414,22 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
-    const providerId = await ensureSetup(sb, tenantId, effectiveUserId);
+    const primaryProviderId = await ensureSetup(sb, tenantId, effectiveUserId);
+
+    // Resolve + validate the target provider (must be an active provider of this tenant).
+    let providerId = primaryProviderId;
+    if (data.providerId && data.providerId !== primaryProviderId) {
+      const { data: prov } = await sb
+        .from("scheduling_providers")
+        .select("id, is_active")
+        .eq("id", data.providerId)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+      if (!prov || !prov.is_active) {
+        return { ok: false, reason: "That provider isn't available.", code: "invalid" };
+      }
+      providerId = prov.id;
+    }
 
     const { data: svc } = await sb
       .from("services")
@@ -461,13 +531,23 @@ export const ownerCancelAppointmentFn = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
-    const providerId = await ensureSetup(sb, tenantId, effectiveUserId);
+    await ensureSetup(sb, tenantId, effectiveUserId);
+
+    // Ownership guard: the appointment must belong to one of this tenant's providers.
+    const { data: provs } = await sb
+      .from("scheduling_providers")
+      .select("id")
+      .eq("tenant_id", tenantId);
+    const tenantProviderIds = (provs ?? []).map((p) => p.id);
 
     const { error } = await sb
       .from("emma_appointments")
       .update({ status: "cancelled", updated_at: new Date().toISOString() })
       .eq("id", data.appointmentId)
-      .eq("provider_id", providerId); // ownership guard (tenantId resolves the provider)
+      .in(
+        "provider_id",
+        tenantProviderIds.length ? tenantProviderIds : ["00000000-0000-0000-0000-000000000000"],
+      );
     if (error) return { ok: false, reason: `Couldn't cancel: ${error.message}` };
     return { ok: true };
   });

@@ -25,6 +25,7 @@ import {
   type DaySchedule,
   type DayAppointment,
   type DayBlock,
+  type ProviderLite,
   type RangeSchedule,
   type WeeklyHoursRow,
 } from "@/server/scheduling-owner.functions";
@@ -56,6 +57,21 @@ const ZOOM_KEY = "refill.schedule.zoom";
 const MIN_DAY_CARD_PX = 40;
 const MIN_WEEK_CARD_PX = 40;
 const WD_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+// Per-provider header accent dot (cards/bands stay emerald — the column + name
+// identify the provider; this is a small additive touch, not a restyle).
+const PROVIDER_DOTS = [
+  "bg-emerald",
+  "bg-sky-500",
+  "bg-violet-500",
+  "bg-amber-500",
+  "bg-rose-500",
+  "bg-teal-500",
+  "bg-indigo-500",
+  "bg-orange-500",
+];
+function providerDot(i: number): string {
+  return PROVIDER_DOTS[i % PROVIDER_DOTS.length];
+}
 
 function SchedulePage() {
   const membership = useTenantMembership();
@@ -66,7 +82,11 @@ function SchedulePage() {
   const [loading, setLoading] = useState(true);
   const [day, setDay] = useState<DaySchedule | null>(null);
   const [range, setRange] = useState<RangeSchedule | null>(null);
-  const [bookSeed, setBookSeed] = useState<{ date: string; time: string } | null>(null);
+  const [bookSeed, setBookSeed] = useState<{ date: string; time: string; providerId?: string } | null>(
+    null,
+  );
+  // Week view provider filter ("all" or a providerId).
+  const [weekProviderId, setWeekProviderId] = useState<string>("all");
   const [blockOpen, setBlockOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<DayAppointment | null>(null);
   const [zoomIdx, setZoomIdx] = useState<number>(() => {
@@ -119,6 +139,7 @@ function SchedulePage() {
 
   const tz = (view === "day" ? day?.timezone : range?.timezone) ?? "America/Los_Angeles";
   const services: ServiceLite[] = (view === "day" ? day?.services : range?.services) ?? [];
+  const providers: ProviderLite[] = (view === "day" ? day?.providers : range?.providers) ?? [];
 
   function navPrev() {
     setDateIso((d) => (view === "day" ? addDays(d, -1) : view === "week" ? addDays(d, -7) : addMonths(d, -1)));
@@ -211,7 +232,7 @@ function SchedulePage() {
             tz={tz}
             pxPerMin={dayPpm}
             onCancel={setCancelTarget}
-            onBook={(d, t) => setBookSeed({ date: d, time: t })}
+            onBook={(d, t, pid) => setBookSeed({ date: d, time: t, providerId: pid })}
           />
         ) : view === "week" && range ? (
           <WeekGrid
@@ -219,8 +240,16 @@ function SchedulePage() {
             tz={tz}
             pxPerMin={weekPpm}
             weekStart={span.fromDate}
+            providerId={weekProviderId}
+            onProviderChange={setWeekProviderId}
             onCancel={setCancelTarget}
-            onBook={(d, t) => setBookSeed({ date: d, time: t })}
+            onBook={(d, t) =>
+              setBookSeed({
+                date: d,
+                time: t,
+                providerId: weekProviderId === "all" ? undefined : weekProviderId,
+              })
+            }
             onPickDay={(iso) => {
               setDateIso(iso);
               setView("day");
@@ -240,7 +269,7 @@ function SchedulePage() {
         ) : null}
       </div>
 
-      <BookDialog open={!!bookSeed} initialDate={bookSeed?.date ?? dateIso} initialTime={bookSeed?.time ?? "09:00"} onClose={() => setBookSeed(null)} services={services} timezone={tz} viewAsUserId={viewAsUserId} onBooked={() => { setBookSeed(null); void load(); }} />
+      <BookDialog open={!!bookSeed} initialDate={bookSeed?.date ?? dateIso} initialTime={bookSeed?.time ?? "09:00"} initialProviderId={bookSeed?.providerId} providers={providers} onClose={() => setBookSeed(null)} services={services} timezone={tz} viewAsUserId={viewAsUserId} onBooked={() => { setBookSeed(null); void load(); }} />
       <BlockDialog open={blockOpen} onClose={() => setBlockOpen(false)} timezone={tz} dateIso={dateIso} viewAsUserId={viewAsUserId} onBlocked={() => { setBlockOpen(false); void load(); }} />
       <CancelDialog appt={cancelTarget} tz={tz} viewAsUserId={viewAsUserId} onClose={() => setCancelTarget(null)} onCancelled={() => { setCancelTarget(null); void load(); }} />
     </div>
@@ -260,11 +289,23 @@ function DayGrid({
   tz: string;
   pxPerMin: number;
   onCancel: (a: DayAppointment) => void;
-  onBook: (dateIso: string, time: string) => void;
+  onBook: (dateIso: string, time: string, providerId?: string) => void;
 }) {
+  // Shared time window across every provider's band + all appts + all blocks.
   const win = useMemo(() => {
-    let start = day.open.isOpen ? day.open.openMin : 9 * 60;
-    let end = day.open.isOpen ? day.open.closeMin : 17 * 60;
+    let start = 24 * 60;
+    let end = 0;
+    let anyOpen = false;
+    for (const band of Object.values(day.openByProvider)) {
+      if (!band.isOpen) continue;
+      anyOpen = true;
+      start = Math.min(start, band.openMin);
+      end = Math.max(end, band.closeMin);
+    }
+    if (!anyOpen) {
+      start = 9 * 60;
+      end = 17 * 60;
+    }
     for (const a of day.appointments) {
       start = Math.min(start, localMinutes(a.startIso, tz));
       end = Math.max(end, localMinutes(a.endIso, tz));
@@ -278,35 +319,106 @@ function DayGrid({
 
   const height = (win.end - win.start) * pxPerMin;
   const top = (iso: string) => (localMinutes(iso, tz) - win.start) * pxPerMin;
+  const providers = day.providers;
 
-  function bgClick(e: { currentTarget: HTMLDivElement; clientY: number }) {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const mins = win.start + (e.clientY - rect.top) / pxPerMin;
-    onBook(day.dateIso, minToHHMM(snap5(mins, win)));
+  // ── Single provider: render exactly as before (loved layout, unchanged). ──
+  if (providers.length <= 1) {
+    const solo = providers[0];
+    const band = (solo && day.openByProvider[solo.id]) ?? {
+      isOpen: false,
+      openMin: 9 * 60,
+      closeMin: 17 * 60,
+    };
+    function bgClick(e: { currentTarget: HTMLDivElement; clientY: number }) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const mins = win.start + (e.clientY - rect.top) / pxPerMin;
+      onBook(day.dateIso, minToHHMM(snap5(mins, win)), solo?.id);
+    }
+    return (
+      <div className="rounded-xl border border-rule bg-white p-4">
+        {!band.isOpen && <div className="mb-3 text-[12px] text-ink-faint">Closed this day (per business hours).</div>}
+        <div className="relative cursor-pointer" style={{ height }} onClick={bgClick} title="Click an open time to book">
+          <div className="absolute inset-0 left-14 hover:bg-emerald-soft/10 transition-colors" />
+          {hourMarks(win).map((m) => (
+            <div key={m} className="absolute left-0 right-0 border-t border-rule/60" style={{ top: (m - win.start) * pxPerMin }}>
+              <span className="absolute -top-2 left-0 text-[11px] text-ink-faint tabular-nums bg-white pr-1">{fmtHour(m)}</span>
+            </div>
+          ))}
+          {band.isOpen && (
+            <div className="absolute left-14 right-0 bg-emerald-soft/40 rounded" style={{ top: (band.openMin - win.start) * pxPerMin, height: (band.closeMin - band.openMin) * pxPerMin }} />
+          )}
+          {day.blocks.map((b) => (
+            <BlockBand key={b.id} left="left-14" top={top(b.startIso)} height={Math.max(14, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} />
+          ))}
+          {day.appointments.map((a) => (
+            <ApptCard key={a.id} a={a} tz={tz} left="left-14" top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} />
+          ))}
+          {day.appointments.length === 0 && day.blocks.length === 0 && (
+            <div className="absolute inset-0 flex items-center justify-center text-[13px] text-ink-faint pointer-events-none">No bookings this day.</div>
+          )}
+        </div>
+      </div>
+    );
   }
 
+  // ── Multiple providers: one column per provider, sharing the time axis. ──
+  const compact = providers.length >= 3;
+  const colMinPx = 130;
   return (
-    <div className="rounded-xl border border-rule bg-white p-4">
-      {!day.open.isOpen && <div className="mb-3 text-[12px] text-ink-faint">Closed this day (per business hours).</div>}
-      <div className="relative cursor-pointer" style={{ height }} onClick={bgClick} title="Click an open time to book">
-        <div className="absolute inset-0 left-14 hover:bg-emerald-soft/10 transition-colors" />
-        {hourMarks(win).map((m) => (
-          <div key={m} className="absolute left-0 right-0 border-t border-rule/60" style={{ top: (m - win.start) * pxPerMin }}>
-            <span className="absolute -top-2 left-0 text-[11px] text-ink-faint tabular-nums bg-white pr-1">{fmtHour(m)}</span>
+    <div className="rounded-xl border border-rule bg-white p-3 overflow-x-auto">
+      <div style={{ minWidth: 48 + providers.length * colMinPx }}>
+        {/* Provider headers */}
+        <div className="grid" style={{ gridTemplateColumns: `48px repeat(${providers.length}, 1fr)` }}>
+          <div />
+          {providers.map((p, i) => (
+            <div key={p.id} className="flex items-center justify-center gap-1.5 py-1.5 border-b border-rule">
+              <span className={cn("h-2 w-2 rounded-full shrink-0", providerDot(i))} />
+              <span className="text-[12px] font-semibold text-ink truncate">{p.name}</span>
+            </div>
+          ))}
+        </div>
+        {/* Grid body */}
+        <div className="relative grid" style={{ gridTemplateColumns: `48px repeat(${providers.length}, 1fr)`, height }}>
+          {/* hour rail */}
+          <div className="relative">
+            {hourMarks(win).map((m) => (
+              <div key={m} className="absolute right-1 text-[10px] text-ink-faint tabular-nums" style={{ top: (m - win.start) * pxPerMin - 6 }}>
+                {fmtHour(m)}
+              </div>
+            ))}
           </div>
-        ))}
-        {day.open.isOpen && (
-          <div className="absolute left-14 right-0 bg-emerald-soft/40 rounded" style={{ top: (day.open.openMin - win.start) * pxPerMin, height: (day.open.closeMin - day.open.openMin) * pxPerMin }} />
-        )}
-        {day.blocks.map((b) => (
-          <BlockBand key={b.id} left="left-14" top={top(b.startIso)} height={Math.max(14, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} />
-        ))}
-        {day.appointments.map((a) => (
-          <ApptCard key={a.id} a={a} tz={tz} left="left-14" top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} />
-        ))}
-        {day.appointments.length === 0 && day.blocks.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center text-[13px] text-ink-faint pointer-events-none">No bookings this day.</div>
-        )}
+          {providers.map((p) => {
+            const band = day.openByProvider[p.id] ?? { isOpen: false, openMin: 9 * 60, closeMin: 17 * 60 };
+            const colAppts = day.appointments.filter((a) => a.providerId === p.id);
+            // Provider-specific blocks + whole-practice (null) blocks.
+            const colBlocks = day.blocks.filter((b) => b.providerId === p.id || b.providerId === null);
+            return (
+              <div
+                key={p.id}
+                className="relative border-l border-rule/60 cursor-pointer hover:bg-emerald-soft/10 transition-colors"
+                title={`Click an open time to book ${p.name}`}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const mins = win.start + (e.clientY - rect.top) / pxPerMin;
+                  onBook(day.dateIso, minToHHMM(snap5(mins, win)), p.id);
+                }}
+              >
+                {hourMarks(win).map((m) => (
+                  <div key={m} className="absolute left-0 right-0 border-t border-rule/40" style={{ top: (m - win.start) * pxPerMin }} />
+                ))}
+                {band.isOpen && (
+                  <div className="absolute left-0 right-0 bg-emerald-soft/30" style={{ top: (band.openMin - win.start) * pxPerMin, height: (band.closeMin - band.openMin) * pxPerMin }} />
+                )}
+                {colBlocks.map((b) => (
+                  <BlockBand key={b.id} left="left-0" top={top(b.startIso)} height={Math.max(10, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} compact />
+                ))}
+                {colAppts.map((a) => (
+                  <ApptCard key={a.id} a={a} tz={tz} left="left-0" top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} compact={compact} />
+                ))}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -319,6 +431,8 @@ function WeekGrid({
   tz,
   pxPerMin,
   weekStart,
+  providerId,
+  onProviderChange,
   onCancel,
   onBook,
   onPickDay,
@@ -327,24 +441,51 @@ function WeekGrid({
   tz: string;
   pxPerMin: number;
   weekStart: string;
+  providerId: string; // "all" or a providerId
+  onProviderChange: (id: string) => void;
   onCancel: (a: DayAppointment) => void;
   onBook: (dateIso: string, time: string) => void;
   onPickDay: (iso: string) => void;
 }) {
   const days = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
+  const providers = range.providers;
+  // Effective filter — fall back to "all" if the chosen provider is gone.
+  const filter = providerId !== "all" && providers.some((p) => p.id === providerId) ? providerId : "all";
+
+  // Effective weekly hours for the current filter: a specific provider's week,
+  // or (for "all") the per-weekday union across every active provider.
   const hoursByDow = useMemo(() => {
     const m = new Map<number, WeeklyHoursRow>();
-    for (const h of range.weeklyHours) m.set(h.dayOfWeek, h);
+    if (filter !== "all") {
+      for (const h of range.weeklyHoursByProvider[filter] ?? []) m.set(h.dayOfWeek, h);
+      return m;
+    }
+    for (const rows of Object.values(range.weeklyHoursByProvider)) {
+      for (const h of rows) {
+        if (h.isClosed) continue;
+        const cur = m.get(h.dayOfWeek);
+        if (!cur || cur.isClosed) {
+          m.set(h.dayOfWeek, { ...h });
+        } else {
+          cur.openMin = Math.min(cur.openMin, h.openMin);
+          cur.closeMin = Math.max(cur.closeMin, h.closeMin);
+        }
+      }
+    }
     return m;
-  }, [range.weeklyHours]);
+  }, [range.weeklyHoursByProvider, filter]);
 
-  const apptsByDay = useMemo(() => groupByDay(range.appointments, tz), [range.appointments, tz]);
+  const filteredAppts = useMemo(
+    () => (filter === "all" ? range.appointments : range.appointments.filter((a) => a.providerId === filter)),
+    [range.appointments, filter],
+  );
+  const apptsByDay = useMemo(() => groupByDay(filteredAppts, tz), [filteredAppts, tz]);
   const blocksByDay = useMemo(() => groupBlocksByDay(range.blocks, tz), [range.blocks, tz]);
 
   const win = useMemo(() => {
     let start = 24 * 60;
     let end = 0;
-    for (const h of range.weeklyHours) {
+    for (const h of hoursByDow.values()) {
       if (h.isClosed) continue;
       start = Math.min(start, h.openMin);
       end = Math.max(end, h.closeMin);
@@ -353,19 +494,53 @@ function WeekGrid({
       start = 9 * 60;
       end = 17 * 60;
     }
-    for (const a of range.appointments) {
+    for (const a of filteredAppts) {
       start = Math.min(start, localMinutes(a.startIso, tz));
       end = Math.max(end, localMinutes(a.endIso, tz));
     }
     return padWindow(start, end);
-  }, [range, tz]);
+  }, [hoursByDow, filteredAppts, tz]);
 
   const height = (win.end - win.start) * pxPerMin;
   const top = (iso: string) => (localMinutes(iso, tz) - win.start) * pxPerMin;
   const today = todayIso();
 
   return (
-    <div className="rounded-xl border border-rule bg-white p-3 overflow-x-auto">
+    <div>
+      {providers.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5 mb-3">
+          <span className="text-[12px] text-ink-soft mr-1">Provider:</span>
+          <button
+            type="button"
+            onClick={() => onProviderChange("all")}
+            className={cn(
+              "rounded-md border px-2.5 py-1 text-[12px] font-medium transition",
+              filter === "all"
+                ? "bg-emerald text-paper border-emerald"
+                : "border-rule text-ink-soft hover:text-ink hover:border-emerald/40",
+            )}
+          >
+            All
+          </button>
+          {providers.map((p, i) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => onProviderChange(p.id)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] font-medium transition",
+                filter === p.id
+                  ? "bg-emerald text-paper border-emerald"
+                  : "border-rule text-ink-soft hover:text-ink hover:border-emerald/40",
+              )}
+            >
+              <span className={cn("h-2 w-2 rounded-full shrink-0", providerDot(i))} />
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="rounded-xl border border-rule bg-white p-3 overflow-x-auto">
       <div className="min-w-[680px]">
         {/* Day headers */}
         <div className="grid" style={{ gridTemplateColumns: `48px repeat(7, 1fr)` }}>
@@ -422,6 +597,7 @@ function WeekGrid({
             );
           })}
         </div>
+      </div>
       </div>
     </div>
   );
@@ -559,22 +735,27 @@ function BookDialog({
   open,
   onClose,
   services,
+  providers,
   timezone,
   initialDate,
   initialTime,
+  initialProviderId,
   viewAsUserId,
   onBooked,
 }: {
   open: boolean;
   onClose: () => void;
   services: ServiceLite[];
+  providers: ProviderLite[];
   timezone: string;
   initialDate: string;
   initialTime: string;
+  initialProviderId?: string;
   viewAsUserId?: string;
   onBooked: () => void;
 }) {
   const [serviceId, setServiceId] = useState("");
+  const [providerId, setProviderId] = useState("");
   const [date, setDate] = useState(initialDate);
   const [time, setTime] = useState(initialTime);
   const [name, setName] = useState("");
@@ -582,13 +763,14 @@ function BookDialog({
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
 
-  // Reseed date+time whenever the dialog is (re)opened from a slot click or button.
+  // Reseed date+time+provider whenever the dialog is (re)opened.
   useEffect(() => {
     if (open) {
       setDate(initialDate);
       setTime(initialTime);
+      setProviderId(initialProviderId ?? providers[0]?.id ?? "");
     }
-  }, [open, initialDate, initialTime]);
+  }, [open, initialDate, initialTime, initialProviderId, providers]);
 
   async function submit() {
     if (!serviceId || !name.trim() || busy) return;
@@ -601,7 +783,7 @@ function BookDialog({
       const [hh, mm] = time.split(":").map((n) => parseInt(n, 10));
       const startIso = zonedWallClockToUtc(y, m, d, hh, mm, timezone).toISOString();
       const r = await ownerCreateAppointmentFn({
-        data: { accessToken: token, viewAsUserId, serviceId, startIso, patientName: name.trim(), patientEmail: email.trim() || undefined, patientPhone: phone.trim() || undefined },
+        data: { accessToken: token, viewAsUserId, serviceId, providerId: providerId || undefined, startIso, patientName: name.trim(), patientEmail: email.trim() || undefined, patientPhone: phone.trim() || undefined },
       });
       if (!r.ok) { toast.error(r.reason); return; }
       toast.success("Booked.");
@@ -621,6 +803,15 @@ function BookDialog({
           <DialogDescription>Pick the day, time, and service to book a patient in.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
+          {providers.length > 1 && (
+            <Labeled label="Provider">
+              <select value={providerId} onChange={(e) => setProviderId(e.target.value)} className={inputCls}>
+                {providers.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </Labeled>
+          )}
           <Labeled label="Service">
             <select value={serviceId} onChange={(e) => setServiceId(e.target.value)} className={inputCls}>
               <option value="">Choose a service…</option>
