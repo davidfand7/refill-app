@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.53.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.53.1 &mdash; Fix: added providers now show on the public booking page. </strong>Providers you add (who don&rsquo;t have their own login) were being skipped on the patient-facing page, so it jumped straight past the provider step. Now <strong>every active provider is bookable</strong> &mdash; their appointments are filed under the practice owner&rsquo;s account while still tracking the real provider, so the patient sees the full team and the <strong>First available</strong> option as intended. <strong>Touched</strong>: <code>src/server/scheduling.functions.ts</code> (public booking no longer requires a provider login; holds stamp the tenant owner&rsquo;s <code>user_id</code> with the provider tracked via <code>provider_id</code>), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.53.0",
     date: "June 2026",
     items: [

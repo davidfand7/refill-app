@@ -296,7 +296,9 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
       loadActiveProviders(sb, tenant.id),
     ]);
 
-    const bookableProviders = providers.filter((p) => p.userId); // must be account-linked to book
+    // Every active provider is bookable — a provider needn't have their own login
+    // (their appointments stamp the tenant owner's user_id; see holdSlot).
+    const bookableProviders = providers;
     const providerIds = bookableProviders.map((p) => p.id);
 
     // All overrides for these providers across the bookable services, in one read.
@@ -386,7 +388,7 @@ export const listAvailableSlots = createServerFn({ method: "GET" })
     const { base } = loaded;
 
     const providers = await loadActiveProviders(sb, data.tenantId);
-    let targets = providers.filter((p) => p.userId); // account-linked = bookable
+    let targets = providers;
     if (data.providerId) {
       targets = targets.filter((p) => p.id === data.providerId);
       if (!targets.length) return { ok: false, reason: "That provider isn't available." };
@@ -466,14 +468,17 @@ export const holdSlot = createServerFn({ method: "POST" })
     if (!loaded.ok) return { ok: false, reason: loaded.reason, code: "invalid" };
     const { base } = loaded;
 
-    // Validate the target provider belongs to the tenant, is active, and is
-    // account-linked (native bookings stamp emma_appointments.user_id).
-    const provider = (await loadActiveProviders(sb, data.tenantId)).find(
-      (p) => p.id === data.providerId,
-    );
+    // Validate the target provider belongs to the tenant and is active.
+    const activeProviders = await loadActiveProviders(sb, data.tenantId);
+    const provider = activeProviders.find((p) => p.id === data.providerId);
     if (!provider) return { ok: false, reason: "That provider isn't available.", code: "invalid" };
-    if (!provider.userId) {
-      return { ok: false, reason: "That provider isn't set up to take bookings.", code: "invalid" };
+    // Native bookings stamp emma_appointments.user_id with the TENANT OWNER's
+    // auth user (the account that owns the calendar). A provider needn't have
+    // their own login — provider_id identifies the person; user_id is the tenant
+    // linkage. Fall back to the owner when this provider has no user_id.
+    const ownerUserId = provider.userId ?? activeProviders.find((p) => p.userId)?.userId ?? null;
+    if (!ownerUserId) {
+      return { ok: false, reason: "This practice isn't set up to take bookings yet.", code: "invalid" };
     }
     const eff = effective(base, (await loadOverrideMap(sb, [provider.id], data.serviceId)).get(provider.id));
 
@@ -521,7 +526,7 @@ export const holdSlot = createServerFn({ method: "POST" })
     const heldUntilIso = new Date(Date.now() + base.holdMinutes * 60_000).toISOString();
 
     const { error: insErr } = await sb.from("emma_appointments").insert({
-      user_id: provider.userId,
+      user_id: ownerUserId,
       provider_id: provider.id,
       scheduled_at: data.startIso,
       duration_min: eff.durationMin,
