@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.48.11",
+    date: "June 2026",
+    items: [
+      "<strong>v1.48.11 &mdash; Week view: no more clipped appointment cards. </strong>Same readability fix as Day, now applied to Week &mdash; cards have enough height for name + time, and in the narrow week columns the card shows just the <strong>start time</strong> (the full range was getting truncated). <strong>Touched</strong>: <code>src/routes/app.refill.schedule.tsx</code> (week min card height + compact start-time label), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.48.10",
     date: "June 2026",
     items: [

@@ -53,7 +53,7 @@ const ZOOM_KEY = "refill.schedule.zoom";
 // Minimum card heights so a short appointment is still tall enough to show
 // name + time without clipping (longer appts size by their real duration).
 const MIN_DAY_CARD_PX = 40;
-const MIN_WEEK_CARD_PX = 30;
+const MIN_WEEK_CARD_PX = 40;
 const WD_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function SchedulePage() {
@@ -486,8 +486,8 @@ function ApptCard({
             {a.patientName ?? (held ? "Hold" : "Booked")}
           </div>
           {height >= 30 && (
-            <div className="text-[11px] text-ink-soft tabular-nums leading-tight">
-              {fmtTime(a.startIso, tz)}–{fmtTime(a.endIso, tz)}
+            <div className="text-[11px] text-ink-soft tabular-nums leading-tight truncate">
+              {compact ? fmtTime(a.startIso, tz) : `${fmtTime(a.startIso, tz)}–${fmtTime(a.endIso, tz)}`}
               {held && " · holding"}
             </div>
           )}
