@@ -93,6 +93,40 @@ export interface DaySchedule {
   services: Array<{ id: string; name: string; durationMin: number }>;
 }
 
+type ApptRow = {
+  id: string;
+  scheduled_at: string;
+  duration_min: number;
+  status: string;
+  source: string;
+  booking_name: string | null;
+  patient_node_id: string | null;
+};
+
+/** Map raw appointment rows → DayAppointment[], resolving display names. */
+async function hydrateAppointments(
+  sb: ReturnType<typeof admin>,
+  rows: ApptRow[],
+): Promise<DayAppointment[]> {
+  const nodeIds = Array.from(
+    new Set(rows.map((a) => a.patient_node_id).filter((x): x is string => !!x)),
+  );
+  const titleById = new Map<string, string>();
+  if (nodeIds.length) {
+    const { data: nodes } = await sb.from("knowledge_nodes").select("id, title").in("id", nodeIds);
+    for (const n of nodes ?? []) titleById.set(n.id, n.title ?? "");
+  }
+  return rows.map((a) => ({
+    id: a.id,
+    startIso: a.scheduled_at,
+    endIso: new Date(new Date(a.scheduled_at).getTime() + a.duration_min * 60_000).toISOString(),
+    durationMin: a.duration_min,
+    status: a.status,
+    patientName: a.booking_name ?? (a.patient_node_id ? titleById.get(a.patient_node_id) ?? null : null),
+    source: a.source,
+  }));
+}
+
 // ── getDayScheduleFn ─────────────────────────────────────────────────────────
 
 const dayInput = z.object({
@@ -149,36 +183,8 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
           .order("name"),
       ]);
 
-    // Resolve patient display names: native bookings carry booking_name; matched
-    // ones resolve via knowledge_nodes.title. Batch the node lookups.
-    const nodeIds = Array.from(
-      new Set((apptRows ?? []).map((a) => a.patient_node_id).filter((x): x is string => !!x)),
-    );
-    const titleById = new Map<string, string>();
-    if (nodeIds.length) {
-      const { data: nodes } = await sb
-        .from("knowledge_nodes")
-        .select("id, title")
-        .in("id", nodeIds);
-      for (const n of nodes ?? []) titleById.set(n.id, n.title ?? "");
-    }
-
-    const appointments: DayAppointment[] = (apptRows ?? []).map((a) => {
-      const start = new Date(a.scheduled_at);
-      const end = new Date(start.getTime() + a.duration_min * 60_000);
-      const name =
-        a.booking_name ??
-        (a.patient_node_id ? titleById.get(a.patient_node_id) ?? null : null);
-      return {
-        id: a.id,
-        startIso: a.scheduled_at,
-        endIso: end.toISOString(),
-        durationMin: a.duration_min,
-        status: a.status,
-        patientName: name,
-        source: a.source,
-      };
-    });
+    // Native bookings carry booking_name; matched ones resolve via knowledge_nodes.
+    const appointments = await hydrateAppointments(sb, apptRows ?? []);
 
     const blocks: DayBlock[] = (blockRows ?? [])
       .map((b) => {
@@ -210,6 +216,114 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
       open,
       appointments,
       blocks,
+      services: (serviceRows ?? []).map((s) => ({
+        id: s.id,
+        name: s.name,
+        durationMin: s.duration_min,
+      })),
+    };
+  });
+
+// ── getRangeScheduleFn (week / month) ────────────────────────────────────────
+
+export interface WeeklyHoursRow {
+  dayOfWeek: number;
+  openMin: number;
+  closeMin: number;
+  isClosed: boolean;
+}
+
+export interface RangeSchedule {
+  timezone: string;
+  providerId: string;
+  appointments: DayAppointment[];
+  blocks: DayBlock[];
+  /** The provider's weekly availability pattern (0..6). */
+  weeklyHours: WeeklyHoursRow[];
+  services: Array<{ id: string; name: string; durationMin: number }>;
+}
+
+const rangeInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+  fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  toDateExclusive: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
+
+export const getRangeScheduleFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => rangeInput.parse(raw))
+  .handler(async ({ data }): Promise<RangeSchedule> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const providerId = await ensureSetup(sb, tenantId, effectiveUserId);
+
+    const { data: settingsRow } = await sb
+      .from("scheduling_settings")
+      .select("timezone")
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    const timezone = settingsRow?.timezone ?? "America/Los_Angeles";
+
+    const startUtc = localDayBounds(data.fromDate, timezone).startUtc;
+    const endUtc = localDayBounds(data.toDateExclusive, timezone).startUtc;
+
+    const [{ data: apptRows }, { data: hoursRows }, { data: blockRows }, { data: serviceRows }] =
+      await Promise.all([
+        sb
+          .from("emma_appointments")
+          .select("id, scheduled_at, duration_min, status, source, booking_name, patient_node_id")
+          .eq("provider_id", providerId)
+          .neq("status", "cancelled")
+          .gte("scheduled_at", startUtc.toISOString())
+          .lt("scheduled_at", endUtc.toISOString())
+          .order("scheduled_at"),
+        sb
+          .from("scheduling_hours")
+          .select("day_of_week, open_time, close_time, is_closed")
+          .eq("provider_id", providerId),
+        sb
+          .from("scheduling_blocks")
+          .select("id, during, reason, provider_id")
+          .or(`provider_id.is.null,provider_id.eq.${providerId}`),
+        sb
+          .from("services")
+          .select("id, name, duration_min, hidden_at")
+          .eq("tenant_id", tenantId)
+          .is("hidden_at", null)
+          .order("name"),
+      ]);
+
+    const appointments = await hydrateAppointments(sb, apptRows ?? []);
+    const blocks: DayBlock[] = (blockRows ?? [])
+      .map((b) => {
+        const r = parseRange(b.during);
+        if (!r) return null;
+        if (r.endMs <= startUtc.getTime() || r.startMs >= endUtc.getTime()) return null;
+        return {
+          id: b.id,
+          startIso: new Date(r.startMs).toISOString(),
+          endIso: new Date(r.endMs).toISOString(),
+          reason: b.reason,
+        };
+      })
+      .filter((x): x is DayBlock => x !== null);
+    const weeklyHours: WeeklyHoursRow[] = (hoursRows ?? []).map((h) => ({
+      dayOfWeek: h.day_of_week,
+      openMin: toMinutes(h.open_time),
+      closeMin: toMinutes(h.close_time),
+      isClosed: h.is_closed,
+    }));
+
+    return {
+      timezone,
+      providerId,
+      appointments,
+      blocks,
+      weeklyHours,
       services: (serviceRows ?? []).map((s) => ({
         id: s.id,
         name: s.name,

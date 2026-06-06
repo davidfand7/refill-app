@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.48.6",
+    date: "June 2026",
+    items: [
+      "<strong>v1.48.6 &mdash; Schedule: Week &amp; Month views. </strong>The Schedule tab now has <strong>Day / Week / Month</strong> toggles. Week is a 7-column time grid (open-hours band + bookings + holds + blocks per day, click a day header to jump to it); Month is a clickable calendar (each day shows its first few bookings + a &lsquo;+N more&rsquo;, click any day to open its Day view). Navigation adapts to the view (&plusmn;1 day / &plusmn;1 week / &plusmn;1 month), and Add booking / Block / cancel work from every view. All times in your practice timezone. <strong>Touched</strong>: <code>src/routes/app.refill.schedule.tsx</code> (Day/Week/Month + shared appt/block components), <code>src/server/scheduling-owner.functions.ts</code> (new getRangeScheduleFn + shared name-hydrator), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.48.5",
     date: "June 2026",
     items: [
