@@ -1202,11 +1202,11 @@ function AddRecipientDialog({
     }
   }, [open]);
 
-  const save = async () => {
+  const save = async (): Promise<boolean> => {
     const e = email.trim().toLowerCase();
     if (!e || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) {
       setErr("Enter a valid email.");
-      return;
+      return false;
     }
     setAdding(true);
     setErr(null);
@@ -1216,11 +1216,24 @@ function AddRecipientDialog({
       setEmail("");
       setFirstName("");
       setSpaName("");
+      return true;
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : "Couldn't add recipient.");
+      return false;
     } finally {
       setAdding(false);
     }
+  };
+
+  // v1.47.10: "Done" must COMMIT the current entry, not discard it. If there's
+  // something typed, save it (validation blocks close on a bad email); if the
+  // form is empty, just close.
+  const done = async () => {
+    if (!email.trim()) {
+      onClose();
+      return;
+    }
+    if (await save()) onClose();
   };
 
   return (
@@ -1270,8 +1283,9 @@ function AddRecipientDialog({
         <DialogFooter>
           <button
             type="button"
-            onClick={onClose}
-            className="rounded-md border px-4 py-2 text-[13px] font-semibold transition hover:bg-[#fbfaf7]"
+            onClick={done}
+            disabled={adding}
+            className="rounded-md border px-4 py-2 text-[13px] font-semibold transition hover:bg-[#fbfaf7] disabled:opacity-50"
             style={{ borderColor: "#e6e2d6", background: "#fff", color: "#1c2024" }}
           >
             Done

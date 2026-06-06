@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.47.10",
+    date: "June 2026",
+    items: [
+      "<strong>v1.47.10 &mdash; Fix: &lsquo;Done&rsquo; in the Add-recipient dialog now saves the current entry. </strong>Grasshopper filled in a recipient (email + name + spa) and clicked <strong>Done</strong> &mdash; and it was discarded. The dialog had two buttons: &lsquo;Save &amp; add another&rsquo; (save + keep stacking) and &lsquo;Done&rsquo; (which just <em>closed</em>, dropping whatever was in the form). <strong>Fix</strong>: Done now commits the current entry before closing &mdash; if there&rsquo;s a valid email typed, it saves it then closes; an invalid email blocks the close and shows the error so nothing is lost silently; an empty form just closes. The X / Escape still cancel (deliberate discard). So both buttons save the in-progress recipient now; they only differ in whether the dialog stays open. <strong>Touched</strong>: <code>src/routes/app.rep.outreach.tsx</code> (AddRecipientDialog: <code>save</code> returns success, new <code>done</code> handler, Done button rewired), <code>src/lib/changelog.ts</code> (this entry). First ship through the new tsc tripwire gate. No dep change, no schema change, no wrangler.jsonc change.",
+    ],
+  },
+  {
     version: "v1.47.9",
     date: "June 2026",
     items: [
