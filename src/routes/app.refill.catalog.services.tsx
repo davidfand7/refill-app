@@ -58,19 +58,18 @@ import {
   type ServiceProductLink,
 } from "@/server/refill-catalog";
 import { cn } from "@/lib/utils";
+import { CategoryCombobox } from "@/components/refill/CategoryCombobox";
+import {
+  buildCategoryList,
+  categoryLabel,
+  categoryRank,
+  DEFAULT_SERVICE_CATEGORY,
+  type CategoryOption,
+} from "@/lib/service-categories";
 
 export const Route = createFileRoute("/app/refill/catalog/services")({
   component: ServicesPage,
 });
-
-const CATEGORY_OPTIONS: Array<{ value: ServiceCategory; label: string }> = [
-  { value: "tox", label: "Tox" },
-  { value: "filler", label: "Filler" },
-  { value: "laser", label: "Laser" },
-  { value: "facial", label: "Facial" },
-  { value: "skincare", label: "Skincare" },
-  { value: "other", label: "Other" },
-];
 
 type ServiceDraft = {
   name: string;
@@ -82,7 +81,7 @@ type ServiceDraft = {
 
 const EMPTY_DRAFT: ServiceDraft = {
   name: "",
-  category: "tox",
+  category: DEFAULT_SERVICE_CATEGORY,
   servicePrice: "",
   cogsPerService: "",
   notes: "",
@@ -128,10 +127,6 @@ function fmtUsd(n: number): string {
 function fmtPct(n: number | null): string {
   if (n === null) return "—";
   return `${(n * 100).toFixed(0)}%`;
-}
-
-function categoryLabel(c: ServiceCategory): string {
-  return CATEGORY_OPTIONS.find((o) => o.value === c)?.label ?? c;
 }
 
 function ServicesPage() {
@@ -233,6 +228,13 @@ function ServicesPage() {
     }
     return counts;
   }, [services]);
+
+  // Built-ins + every custom category the tenant already uses (the shared
+  // source that keeps Catalog and Booking mirrored).
+  const categoryOptions: CategoryOption[] = useMemo(
+    () => buildCategoryList(services.map((s) => s.category)),
+    [services],
+  );
 
   const filteredServices = useMemo(() => {
     if (categoryFilter.size === 0) return services;
@@ -578,7 +580,7 @@ function ServicesPage() {
             <span className="text-[10px] uppercase tracking-wider font-semibold text-ink-faint">
               Filter
             </span>
-            {(["tox", "filler", "laser", "facial", "skincare", "other"] as ServiceCategory[]).map((c) => {
+            {categoryOptions.map((o) => o.value).map((c) => {
               const count = categoryCounts.get(c) ?? 0;
               if (count === 0) return null;
               const active = categoryFilter.has(c);
@@ -696,6 +698,7 @@ function ServicesPage() {
             mode="add"
             draft={addDraft}
             onChange={setAddDraft}
+            categoryOptions={categoryOptions}
             onSubmit={onAdd}
             onCancel={() => {
               setAdding(false);
@@ -735,7 +738,11 @@ function ServicesPage() {
           )
         ) : (
           <>
-            {Array.from(byCategory.entries()).map(([cat, rows]) => (
+            {Array.from(byCategory.entries())
+              .sort(
+                ([a], [b]) => categoryRank(a) - categoryRank(b) || a.localeCompare(b),
+              )
+              .map(([cat, rows]) => (
               <section key={cat} className="space-y-3">
                 <h2 className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint flex items-center gap-2">
                   <Sparkles className="h-3.5 w-3.5 text-emerald" />
@@ -750,6 +757,7 @@ function ServicesPage() {
                         mode="edit"
                         draft={editDraft}
                         onChange={setEditDraft}
+                        categoryOptions={categoryOptions}
                         onSubmit={(e) => onSaveEdit(e, s.id)}
                         onCancel={cancelEdit}
                         onDelete={() => onDelete(s)}
@@ -883,10 +891,12 @@ function ServiceFormCard({
   onUpdateQuantity,
   onUnlink,
   onToggleCogsSource,
+  categoryOptions,
 }: {
   mode: "add" | "edit";
   draft: ServiceDraft;
   onChange: (d: ServiceDraft) => void;
+  categoryOptions: CategoryOption[];
   onSubmit: (e: FormEvent) => void;
   onCancel: () => void;
   onDelete?: () => void;
@@ -932,20 +942,13 @@ function ServiceFormCard({
         </FormField>
 
         <FormField label="Category">
-          <select
+          <CategoryCombobox
             value={draft.category}
-            onChange={(e) =>
-              onChange({ ...draft, category: e.target.value as ServiceCategory })
-            }
-            disabled={busy}
-            className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
-          >
-            {CATEGORY_OPTIONS.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
+            onChange={(c) => onChange({ ...draft, category: c })}
+            options={categoryOptions}
+            placeholder="Type to create or pick a category"
+            className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 disabled:opacity-50"
+          />
         </FormField>
 
         <FormField label="Sales price ($)">

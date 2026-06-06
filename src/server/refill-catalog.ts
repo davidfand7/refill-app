@@ -18,6 +18,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
+import { normalizeCategory } from "@/lib/service-categories";
 import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
@@ -322,7 +323,9 @@ export const deleteProductFn = createServerFn({ method: "POST" })
 
 // ══ Services (v1.29.2) ═══════════════════════════════════════════════════
 
-export type ServiceCategory = "tox" | "filler" | "laser" | "facial" | "skincare" | "other";
+// Categories are free text per tenant as of v1.67.0 (the 6 built-ins live in
+// src/lib/service-categories.ts). Kept as a named alias for readability.
+export type ServiceCategory = string;
 
 export type ServiceCogsSource = "manual" | "derived";
 
@@ -379,11 +382,14 @@ function rowToService(r: ServiceRow): Service {
   };
 }
 
-const SERVICE_CATEGORY_VALUES = ["tox", "filler", "laser", "facial", "skincare", "other"] as const;
-
 const servicePayload = z.object({
   name: z.string().trim().min(1, "Service name is required.").max(160),
-  category: z.enum(SERVICE_CATEGORY_VALUES),
+  category: z
+    .string()
+    .trim()
+    .min(1, "Category is required.")
+    .max(40, "Category is too long.")
+    .transform(normalizeCategory),
   servicePrice: z.number().nonnegative("Price can't be negative."),
   cogsPerService: z.number().nonnegative("COGS can't be negative.").nullable(),
   notes: z.string().trim().max(500).nullable(),
@@ -1299,6 +1305,8 @@ function canonicalToProductCategory(c: ServiceCategory): ProductCategory {
     case "facial": return "other";
     case "skincare": return "skincare";
     case "other": return "other";
+    // Custom (free-text) categories have no product-taxonomy mapping.
+    default: return "other";
   }
 }
 

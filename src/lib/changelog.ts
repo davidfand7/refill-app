@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.67.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.67.0 &mdash; Make your own service categories. </strong>Categories are no longer locked to the six built-ins (Tox, Filler, Laser, Facial, Skincare, Other). In both <strong>Catalog &rarr; Services</strong> and <strong>Booking &rarr; Bookable services</strong>, the category field is now a <strong>type-to-create combobox</strong>: pick a suggestion or just type a new one (e.g. <em>Body Contouring</em>, <em>Wellness / IV</em>, <em>Memberships</em>) and it&rsquo;s created on the spot. <strong>Rename a category</strong> from the little pencil on any category header in Booking &mdash; it updates every service in that category at once, and the change shows up in the Catalog too (both read the same source). Typing one of the built-in names folds onto the canonical one, so you won&rsquo;t get a stray &ldquo;tox&rdquo; next to &ldquo;Tox.&rdquo; <strong>Touched</strong>: <code>supabase/migrations/20260708000000_v1_67_0_custom_service_categories.sql</code> (relax the <code>services.category</code> CHECK to any non-empty text), <code>src/lib/service-categories.ts</code> (new shared source), <code>src/components/refill/CategoryCombobox.tsx</code> (new), <code>src/server/refill-catalog.ts</code>, <code>src/server/scheduling-settings.functions.ts</code> (<code>renameServiceCategoryFn</code> + free-text validators), <code>src/routes/app.refill.catalog.services.tsx</code>, <code>src/routes/app.refill.settings.booking.tsx</code>, <code>src/routes/app.refill.catalog.import.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.66.1",
     date: "June 2026",
     items: [

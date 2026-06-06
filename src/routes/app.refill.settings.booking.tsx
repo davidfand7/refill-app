@@ -20,6 +20,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   CalendarClock,
+  Check,
   CheckCircle2,
   ChevronDown,
   Clock,
@@ -30,11 +31,13 @@ import {
   GripVertical,
   Link2,
   Loader2,
+  Pencil,
   Plus,
   Search,
   Sparkles,
   Trash2,
   Users,
+  X,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -49,6 +52,7 @@ import {
   createResourceFn,
   deleteBookableServiceFn,
   getSchedulingSetupFn,
+  renameServiceCategoryFn,
   saveSchedulingSetupFn,
   setProviderServiceOverrideFn,
   updateProviderFn,
@@ -60,13 +64,20 @@ import {
   type ResourceRow,
   type ResourceType,
   type ServiceCategory,
-  SERVICE_CATEGORIES,
   type SchedulingHoursDraft,
   type SchedulingSettingsDraft,
   type SchedulingSetupBundle,
 } from "@/server/scheduling-settings.functions";
 import { cn } from "@/lib/utils";
 import { TimeSelect } from "@/components/refill/TimeSelect";
+import { CategoryCombobox } from "@/components/refill/CategoryCombobox";
+import {
+  buildCategoryList,
+  categoryLabel,
+  categoryRank,
+  normalizeCategory,
+  type CategoryOption,
+} from "@/lib/service-categories";
 
 export const Route = createFileRoute("/app/refill/settings/booking")({
   component: BookingSettingsPage,
@@ -126,6 +137,9 @@ function BookingSettingsPage() {
   const [showInactive, setShowInactive] = useState(false);
   // Services list: collapsible categories + drag-to-recategorize.
   const [collapsedSvcCats, setCollapsedSvcCats] = useState<Set<string>>(new Set());
+  // Inline category rename at the accordion header.
+  const [renamingCat, setRenamingCat] = useState<string | null>(null);
+  const [renameText, setRenameText] = useState("");
   const draggedSvcRef = useRef<string | null>(null);
   // Auto-scroll the window while dragging near the top/bottom edge (HTML5 DnD
   // doesn't scroll on its own — needed to drag a service up to a far category).
@@ -241,13 +255,14 @@ function BookingSettingsPage() {
   // Group the list by category (known categories first, then any extras), each
   // sorted by name — and a per-category count for the headers.
   const svcCat = (s: BookableServiceDraft) => s.category?.trim() || "other";
-  const catRank = (c: string) => {
-    const i = (SERVICE_CATEGORIES as readonly string[]).indexOf(c);
-    return i < 0 ? SERVICE_CATEGORIES.length : i;
-  };
+  // Built-ins + every custom category in use — the shared source that keeps
+  // Booking mirrored with the Catalog.
+  const categoryOptions: CategoryOption[] = buildCategoryList(
+    (draft?.services ?? []).map((s) => s.category),
+  );
   const sortedVisible = [...visibleServices].sort(
     (a, b) =>
-      catRank(svcCat(a)) - catRank(svcCat(b)) ||
+      categoryRank(svcCat(a)) - categoryRank(svcCat(b)) ||
       svcCat(a).localeCompare(svcCat(b)) ||
       a.name.localeCompare(b.name),
   );
@@ -620,6 +635,40 @@ function BookingSettingsPage() {
       d ? { ...d, services: d.services.map((s) => (s.id === id ? { ...s, ...patch } : s)) } : d,
     );
   }
+  // Rename a category across every service in it (immediate persist — bulk
+  // server update — then patch draft + server so the list reflects it without
+  // a reload). Mirrors instantly into the Catalog (both read services.category).
+  async function commitCategoryRename(oldCat: string) {
+    const to = normalizeCategory(renameText);
+    setRenamingCat(null);
+    if (!to || normalizeCategory(oldCat) === to) return;
+    try {
+      const res = await withToken((token) =>
+        renameServiceCategoryFn({ data: { accessToken: token, viewAsUserId, from: oldCat, to } }),
+      );
+      if (!res) return;
+      const apply = (b: SchedulingSetupBundle): SchedulingSetupBundle => ({
+        ...b,
+        services: b.services.map((s) => (s.category === oldCat ? { ...s, category: res.to } : s)),
+      });
+      setServer((b) => (b ? apply(b) : b));
+      setDraft((b) => (b ? apply(b) : b));
+      setCollapsedSvcCats((p) => {
+        if (!p.has(oldCat)) return p;
+        const n = new Set(p);
+        n.delete(oldCat);
+        n.add(res.to);
+        return n;
+      });
+      toast.success(
+        `Category renamed to “${categoryLabel(res.to)}”${
+          res.renamed ? ` · ${res.renamed} service${res.renamed === 1 ? "" : "s"}` : ""
+        }.`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't rename category.");
+    }
+  }
   // Create / delete services (immediate persist — separate from the batched Save).
   async function onAddService() {
     const name = newSvcName.trim();
@@ -698,9 +747,7 @@ function BookingSettingsPage() {
           services: draft.services.map((s) => ({
             id: s.id,
             name: s.name,
-            category: (SERVICE_CATEGORIES.includes(s.category as ServiceCategory)
-              ? s.category
-              : "other") as ServiceCategory,
+            category: s.category,
             price: s.price,
             durationMin: s.durationMin,
             bufferMin: s.bufferMin,
@@ -908,10 +955,12 @@ function BookingSettingsPage() {
                           : draft.services.filter((s) => s.onlineBookable);
                         const byCat = new Map<string, BookableServiceDraft[]>();
                         for (const s of list) {
-                          const cat = s.category?.trim() || "Other";
+                          const cat = svcCat(s);
                           (byCat.get(cat) ?? byCat.set(cat, []).get(cat)!).push(s);
                         }
-                        const cats = Array.from(byCat.keys()).sort((a, b) => a.localeCompare(b));
+                        const cats = Array.from(byCat.keys()).sort(
+                          (a, b) => categoryRank(a) - categoryRank(b) || a.localeCompare(b),
+                        );
                         return (
                           <div className="ml-5 mb-2 mt-1 rounded-lg border border-rule/60 bg-paper/30 px-3 py-2.5">
                             <div className="relative mb-2">
@@ -968,7 +1017,7 @@ function BookingSettingsPage() {
                                           onClick={toggleCat}
                                           className="flex-1 min-w-0 text-left text-[13px] font-medium text-ink truncate"
                                         >
-                                          {cat}
+                                          {categoryLabel(cat)}
                                         </button>
                                         <span className="text-[11px] text-ink-faint tabular-nums shrink-0">
                                           {performed}/{svcs.length}
@@ -1479,10 +1528,62 @@ function BookingSettingsPage() {
                             >
                               <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", collapsed && "-rotate-90")} />
                             </button>
-                            <span className="text-[12px] font-semibold text-ink capitalize">{cat}</span>
-                            <span className="text-[11px] text-ink-faint tabular-nums">
-                              {svcCatCounts.get(cat) ?? 0}
-                            </span>
+                            {renamingCat === cat ? (
+                              <span className="flex items-center gap-1">
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  value={renameText}
+                                  onChange={(e) => setRenameText(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      void commitCategoryRename(cat);
+                                    } else if (e.key === "Escape") {
+                                      setRenamingCat(null);
+                                    }
+                                  }}
+                                  className="w-40 rounded-md border border-emerald bg-white px-2 py-0.5 text-[12px] font-semibold text-ink outline-none focus:ring-2 focus:ring-emerald/30"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => void commitCategoryRename(cat)}
+                                  className="shrink-0 text-emerald hover:opacity-80 transition"
+                                  aria-label="Save category name"
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setRenamingCat(null)}
+                                  className="shrink-0 text-ink-faint hover:text-ink transition"
+                                  aria-label="Cancel rename"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </span>
+                            ) : (
+                              <span className="group/cat flex items-center gap-1.5">
+                                <span className="text-[12px] font-semibold text-ink">
+                                  {categoryLabel(cat)}
+                                </span>
+                                <span className="text-[11px] text-ink-faint tabular-nums">
+                                  {svcCatCounts.get(cat) ?? 0}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setRenamingCat(cat);
+                                    setRenameText(categoryLabel(cat));
+                                  }}
+                                  className="shrink-0 text-ink-faint/0 group-hover/cat:text-ink-faint hover:!text-ink transition"
+                                  aria-label="Rename category"
+                                  title="Rename this category (updates every service in it)"
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </button>
+                              </span>
+                            )}
                             <span className="flex-1 border-t border-rule/40 ml-1" />
                           </div>
                         )}
@@ -1553,17 +1654,12 @@ function BookingSettingsPage() {
                                 <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
                                   Category
                                 </label>
-                                <select
-                                  value={SERVICE_CATEGORIES.includes(s.category as ServiceCategory) ? s.category : "other"}
-                                  onChange={(e) => patchService(s.id, { category: e.target.value })}
-                                  className="w-full rounded-md border border-rule bg-white px-1.5 py-1 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 capitalize"
-                                >
-                                  {SERVICE_CATEGORIES.map((c) => (
-                                    <option key={c} value={c} className="capitalize">
-                                      {c}
-                                    </option>
-                                  ))}
-                                </select>
+                                <CategoryCombobox
+                                  value={s.category}
+                                  onChange={(c) => patchService(s.id, { category: c })}
+                                  options={categoryOptions}
+                                  className="w-full rounded-md border border-rule bg-white px-1.5 py-1 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                                />
                               </div>
                               <div>
                                 <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
@@ -1738,17 +1834,12 @@ function BookingSettingsPage() {
                     <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
                       Category
                     </label>
-                    <select
+                    <CategoryCombobox
                       value={newSvcCategory}
-                      onChange={(e) => setNewSvcCategory(e.target.value as ServiceCategory)}
-                      className="rounded-md border border-rule bg-white px-2 py-2 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 capitalize"
-                    >
-                      {SERVICE_CATEGORIES.map((c) => (
-                        <option key={c} value={c} className="capitalize">
-                          {c}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(c) => setNewSvcCategory(c)}
+                      options={categoryOptions}
+                      className="w-full rounded-md border border-rule bg-white px-2 py-2 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                    />
                   </div>
                   <div>
                     <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">

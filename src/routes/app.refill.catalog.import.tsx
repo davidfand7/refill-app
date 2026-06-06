@@ -59,6 +59,8 @@ function categoryLabel(c: CatLabel | ServiceCategory): string {
     case "facial": return "Facial";
     case "skincare": return "Skincare";
     case "other": return "Other";
+    // Custom (free-text) service categories display verbatim.
+    default: return c;
   }
 }
 

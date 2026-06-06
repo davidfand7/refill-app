@@ -21,6 +21,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import { BUILTIN_CATEGORY_VALUES, normalizeCategory } from "@/lib/service-categories";
 
 function admin() {
   const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
@@ -95,8 +96,11 @@ export interface ProviderRow {
 
 export type ResourceType = "room" | "chair" | "device";
 
-export const SERVICE_CATEGORIES = ["tox", "filler", "laser", "facial", "skincare", "other"] as const;
-export type ServiceCategory = (typeof SERVICE_CATEGORIES)[number];
+// Built-in categories live in the shared source (src/lib/service-categories.ts).
+// As of v1.67.0 categories are free text per tenant; this re-export keeps the
+// built-in list available for back-compat with existing importers.
+export const SERVICE_CATEGORIES = BUILTIN_CATEGORY_VALUES;
+export type ServiceCategory = string;
 
 export interface ResourceRow {
   id: string;
@@ -379,7 +383,7 @@ const settingsDraftSchema = z.object({
 const serviceDraftSchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(1).max(160),
-  category: z.enum(SERVICE_CATEGORIES),
+  category: z.string().trim().min(1).max(40).transform(normalizeCategory),
   price: z.number().nonnegative().max(1_000_000),
   durationMin: z.number().int().positive().max(1440),
   bufferMin: z.number().int().min(0).max(1440),
@@ -971,7 +975,7 @@ const createBookableServiceInput = z.object({
   accessToken: z.string().min(10),
   viewAsUserId: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(160),
-  category: z.enum(SERVICE_CATEGORIES),
+  category: z.string().trim().min(1).max(40).transform(normalizeCategory),
   price: z.number().nonnegative().max(1_000_000),
 });
 
@@ -1034,4 +1038,37 @@ export const deleteBookableServiceFn = createServerFn({ method: "POST" })
       .eq("tenant_id", tenantId);
     if (error) throw new Error(`Couldn't delete service: ${error.message}`);
     return { ok: true };
+  });
+
+// ── Rename a category across all of a tenant's services (v1.67.0) ─────────
+// Categories are free text on each service row, so renaming a category = a
+// bulk update of every service currently in it. Mirrors instantly into the
+// Catalog because both surfaces read services.category. Tenant-scoped.
+
+const renameServiceCategoryInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+  from: z.string().trim().min(1).max(40),
+  to: z.string().trim().min(1).max(40).transform(normalizeCategory),
+});
+
+export const renameServiceCategoryFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => renameServiceCategoryInput.parse(raw))
+  .handler(async ({ data }): Promise<{ renamed: number; to: string }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    if (!data.to) throw new Error("New category name is required.");
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    if (normalizeCategory(data.from) === data.to) return { renamed: 0, to: data.to };
+    const { data: rows, error } = await sb
+      .from("services")
+      .update({ category: data.to })
+      .eq("tenant_id", tenantId)
+      .eq("category", data.from)
+      .select("id");
+    if (error) throw new Error(`Couldn't rename category: ${error.message}`);
+    return { renamed: rows?.length ?? 0, to: data.to };
   });
