@@ -95,6 +95,9 @@ export interface ProviderRow {
 
 export type ResourceType = "room" | "chair" | "device";
 
+export const SERVICE_CATEGORIES = ["tox", "filler", "laser", "facial", "skincare", "other"] as const;
+export type ServiceCategory = (typeof SERVICE_CATEGORIES)[number];
+
 export interface ResourceRow {
   id: string;
   name: string;
@@ -375,6 +378,9 @@ const settingsDraftSchema = z.object({
 
 const serviceDraftSchema = z.object({
   id: z.string().uuid(),
+  name: z.string().trim().min(1).max(160),
+  category: z.enum(SERVICE_CATEGORIES),
+  price: z.number().nonnegative().max(1_000_000),
   durationMin: z.number().int().positive().max(1440),
   bufferMin: z.number().int().min(0).max(1440),
   onlineBookable: z.boolean(),
@@ -465,6 +471,9 @@ export const saveSchedulingSetupFn = createServerFn({ method: "POST" })
       const { error: svcErr } = await sb
         .from("services")
         .update({
+          name: s.name,
+          category: s.category,
+          service_price: s.price,
           duration_min: s.durationMin,
           buffer_min: s.bufferMin,
           online_bookable: s.onlineBookable,
@@ -949,4 +958,80 @@ export const assignProviderServicesBulkFn = createServerFn({ method: "POST" })
       await applyAssignment(sb, tenantId, data.providerId, sid, data.performs, activeIds, nowIso);
     }
     return { services: await assignmentResults(sb, ids) };
+  });
+
+// ── createBookableServiceFn / deleteBookableServiceFn ────────────────────────
+// Lightweight create/delete over the services catalog, returning the booking
+// draft shape. New services start NOT bookable (default off) with the catalog
+// defaults (30 min, no buffer). Edits to name/category/price flow through the
+// batched Save (saveSchedulingSetupFn). Delete cascades the provider×service
+// rows via FK; appointments don't reference service_id, so they're unaffected.
+
+const createBookableServiceInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+  name: z.string().trim().min(1).max(160),
+  category: z.enum(SERVICE_CATEGORIES),
+  price: z.number().nonnegative().max(1_000_000),
+});
+
+export const createBookableServiceFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => createBookableServiceInput.parse(raw))
+  .handler(async ({ data }): Promise<{ service: BookableServiceDraft }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const { data: row, error } = await sb
+      .from("services")
+      .insert({
+        tenant_id: tenantId,
+        name: data.name,
+        category: data.category,
+        service_price: data.price,
+        cogs_source: "manual",
+      })
+      .select(
+        "id, name, category, duration_min, buffer_min, service_price, online_bookable, required_resource_type",
+      )
+      .single();
+    if (error || !row) throw new Error(`Couldn't add service: ${error?.message ?? "unknown"}`);
+    return {
+      service: {
+        id: row.id,
+        name: row.name,
+        category: row.category,
+        durationMin: row.duration_min,
+        bufferMin: row.buffer_min,
+        price: row.service_price,
+        onlineBookable: row.online_bookable,
+        requiredResourceType: normalizeResourceTypeOrNull(row.required_resource_type),
+      },
+    };
+  });
+
+const deleteBookableServiceInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+  serviceId: z.string().uuid(),
+});
+
+export const deleteBookableServiceFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => deleteBookableServiceInput.parse(raw))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const { error } = await sb
+      .from("services")
+      .delete()
+      .eq("id", data.serviceId)
+      .eq("tenant_id", tenantId);
+    if (error) throw new Error(`Couldn't delete service: ${error.message}`);
+    return { ok: true };
   });

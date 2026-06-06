@@ -32,6 +32,7 @@ import {
   Plus,
   Search,
   Sparkles,
+  Trash2,
   Users,
 } from "lucide-react";
 
@@ -42,8 +43,10 @@ import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
   assignProviderServiceFn,
   assignProviderServicesBulkFn,
+  createBookableServiceFn,
   createProviderFn,
   createResourceFn,
+  deleteBookableServiceFn,
   getSchedulingSetupFn,
   saveSchedulingSetupFn,
   setProviderServiceOverrideFn,
@@ -55,6 +58,8 @@ import {
   type ProviderServiceOverrideRow,
   type ResourceRow,
   type ResourceType,
+  type ServiceCategory,
+  SERVICE_CATEGORIES,
   type SchedulingHoursDraft,
   type SchedulingSettingsDraft,
   type SchedulingSetupBundle,
@@ -118,6 +123,12 @@ function BookingSettingsPage() {
   // Bookable-services list declutter: search + show-inactive.
   const [svcSearch, setSvcSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  // Add-service form.
+  const [addingSvc, setAddingSvc] = useState(false);
+  const [newSvcName, setNewSvcName] = useState("");
+  const [newSvcCategory, setNewSvcCategory] = useState<ServiceCategory>("other");
+  const [newSvcPrice, setNewSvcPrice] = useState("");
+  const [svcBusy, setSvcBusy] = useState(false);
   // Which bookable service is expanded to its per-provider override panel.
   const [expandedSvc, setExpandedSvc] = useState<string | null>(null);
   // Transient override input buffers, keyed `${providerId}|${serviceId}|${field}`.
@@ -557,6 +568,58 @@ function BookingSettingsPage() {
       d ? { ...d, services: d.services.map((s) => (s.id === id ? { ...s, ...patch } : s)) } : d,
     );
   }
+  // Create / delete services (immediate persist — separate from the batched Save).
+  async function onAddService() {
+    const name = newSvcName.trim();
+    if (!name) return;
+    const price = Math.max(0, Math.round((parseFloat(newSvcPrice) || 0) * 100) / 100);
+    setSvcBusy(true);
+    try {
+      const res = await withToken((token) =>
+        createBookableServiceFn({
+          data: { accessToken: token, viewAsUserId, name, category: newSvcCategory, price },
+        }),
+      );
+      if (!res) return;
+      const add = (b: SchedulingSetupBundle): SchedulingSetupBundle => ({
+        ...b,
+        services: [...b.services, res.service],
+      });
+      setServer((s) => (s ? add(s) : s));
+      setDraft((d) => (d ? add(d) : d));
+      setNewSvcName("");
+      setNewSvcPrice("");
+      setNewSvcCategory("other");
+      setAddingSvc(false);
+      toast.success(`Added ${res.service.name}.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't add service.");
+    } finally {
+      setSvcBusy(false);
+    }
+  }
+  async function onDeleteService(s: BookableServiceDraft) {
+    if (typeof window !== "undefined" && !window.confirm(`Delete "${s.name}"? This can't be undone.`)) {
+      return;
+    }
+    try {
+      const res = await withToken((token) =>
+        deleteBookableServiceFn({ data: { accessToken: token, viewAsUserId, serviceId: s.id } }),
+      );
+      if (!res) return;
+      const remove = (b: SchedulingSetupBundle): SchedulingSetupBundle => ({
+        ...b,
+        services: b.services.filter((x) => x.id !== s.id),
+        providerServices: b.providerServices.filter((r) => r.serviceId !== s.id),
+      });
+      setServer((b) => (b ? remove(b) : b));
+      setDraft((b) => (b ? remove(b) : b));
+      if (expandedSvc === s.id) setExpandedSvc(null);
+      toast.success(`Deleted ${s.name}.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't delete service.");
+    }
+  }
 
   async function onSave() {
     if (!draft || !dirty) return;
@@ -582,6 +645,11 @@ function BookingSettingsPage() {
           hours: flatHours,
           services: draft.services.map((s) => ({
             id: s.id,
+            name: s.name,
+            category: (SERVICE_CATEGORIES.includes(s.category as ServiceCategory)
+              ? s.category
+              : "other") as ServiceCategory,
+            price: s.price,
             durationMin: s.durationMin,
             bufferMin: s.bufferMin,
             onlineBookable: s.onlineBookable,
@@ -1326,7 +1394,7 @@ function BookingSettingsPage() {
                     </p>
                   )}
                   {visibleServices.map((s) => {
-                    const canExpand = activeProviders.length > 1 || activeResourceTypes.length > 0;
+                    const canExpand = true; // every service expands to edit details / room / per-provider
                     const expanded = canExpand && expandedSvc === s.id;
                     return (
                       <div key={s.id} className="py-1">
@@ -1365,9 +1433,68 @@ function BookingSettingsPage() {
                           </div>
                         </div>
 
-                        {/* Advanced per-service settings (room requirement + per-provider). */}
+                        {/* Advanced per-service settings (details + room + per-provider). */}
                         {expanded && (
                           <div className="ml-5 mb-2 mt-1 rounded-lg border border-rule/60 bg-paper/30 px-3 py-2.5 space-y-3">
+                            {/* Service details — name / category / price (batched Save) + delete. */}
+                            <div className="grid grid-cols-[1fr_110px_90px_auto] gap-2 items-end">
+                              <div>
+                                <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                                  Name
+                                </label>
+                                <input
+                                  type="text"
+                                  value={s.name}
+                                  onChange={(e) => patchService(s.id, { name: e.target.value })}
+                                  className="w-full rounded-md border border-rule bg-white px-2 py-1 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                                  Category
+                                </label>
+                                <select
+                                  value={SERVICE_CATEGORIES.includes(s.category as ServiceCategory) ? s.category : "other"}
+                                  onChange={(e) => patchService(s.id, { category: e.target.value })}
+                                  className="w-full rounded-md border border-rule bg-white px-1.5 py-1 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 capitalize"
+                                >
+                                  {SERVICE_CATEGORIES.map((c) => (
+                                    <option key={c} value={c} className="capitalize">
+                                      {c}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                                  Price
+                                </label>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[11px] text-ink-faint">$</span>
+                                  <input
+                                    type="number"
+                                    min={0}
+                                    step="0.01"
+                                    value={s.price}
+                                    onChange={(e) =>
+                                      patchService(s.id, {
+                                        price: Math.max(0, Math.round((parseFloat(e.target.value) || 0) * 100) / 100),
+                                      })
+                                    }
+                                    className="w-full rounded-md border border-rule bg-white px-1.5 py-1 text-[13px] text-ink text-right outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums"
+                                  />
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => void onDeleteService(s)}
+                                className="inline-flex items-center justify-center rounded-md border border-bad/30 px-2 py-1.5 text-bad hover:bg-bad/5 transition"
+                                title="Delete service"
+                                aria-label="Delete service"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                             {activeResourceTypes.length > 0 && (
                               <div>
                                 <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
@@ -1483,6 +1610,85 @@ function BookingSettingsPage() {
                     );
                   })}
                 </div>
+              )}
+
+              {/* Add a new service to the catalog (immediate). */}
+              {addingSvc ? (
+                <div className="flex flex-wrap items-end gap-2 mt-3 pt-3 border-t border-rule/60">
+                  <div className="flex-1 min-w-[160px]">
+                    <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                      Name
+                    </label>
+                    <input
+                      type="text"
+                      autoFocus
+                      value={newSvcName}
+                      onChange={(e) => setNewSvcName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void onAddService();
+                        if (e.key === "Escape") setAddingSvc(false);
+                      }}
+                      placeholder="e.g. Lip filler"
+                      className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[14px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                      Category
+                    </label>
+                    <select
+                      value={newSvcCategory}
+                      onChange={(e) => setNewSvcCategory(e.target.value as ServiceCategory)}
+                      className="rounded-md border border-rule bg-white px-2 py-2 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 capitalize"
+                    >
+                      {SERVICE_CATEGORIES.map((c) => (
+                        <option key={c} value={c} className="capitalize">
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                      Price
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[12px] text-ink-faint">$</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={newSvcPrice}
+                        onChange={(e) => setNewSvcPrice(e.target.value)}
+                        placeholder="0"
+                        className="w-20 rounded-md border border-rule bg-white px-2 py-2 text-[14px] text-ink text-right outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void onAddService()}
+                    disabled={svcBusy || !newSvcName.trim()}
+                    className="inline-flex items-center gap-1 rounded-md bg-emerald px-3 py-2 text-[13px] font-medium text-paper hover:opacity-95 transition disabled:opacity-50"
+                  >
+                    {svcBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAddingSvc(false)}
+                    className="rounded-md border border-rule px-3 py-2 text-[13px] text-ink-soft hover:text-ink transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAddingSvc(true)}
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-1.5 text-[13px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add service
+                </button>
               )}
             </section>
 

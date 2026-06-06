@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.65.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.65.0 &mdash; Add, edit, and delete services right here. </strong>No more bouncing to the catalog: the <strong>Bookable services</strong> list now does full CRUD. <strong>+ Add service</strong> creates one (name, category, price) on the spot; expand any service to <strong>edit its name, category, and price</strong> (alongside duration, buffer, room, and per-provider settings); and a <strong>delete</strong> button removes one cleanly (handy for retail products that slipped into your services). Name/category/price edits save with the <strong>Save changes</strong> button; add and delete apply immediately. <strong>Touched</strong>: <code>src/server/scheduling-settings.functions.ts</code> (<code>createBookableServiceFn</code> / <code>deleteBookableServiceFn</code> + name/category/price in the save), <code>src/routes/app.refill.settings.booking.tsx</code> (add form, inline details editor, delete), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.64.1",
     date: "June 2026",
     items: [
