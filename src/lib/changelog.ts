@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.47.9",
+    date: "June 2026",
+    items: [
+      "<strong>v1.47.9 &mdash; Search-and-destroy round 1: killed the one real dangling-ref bug hiding in the type errors. </strong>After the v1.47.8 <code>setResult</code> lesson, ran <code>tsc --noEmit</code> across the whole codebase to hunt for the same class of bug (an identifier referenced but never declared — the kind esbuild ships and that throws at runtime). Of 268 pre-existing type errors, exactly <strong>ONE</strong> was a genuine dangling reference: <code>emma-inbox.functions.ts</code> used <code>userId</code> (undefined) in the outbound-message lookup instead of the in-scope <code>effectiveUserId</code> that the rest of the function uses &mdash; so the inbox couldn&rsquo;t thread a reply back to the parent message it answered. Fixed (one-word typo). The remaining ~267 errors are non-throwing noise: mostly a stale generated <code>types.ts</code> (SelectQueryError on queries the typed client can&rsquo;t infer) concentrated in <code>seed.ts</code> / <code>zoho.functions.ts</code> / nav-features / NotificationCenter, plus <code>Record</code>-vs-<code>Json</code> and <code>string|null</code> strictness &mdash; cosmetic until <code>types.ts</code> is regenerated. <strong>Touched</strong>: <code>src/server/emma-inbox.functions.ts</code> (userId &rarr; effectiveUserId), <code>src/lib/changelog.ts</code> (this entry). No dep change, no schema change, no wrangler.jsonc change.",
+    ],
+  },
+  {
     version: "v1.47.8",
     date: "June 2026",
     items: [

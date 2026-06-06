@@ -218,7 +218,7 @@ export const listPatientInbox = createServerFn({ method: "POST" })
     const { data: outbound } = await sb
       .from("patient_outreach")
       .select("id, patient_outreach_state_id, channel, subject, body, sent_at")
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .eq("direction", "outbound")
       .in("patient_outreach_state_id", stateIds)
       .not("sent_at", "is", null)
