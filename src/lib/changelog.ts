@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.59.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.59.0 &mdash; Hours &amp; minutes for service times, in 5-minute steps. </strong>On the <strong>Online booking</strong> page, service <strong>Duration</strong> and <strong>Buffer</strong> now edit as <strong>hours + minutes</strong> (minutes in clean 5-minute increments) instead of one raw minutes box. Prefer plain minutes? A toggle at the top of <strong>Bookable services</strong> flips the whole list between <strong>1h 30m</strong> and <strong>90 min</strong> &mdash; your choice is remembered. <strong>Touched</strong>: <code>src/routes/app.refill.settings.booking.tsx</code> (new <code>DurationField</code> + format toggle), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.58.0",
     date: "June 2026",
     items: [

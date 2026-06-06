@@ -110,6 +110,15 @@ function BookingSettingsPage() {
   const [expandedSvc, setExpandedSvc] = useState<string | null>(null);
   // Transient override input buffers, keyed `${providerId}|${serviceId}|${field}`.
   const [psDrafts, setPsDrafts] = useState<Record<string, string>>({});
+  // Duration display format ("hm" = 1h 30m, "min" = 90 min). UI-only pref.
+  const [durFmt, setDurFmt] = useState<"hm" | "min">(() => {
+    if (typeof window === "undefined") return "hm";
+    return window.localStorage.getItem("refill.booking.durFmt") === "min" ? "min" : "hm";
+  });
+  function setDurationFormat(f: "hm" | "min") {
+    setDurFmt(f);
+    if (typeof window !== "undefined") window.localStorage.setItem("refill.booking.durFmt", f);
+  }
   // Rooms/resources management.
   const [addingResource, setAddingResource] = useState(false);
   const [newResourceName, setNewResourceName] = useState("");
@@ -1039,8 +1048,30 @@ function BookingSettingsPage() {
 
             {/* ── Bookable services ── */}
             <section className="rounded-xl border border-rule bg-white px-5 py-4">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center justify-between gap-2 mb-1">
                 <h3 className="text-[14px] font-semibold text-ink">Bookable services</h3>
+                <div className="inline-flex rounded-md border border-rule overflow-hidden text-[12px]">
+                  <button
+                    type="button"
+                    onClick={() => setDurationFormat("hm")}
+                    className={cn(
+                      "px-2.5 py-1 font-medium transition tabular-nums",
+                      durFmt === "hm" ? "bg-emerald text-paper" : "text-ink-soft hover:text-ink",
+                    )}
+                  >
+                    1h 30m
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDurationFormat("min")}
+                    className={cn(
+                      "px-2.5 py-1 font-medium transition tabular-nums border-l border-rule",
+                      durFmt === "min" ? "bg-emerald text-paper" : "text-ink-soft hover:text-ink",
+                    )}
+                  >
+                    90 min
+                  </button>
+                </div>
               </div>
               <p className="text-[12px] text-ink-soft mb-3 leading-relaxed">
                 Choose which services patients can book online, and set how long each takes
@@ -1058,7 +1089,7 @@ function BookingSettingsPage() {
                 </div>
               ) : (
                 <div className="divide-y divide-rule">
-                  <div className="hidden sm:grid grid-cols-[1fr_90px_90px_90px] gap-2 pb-2 text-[11px] uppercase tracking-wider font-semibold text-ink-faint">
+                  <div className="hidden sm:grid grid-cols-[1fr_136px_136px_72px] gap-2 pb-2 text-[11px] uppercase tracking-wider font-semibold text-ink-faint">
                     <span>Service</span>
                     <span className="text-right">Duration</span>
                     <span className="text-right">Buffer</span>
@@ -1069,47 +1100,33 @@ function BookingSettingsPage() {
                     const expanded = canExpand && expandedSvc === s.id;
                     return (
                       <div key={s.id} className="py-1">
-                        <div className="grid grid-cols-[1fr_90px_90px_90px] gap-2 items-center py-1.5">
+                        <div className="grid grid-cols-[1fr_136px_136px_72px] gap-2 items-center py-1.5">
                           <div className="flex items-center gap-1 min-w-0">
                             {canExpand && (
                               <button
                                 type="button"
                                 onClick={() => setExpandedSvc(expanded ? null : s.id)}
                                 className="shrink-0 text-ink-faint hover:text-ink transition"
-                                aria-label={expanded ? "Hide per-provider pricing" : "Set per-provider time & price"}
-                                title="Per-provider time & price"
+                                aria-label={expanded ? "Hide advanced settings" : "Advanced (room + per-provider)"}
+                                title="Room requirement &amp; per-provider time/price"
                               >
                                 <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", !expanded && "-rotate-90")} />
                               </button>
                             )}
                             <span className="text-[13px] text-ink truncate">{s.name}</span>
                           </div>
-                          <div className="flex items-center justify-end gap-1">
-                            <input
-                              type="number"
-                              min={1}
-                              max={1440}
-                              value={s.durationMin}
-                              onChange={(e) =>
-                                patchService(s.id, { durationMin: clampInt(e.target.value, 1, 1440) })
-                              }
-                              className="w-14 rounded-md border border-rule bg-white px-2 py-1 text-[13px] text-ink text-right outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums"
-                            />
-                            <span className="text-[11px] text-ink-faint">m</span>
-                          </div>
-                          <div className="flex items-center justify-end gap-1">
-                            <input
-                              type="number"
-                              min={0}
-                              max={1440}
-                              value={s.bufferMin}
-                              onChange={(e) =>
-                                patchService(s.id, { bufferMin: clampInt(e.target.value, 0, 1440) })
-                              }
-                              className="w-14 rounded-md border border-rule bg-white px-2 py-1 text-[13px] text-ink text-right outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums"
-                            />
-                            <span className="text-[11px] text-ink-faint">m</span>
-                          </div>
+                          <DurationField
+                            minutes={s.durationMin}
+                            min={5}
+                            format={durFmt}
+                            onChange={(m) => patchService(s.id, { durationMin: m })}
+                          />
+                          <DurationField
+                            minutes={s.bufferMin}
+                            min={0}
+                            format={durFmt}
+                            onChange={(m) => patchService(s.id, { bufferMin: m })}
+                          />
                           <div className="flex justify-end">
                             <Toggle
                               checked={s.onlineBookable}
@@ -1284,6 +1301,74 @@ function clampInt(raw: string, min: number, max: number): number {
   const n = parseInt(raw, 10);
   if (Number.isNaN(n)) return min;
   return Math.max(min, Math.min(max, n));
+}
+
+/** Round to the nearest 5 minutes, clamped to [min, 1440]. */
+function snap5(n: number, min: number): number {
+  return Math.max(min, Math.min(1440, Math.round(n / 5) * 5));
+}
+
+const DUR_INPUT_CLS =
+  "rounded-md border border-rule bg-white px-1.5 py-1 text-[13px] text-ink text-right outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums";
+
+/**
+ * Duration / buffer editor in 5-minute steps. Always stores minutes; renders as
+ * "1 h 30 m" (format "hm") or "90 min" (format "min").
+ */
+function DurationField({
+  minutes,
+  min,
+  format,
+  onChange,
+}: {
+  minutes: number;
+  min: number; // 0 for buffer, 5 for duration
+  format: "hm" | "min";
+  onChange: (m: number) => void;
+}) {
+  if (format === "min") {
+    return (
+      <div className="flex items-center justify-end gap-1">
+        <input
+          type="number"
+          min={min}
+          max={1440}
+          step={5}
+          value={minutes}
+          onChange={(e) => onChange(snap5(parseInt(e.target.value || "0", 10), min))}
+          className={cn(DUR_INPUT_CLS, "w-16")}
+        />
+        <span className="text-[11px] text-ink-faint">min</span>
+      </div>
+    );
+  }
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <input
+        type="number"
+        min={0}
+        max={24}
+        value={h}
+        onChange={(e) => onChange(snap5((clampInt(e.target.value, 0, 24)) * 60 + m, min))}
+        className={cn(DUR_INPUT_CLS, "w-10")}
+      />
+      <span className="text-[11px] text-ink-faint">h</span>
+      <select
+        value={m}
+        onChange={(e) => onChange(snap5(h * 60 + parseInt(e.target.value, 10), min))}
+        className="rounded-md border border-rule bg-white px-1 py-1 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums"
+      >
+        {Array.from({ length: 12 }, (_, i) => i * 5).map((mm) => (
+          <option key={mm} value={mm}>
+            {String(mm).padStart(2, "0")}
+          </option>
+        ))}
+      </select>
+      <span className="text-[11px] text-ink-faint">m</span>
+    </div>
+  );
 }
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
