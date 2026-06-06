@@ -127,6 +127,39 @@ function BookingSettingsPage() {
   // Services list: collapsible categories + drag-to-recategorize.
   const [collapsedSvcCats, setCollapsedSvcCats] = useState<Set<string>>(new Set());
   const draggedSvcRef = useRef<string | null>(null);
+  // Auto-scroll the window while dragging near the top/bottom edge (HTML5 DnD
+  // doesn't scroll on its own — needed to drag a service up to a far category).
+  const autoScroll = useRef<{ vy: number; raf: number; on: boolean; off?: () => void }>({
+    vy: 0,
+    raf: 0,
+    on: false,
+  });
+  function startAutoScroll() {
+    const st = autoScroll.current;
+    if (st.on) return;
+    st.on = true;
+    const onOver = (e: DragEvent) => {
+      const EDGE = 100;
+      const h = window.innerHeight;
+      const y = e.clientY;
+      st.vy = y < EDGE ? -Math.ceil((EDGE - y) / 4) : y > h - EDGE ? Math.ceil((y - (h - EDGE)) / 4) : 0;
+    };
+    window.addEventListener("dragover", onOver);
+    st.off = () => window.removeEventListener("dragover", onOver);
+    const tick = () => {
+      if (!st.on) return;
+      if (st.vy) window.scrollBy(0, st.vy);
+      st.raf = requestAnimationFrame(tick);
+    };
+    st.raf = requestAnimationFrame(tick);
+  }
+  function stopAutoScroll() {
+    const st = autoScroll.current;
+    st.on = false;
+    st.vy = 0;
+    if (st.raf) cancelAnimationFrame(st.raf);
+    st.off?.();
+  }
   // Add-service form.
   const [addingSvc, setAddingSvc] = useState(false);
   const [newSvcName, setNewSvcName] = useState("");
@@ -1461,7 +1494,9 @@ function BookingSettingsPage() {
                               draggable
                               onDragStart={() => {
                                 draggedSvcRef.current = s.id;
+                                startAutoScroll();
                               }}
+                              onDragEnd={() => stopAutoScroll()}
                               className="shrink-0 cursor-grab active:cursor-grabbing text-ink-faint/40 hover:text-ink-faint"
                               title="Drag to another category"
                             >

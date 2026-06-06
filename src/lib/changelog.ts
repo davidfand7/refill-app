@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.66.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.66.1 &mdash; Dragging a service now auto-scrolls the page. </strong>When you drag a service toward the top or bottom edge, the page scrolls so you can reach a category that&rsquo;s far up or down the list (e.g. moving <em>smooth</em> or <em>Skinvive</em> up to <em>filler</em>). <strong>Touched</strong>: <code>src/routes/app.refill.settings.booking.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.66.0",
     date: "June 2026",
     items: [
