@@ -9,10 +9,16 @@
  */
 
 import { Link } from "@tanstack/react-router";
-import { Plug, UserCog, AtSign, Building2, Mail } from "lucide-react";
+import { Plug, UserCog, AtSign, Building2, Mail, CalendarClock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type SettingsTab = "scheduler" | "account" | "sender" | "spa-profile" | "light-mode";
+type SettingsTab =
+  | "scheduler"
+  | "booking"
+  | "account"
+  | "sender"
+  | "spa-profile"
+  | "light-mode";
 
 const TABS: Array<{
   key: SettingsTab;
@@ -21,6 +27,7 @@ const TABS: Array<{
   icon: typeof Plug;
 }> = [
   { key: "scheduler", to: "/app/refill/settings/scheduler", label: "Scheduler", icon: Plug },
+  { key: "booking", to: "/app/refill/settings/booking", label: "Online booking", icon: CalendarClock },
   { key: "account", to: "/app/refill/settings/account", label: "Account", icon: UserCog },
   { key: "sender", to: "/app/refill/settings/sender", label: "Sender", icon: AtSign },
   { key: "spa-profile", to: "/app/refill/settings/spa-profile", label: "Spa profile", icon: Building2 },

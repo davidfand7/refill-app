@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.48.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.48.0 &mdash; Smart Scheduling: the spine + Online booking setup. </strong>The first drop of Refill&rsquo;s native scheduler &mdash; free scheduling, performance-only pricing. New <strong>Online booking</strong> settings tab (Settings &rarr; Online booking) where you flip on patient self-booking, set your timezone, define business hours per day, tune booking rules (minimum notice, booking window, slot interval, hold window, reminders), and choose which services are bookable online with their duration + cleanup buffer. First open auto-creates your provider + a sensible default week, so there&rsquo;s nothing to wire up. <strong>Under the hood</strong>: a database-enforced no-double-booking guarantee (Postgres exclusion constraints &mdash; overlaps are physically impossible, not just app-checked), a timezone/DST-correct slot engine, and the HOLD&rarr;CONFIRM booking flow. The public self-book page, owner calendar, confirmation emails, and the $5/$5 billing meter land next. <strong>Touched</strong>: new migration <code>20260702000000_v1_48_0_smart_scheduling_spine.sql</code> (6 tables + emma_appointments/services extensions + btree_gist EXCLUDE constraints), <code>src/lib/scheduling-slots.ts</code> (slot engine), <code>src/server/scheduling.functions.ts</code> (booking fns), <code>src/server/scheduling-settings.functions.ts</code> + <code>src/routes/app.refill.settings.booking.tsx</code> (settings), <code>SettingsTabStrip.tsx</code> (new tab), <code>src/integrations/supabase/types.ts</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.47.11",
     date: "June 2026",
     items: [

@@ -87,6 +87,7 @@ import { Route as AppRefillSettingsSchedulerRouteImport } from './routes/app.ref
 import { Route as AppRefillSettingsNoshowRouteImport } from './routes/app.refill.settings.noshow'
 import { Route as AppRefillSettingsLightModeRouteImport } from './routes/app.refill.settings.light-mode'
 import { Route as AppRefillSettingsBoulevardInstallRouteImport } from './routes/app.refill.settings.boulevard-install'
+import { Route as AppRefillSettingsBookingRouteImport } from './routes/app.refill.settings.booking'
 import { Route as AppRefillSettingsBookerInstallRouteImport } from './routes/app.refill.settings.booker-install'
 import { Route as AppRefillSettingsAccountRouteImport } from './routes/app.refill.settings.account'
 import { Route as AppRefillRecognitionManufacturersRouteImport } from './routes/app.refill.recognition.manufacturers'
@@ -524,6 +525,12 @@ const AppRefillSettingsBoulevardInstallRoute =
     path: '/settings/boulevard-install',
     getParentRoute: () => AppRefillRoute,
   } as any)
+const AppRefillSettingsBookingRoute =
+  AppRefillSettingsBookingRouteImport.update({
+    id: '/settings/booking',
+    path: '/settings/booking',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
 const AppRefillSettingsBookerInstallRoute =
   AppRefillSettingsBookerInstallRouteImport.update({
     id: '/settings/booker-install',
@@ -845,6 +852,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
+  '/app/refill/settings/booking': typeof AppRefillSettingsBookingRoute
   '/app/refill/settings/boulevard-install': typeof AppRefillSettingsBoulevardInstallRoute
   '/app/refill/settings/light-mode': typeof AppRefillSettingsLightModeRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
@@ -958,6 +966,7 @@ export interface FileRoutesByTo {
   '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
+  '/app/refill/settings/booking': typeof AppRefillSettingsBookingRoute
   '/app/refill/settings/boulevard-install': typeof AppRefillSettingsBoulevardInstallRoute
   '/app/refill/settings/light-mode': typeof AppRefillSettingsLightModeRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
@@ -1077,6 +1086,7 @@ export interface FileRoutesById {
   '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
+  '/app/refill/settings/booking': typeof AppRefillSettingsBookingRoute
   '/app/refill/settings/boulevard-install': typeof AppRefillSettingsBoulevardInstallRoute
   '/app/refill/settings/light-mode': typeof AppRefillSettingsLightModeRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
@@ -1197,6 +1207,7 @@ export interface FileRouteTypes {
     | '/app/refill/recognition/manufacturers'
     | '/app/refill/settings/account'
     | '/app/refill/settings/booker-install'
+    | '/app/refill/settings/booking'
     | '/app/refill/settings/boulevard-install'
     | '/app/refill/settings/light-mode'
     | '/app/refill/settings/noshow'
@@ -1310,6 +1321,7 @@ export interface FileRouteTypes {
     | '/app/refill/recognition/manufacturers'
     | '/app/refill/settings/account'
     | '/app/refill/settings/booker-install'
+    | '/app/refill/settings/booking'
     | '/app/refill/settings/boulevard-install'
     | '/app/refill/settings/light-mode'
     | '/app/refill/settings/noshow'
@@ -1428,6 +1440,7 @@ export interface FileRouteTypes {
     | '/app/refill/recognition/manufacturers'
     | '/app/refill/settings/account'
     | '/app/refill/settings/booker-install'
+    | '/app/refill/settings/booking'
     | '/app/refill/settings/boulevard-install'
     | '/app/refill/settings/light-mode'
     | '/app/refill/settings/noshow'
@@ -2051,6 +2064,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillSettingsBoulevardInstallRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/refill/settings/booking': {
+      id: '/app/refill/settings/booking'
+      path: '/settings/booking'
+      fullPath: '/app/refill/settings/booking'
+      preLoaderRoute: typeof AppRefillSettingsBookingRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/settings/booker-install': {
       id: '/app/refill/settings/booker-install'
       path: '/settings/booker-install'
@@ -2397,6 +2417,7 @@ interface AppRefillRouteChildren {
   AppRefillRecognitionManufacturersRoute: typeof AppRefillRecognitionManufacturersRoute
   AppRefillSettingsAccountRoute: typeof AppRefillSettingsAccountRoute
   AppRefillSettingsBookerInstallRoute: typeof AppRefillSettingsBookerInstallRoute
+  AppRefillSettingsBookingRoute: typeof AppRefillSettingsBookingRoute
   AppRefillSettingsBoulevardInstallRoute: typeof AppRefillSettingsBoulevardInstallRoute
   AppRefillSettingsLightModeRoute: typeof AppRefillSettingsLightModeRoute
   AppRefillSettingsNoshowRoute: typeof AppRefillSettingsNoshowRoute
@@ -2435,6 +2456,7 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
     AppRefillRecognitionManufacturersRoute,
   AppRefillSettingsAccountRoute: AppRefillSettingsAccountRoute,
   AppRefillSettingsBookerInstallRoute: AppRefillSettingsBookerInstallRoute,
+  AppRefillSettingsBookingRoute: AppRefillSettingsBookingRoute,
   AppRefillSettingsBoulevardInstallRoute:
     AppRefillSettingsBoulevardInstallRoute,
   AppRefillSettingsLightModeRoute: AppRefillSettingsLightModeRoute,

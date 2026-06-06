@@ -336,15 +336,23 @@ export type Database = {
       }
       emma_appointments: {
         Row: {
+          booking_email: string | null
+          booking_name: string | null
+          booking_phone: string | null
+          booking_token: string | null
           created_at: string
+          during: string | null
           duration_min: number
           external_id: string | null
           id: string
           notes: string | null
           patient_node_id: string | null
+          provider_id: string | null
           provider_name: string | null
           recovery_event_id: string | null
+          resource_id: string | null
           scheduled_at: string
+          slot_held_until: string | null
           source: string
           status: string
           treatment_type: string | null
@@ -352,15 +360,23 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          booking_email?: string | null
+          booking_name?: string | null
+          booking_phone?: string | null
+          booking_token?: string | null
           created_at?: string
+          during?: never
           duration_min?: number
           external_id?: string | null
           id?: string
           notes?: string | null
           patient_node_id?: string | null
+          provider_id?: string | null
           provider_name?: string | null
           recovery_event_id?: string | null
+          resource_id?: string | null
           scheduled_at: string
+          slot_held_until?: string | null
           source?: string
           status?: string
           treatment_type?: string | null
@@ -368,15 +384,23 @@ export type Database = {
           user_id: string
         }
         Update: {
+          booking_email?: string | null
+          booking_name?: string | null
+          booking_phone?: string | null
+          booking_token?: string | null
           created_at?: string
+          during?: never
           duration_min?: number
           external_id?: string | null
           id?: string
           notes?: string | null
           patient_node_id?: string | null
+          provider_id?: string | null
           provider_name?: string | null
           recovery_event_id?: string | null
+          resource_id?: string | null
           scheduled_at?: string
+          slot_held_until?: string | null
           source?: string
           status?: string
           treatment_type?: string | null
@@ -392,10 +416,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "emma_appointments_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "scheduling_providers"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "emma_appointments_recovery_event_id_fkey"
             columns: ["recovery_event_id"]
             isOneToOne: false
             referencedRelation: "emma_recovery_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "emma_appointments_resource_id_fkey"
+            columns: ["resource_id"]
+            isOneToOne: false
+            referencedRelation: "scheduling_resources"
             referencedColumns: ["id"]
           },
         ]
@@ -3262,42 +3300,317 @@ export type Database = {
           },
         ]
       }
+      scheduling_billable_events: {
+        Row: {
+          amount_cents: number
+          appointment_id: string
+          created_at: string
+          id: string
+          invoiced_at: string | null
+          occurred_at: string
+          tenant_id: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents?: number
+          appointment_id: string
+          created_at?: string
+          id?: string
+          invoiced_at?: string | null
+          occurred_at?: string
+          tenant_id: string
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          appointment_id?: string
+          created_at?: string
+          id?: string
+          invoiced_at?: string | null
+          occurred_at?: string
+          tenant_id?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduling_billable_events_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "emma_appointments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduling_billable_events_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduling_blocks: {
+        Row: {
+          created_at: string
+          during: string
+          id: string
+          provider_id: string | null
+          reason: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          during: string
+          id?: string
+          provider_id?: string | null
+          reason?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          during?: string
+          id?: string
+          provider_id?: string | null
+          reason?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduling_blocks_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "scheduling_providers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduling_blocks_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduling_hours: {
+        Row: {
+          close_time: string
+          created_at: string
+          day_of_week: number
+          id: string
+          is_closed: boolean
+          open_time: string
+          provider_id: string
+          updated_at: string
+        }
+        Insert: {
+          close_time: string
+          created_at?: string
+          day_of_week: number
+          id?: string
+          is_closed?: boolean
+          open_time: string
+          provider_id: string
+          updated_at?: string
+        }
+        Update: {
+          close_time?: string
+          created_at?: string
+          day_of_week?: number
+          id?: string
+          is_closed?: boolean
+          open_time?: string
+          provider_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduling_hours_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "scheduling_providers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduling_providers: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          tenant_id: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          tenant_id: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          tenant_id?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduling_providers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduling_resources: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          tenant_id: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          tenant_id: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          tenant_id?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduling_resources_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scheduling_settings: {
+        Row: {
+          created_at: string
+          hold_minutes: number
+          id: string
+          max_advance_days: number
+          min_advance_notice_min: number
+          online_booking_enabled: boolean
+          reminder_lead_hours: number
+          sameday_reminder_enabled: boolean
+          slot_granularity_min: number
+          tenant_id: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          hold_minutes?: number
+          id?: string
+          max_advance_days?: number
+          min_advance_notice_min?: number
+          online_booking_enabled?: boolean
+          reminder_lead_hours?: number
+          sameday_reminder_enabled?: boolean
+          slot_granularity_min?: number
+          tenant_id: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          hold_minutes?: number
+          id?: string
+          max_advance_days?: number
+          min_advance_notice_min?: number
+          online_booking_enabled?: boolean
+          reminder_lead_hours?: number
+          sameday_reminder_enabled?: boolean
+          slot_granularity_min?: number
+          tenant_id?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduling_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       services: {
         Row: {
+          buffer_min: number
           category: string
           cogs_per_service: number | null
           cogs_source: string
           created_at: string
+          duration_min: number
           hidden_at: string | null
           id: string
           name: string
           notes: string | null
+          online_bookable: boolean
           service_price: number
           tenant_id: string
           updated_at: string
         }
         Insert: {
+          buffer_min?: number
           category: string
           cogs_per_service?: number | null
           cogs_source?: string
           created_at?: string
+          duration_min?: number
           hidden_at?: string | null
           id?: string
           name: string
           notes?: string | null
+          online_bookable?: boolean
           service_price: number
           tenant_id: string
           updated_at?: string
         }
         Update: {
+          buffer_min?: number
           category?: string
           cogs_per_service?: number | null
           cogs_source?: string
           created_at?: string
+          duration_min?: number
           hidden_at?: string | null
           id?: string
           name?: string
           notes?: string | null
+          online_bookable?: boolean
           service_price?: number
           tenant_id?: string
           updated_at?: string
