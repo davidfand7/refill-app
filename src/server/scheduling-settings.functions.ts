@@ -36,7 +36,7 @@ function admin() {
 type Sb = ReturnType<typeof admin>;
 
 /** Resolve the caller's tenant (earliest membership = their Refill tenant). */
-async function getTenantIdForUser(sb: Sb, userId: string): Promise<string> {
+export async function getTenantIdForUser(sb: Sb, userId: string): Promise<string> {
   const { data, error } = await sb
     .from("tenant_memberships")
     .select("tenant_id, created_at")
@@ -104,7 +104,7 @@ function hhmm(t: string): string {
 
 // ── Idempotent seed ──────────────────────────────────────────────────────────
 
-async function ensureSetup(sb: Sb, tenantId: string, ownerUserId: string): Promise<string> {
+export async function ensureSetup(sb: Sb, tenantId: string, ownerUserId: string): Promise<string> {
   // 1. Provider — the MVP single provider, mapped to the owner's auth user.
   let providerId: string | null = null;
   const { data: provider } = await sb

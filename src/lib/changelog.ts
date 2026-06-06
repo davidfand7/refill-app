@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.48.3",
+    date: "June 2026",
+    items: [
+      "<strong>v1.48.3 &mdash; Owner calendar: the Schedule tab. </strong>A new <strong>Schedule</strong> tab (between Appointments and Catalog) shows your day on a real time grid &mdash; bookings, in-flight holds, your open hours band, and blocked time, all in your timezone. Page through days, <strong>Add booking</strong> to drop a patient in manually (double-book-proof &mdash; the database rejects any overlap), <strong>Block time</strong> for lunch/vacation/meetings, and cancel an appointment to free the slot (a freed native slot is exactly what the recovery engine can later fill). <strong>Touched</strong>: new <code>src/routes/app.refill.schedule.tsx</code> (day-view grid + book/block/cancel dialogs), new <code>src/server/scheduling-owner.functions.ts</code> (getDaySchedule + ownerCreate/Block/Cancel), <code>RefillNav.tsx</code> + <code>RefillShellChrome.tsx</code> (Schedule chip), <code>scheduling-settings.functions.ts</code> (shared helpers), <code>src/lib/changelog.ts</code>. Still to come: confirmation emails + reminders, and the $5/$5 billing meter.",
+    ],
+  },
+  {
     version: "v1.48.2",
     date: "June 2026",
     items: [

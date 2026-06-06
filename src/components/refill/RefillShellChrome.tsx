@@ -24,6 +24,7 @@ import { WishlistWidget } from "@/components/WishlistWidget";
 import { type MyTenant } from "@/server/refill-tenants";
 
 function deriveActiveKey(pathname: string): RefillNavKey | undefined {
+  if (pathname.startsWith("/app/refill/schedule")) return "schedule";
   if (pathname.startsWith("/app/refill/patients")) return "patients";
   if (pathname.startsWith("/app/refill/catalog")) return "catalog";
   if (pathname.startsWith("/app/refill/promos")) return "promos";

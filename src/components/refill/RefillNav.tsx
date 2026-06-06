@@ -24,6 +24,7 @@ import { Link } from "@tanstack/react-router";
 export type RefillNavKey =
   | "patients"
   | "appointments"
+  | "schedule"
   | "catalog"
   | "promos"
   | "recognition"
@@ -52,6 +53,7 @@ const ITEMS: RefillNavItem[] = [
   // since the port — orphan once you navigate off the home grid (no way back to
   // your own appointments table). Sits right after Patients (WHO → WHEN pairing).
   { key: "appointments", to: "/app/refill/appointments",  label: "Appointments", shortLabel: "Appts" },
+  { key: "schedule", to: "/app/refill/schedule",          label: "Schedule", shortLabel: "Schedule" },
   { key: "catalog",  to: "/app/refill/catalog/products",  label: "Catalog",  shortLabel: "Catalog" },
   { key: "promos",   to: "/app/refill/promos",            label: "Promos",   shortLabel: "Promos" },
   // v1.34.2: Recognition Allocation Engine. Lives between Promos and Recovery —
