@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.48.12",
+    date: "June 2026",
+    items: [
+      "<strong>v1.48.12 &mdash; True 5-minute time pickers everywhere. </strong>Chrome&rsquo;s native time dropdown ignores the 5-minute step and always lists every minute &mdash; so every time picker in the scheduler is now a real 5-minute selector (12-hour labels). Applies to Add booking, Block time, business hours, and bulk-apply &mdash; and it&rsquo;s a shared component, so any future time picker is 5-minute by default too. <strong>Touched</strong>: new <code>src/components/refill/TimeSelect.tsx</code>, <code>src/routes/app.refill.schedule.tsx</code> + <code>src/routes/app.refill.settings.booking.tsx</code> (all time inputs swapped), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.48.11",
     date: "June 2026",
     items: [

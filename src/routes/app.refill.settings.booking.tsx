@@ -43,6 +43,7 @@ import {
   type SchedulingSetupBundle,
 } from "@/server/scheduling-settings.functions";
 import { cn } from "@/lib/utils";
+import { TimeSelect } from "@/components/refill/TimeSelect";
 
 export const Route = createFileRoute("/app/refill/settings/booking")({
   component: BookingSettingsPage,
@@ -342,8 +343,8 @@ function BookingSettingsPage() {
                 {selDays.size > 0 && (
                   <span className="ml-auto flex items-center gap-1.5">
                     <span className="text-emerald font-medium mr-1">{selDays.size} day{selDays.size === 1 ? "" : "s"} →</span>
-                    <input type="time" step={300} value={bulkOpen} onChange={(e) => setBulkOpen(e.target.value)} className="rounded-md border border-rule bg-white px-2 py-1 text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums" />
-                    <input type="time" step={300} value={bulkClose} onChange={(e) => setBulkClose(e.target.value)} className="rounded-md border border-rule bg-white px-2 py-1 text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums" />
+                    <TimeSelect value={bulkOpen} onChange={setBulkOpen} className="rounded-md border border-rule bg-white px-2 py-1 text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums" />
+                    <TimeSelect value={bulkClose} onChange={setBulkClose} className="rounded-md border border-rule bg-white px-2 py-1 text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums" />
                     <button type="button" onClick={applyHoursToSelected} className="rounded-md bg-emerald px-2.5 py-1 font-medium text-paper hover:opacity-95 transition">Apply</button>
                     <button type="button" onClick={setSelectedClosed} className="rounded-md border border-rule px-2.5 py-1 text-ink-soft hover:text-ink transition">Set closed</button>
                   </span>
@@ -375,16 +376,14 @@ function BookingSettingsPage() {
                         <span className="text-[13px] text-ink-faint sm:col-span-2">Closed</span>
                       ) : (
                         <>
-                          <input
-                            type="time" step={300}
+                          <TimeSelect
                             value={h.openTime}
-                            onChange={(e) => patchDay(dow, { openTime: e.target.value })}
+                            onChange={(v) => patchDay(dow, { openTime: v })}
                             className="rounded-md border border-rule bg-white px-2 py-1.5 text-[14px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums"
                           />
-                          <input
-                            type="time" step={300}
+                          <TimeSelect
                             value={h.closeTime}
-                            onChange={(e) => patchDay(dow, { closeTime: e.target.value })}
+                            onChange={(v) => patchDay(dow, { closeTime: v })}
                             className="rounded-md border border-rule bg-white px-2 py-1.5 text-[14px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums"
                           />
                         </>
