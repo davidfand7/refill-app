@@ -781,9 +781,11 @@ function BookingSettingsPage() {
 
                       {expanded && p.isActive && (() => {
                         const q = providerSearch.trim().toLowerCase();
+                        // Default: only bookable services (tidy). Search reaches the full catalog
+                        // so you can pull in (and thereby make bookable) anything else.
                         const list = q
                           ? draft.services.filter((s) => s.name.toLowerCase().includes(q))
-                          : draft.services;
+                          : draft.services.filter((s) => s.onlineBookable);
                         const byCat = new Map<string, BookableServiceDraft[]>();
                         for (const s of list) {
                           const cat = s.category?.trim() || "Other";
@@ -803,7 +805,11 @@ function BookingSettingsPage() {
                               />
                             </div>
                             {cats.length === 0 ? (
-                              <p className="text-[12px] text-ink-soft py-1.5">No services match.</p>
+                              <p className="text-[12px] text-ink-soft py-1.5">
+                                {q
+                                  ? "No services match."
+                                  : "No bookable services yet — search to add the ones this provider performs."}
+                              </p>
                             ) : (
                               <div className="space-y-0.5 max-h-80 overflow-y-auto">
                                 {cats.map((cat) => {

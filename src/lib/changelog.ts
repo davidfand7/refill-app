@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.64.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.64.1 &mdash; Fix: provider service picker no longer lists non-bookable items. </strong>The per-provider picker was showing your <em>whole</em> catalog by category (including retail-ish entries that aren&rsquo;t scheduled). It now defaults to your <strong>bookable</strong> services; <strong>search</strong> still reaches the full catalog to pull in (and make bookable) anything else. <strong>Touched</strong>: <code>src/routes/app.refill.settings.booking.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.64.0",
     date: "June 2026",
     items: [
