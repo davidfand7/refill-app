@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.58.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.58.0 &mdash; Services can require a room &mdash; and we stop double-booking it. </strong>In <strong>Online booking</strong>, expand a service and set <strong>Requires: Any room / chair / device</strong>. Now a time is only offered to patients when both the provider <em>and</em> a resource of that type are free, and every booking (patient or owner) automatically grabs an open one &mdash; so two laser appointments can&rsquo;t land in your one laser bay, even across different providers. Rooms of the same type pool together (3 rooms = 3 concurrent), and the database enforces no double-booking at the lowest level. Services that don&rsquo;t need a room are unchanged. <strong>Touched</strong>: new column <code>services.required_resource_type</code>; new <code>src/server/scheduling-resources.ts</code> (capacity check + free-resource assignment); <code>scheduling.functions.ts</code> (slot filter + hold assigns a resource), <code>scheduling-owner.functions.ts</code> (manual booking assigns a resource), <code>scheduling-settings.functions.ts</code> + <code>app.refill.settings.booking.tsx</code> (the Requires control), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.57.0",
     date: "June 2026",
     items: [

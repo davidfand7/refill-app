@@ -23,6 +23,7 @@ import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import { ensureSetup, getTenantIdForUser } from "@/server/scheduling-settings.functions";
 import { zonedWallClockToUtc, zonedDateParts } from "@/lib/scheduling-slots";
 import { sendBookingConfirmation } from "@/server/scheduling-email";
+import { asResourceType, assignFreeResource } from "@/server/scheduling-resources";
 
 function admin() {
   const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
@@ -433,7 +434,7 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
 
     const { data: svc } = await sb
       .from("services")
-      .select("id, duration_min, tenant_id")
+      .select("id, duration_min, tenant_id, required_resource_type")
       .eq("id", data.serviceId)
       .maybeSingle();
     if (!svc || svc.tenant_id !== tenantId) {
@@ -449,11 +450,28 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
       .maybeSingle();
     const effectiveDuration = override?.duration_min ?? svc.duration_min;
 
+    // If the service needs a room/resource, claim a free one of that type.
+    let resourceId: string | null = null;
+    const requiredType = asResourceType(svc.required_resource_type);
+    if (requiredType) {
+      resourceId = await assignFreeResource(
+        sb,
+        tenantId,
+        requiredType,
+        new Date(data.startIso).getTime(),
+        effectiveDuration,
+      );
+      if (!resourceId) {
+        return { ok: false, reason: "No room of that type is free at that time.", code: "conflict" };
+      }
+    }
+
     const { data: created, error } = await sb
       .from("emma_appointments")
       .insert({
         user_id: effectiveUserId,
         provider_id: providerId,
+        resource_id: resourceId,
         scheduled_at: data.startIso,
         duration_min: effectiveDuration,
         status: "confirmed",

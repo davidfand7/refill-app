@@ -82,6 +82,8 @@ export interface BookableServiceDraft {
    *  the inherited placeholder for per-provider price overrides. */
   price: number;
   onlineBookable: boolean;
+  /** Resource type this service needs (room/chair/device), or null = none. */
+  requiredResourceType: ResourceType | null;
 }
 
 export interface ProviderRow {
@@ -147,6 +149,11 @@ function hhmm(t: string): string {
 /** Coerce a stored resource type to the known union (defaults to "room"). */
 function normalizeResourceType(t: string): ResourceType {
   return t === "chair" || t === "device" ? t : "room";
+}
+
+/** Coerce a nullable required-resource-type to the union or null. */
+function normalizeResourceTypeOrNull(t: string | null): ResourceType | null {
+  return t === "room" || t === "chair" || t === "device" ? t : null;
 }
 
 // ── Idempotent seed ──────────────────────────────────────────────────────────
@@ -270,7 +277,9 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
           .order("day_of_week"),
         sb
           .from("services")
-          .select("id, name, duration_min, buffer_min, service_price, online_bookable, hidden_at")
+          .select(
+            "id, name, duration_min, buffer_min, service_price, online_bookable, required_resource_type, hidden_at",
+          )
           .eq("tenant_id", tenantId)
           .is("hidden_at", null)
           .order("name"),
@@ -325,6 +334,7 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
       bufferMin: s.buffer_min,
       price: s.service_price,
       onlineBookable: s.online_bookable,
+      requiredResourceType: normalizeResourceTypeOrNull(s.required_resource_type),
     }));
 
     return {
@@ -366,6 +376,7 @@ const serviceDraftSchema = z.object({
   durationMin: z.number().int().positive().max(1440),
   bufferMin: z.number().int().min(0).max(1440),
   onlineBookable: z.boolean(),
+  requiredResourceType: z.enum(["room", "chair", "device"]).nullable(),
 });
 
 const saveInput = z.object({
@@ -455,6 +466,7 @@ export const saveSchedulingSetupFn = createServerFn({ method: "POST" })
           duration_min: s.durationMin,
           buffer_min: s.bufferMin,
           online_bookable: s.onlineBookable,
+          required_resource_type: s.requiredResourceType,
           updated_at: nowIso,
         })
         .eq("id", s.id)

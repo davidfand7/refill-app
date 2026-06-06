@@ -43,6 +43,13 @@ import {
   type SlotEngineSettings,
 } from "@/lib/scheduling-slots";
 import { sendBookingConfirmation } from "@/server/scheduling-email";
+import {
+  asResourceType,
+  assignFreeResource,
+  loadResourcePool,
+  resourceFreeAt,
+  type ResourceType,
+} from "@/server/scheduling-resources";
 
 function admin() {
   const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -71,6 +78,7 @@ interface BaseContext {
     bufferMin: number;
     price: number;
     onlineBookable: boolean;
+    requiredResourceType: ResourceType | null;
   };
 }
 
@@ -83,7 +91,9 @@ async function loadBaseContext(
     sb.from("scheduling_settings").select("*").eq("tenant_id", tenantId).maybeSingle(),
     sb
       .from("services")
-      .select("id, duration_min, buffer_min, service_price, online_bookable, tenant_id, hidden_at")
+      .select(
+        "id, duration_min, buffer_min, service_price, online_bookable, required_resource_type, tenant_id, hidden_at",
+      )
       .eq("id", serviceId)
       .maybeSingle(),
   ]);
@@ -114,6 +124,7 @@ async function loadBaseContext(
         bufferMin: svc.buffer_min,
         price: svc.service_price,
         onlineBookable: svc.online_bookable,
+        requiredResourceType: asResourceType(svc.required_resource_type),
       },
     },
   };
@@ -444,7 +455,18 @@ export const listAvailableSlots = createServerFn({ method: "GET" })
       targets = targets.filter((p) => priceOf(p.id) === minPrice);
     }
 
-    // Compute each provider's slots with THEIR effective duration/buffer.
+    // Shared resource pool (rooms are tenant-wide, contended across providers).
+    const reqType = base.service.requiredResourceType;
+    const pool = reqType
+      ? await loadResourcePool(sb, data.tenantId, reqType, data.fromIso, data.toIso)
+      : null;
+    // A required type with zero active resources can never be fulfilled.
+    if (pool && pool.capacity === 0) {
+      return { ok: false, reason: "This service needs a room that isn't set up yet." };
+    }
+
+    // Compute each provider's slots with THEIR effective duration/buffer, then
+    // drop any slot where no resource of the required type is free.
     const perProvider = await Promise.all(
       targets.map(async (p) => {
         const eff = effective(base, overrides.get(p.id));
@@ -455,7 +477,7 @@ export const listAvailableSlots = createServerFn({ method: "GET" })
           data.fromIso,
           data.toIso,
         );
-        const slots = availableSlots({
+        let slots = availableSlots({
           settings: base.settings,
           hours,
           blocks,
@@ -465,6 +487,9 @@ export const listAvailableSlots = createServerFn({ method: "GET" })
           rangeEnd: new Date(data.toIso),
           now: new Date(),
         });
+        if (pool) {
+          slots = slots.filter((s) => resourceFreeAt(pool, s.startMs, eff.durationMin));
+        }
         return { providerId: p.id, slots };
       }),
     );
@@ -566,15 +591,31 @@ export const holdSlot = createServerFn({ method: "POST" })
       return { ok: false, reason: "That time is no longer available.", code: "taken" };
     }
 
-    // 3. Insert the hold. The EXCLUDE constraint (keyed per provider) is the real
-    //    concurrency arbiter — a simultaneous overlapping hold for this provider
-    //    makes exactly one insert fail with 23P01.
+    // 3a. If the service needs a room/resource, claim a free one of that type.
+    let resourceId: string | null = null;
+    if (base.service.requiredResourceType) {
+      resourceId = await assignFreeResource(
+        sb,
+        data.tenantId,
+        base.service.requiredResourceType,
+        startMs,
+        eff.durationMin,
+      );
+      if (!resourceId) {
+        return { ok: false, reason: "No room is free at that time.", code: "taken" };
+      }
+    }
+
+    // 3b. Insert the hold. The EXCLUDE constraints (per provider AND per resource)
+    //    are the real concurrency arbiters — a simultaneous overlapping hold makes
+    //    exactly one insert fail with 23P01.
     const token = crypto.randomUUID();
     const heldUntilIso = new Date(Date.now() + base.holdMinutes * 60_000).toISOString();
 
     const { error: insErr } = await sb.from("emma_appointments").insert({
       user_id: ownerUserId,
       provider_id: provider.id,
+      resource_id: resourceId,
       scheduled_at: data.startIso,
       duration_min: eff.durationMin,
       status: "held",

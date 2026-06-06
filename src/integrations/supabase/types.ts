@@ -3662,6 +3662,7 @@ export type Database = {
           name: string
           notes: string | null
           online_bookable: boolean
+          required_resource_type: string | null
           service_price: number
           tenant_id: string
           updated_at: string
@@ -3678,6 +3679,7 @@ export type Database = {
           name: string
           notes?: string | null
           online_bookable?: boolean
+          required_resource_type?: string | null
           service_price: number
           tenant_id: string
           updated_at?: string
@@ -3694,6 +3696,7 @@ export type Database = {
           name?: string
           notes?: string | null
           online_bookable?: boolean
+          required_resource_type?: string | null
           service_price?: number
           tenant_id?: string
           updated_at?: string

@@ -152,6 +152,12 @@ function BookingSettingsPage() {
   );
 
   const activeProviders = useMemo(() => draft?.providers.filter((p) => p.isActive) ?? [], [draft]);
+  // Distinct active resource types (room/chair/device) a service can require.
+  const activeResourceTypes = useMemo(() => {
+    const order: ResourceType[] = ["room", "chair", "device"];
+    const present = new Set((draft?.resources ?? []).filter((r) => r.isActive).map((r) => r.type));
+    return order.filter((t) => present.has(t));
+  }, [draft]);
   const selHours = draft?.hoursByProvider[selProviderId] ?? [];
   const selProviderName = draft?.providers.find((p) => p.id === selProviderId)?.name ?? "";
 
@@ -497,6 +503,7 @@ function BookingSettingsPage() {
             durationMin: s.durationMin,
             bufferMin: s.bufferMin,
             onlineBookable: s.onlineBookable,
+            requiredResourceType: s.requiredResourceType,
           })),
         },
       });
@@ -1058,7 +1065,7 @@ function BookingSettingsPage() {
                     <span className="text-right">Bookable</span>
                   </div>
                   {draft.services.map((s) => {
-                    const canExpand = activeProviders.length > 1;
+                    const canExpand = activeProviders.length > 1 || activeResourceTypes.length > 0;
                     const expanded = canExpand && expandedSvc === s.id;
                     return (
                       <div key={s.id} className="py-1">
@@ -1111,9 +1118,39 @@ function BookingSettingsPage() {
                           </div>
                         </div>
 
-                        {/* Per-provider time & price overrides (blank = inherits). */}
+                        {/* Advanced per-service settings (room requirement + per-provider). */}
                         {expanded && (
-                          <div className="ml-5 mb-2 mt-1 rounded-lg border border-rule/60 bg-paper/30 px-3 py-2.5">
+                          <div className="ml-5 mb-2 mt-1 rounded-lg border border-rule/60 bg-paper/30 px-3 py-2.5 space-y-3">
+                            {activeResourceTypes.length > 0 && (
+                              <div>
+                                <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                                  Requires
+                                </label>
+                                <select
+                                  value={s.requiredResourceType ?? ""}
+                                  onChange={(e) =>
+                                    patchService(s.id, {
+                                      requiredResourceType: (e.target.value || null) as ResourceType | null,
+                                    })
+                                  }
+                                  className="rounded-md border border-rule bg-white px-2 py-1 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                                >
+                                  <option value="">No room needed</option>
+                                  {activeResourceTypes.map((t) => (
+                                    <option key={t} value={t}>
+                                      Any {t}
+                                    </option>
+                                  ))}
+                                </select>
+                                <p className="text-[12px] text-ink-soft mt-1 leading-relaxed">
+                                  {s.requiredResourceType
+                                    ? `A time is offered only when a ${s.requiredResourceType} is free; booking assigns one automatically.`
+                                    : "This service doesn't tie up a room."}
+                                </p>
+                              </div>
+                            )}
+                            {activeProviders.length > 1 && (
+                              <div>
                             <div className="text-[11px] text-ink-soft mb-2">
                               Per-provider time &amp; price{" "}
                               <span className="text-ink-faint">
@@ -1191,6 +1228,8 @@ function BookingSettingsPage() {
                                 );
                               })}
                             </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
