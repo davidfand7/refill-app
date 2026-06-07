@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.77.2",
+    date: "June 2026",
+    items: [
+      "<strong>v1.77.2 &mdash; Wider Add-booking dialog on desktop. </strong>The <strong>Add booking</strong> dialog now uses much more screen width on desktop, so the Smart Schedule day-columns lay out inside the dialog and scroll horizontally there &mdash; instead of spilling past the edge of the box. (On mobile it stays a single column as before.) <strong>Touched</strong>: <code>src/components/refill/schedule/dialogs.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.77.1",
     date: "June 2026",
     items: [

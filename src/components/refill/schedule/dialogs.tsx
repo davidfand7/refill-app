@@ -330,12 +330,12 @@ export function BookDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !busy && !o && onClose()}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add booking</DialogTitle>
           <DialogDescription>Pick the day, time, and service to book a patient in.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-3">
+        <div className="space-y-3 min-w-0">
           <Labeled label="Service">
             <ServicePicker services={services} value={serviceId} onChange={setServiceId} />
           </Labeled>
@@ -410,7 +410,7 @@ export function BookDialog({
                         : "No open times in the next 30 days. Use Custom time to override."}
                     </p>
                   ) : (
-                    <div className="flex flex-col sm:flex-row gap-y-4 sm:gap-x-3 max-h-[40vh] overflow-y-auto sm:overflow-y-hidden sm:overflow-x-auto pr-1 sm:pb-2">
+                    <div className="min-w-0 flex flex-col sm:flex-row gap-y-4 sm:gap-x-3 max-h-[40vh] overflow-y-auto sm:overflow-y-hidden sm:overflow-x-auto pr-1 sm:pb-2">
                       {visibleDayGroups.map((g) => (
                         <div key={g.key} className="sm:shrink-0 sm:w-32 sm:max-h-[38vh] sm:overflow-y-auto">
                           <div className="text-[12px] font-semibold text-ink-soft mb-1.5 sm:text-center sm:sticky sm:top-0 sm:bg-paper sm:pb-1">
