@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.78.3",
+    date: "June 2026",
+    items: [
+      "<strong>v1.78.3 &mdash; Patients: last-visit date no longer wraps. </strong>The <strong>Last visit</strong> date in the Patients table now stays on a single line (e.g. <em>May 14, 2026</em>) instead of breaking across three lines when the column is tight. <strong>Touched</strong>: <code>src/routes/app.refill.patients.index.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.78.2",
     date: "June 2026",
     items: [

@@ -985,7 +985,7 @@ function PatientsPage() {
                     </th>
                     <th className="px-4 py-3 font-semibold">Patient</th>
                     <th className="px-4 py-3 font-semibold">Contact</th>
-                    <th className="px-4 py-3 font-semibold">Last visit</th>
+                    <th className="px-4 py-3 font-semibold whitespace-nowrap">Last visit</th>
                     <th className="px-4 py-3 font-semibold">Primary</th>
                     <th className="px-4 py-3 font-semibold text-right">Visits</th>
                     <th className="px-4 py-3 font-semibold text-right">
@@ -1200,7 +1200,7 @@ function PatientRow({
       <td className="px-4 py-3">
         <ContactCell phone={row.phone} email={row.email} />
       </td>
-      <td className="px-4 py-3 text-sm text-ink">
+      <td className="px-4 py-3 text-sm text-ink whitespace-nowrap">
         {row.lastVisit ? formatDate(row.lastVisit) : "—"}
       </td>
       <td className="px-4 py-3">
