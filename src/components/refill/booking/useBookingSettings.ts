@@ -16,6 +16,7 @@ import {
   assignProviderServiceFn,
   assignProviderServicesBulkFn,
   createBookableServiceFn,
+  reorderServicesFn,
   upsertDateOverrideFn,
   deleteDateOverrideFn,
   createProviderFn,
@@ -195,6 +196,7 @@ export function useBookingSettings({
     (a, b) =>
       categoryRank(svcCat(a)) - categoryRank(svcCat(b)) ||
       svcCat(a).localeCompare(svcCat(b)) ||
+      (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) ||
       a.name.localeCompare(b.name),
   );
   const svcCatCounts = new Map<string, number>();
@@ -654,6 +656,40 @@ export function useBookingSettings({
     }
   }
 
+  /** Drag-to-reorder a service within its category (drop onto another row in the
+   *  same category). Cross-category moves still use the header drop. Immediate
+   *  persist of the whole category's new order. */
+  async function onReorderService(draggedId: string, targetId: string) {
+    if (!draft || draggedId === targetId) return;
+    const dragged = draft.services.find((s) => s.id === draggedId);
+    const target = draft.services.find((s) => s.id === targetId);
+    if (!dragged || !target) return;
+    const cat = svcCat(target);
+    if (svcCat(dragged) !== cat) return; // different category → use the header drop
+    const ids = draft.services
+      .filter((s) => svcCat(s) === cat)
+      .sort(
+        (a, b) =>
+          (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || a.name.localeCompare(b.name),
+      )
+      .map((s) => s.id)
+      .filter((id) => id !== draggedId);
+    const tIdx = ids.indexOf(targetId);
+    ids.splice(tIdx < 0 ? ids.length : tIdx, 0, draggedId);
+    const pos = new Map(ids.map((id, i) => [id, i]));
+    applyToBoth((b) => ({
+      ...b,
+      services: b.services.map((s) => (pos.has(s.id) ? { ...s, sortOrder: pos.get(s.id)! } : s)),
+    }));
+    try {
+      await withToken((token) =>
+        reorderServicesFn({ data: { accessToken: token, viewAsUserId, orderedIds: ids } }),
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save the new order.");
+    }
+  }
+
   function patchService(id: string, patch: Partial<BookableServiceDraft>) {
     setDraft((d) =>
       d ? { ...d, services: d.services.map((s) => (s.id === id ? { ...s, ...patch } : s)) } : d,
@@ -838,7 +874,7 @@ export function useBookingSettings({
     performsService, mergeAssignments, togglePerforms, toggleCategoryPerforms,
     overrideFor, syncOverride, psFieldValue, offersService, persistPS, commitOverride, toggleOffered,
     syncResourceAdd, syncResourceUpdate, onAddResource, commitResourceRename, updateResource,
-    patchService, commitCategoryRename, onAddService, onDeleteService, onSave,
+    patchService, commitCategoryRename, onAddService, onDeleteService, onReorderService, onSave,
   };
 }
 

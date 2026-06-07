@@ -341,6 +341,7 @@ export type Service = {
   marginPct: number | null;
   notes: string | null;
   hiddenAt: string | null;
+  sortOrder: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -355,6 +356,7 @@ type ServiceRow = {
   cogs_source: string;
   notes: string | null;
   hidden_at: string | null;
+  sort_order: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -377,6 +379,7 @@ function rowToService(r: ServiceRow): Service {
     marginPct,
     notes: r.notes,
     hiddenAt: r.hidden_at ?? null,
+    sortOrder: r.sort_order ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

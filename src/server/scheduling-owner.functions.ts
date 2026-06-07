@@ -108,7 +108,7 @@ export interface DaySchedule {
   openByProvider: Record<string, DayBand>;
   appointments: DayAppointment[];
   blocks: DayBlock[];
-  services: Array<{ id: string; name: string; durationMin: number; category: string }>;
+  services: Array<{ id: string; name: string; durationMin: number; category: string; sortOrder: number | null }>;
   /** providerId → serviceIds that provider does NOT offer (opt-out). */
   providerUnoffered: Record<string, string[]>;
 }
@@ -236,7 +236,7 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
           .eq("tenant_id", tenantId),
         sb
           .from("services")
-          .select("id, name, duration_min, hidden_at, online_bookable, category")
+          .select("id, name, duration_min, hidden_at, online_bookable, category, sort_order")
           .eq("tenant_id", tenantId)
           .eq("online_bookable", true)
           .is("hidden_at", null)
@@ -288,6 +288,7 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
         name: s.name,
         durationMin: s.duration_min,
         category: s.category,
+        sortOrder: s.sort_order,
       })),
       providerUnoffered: await loadProviderUnoffered(sb, idFilter),
     };
@@ -311,7 +312,7 @@ export interface RangeSchedule {
   blocks: DayBlock[];
   /** providerId → that provider's weekly availability pattern (0..6). */
   weeklyHoursByProvider: Record<string, WeeklyHoursRow[]>;
-  services: Array<{ id: string; name: string; durationMin: number; category: string }>;
+  services: Array<{ id: string; name: string; durationMin: number; category: string; sortOrder: number | null }>;
   /** providerId → serviceIds that provider does NOT offer (opt-out). */
   providerUnoffered: Record<string, string[]>;
 }
@@ -369,7 +370,7 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
           .eq("tenant_id", tenantId),
         sb
           .from("services")
-          .select("id, name, duration_min, hidden_at, online_bookable, category")
+          .select("id, name, duration_min, hidden_at, online_bookable, category, sort_order")
           .eq("tenant_id", tenantId)
           .eq("online_bookable", true)
           .is("hidden_at", null)
@@ -414,6 +415,7 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
         name: s.name,
         durationMin: s.duration_min,
         category: s.category,
+        sortOrder: s.sort_order,
       })),
       providerUnoffered: await loadProviderUnoffered(sb, idFilter),
     };

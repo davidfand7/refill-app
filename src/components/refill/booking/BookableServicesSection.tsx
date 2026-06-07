@@ -31,7 +31,7 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
     visibleByCat, setCategoryBookable,
     performsService, togglePerforms, toggleCategoryPerforms,
     overrideFor, psFieldValue, offersService, commitOverride, toggleOffered,
-    patchService, commitCategoryRename, onAddService, onDeleteService,
+    patchService, commitCategoryRename, onAddService, onDeleteService, onReorderService,
   } = bk;
   if (!draft) return null;
   return (
@@ -394,7 +394,15 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
                         )}
                         {!collapsed && (
                       <div className="py-1">
-                        <div className="grid grid-cols-[1fr_136px_136px_72px] gap-2 items-center py-1.5">
+                        <div
+                          className="grid grid-cols-[1fr_136px_136px_72px] gap-2 items-center py-1.5"
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={() => {
+                            const id = draggedSvcRef.current;
+                            draggedSvcRef.current = null;
+                            if (id) void onReorderService(id, s.id);
+                          }}
+                        >
                           <div className="flex items-center gap-1 min-w-0">
                             <span
                               draggable
@@ -404,7 +412,7 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
                               }}
                               onDragEnd={() => stopAutoScroll()}
                               className="shrink-0 cursor-grab active:cursor-grabbing text-ink-faint/40 hover:text-ink-faint"
-                              title="Drag to another category"
+                              title="Drag to reorder within this category, or onto a category header to move it"
                             >
                               <GripVertical className="h-3.5 w-3.5" />
                             </span>

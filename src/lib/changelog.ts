@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.81.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.81.0 &mdash; Drag to reorder services (the order is finally yours). </strong>In <strong>Booking settings &rarr; Bookable services</strong>, grab a service by its handle and <strong>drag it up or down within its category</strong> to set the exact order &mdash; no more forced alphabetical. Your order is honored everywhere it matters: the patient booking page, the owner Add-booking picker, and the Catalog. (Drag onto a category header still moves a service to that category.) Category reordering + drag-reorder on the Catalog page are next. <strong>Touched</strong>: new <code>services.sort_order</code> + <code>scheduling_settings.category_order</code> columns, <code>reorderServicesFn</code>, and order-aware sorting across <code>scheduling-settings.functions.ts</code>, <code>scheduling.functions.ts</code>, <code>scheduling-owner.functions.ts</code>, <code>refill-catalog.ts</code>, <code>useBookingSettings.ts</code>, <code>BookableServicesSection.tsx</code>, <code>s.$slug.tsx</code>, <code>dialogs.tsx</code>, <code>app.refill.catalog.services.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.80.1",
     date: "June 2026",
     items: [

@@ -3637,6 +3637,7 @@ export type Database = {
       scheduling_settings: {
         Row: {
           booking_lead_option: string
+          category_order: string[]
           created_at: string
           hold_minutes: number
           id: string
@@ -3652,6 +3653,7 @@ export type Database = {
         }
         Insert: {
           booking_lead_option?: string
+          category_order?: string[]
           created_at?: string
           hold_minutes?: number
           id?: string
@@ -3667,6 +3669,7 @@ export type Database = {
         }
         Update: {
           booking_lead_option?: string
+          category_order?: string[]
           created_at?: string
           hold_minutes?: number
           id?: string
@@ -3705,6 +3708,7 @@ export type Database = {
           online_bookable: boolean
           required_resource_type: string | null
           service_price: number
+          sort_order: number | null
           tenant_id: string
           updated_at: string
         }
@@ -3722,6 +3726,7 @@ export type Database = {
           online_bookable?: boolean
           required_resource_type?: string | null
           service_price: number
+          sort_order?: number | null
           tenant_id: string
           updated_at?: string
         }
@@ -3739,6 +3744,7 @@ export type Database = {
           online_bookable?: boolean
           required_resource_type?: string | null
           service_price?: number
+          sort_order?: number | null
           tenant_id?: string
           updated_at?: string
         }

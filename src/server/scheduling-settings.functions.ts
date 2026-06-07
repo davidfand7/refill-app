@@ -86,6 +86,8 @@ export interface BookableServiceDraft {
   onlineBookable: boolean;
   /** Resource type this service needs (room/chair/device), or null = none. */
   requiredResourceType: ResourceType | null;
+  /** Manual position within its category (lower first; null = unordered). */
+  sortOrder: number | null;
 }
 
 export interface ProviderRow {
@@ -299,10 +301,11 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
         sb
           .from("services")
           .select(
-            "id, name, category, duration_min, buffer_min, service_price, online_bookable, required_resource_type, hidden_at",
+            "id, name, category, duration_min, buffer_min, service_price, online_bookable, required_resource_type, hidden_at, sort_order",
           )
           .eq("tenant_id", tenantId)
           .is("hidden_at", null)
+          .order("sort_order", { nullsFirst: false })
           .order("name"),
         sb.from("tenants").select("slug").eq("id", tenantId).maybeSingle(),
       ]);
@@ -377,6 +380,7 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
       price: s.service_price,
       onlineBookable: s.online_bookable,
       requiredResourceType: normalizeResourceTypeOrNull(s.required_resource_type),
+      sortOrder: s.sort_order,
     }));
 
     return {
@@ -484,6 +488,39 @@ export const deleteDateOverrideFn = createServerFn({ method: "POST" })
       .eq("id", data.overrideId)
       .in("provider_id", ids);
     if (error) throw new Error(`Couldn't delete override: ${error.message}`);
+    return { ok: true };
+  });
+
+// ── reorderServicesFn (immediate persist) ────────────────────────────────────
+// Writes sort_order = position for an ordered list of service ids (a single
+// category's services, in their new order). Tenant-scoped. Drag-to-reorder.
+
+const reorderServicesInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+  orderedIds: z.array(z.string().uuid()).max(500),
+});
+
+export const reorderServicesFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => reorderServicesInput.parse(raw))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    // Position each id by its index; tenant-scoped so a stray id can't touch
+    // another tenant's rows.
+    await Promise.all(
+      data.orderedIds.map((id, i) =>
+        sb
+          .from("services")
+          .update({ sort_order: i })
+          .eq("id", id)
+          .eq("tenant_id", tenantId),
+      ),
+    );
     return { ok: true };
   });
 
@@ -1130,7 +1167,7 @@ export const createBookableServiceFn = createServerFn({ method: "POST" })
         cogs_source: "manual",
       })
       .select(
-        "id, name, category, duration_min, buffer_min, service_price, online_bookable, required_resource_type",
+        "id, name, category, duration_min, buffer_min, service_price, online_bookable, required_resource_type, sort_order",
       )
       .single();
     if (error || !row) throw new Error(`Couldn't add service: ${error?.message ?? "unknown"}`);
@@ -1144,6 +1181,7 @@ export const createBookableServiceFn = createServerFn({ method: "POST" })
         price: row.service_price,
         onlineBookable: row.online_bookable,
         requiredResourceType: normalizeResourceTypeOrNull(row.required_resource_type),
+        sortOrder: row.sort_order,
       },
     };
   });

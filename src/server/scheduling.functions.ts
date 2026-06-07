@@ -305,6 +305,8 @@ export interface PublicServiceOption {
   category: string;
   /** Freeform patient-facing notes/description (what makes us unique). */
   notes: string | null;
+  /** Manual position within its category (lower first; null = unordered). */
+  sortOrder: number | null;
   /** Active providers who offer this service (v1: all active), with effective price/duration. */
   providers: PublicProviderOption[];
 }
@@ -345,7 +347,7 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
     const [{ data: services }, providers] = await Promise.all([
       sb
         .from("services")
-        .select("id, name, duration_min, buffer_min, service_price, online_bookable, hidden_at, category, notes")
+        .select("id, name, duration_min, buffer_min, service_price, online_bookable, hidden_at, category, notes, sort_order")
         .eq("tenant_id", tenant.id)
         .eq("online_bookable", true)
         .is("hidden_at", null)
@@ -407,6 +409,7 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
           fromPrice,
           category: s.category,
           notes: s.notes,
+          sortOrder: s.sort_order,
           providers: providerOpts,
         };
       })

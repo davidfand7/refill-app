@@ -89,7 +89,12 @@ function PublicBookingPage() {
       m.set(c, arr);
     }
     return [...m.entries()]
-      .map(([cat, rows]) => ({ cat, rows: [...rows].sort((a, b) => a.name.localeCompare(b.name)) }))
+      .map(([cat, rows]) => ({
+        cat,
+        rows: [...rows].sort(
+          (a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || a.name.localeCompare(b.name),
+        ),
+      }))
       .sort((a, b) => categoryRank(a.cat) - categoryRank(b.cat) || a.cat.localeCompare(b.cat));
   }, [ctx]);
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());

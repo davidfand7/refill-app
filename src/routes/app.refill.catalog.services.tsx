@@ -268,6 +268,13 @@ function ServicesPage() {
       arr.push(s);
       groups.set(s.category, arr);
     }
+    // Honor the manual order within each category (lower sort_order first; ties
+    // by name; unordered rows last).
+    for (const arr of groups.values()) {
+      arr.sort(
+        (a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || a.name.localeCompare(b.name),
+      );
+    }
     return groups;
   }, [filteredServices]);
 
