@@ -64,6 +64,7 @@ import {
 import { reorderServicesFn, reorderCategoriesFn, getCategoryOrderFn } from "@/server/scheduling-settings.functions";
 import { cn } from "@/lib/utils";
 import { CategoryCombobox } from "@/components/refill/CategoryCombobox";
+import { ServiceLibraryPicker } from "@/components/refill/ServiceLibraryPicker";
 import {
   buildCategoryList,
   categoryLabel,
@@ -168,6 +169,13 @@ function ServicesPage() {
   const draggedServiceRef = useRef<string | null>(null);
   const draggedCategoryRef = useRef<string | null>(null);
   const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  // `${category}|${name}` (lowercased) of services already in the catalog — for
+  // dedup in the library picker.
+  const existingServiceKeys = useMemo(
+    () => new Set(services.map((s) => `${s.category.trim().toLowerCase()}|${s.name.trim().toLowerCase()}`)),
+    [services],
+  );
 
   useEffect(() => {
     if (membership.status !== "tenant") return;
@@ -699,6 +707,14 @@ function ServicesPage() {
               </Link>
               <button
                 type="button"
+                onClick={() => setLibraryOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-emerald/40 bg-emerald-soft px-3 py-2 text-[13px] font-semibold text-emerald-ink hover:opacity-90 transition"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Add from library
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   setAddingCat(true);
                   setNewCatName("");
@@ -1090,6 +1106,14 @@ function ServicesPage() {
           </>
         )}
       </div>
+
+      <ServiceLibraryPicker
+        open={libraryOpen}
+        onClose={() => setLibraryOpen(false)}
+        viewAsUserId={viewAsUserId}
+        existingKeys={existingServiceKeys}
+        onAdded={(created) => setServices((prev) => [...prev, ...created])}
+      />
     </div>
   );
 }

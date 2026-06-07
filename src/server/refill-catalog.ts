@@ -1591,3 +1591,94 @@ export const setServiceCogsSourceFn = createServerFn({ method: "POST" })
     const links = await loadLinksForService(sb, data.serviceId, tenantId);
     return { service, links };
   });
+
+// ── Service Library (curate from a pre-loaded catalog; copy-on-select) ────────
+
+export type ServiceLibraryEntry = {
+  id: string;
+  category: string;
+  name: string;
+  defaultDurationMin: number;
+  sortOrder: number;
+};
+
+/** Read the global service library (template catalog). Dedup vs the tenant's
+ *  existing services is computed client-side (name + category). */
+export const listServiceLibraryFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) =>
+    z.object({ accessToken: z.string().min(10), viewAsUserId: z.string().uuid().optional() }).parse(raw),
+  )
+  .handler(async ({ data }): Promise<ServiceLibraryEntry[]> => {
+    await resolveEffectiveUserId({ accessToken: data.accessToken, viewAsUserId: data.viewAsUserId });
+    const sb = admin();
+    const { data: rows } = await sb
+      .from("service_library")
+      .select("id, category, name, default_duration_min, sort_order")
+      .eq("is_active", true)
+      .order("category")
+      .order("sort_order")
+      .order("name");
+    return (rows ?? []).map((r) => ({
+      id: r.id,
+      category: r.category,
+      name: r.name,
+      defaultDurationMin: r.default_duration_min,
+      sortOrder: r.sort_order,
+    }));
+  });
+
+/** Bulk copy selected library entries into the tenant's own services. Skips any
+ *  that already exist (same name + category). New rows: bookable, price 0,
+ *  library_id provenance. Returns the created services. */
+export const addServicesFromLibraryFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) =>
+    z
+      .object({
+        accessToken: z.string().min(10),
+        viewAsUserId: z.string().uuid().optional(),
+        libraryIds: z.array(z.string().uuid()).min(1).max(300),
+      })
+      .parse(raw),
+  )
+  .handler(async ({ data }): Promise<{ created: Service[]; skipped: number }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const { data: libRows } = await sb
+      .from("service_library")
+      .select("id, category, name, default_duration_min")
+      .in("id", data.libraryIds);
+    if (!libRows || libRows.length === 0) return { created: [], skipped: 0 };
+    const { data: existing } = await sb
+      .from("services")
+      .select("name, category")
+      .eq("tenant_id", tenantId);
+    const seen = new Set(
+      (existing ?? []).map((s) => `${s.category.trim().toLowerCase()}|${s.name.trim().toLowerCase()}`),
+    );
+    const toInsert = libRows.filter(
+      (l) => !seen.has(`${l.category.trim().toLowerCase()}|${l.name.trim().toLowerCase()}`),
+    );
+    const skipped = libRows.length - toInsert.length;
+    if (toInsert.length === 0) return { created: [], skipped };
+    const { data: rows, error } = await sb
+      .from("services")
+      .insert(
+        toInsert.map((l) => ({
+          tenant_id: tenantId,
+          name: l.name,
+          category: l.category,
+          duration_min: l.default_duration_min,
+          service_price: 0,
+          online_bookable: true,
+          cogs_source: "manual",
+          library_id: l.id,
+        })),
+      )
+      .select("*");
+    if (error) throw new Error(`Couldn't add services: ${error.message}`);
+    return { created: (rows ?? []).map(rowToService), skipped };
+  });

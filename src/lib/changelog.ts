@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.83.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.83.0 &mdash; Add from the service library. </strong>New on <strong>Catalog &rarr; Services</strong>: an <strong>Add from library</strong> button opens a pre-loaded catalog of common med-spa services (Tox, Filler, IPL/BBL, Laser, RF Microneedling, Facials, Peels, Body, Wellness, Consults&hellip;). Browse by category, search, multi-select (or &ldquo;Select all&rdquo; a category), and add them to your catalog in one click &mdash; already-added services show as <em>Added</em> and can&rsquo;t duplicate. Added services come in bookable at $0 with a sensible default duration, ready to <strong>price and drag into your order</strong>. Onboarding becomes curation, not data entry. <strong>Touched</strong>: new <code>service_library</code> table + seed, <code>listServiceLibraryFn</code> / <code>addServicesFromLibraryFn</code>, <code>ServiceLibraryPicker.tsx</code>, <code>app.refill.catalog.services.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.82.1",
     date: "June 2026",
     items: [
