@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.83.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.83.1 &mdash; Guided first-run for new spas. </strong>A brand-new catalog now opens with a welcoming <strong>&ldquo;Let&rsquo;s build your booking menu&rdquo;</strong> screen that leads straight into the service library (with &ldquo;add one manually&rdquo; as the alternate). Once you&rsquo;ve added services, a dismissible <strong>Getting started</strong> checklist guides the rest &mdash; set prices (flags how many are still $0), set provider hours, and turn on online booking, each linking right to where you do it. <strong>Touched</strong>: <code>src/routes/app.refill.catalog.services.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.83.0",
     date: "June 2026",
     items: [

@@ -19,10 +19,12 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
+  AlertTriangle,
+  CheckCircle2,
   ChevronDown,
+  ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
-  ClipboardList,
   Eye,
   EyeOff,
   GripVertical,
@@ -170,6 +172,15 @@ function ServicesPage() {
   const draggedCategoryRef = useRef<string | null>(null);
   const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [checklistDismissed, setChecklistDismissed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("refill.catalog.gettingStarted.dismissed") === "1";
+  });
+  function dismissChecklist() {
+    setChecklistDismissed(true);
+    if (typeof window !== "undefined")
+      window.localStorage.setItem("refill.catalog.gettingStarted.dismissed", "1");
+  }
   // `${category}|${name}` (lowercased) of services already in the catalog — for
   // dedup in the library picker.
   const existingServiceKeys = useMemo(
@@ -979,6 +990,61 @@ function ServicesPage() {
           </div>
         )}
 
+        {!loading && services.length > 0 && !checklistDismissed && (() => {
+          const unpriced = services.filter((s) => s.servicePrice === 0).length;
+          return (
+            <div className="rounded-xl border border-emerald/30 bg-emerald-soft/30 px-5 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-[14px] font-semibold text-ink flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-emerald" /> Getting started
+                  </h3>
+                  <ul className="mt-2 space-y-1.5 text-[13px]">
+                    <li className="flex items-center gap-2 text-ink-soft">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald shrink-0" />
+                      Added {services.length} service{services.length === 1 ? "" : "s"}
+                    </li>
+                    <li className="flex items-center gap-2">
+                      {unpriced > 0 ? (
+                        <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+                      ) : (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald shrink-0" />
+                      )}
+                      <span className={unpriced > 0 ? "text-ink" : "text-ink-soft"}>
+                        Set your prices
+                        {unpriced > 0 && <span className="text-amber-700 font-medium"> — {unpriced} at $0</span>}
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-2 text-ink-soft">
+                      <ChevronRight className="h-3.5 w-3.5 text-ink-faint shrink-0" />
+                      Set provider hours &amp; bookable services —{" "}
+                      <Link to="/app/refill/settings/booking" className="text-emerald font-medium underline">
+                        open Booking settings
+                      </Link>
+                    </li>
+                    <li className="flex items-center gap-2 text-ink-soft">
+                      <ChevronRight className="h-3.5 w-3.5 text-ink-faint shrink-0" />
+                      Turn on online booking —{" "}
+                      <Link to="/app/refill/settings/booking" className="text-emerald font-medium underline">
+                        Booking settings
+                      </Link>
+                    </li>
+                  </ul>
+                </div>
+                <button
+                  type="button"
+                  onClick={dismissChecklist}
+                  className="shrink-0 text-ink-faint hover:text-ink transition p-1"
+                  aria-label="Dismiss getting started"
+                  title="Dismiss"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+
         {loading ? (
           <div className="rounded-xl border border-rule bg-white px-5 py-8 text-center">
             <Loader2 className="mx-auto h-5 w-5 animate-spin text-ink-soft" />
@@ -986,25 +1052,39 @@ function ServicesPage() {
           </div>
         ) : services.length === 0 ? (
           !adding && (
-            <div className="rounded-xl border border-dashed border-rule bg-white px-6 py-10 text-center">
-              <div className="mx-auto inline-flex items-center justify-center rounded-full bg-emerald-soft p-3">
-                <ClipboardList className="h-6 w-6 text-emerald" />
+            <div className="rounded-2xl border border-emerald/30 bg-emerald-soft/40 px-6 py-12 text-center">
+              <div className="mx-auto inline-flex items-center justify-center rounded-full bg-white p-3 shadow-sm">
+                <Sparkles className="h-6 w-6 text-emerald" />
               </div>
-              <h3 className="mt-3 text-[17px] font-semibold text-ink">No services yet</h3>
-              <p className="mt-1.5 text-[13px] text-ink-soft max-w-md mx-auto leading-relaxed">
-                Add the services you offer &mdash; tox per unit, filler per syringe, BBL sessions, HydraFacials. Enter the price you charge; COGS is optional (or link products to auto-derive it).
+              <h3 className="mt-4 text-[22px] font-semibold text-ink leading-tight">
+                Let&rsquo;s build your booking menu
+              </h3>
+              <p className="mt-2 text-[14px] text-ink-soft max-w-md mx-auto leading-relaxed">
+                Start from our library of common med-spa services &mdash; pick what you offer,
+                set your prices, drag them into your order, and you&rsquo;re ready to take bookings.
+                No typing a menu from scratch.
               </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setAdding(true);
-                  setAddDraft(EMPTY_DRAFT);
-                }}
-                className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-emerald px-4 py-2 text-[14px] font-semibold text-paper shadow-sm hover:opacity-95 transition"
-              >
-                <Plus className="h-4 w-4" />
-                Add your first service
-              </button>
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setLibraryOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-emerald px-5 py-2.5 text-[14px] font-semibold text-paper shadow-sm hover:opacity-95 transition"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  Browse the service library
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdding(true);
+                    setAddDraft(EMPTY_DRAFT);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-4 py-2.5 text-[14px] font-semibold text-ink-soft hover:text-ink hover:border-emerald/40 transition"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add one manually
+                </button>
+              </div>
             </div>
           )
         ) : (
