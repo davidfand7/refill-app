@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.89.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.89.0 &mdash; Collapsible sections on Booking settings. </strong>The booking-settings page got long &mdash; so every card is now a <strong>turn-down</strong>: click a section header (chevron) to collapse <strong>Your booking link</strong>, <strong>Providers</strong>, <strong>Provider hours</strong>, <strong>Date-specific hours</strong>, <strong>Rooms &amp; resources</strong>, <strong>Booking rules</strong>, or <strong>Bookable services</strong>. Open/closed is <strong>remembered per section</strong> across reloads, so if you mostly live in one section the rest stay tucked away. (The master <em>Online booking</em> on/off + timezone card stays open by design &mdash; no hiding the main switch.) <strong>Touched</strong>: new <code>useSectionCollapse.ts</code>, each <code>booking/*Section.tsx</code>, <code>app.refill.settings.booking.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.88.0",
     date: "June 2026",
     items: [

@@ -5,10 +5,11 @@
  * owned by the page and passed in, so behavior is identical to before.
  */
 
-import { Clock } from "lucide-react";
+import { ChevronDown, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TimeSelect } from "@/components/refill/TimeSelect";
 import type { ProviderRow, SchedulingHoursDraft } from "@/server/scheduling-settings.functions";
+import { useSectionCollapse } from "@/components/refill/booking/useSectionCollapse";
 
 const DAY_ORDER = [1, 2, 3, 4, 5, 6, 0];
 const DAY_LABELS: Record<number, string> = {
@@ -54,15 +55,17 @@ export function BusinessHoursSection({
   patchDay: (dayOfWeek: number, patch: Partial<SchedulingHoursDraft>) => void;
   toggleSelDay: (dow: number) => void;
 }) {
+  const { open, toggle } = useSectionCollapse("hours");
   return (
     <section id="provider-hours" className="scroll-mt-24 rounded-xl border border-rule bg-white px-5 py-4">
       <div className="flex items-center justify-between gap-3 mb-3">
-        <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-emerald" />
+        <button type="button" onClick={toggle} className="flex items-center gap-2 text-left min-w-0">
+          <ChevronDown className={cn("h-4 w-4 text-ink-faint transition-transform shrink-0", open ? "" : "-rotate-90")} />
+          <Clock className="h-4 w-4 text-emerald shrink-0" />
           <h3 className="text-[14px] font-semibold text-ink">
             {activeProviders.length > 1 ? "Provider hours" : "Business hours"}
           </h3>
-        </div>
+        </button>
         {activeProviders.length > 1 && (
           <select
             value={selProviderId}
@@ -77,6 +80,7 @@ export function BusinessHoursSection({
           </select>
         )}
       </div>
+      {open && (<>
       {activeProviders.length > 1 && (
         <p className="text-[12px] text-ink-soft mb-3 -mt-1">
           Editing hours for <strong>{selProviderName}</strong>. Each provider has their own
@@ -153,6 +157,7 @@ export function BusinessHoursSection({
           );
         })}
       </div>
+      </>)}
     </section>
   );
 }

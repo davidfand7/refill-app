@@ -5,9 +5,11 @@
  * Partial-day time-off still uses Block on the Schedule tab.
  */
 
-import { CalendarRange, Loader2, Plus, X } from "lucide-react";
+import { CalendarRange, ChevronDown, Loader2, Plus, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { TimeSelect } from "@/components/refill/TimeSelect";
 import type { BookingSettings } from "@/components/refill/booking/useBookingSettings";
+import { useSectionCollapse } from "@/components/refill/booking/useSectionCollapse";
 
 /** "2026-07-03" → "Fri, Jul 3, 2026" (parsed as a plain calendar date, no tz drift). */
 function fmtDate(d: string): string {
@@ -39,15 +41,18 @@ export function DateOverridesSection({ bk }: { bk: BookingSettings }) {
   } = bk;
   if (!draft) return null;
   const multi = activeProviders.length > 1;
+  const { open, toggle } = useSectionCollapse("date-overrides");
   const today = new Date().toISOString().slice(0, 10);
 
   return (
     <section className="rounded-xl border border-rule bg-white px-5 py-4">
-      <div className="flex items-center gap-2 mb-1">
-        <CalendarRange className="h-4 w-4 text-emerald" />
+      <button type="button" onClick={toggle} className="flex w-full items-center gap-2 text-left">
+        <ChevronDown className={cn("h-4 w-4 text-ink-faint transition-transform shrink-0", open ? "" : "-rotate-90")} />
+        <CalendarRange className="h-4 w-4 text-emerald shrink-0" />
         <h3 className="text-[14px] font-semibold text-ink">Date-specific hours</h3>
-      </div>
-      <p className="text-[12px] text-ink-soft mb-3 leading-relaxed">
+      </button>
+      {open && (<>
+      <p className="text-[12px] text-ink-soft mb-3 mt-1 leading-relaxed">
         Override {multi ? <strong>{selProviderName}</strong> : "your"}
         {multi ? "’s" : ""} weekly hours for a single date — a holiday closure, or
         different hours just that day. (Use <strong>Block</strong> on the Schedule for a
@@ -159,6 +164,7 @@ export function DateOverridesSection({ bk }: { bk: BookingSettings }) {
           <Plus className="h-3.5 w-3.5" /> Add date override
         </button>
       )}
+      </>)}
     </section>
   );
 }

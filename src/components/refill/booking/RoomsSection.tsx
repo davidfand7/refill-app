@@ -12,8 +12,10 @@ import { BufferSelect, DurationField, Toggle, TriCheckbox } from "@/components/r
 import { categoryLabel, categoryRank } from "@/lib/service-categories";
 import type { BookableServiceDraft, ResourceType } from "@/server/scheduling-settings.functions";
 import type { BookingSettings } from "@/components/refill/booking/useBookingSettings";
+import { useSectionCollapse } from "@/components/refill/booking/useSectionCollapse";
 
 export function RoomsSection({ bk }: { bk: BookingSettings }) {
+  const { open, toggle } = useSectionCollapse("rooms");
   const {
     draft, setDraft, selProviderId,
     addingProvider, setAddingProvider, newProviderName, setNewProviderName, providerBusy,
@@ -38,11 +40,13 @@ export function RoomsSection({ bk }: { bk: BookingSettings }) {
   if (!draft) return null;
   return (
             <section className="rounded-xl border border-rule bg-white px-5 py-4">
-              <div className="flex items-center gap-2 mb-1">
-                <DoorOpen className="h-4 w-4 text-emerald" />
+              <button type="button" onClick={toggle} className="flex w-full items-center gap-2 text-left">
+                <ChevronDown className={cn("h-4 w-4 text-ink-faint transition-transform shrink-0", open ? "" : "-rotate-90")} />
+                <DoorOpen className="h-4 w-4 text-emerald shrink-0" />
                 <h3 className="text-[14px] font-semibold text-ink">Rooms &amp; resources</h3>
-              </div>
-              <p className="text-[12px] text-ink-soft mb-3 leading-relaxed">
+              </button>
+              {open && (<>
+              <p className="text-[12px] text-ink-soft mb-3 mt-1 leading-relaxed">
                 Treatment rooms, chairs, or devices an appointment occupies. Optional — add them if
                 two appointments shouldn&rsquo;t need the same room at once. (Requiring a room per
                 service comes next; for now this just sets up your list.)
@@ -152,6 +156,7 @@ export function RoomsSection({ bk }: { bk: BookingSettings }) {
                   <Plus className="h-3.5 w-3.5" /> Add room or resource
                 </button>
               )}
+              </>)}
             </section>
   );
 }

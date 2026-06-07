@@ -13,6 +13,7 @@ import { BufferSelect, DurationField, Toggle, TriCheckbox } from "@/components/r
 import { categoryLabel, categoryRank } from "@/lib/service-categories";
 import type { BookableServiceDraft, ResourceType } from "@/server/scheduling-settings.functions";
 import type { BookingSettings } from "@/components/refill/booking/useBookingSettings";
+import { useSectionCollapse } from "@/components/refill/booking/useSectionCollapse";
 
 export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
   const {
@@ -35,10 +36,15 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
     draggedCatRef, onReorderCategory,
   } = bk;
   if (!draft) return null;
+  const { open, toggle } = useSectionCollapse("services");
   return (
             <section className="rounded-xl border border-rule bg-white px-5 py-4">
               <div className="flex items-center justify-between gap-2 mb-1">
-                <h3 className="text-[14px] font-semibold text-ink">Bookable services</h3>
+                <button type="button" onClick={toggle} className="flex items-center gap-2 text-left min-w-0">
+                  <ChevronDown className={cn("h-4 w-4 text-ink-faint transition-transform shrink-0", open ? "" : "-rotate-90")} />
+                  <Sparkles className="h-4 w-4 text-emerald shrink-0" />
+                  <h3 className="text-[14px] font-semibold text-ink">Bookable services</h3>
+                </button>
                 <div className="inline-flex rounded-md border border-rule overflow-hidden text-[12px]">
                   <button
                     type="button"
@@ -62,6 +68,7 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
                   </button>
                 </div>
               </div>
+              {open && (<>
               <p className="text-[12px] text-ink-soft mb-3 leading-relaxed">
                 Choose which services patients can book online, and set how long each takes
                 (plus any cleanup buffer between appointments). Turning <strong>Bookable</strong> off
@@ -657,6 +664,7 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
                   })}
                 </div>
               )}
+              </>)}
             </section>
   );
 }

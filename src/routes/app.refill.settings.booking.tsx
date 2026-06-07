@@ -29,7 +29,9 @@ import { ProvidersSection } from "@/components/refill/booking/ProvidersSection";
 import { RoomsSection } from "@/components/refill/booking/RoomsSection";
 import { BookableServicesSection } from "@/components/refill/booking/BookableServicesSection";
 import { useBookingSettings } from "@/components/refill/booking/useBookingSettings";
+import { useSectionCollapse } from "@/components/refill/booking/useSectionCollapse";
 import { bookingUrl, Toggle } from "@/components/refill/booking/fields";
+import { ChevronDown } from "lucide-react";
 
 export const Route = createFileRoute("/app/refill/settings/booking")({
   component: BookingSettingsPage,
@@ -51,6 +53,7 @@ function BookingSettingsPage() {
   const viewAsUserId = membership.status === "tenant" ? membership.viewAsUserId : undefined;
 
   const bk = useBookingSettings({ viewAsUserId, isTenant: membership.status === "tenant" });
+  const linkSection = useSectionCollapse("link");
   const {
     loading, saving, server, draft,
     selDays, setSelDays, bulkOpen, setBulkOpen, bulkClose, setBulkClose,
@@ -97,10 +100,21 @@ function BookingSettingsPage() {
             {/* ── Your public booking link ── */}
             {draft.slug && (
               <section className="rounded-xl border border-rule bg-white px-5 py-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Link2 className="h-4 w-4 text-emerald" />
+                <button
+                  type="button"
+                  onClick={linkSection.toggle}
+                  className="flex w-full items-center gap-2 mb-2 text-left"
+                >
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 text-ink-faint transition-transform shrink-0",
+                      linkSection.open ? "" : "-rotate-90",
+                    )}
+                  />
+                  <Link2 className="h-4 w-4 text-emerald shrink-0" />
                   <h3 className="text-[14px] font-semibold text-ink">Your booking link</h3>
-                </div>
+                </button>
+                {linkSection.open && (<>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 min-w-0 truncate rounded-md border border-rule bg-paper/60 px-3 py-2 text-[13px] text-ink">
                     {bookingUrl(draft.slug)}
@@ -130,6 +144,7 @@ function BookingSettingsPage() {
                   Share this with patients. It goes live once <strong>Online booking</strong> is on and
                   at least one service is marked bookable below.
                 </p>
+                </>)}
               </section>
             )}
 
