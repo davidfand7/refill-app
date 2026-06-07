@@ -108,6 +108,8 @@ export interface DaySchedule {
   appointments: DayAppointment[];
   blocks: DayBlock[];
   services: Array<{ id: string; name: string; durationMin: number; category: string }>;
+  /** providerId → serviceIds that provider does NOT offer (opt-out). */
+  providerUnoffered: Record<string, string[]>;
 }
 
 type ApptRow = {
@@ -133,6 +135,25 @@ async function loadActiveProviders(
     .eq("is_active", true)
     .order("created_at", { ascending: true });
   return (data ?? []).map((p) => ({ id: p.id, name: p.name }));
+}
+
+/**
+ * Per-provider set of services they DON'T offer (opt-out model — a provider
+ * offers a service unless an explicit row says offered=false). Lets the booking
+ * UI hide services the chosen provider can't perform. providerId → serviceId[].
+ */
+async function loadProviderUnoffered(
+  sb: ReturnType<typeof admin>,
+  idFilter: string[],
+): Promise<Record<string, string[]>> {
+  const { data } = await sb
+    .from("scheduling_provider_services")
+    .select("provider_id, service_id")
+    .in("provider_id", idFilter)
+    .eq("offered", false);
+  const m: Record<string, string[]> = {};
+  for (const r of data ?? []) (m[r.provider_id] ??= []).push(r.service_id);
+  return m;
 }
 
 /** Map raw appointment rows → DayAppointment[], resolving display names. */
@@ -266,6 +287,7 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
         durationMin: s.duration_min,
         category: s.category,
       })),
+      providerUnoffered: await loadProviderUnoffered(sb, idFilter),
     };
   });
 
@@ -287,6 +309,8 @@ export interface RangeSchedule {
   /** providerId → that provider's weekly availability pattern (0..6). */
   weeklyHoursByProvider: Record<string, WeeklyHoursRow[]>;
   services: Array<{ id: string; name: string; durationMin: number; category: string }>;
+  /** providerId → serviceIds that provider does NOT offer (opt-out). */
+  providerUnoffered: Record<string, string[]>;
 }
 
 const rangeInput = z.object({
@@ -387,6 +411,7 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
         durationMin: s.duration_min,
         category: s.category,
       })),
+      providerUnoffered: await loadProviderUnoffered(sb, idFilter),
     };
   });
 

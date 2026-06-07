@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.72.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.72.1 &mdash; Booking picker now shows only what the chosen provider performs. </strong>In <strong>Schedule &rarr; Add booking</strong>, the Service list is filtered to the selected provider&rsquo;s services &mdash; so picking <em>Michelle</em> (who does Laser &amp; Facial) no longer shows Tox or Filler. Switch the provider and the list updates; if a service you&rsquo;d picked isn&rsquo;t offered by the new provider, it clears so you can&rsquo;t book a mismatch. Eligibility uses the same per-provider assignment from <strong>Booking settings</strong> (opt-out: a provider performs everything unless unchecked). <strong>Touched</strong>: <code>src/server/scheduling-owner.functions.ts</code> (return per-provider unoffered set), <code>src/components/refill/schedule/dialogs.tsx</code> (filter picker + clear stale pick), <code>src/routes/app.refill.schedule.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.72.0",
     date: "June 2026",
     items: [

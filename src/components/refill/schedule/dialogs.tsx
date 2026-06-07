@@ -159,6 +159,7 @@ export function BookDialog({
   onClose,
   services,
   providers,
+  providerUnoffered,
   timezone,
   initialDate,
   initialTime,
@@ -170,6 +171,8 @@ export function BookDialog({
   onClose: () => void;
   services: ServiceLite[];
   providers: ProviderLite[];
+  /** providerId → serviceIds that provider does NOT offer (hidden from picker). */
+  providerUnoffered: Record<string, string[]>;
   timezone: string;
   initialDate: string;
   initialTime: string;
@@ -194,6 +197,20 @@ export function BookDialog({
       setProviderId(initialProviderId ?? providers[0]?.id ?? "");
     }
   }, [open, initialDate, initialTime, initialProviderId, providers]);
+
+  // Only the services the chosen provider actually performs (opt-out model).
+  const offeredServices = useMemo(() => {
+    const blocked = new Set(providerUnoffered[providerId] ?? []);
+    return services.filter((s) => !blocked.has(s.id));
+  }, [services, providerUnoffered, providerId]);
+
+  // If switching provider makes the picked service unavailable, clear it so the
+  // operator can't book a service the provider doesn't perform.
+  useEffect(() => {
+    if (serviceId && (providerUnoffered[providerId] ?? []).includes(serviceId)) {
+      setServiceId("");
+    }
+  }, [providerId, serviceId, providerUnoffered]);
 
   async function submit() {
     if (!serviceId || !name.trim() || busy) return;
@@ -236,7 +253,7 @@ export function BookDialog({
             </Labeled>
           )}
           <Labeled label="Service">
-            <ServicePicker services={services} value={serviceId} onChange={setServiceId} />
+            <ServicePicker services={offeredServices} value={serviceId} onChange={setServiceId} />
           </Labeled>
           <div className="grid grid-cols-2 gap-3">
             <Labeled label="Day"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Labeled>
