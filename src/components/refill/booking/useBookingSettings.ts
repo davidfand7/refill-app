@@ -188,6 +188,13 @@ export function useBookingSettings({
   );
   const svcCatCounts = new Map<string, number>();
   for (const s of visibleServices) svcCatCounts.set(svcCat(s), (svcCatCounts.get(svcCat(s)) ?? 0) + 1);
+  // Expand/collapse ALL category groups at once. "All collapsed" drives the
+  // toggle's label/state; toggling sets every visible category collapsed or none.
+  const visibleCats = [...svcCatCounts.keys()];
+  const allCatsCollapsed = visibleCats.length > 0 && visibleCats.every((c) => collapsedSvcCats.has(c));
+  function toggleAllCats() {
+    setCollapsedSvcCats(allCatsCollapsed ? new Set() : new Set(visibleCats));
+  }
 
   // Keep the selected provider valid (e.g. after deactivating the selected one).
   useEffect(() => {
@@ -725,6 +732,7 @@ export function useBookingSettings({
     draggedSvcRef, startAutoScroll, stopAutoScroll,
     dirty, activeProviders, activeResourceTypes, selHours, selProviderName,
     svcQuery, inactiveCount, visibleServices, svcCat, sortedVisible, svcCatCounts, categoryOptions,
+    allCatsCollapsed, toggleAllCats,
     setDurationFormat, patchSettings, applyToBoth, mapSelectedHours, patchDay, toggleSelDay,
     applyHoursToSelected, setSelectedClosed, withToken,
     syncProviderAdd, syncProviderUpdate, onAddProvider, commitRename, onToggleProviderActive,

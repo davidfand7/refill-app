@@ -7,7 +7,7 @@
 import { Fragment } from "react";
 import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
-import { Check, CheckCircle2, ChevronDown, Copy, DoorOpen, ExternalLink, Globe, GripVertical, Link2, Loader2, Pencil, Plus, Search, Sparkles, Trash2, Users, X } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, DoorOpen, ExternalLink, Globe, GripVertical, Link2, Loader2, Pencil, Plus, Search, Sparkles, Trash2, Users, X } from "lucide-react";
 import { CategoryCombobox } from "@/components/refill/CategoryCombobox";
 import { BufferSelect, DurationField, Toggle, TriCheckbox } from "@/components/refill/booking/fields";
 import { categoryLabel, categoryRank } from "@/lib/service-categories";
@@ -27,7 +27,7 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
     psDrafts, setPsDrafts, durFmt, setDurationFormat,
     draggedSvcRef, startAutoScroll, stopAutoScroll,
     activeProviders, activeResourceTypes, svcQuery, inactiveCount, visibleServices,
-    svcCat, sortedVisible, svcCatCounts, categoryOptions,
+    svcCat, sortedVisible, svcCatCounts, categoryOptions, allCatsCollapsed, toggleAllCats,
     performsService, togglePerforms, toggleCategoryPerforms,
     overrideFor, psFieldValue, offersService, commitOverride, toggleOffered,
     patchService, commitCategoryRename, onAddService, onDeleteService,
@@ -233,6 +233,24 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
                       className="rounded-md border border-rule px-3 py-1.5 text-[12px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition"
                     >
                       {showInactive ? "Hide inactive" : `Show inactive (${inactiveCount})`}
+                    </button>
+                  )}
+                  {svcCatCounts.size > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => toggleAllCats()}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-1.5 text-[12px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition"
+                      title={allCatsCollapsed ? "Expand every category" : "Collapse every category"}
+                    >
+                      {allCatsCollapsed ? (
+                        <>
+                          <ChevronsUpDown className="h-3.5 w-3.5" /> Expand all
+                        </>
+                      ) : (
+                        <>
+                          <ChevronsDownUp className="h-3.5 w-3.5" /> Collapse all
+                        </>
+                      )}
                     </button>
                   )}
                 </div>

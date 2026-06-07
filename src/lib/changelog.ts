@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.69.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.69.1 &mdash; Expand / Collapse all categories. </strong>On <strong>Booking &rarr; Bookable services</strong>, a new <strong>Collapse all</strong> / <strong>Expand all</strong> button (next to the search box) folds or unfolds every category group at once &mdash; handy for scanning a long catalog or jumping straight to the category you want. Individual category headers still toggle on their own. <strong>Touched</strong>: <code>src/components/refill/booking/useBookingSettings.ts</code> (<code>toggleAllCats</code> + all-collapsed state), <code>src/components/refill/booking/BookableServicesSection.tsx</code> (toggle button), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.69.0",
     date: "June 2026",
     items: [
