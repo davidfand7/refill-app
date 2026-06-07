@@ -671,6 +671,35 @@ function PublicBookingPage() {
               {confirmed.providerName ? ` with ${confirmed.providerName}` : ` with ${ctx.spaName}`}.
               A confirmation is on its way to your email.
             </p>
+            {(() => {
+              const links = buildCalendarLinks({
+                title: `${selService?.name ?? "Appointment"} — ${ctx.spaName}`,
+                startIso: confirmed.startIso,
+                durationMin: selService?.durationMin ?? 30,
+                details: `${confirmed.providerName ? `With ${confirmed.providerName}. ` : ""}Booked with ${ctx.spaName}.`,
+                location: ctx.spaName,
+              });
+              return (
+                <div className="mt-5 flex flex-wrap items-center gap-2">
+                  <span className="text-[13px] text-stone-500 mr-1">Add to calendar:</span>
+                  <a
+                    href={links.google}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-[13px] font-medium text-stone-700 hover:border-stone-900 transition-colors"
+                  >
+                    <CalendarCheck className="w-3.5 h-3.5" /> Google
+                  </a>
+                  <a
+                    href={links.icsHref}
+                    download="appointment.ics"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-[13px] font-medium text-stone-700 hover:border-stone-900 transition-colors"
+                  >
+                    <CalendarCheck className="w-3.5 h-3.5" /> Apple / Outlook
+                  </a>
+                </div>
+              );
+            })()}
           </div>
         )}
       </div>
@@ -782,6 +811,52 @@ function dayKey(iso: string, tz: string): string {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date(iso));
+}
+
+/** Escape a value for an ICS text field. */
+function icsEscape(s: string): string {
+  return s.replace(/[\\,;]/g, (m) => "\\" + m).replace(/\n/g, "\\n");
+}
+
+/** Build "add to calendar" targets for a confirmed appointment. Returns a
+ *  Google Calendar template URL and a downloadable .ics data URI (Apple/Outlook). */
+function buildCalendarLinks(opts: {
+  title: string;
+  startIso: string;
+  durationMin: number;
+  details: string;
+  location: string;
+}): { google: string; icsHref: string } {
+  const startMs = new Date(opts.startIso).getTime();
+  const endIso = new Date(startMs + opts.durationMin * 60_000).toISOString();
+  // Calendar timestamps: UTC basic format, e.g. 20260624T170000Z.
+  const stamp = (iso: string) => iso.replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const start = stamp(opts.startIso);
+  const end = stamp(endIso);
+  const google =
+    "https://calendar.google.com/calendar/render?action=TEMPLATE" +
+    `&text=${encodeURIComponent(opts.title)}` +
+    `&dates=${start}/${end}` +
+    `&details=${encodeURIComponent(opts.details)}` +
+    `&location=${encodeURIComponent(opts.location)}`;
+  const ics = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Refill//Booking//EN",
+    "CALSCALE:GREGORIAN",
+    "BEGIN:VEVENT",
+    `UID:${start}-${startMs}@getrefill.app`,
+    `DTSTAMP:${start}`,
+    `DTSTART:${start}`,
+    `DTEND:${end}`,
+    `SUMMARY:${icsEscape(opts.title)}`,
+    `DESCRIPTION:${icsEscape(opts.details)}`,
+    `LOCATION:${icsEscape(opts.location)}`,
+    "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+  const icsHref = `data:text/calendar;charset=utf-8,${encodeURIComponent(ics)}`;
+  return { google, icsHref };
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

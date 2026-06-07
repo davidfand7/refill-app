@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.80.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.80.1 &mdash; Add to calendar on the booking confirmation. </strong>After a patient books on your public page, the &ldquo;You&rsquo;re booked!&rdquo; screen now offers <strong>Add to calendar</strong> &mdash; a <strong>Google</strong> link and an <strong>Apple / Outlook</strong> (.ics) download, pre-filled with the service, time, duration, provider, and your spa name. Fewer forgotten appointments. <strong>Touched</strong>: <code>src/routes/s.$slug.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.80.0",
     date: "June 2026",
     items: [
