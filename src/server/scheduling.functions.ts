@@ -311,8 +311,19 @@ export interface PublicServiceOption {
   isFree: boolean;
   /** Paid service whose fee is applied toward a treatment (e.g. a consult). */
   feeCredit: boolean;
+  /** Add-ons a patient can tack onto this service (each extends time + price). */
+  addOns: PublicAddOn[];
   /** Active providers who offer this service (v1: all active), with effective price/duration. */
   providers: PublicProviderOption[];
+}
+
+/** An add-on offered with a service (its own price + duration). */
+export interface PublicAddOn {
+  id: string;
+  name: string;
+  price: number;
+  durationMin: number;
+  isFree: boolean;
 }
 
 export type PublicBookingContext =
@@ -394,6 +405,41 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
       }
     }
 
+    // Add-on eligibility per base service + add-on details. Add-ons may be
+    // add-on-only (not online_bookable), so fetch their details separately.
+    const addonsByService = new Map<string, PublicAddOn[]>();
+    if (serviceIds.length) {
+      const { data: saRows } = await sb
+        .from("service_addons")
+        .select("service_id, addon_service_id, sort_order")
+        .eq("tenant_id", tenant.id)
+        .order("sort_order");
+      const wantedAddonIds = [...new Set((saRows ?? []).map((r) => r.addon_service_id))];
+      const addonById = new Map<string, PublicAddOn>();
+      if (wantedAddonIds.length) {
+        const { data: addonRows } = await sb
+          .from("services")
+          .select("id, name, service_price, duration_min, is_free")
+          .in("id", wantedAddonIds)
+          .is("hidden_at", null);
+        for (const a of addonRows ?? [])
+          addonById.set(a.id, {
+            id: a.id,
+            name: a.name,
+            price: a.service_price,
+            durationMin: a.duration_min,
+            isFree: a.is_free ?? false,
+          });
+      }
+      for (const r of saRows ?? []) {
+        const a = addonById.get(r.addon_service_id);
+        if (!a) continue;
+        const arr = addonsByService.get(r.service_id) ?? [];
+        arr.push(a);
+        addonsByService.set(r.service_id, arr);
+      }
+    }
+
     const serviceOptions: PublicServiceOption[] = (services ?? [])
       .map((s) => {
         const ovMap = overridesByService.get(s.id);
@@ -422,6 +468,7 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
           sortOrder: s.sort_order,
           isFree: s.is_free ?? false,
           feeCredit: s.fee_credit ?? false,
+          addOns: addonsByService.get(s.id) ?? [],
           providers: providerOpts,
         };
       })
@@ -451,6 +498,8 @@ const listInput = z.object({
   providerId: z.string().uuid().optional(),
   /** "Best deal": union only across the lowest-priced provider(s). */
   cheapestOnly: z.boolean().optional(),
+  /** Combined duration of chosen add-ons (min), added to the base service. */
+  extraMinutes: z.number().int().min(0).optional(),
   fromIso: z.string().min(10),
   toIso: z.string().min(10),
 });
@@ -515,9 +564,11 @@ export const listAvailableSlots = createServerFn({ method: "GET" })
 
     // Compute each provider's slots with THEIR effective duration/buffer, then
     // drop any slot where no resource of the required type is free.
+    const extraMinutes = Math.max(0, data.extraMinutes ?? 0);
     const perProvider = await Promise.all(
       targets.map(async (p) => {
         const eff = effective(base, overrides.get(p.id));
+        const totalDuration = eff.durationMin + extraMinutes;
         const { hours, dateOverrides, blocks, busy } = await loadEngineInputs(
           sb,
           p.id,
@@ -531,13 +582,13 @@ export const listAvailableSlots = createServerFn({ method: "GET" })
           dateOverrides,
           blocks,
           busy,
-          service: { durationMin: eff.durationMin, bufferMin: eff.bufferMin },
+          service: { durationMin: totalDuration, bufferMin: eff.bufferMin },
           rangeStart: new Date(data.fromIso),
           rangeEnd: new Date(data.toIso),
           now: new Date(),
         });
         if (pool) {
-          slots = slots.filter((s) => resourceFreeAt(pool, s.startMs, eff.durationMin));
+          slots = slots.filter((s) => resourceFreeAt(pool, s.startMs, totalDuration));
         }
         return { providerId: p.id, slots };
       }),
@@ -571,6 +622,8 @@ const holdInput = z.object({
   /** The provider that owns the chosen slot (carried from listAvailableSlots). */
   providerId: z.string().uuid(),
   startIso: z.string().min(10),
+  /** Chosen add-on service ids (validated server-side against eligibility). */
+  addonServiceIds: z.array(z.string().uuid()).optional().default([]),
 });
 
 export type HoldResult =
@@ -603,6 +656,40 @@ export const holdSlot = createServerFn({ method: "POST" })
     }
     const eff = effective(base, ov);
 
+    // Resolve chosen add-ons against eligibility (never trust client price/min).
+    // Each add-on extends the visit; the snapshot freezes price/min at hold time.
+    type ChosenAddon = { id: string; name: string; price: number; durationMin: number };
+    let chosenAddons: ChosenAddon[] = [];
+    const requestedAddonIds = [...new Set(data.addonServiceIds)];
+    if (requestedAddonIds.length) {
+      const { data: eligRows } = await sb
+        .from("service_addons")
+        .select("addon_service_id")
+        .eq("tenant_id", data.tenantId)
+        .eq("service_id", data.serviceId)
+        .in("addon_service_id", requestedAddonIds);
+      const eligible = new Set((eligRows ?? []).map((r) => r.addon_service_id));
+      const validIds = requestedAddonIds.filter((id) => eligible.has(id));
+      if (validIds.length !== requestedAddonIds.length) {
+        return { ok: false, reason: "An add-on isn't available for this service.", code: "invalid" };
+      }
+      if (validIds.length) {
+        const { data: addonRows } = await sb
+          .from("services")
+          .select("id, name, service_price, duration_min, is_free")
+          .in("id", validIds)
+          .is("hidden_at", null);
+        chosenAddons = (addonRows ?? []).map((a) => ({
+          id: a.id,
+          name: a.name,
+          price: a.is_free ? 0 : a.service_price,
+          durationMin: a.duration_min,
+        }));
+      }
+    }
+    const extraMinutes = chosenAddons.reduce((sum, a) => sum + a.durationMin, 0);
+    const totalDuration = eff.durationMin + extraMinutes;
+
     const startMs = new Date(data.startIso).getTime();
     if (Number.isNaN(startMs)) return { ok: false, reason: "Invalid time.", code: "invalid" };
 
@@ -632,7 +719,7 @@ export const holdSlot = createServerFn({ method: "POST" })
       dateOverrides,
       blocks,
       busy,
-      service: { durationMin: eff.durationMin, bufferMin: eff.bufferMin },
+      service: { durationMin: totalDuration, bufferMin: eff.bufferMin },
       rangeStart: dayStart,
       rangeEnd: dayEnd,
       now: new Date(),
@@ -649,7 +736,7 @@ export const holdSlot = createServerFn({ method: "POST" })
         data.tenantId,
         base.service.requiredResourceType,
         startMs,
-        eff.durationMin,
+        totalDuration,
       );
       if (!resourceId) {
         return { ok: false, reason: "No room is free at that time.", code: "taken" };
@@ -662,23 +749,40 @@ export const holdSlot = createServerFn({ method: "POST" })
     const token = crypto.randomUUID();
     const heldUntilIso = new Date(Date.now() + base.holdMinutes * 60_000).toISOString();
 
-    const { error: insErr } = await sb.from("emma_appointments").insert({
-      user_id: ownerUserId,
-      provider_id: provider.id,
-      resource_id: resourceId,
-      scheduled_at: data.startIso,
-      duration_min: eff.durationMin,
-      status: "held",
-      source: "native-online",
-      slot_held_until: heldUntilIso,
-      booking_token: token,
-    });
+    const { data: held, error: insErr } = await sb
+      .from("emma_appointments")
+      .insert({
+        user_id: ownerUserId,
+        provider_id: provider.id,
+        resource_id: resourceId,
+        scheduled_at: data.startIso,
+        duration_min: totalDuration,
+        status: "held",
+        source: "native-online",
+        slot_held_until: heldUntilIso,
+        booking_token: token,
+      })
+      .select("id")
+      .single();
 
     if (insErr) {
       if (insErr.code === "23P01") {
         return { ok: false, reason: "That time was just taken.", code: "taken" };
       }
       return { ok: false, reason: `Couldn't hold the slot: ${insErr.message}`, code: "invalid" };
+    }
+
+    // Snapshot chosen add-ons onto the held appointment (price/min frozen now).
+    if (held && chosenAddons.length) {
+      await sb.from("appointment_addons").insert(
+        chosenAddons.map((a) => ({
+          appointment_id: held.id,
+          addon_service_id: a.id,
+          name: a.name,
+          price: a.price,
+          duration_min: a.durationMin,
+        })),
+      );
     }
 
     return { ok: true, token, heldUntilIso };

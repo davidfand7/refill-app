@@ -43,7 +43,7 @@ export const Route = createFileRoute("/s/$slug")({
 type Ctx = Extract<PublicBookingContext, { ok: true }>;
 
 type Screen = "loading" | "error" | "choose" | "contact" | "confirmed";
-type Section = "service" | "provider" | "when";
+type Section = "service" | "provider" | "addons" | "when";
 type ScheduleMode = "soonest" | "day";
 
 const RANGE_DAYS = 30;
@@ -57,6 +57,8 @@ function PublicBookingPage() {
   const [ctx, setCtx] = useState<Ctx | null>(null);
   const [serviceId, setServiceId] = useState<string | null>(null);
   const [providerChoice, setProviderChoice] = useState<string | null>(null); // FIRST | BEST | providerId
+  const [selectedAddons, setSelectedAddons] = useState<Set<string>>(new Set());
+  const [addonsTouched, setAddonsTouched] = useState(false); // patient has visited the add-ons step
   // Accordion: which of the two collapsed selections (+ When) is open.
   const [openSection, setOpenSection] = useState<Section>("service");
   // Smart Schedule: how the patient wants to find a time.
@@ -78,6 +80,27 @@ function PublicBookingPage() {
   const providers = selService?.providers ?? [];
   const multiProvider = providers.length > 1;
   const showPrices = ctx?.showPrices !== false;
+
+  // Add-ons offered with the chosen service. Each selection extends the visit
+  // (combined duration drives the slot engine; combined price shows on confirm).
+  const addOns = selService?.addOns ?? [];
+  const hasAddons = addOns.length > 0;
+  const chosenAddons = useMemo(
+    () => addOns.filter((a) => selectedAddons.has(a.id)),
+    [addOns, selectedAddons],
+  );
+  const extraMinutes = useMemo(
+    () => chosenAddons.reduce((sum, a) => sum + a.durationMin, 0),
+    [chosenAddons],
+  );
+  const addonPriceTotal = useMemo(
+    () => chosenAddons.reduce((sum, a) => sum + (a.isFree ? 0 : a.price), 0),
+    [chosenAddons],
+  );
+  // Step numbers shift with which sections are present.
+  const stepProvider = 2;
+  const stepAddons = multiProvider ? 3 : 2;
+  const stepWhen = 2 + (multiProvider ? 1 : 0) + (hasAddons ? 1 : 0);
 
   // Group the service menu by category (collapsible turndowns). Built-ins keep
   // their canonical order; custom categories follow.
@@ -165,21 +188,44 @@ function PublicBookingPage() {
     setBanner(null);
     setScheduleMode(null);
     setSlots([]);
+    setSelectedAddons(new Set());
+    setAddonsTouched(false);
+    const serviceHasAddons = s.addOns.length > 0;
     if (s.providers.length <= 1) {
       setProviderChoice(s.providers[0]?.id ?? FIRST);
-      setOpenSection("when");
+      setOpenSection(serviceHasAddons ? "addons" : "when");
     } else {
       setProviderChoice(null);
       setOpenSection("provider");
     }
   }
 
-  /** Pick a provider (or a smart option) → collapse section 2, open When. */
+  /** Pick a provider (or a smart option) → collapse section 2, open the next
+   *  needed section (Add-ons if the service has any, else When). */
   function chooseProvider(choice: string) {
     setProviderChoice(choice);
     setBanner(null);
     setScheduleMode(null);
     setSlots([]);
+    setOpenSection(hasAddons ? "addons" : "when");
+  }
+
+  /** Toggle an add-on; changing the selection invalidates loaded slots (the
+   *  combined duration changed) so When recomputes when reopened. */
+  function toggleAddon(id: string) {
+    setSelectedAddons((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setScheduleMode(null);
+    setSlots([]);
+  }
+
+  /** Continue past the Add-ons step → open When. */
+  function continueAddons() {
+    setAddonsTouched(true);
     setOpenSection("when");
   }
 
@@ -197,6 +243,7 @@ function PublicBookingPage() {
           providerId:
             providerChoice === FIRST || providerChoice === BEST ? undefined : providerChoice,
           cheapestOnly: providerChoice === BEST ? true : undefined,
+          extraMinutes: extraMinutes || undefined,
           fromIso: now.toISOString(),
           toIso: to.toISOString(),
         },
@@ -208,7 +255,7 @@ function PublicBookingPage() {
     } finally {
       setSlotsLoading(false);
     }
-  }, [ctx, serviceId, providerChoice]);
+  }, [ctx, serviceId, providerChoice, extraMinutes]);
 
   // Load slots once the patient chooses how to schedule (Smart Schedule).
   useEffect(() => {
@@ -278,6 +325,7 @@ function PublicBookingPage() {
           serviceId,
           providerId: slot.providerId,
           startIso: slot.startIso,
+          addonServiceIds: chosenAddons.map((a) => a.id),
         },
       });
       if (!r.ok) {
@@ -324,6 +372,11 @@ function PublicBookingPage() {
   }
 
   const heldProviderName = held ? nameOf(held.slot.providerId) : null;
+  const heldBasePrice = held
+    ? providers.find((p) => p.id === held.slot.providerId)?.price ?? selService?.fromPrice ?? 0
+    : 0;
+  const heldTotalPrice = (selService?.isFree ? 0 : heldBasePrice) + addonPriceTotal;
+  const heldTotalDuration = (selService?.durationMin ?? 0) + extraMinutes;
 
   return (
     <main className="min-h-screen bg-[#fafaf7] text-stone-900 flex items-start justify-center px-5 py-12 sm:py-16">
@@ -495,11 +548,78 @@ function PublicBookingPage() {
                 </>
               )}
 
-              {/* ── 3. Smart Schedule: when? ── */}
-              {selService && providerChoice && (
+              {/* ── Add-ons (only when the chosen service offers any) ── */}
+              {selService && providerChoice && hasAddons && (
                 <>
                   <SectionRow
-                    n={multiProvider ? 3 : 2}
+                    n={stepAddons}
+                    label="Add-ons"
+                    value={
+                      addonsTouched
+                        ? chosenAddons.length
+                          ? `${chosenAddons.length} added${showPrices && addonPriceTotal > 0 ? ` · +$${addonPriceTotal}` : ""}`
+                          : "None"
+                        : null
+                    }
+                    placeholder="Enhance your visit (optional)"
+                    done={addonsTouched}
+                    open={openSection === "addons"}
+                    onToggle={() => setOpenSection("addons")}
+                  />
+                  {openSection === "addons" && (
+                    <div className="px-4 py-4 space-y-2 bg-stone-50/40">
+                      <p className="text-[13px] text-stone-500">
+                        Optional — add any to your appointment.
+                      </p>
+                      {addOns.map((a) => {
+                        const checked = selectedAddons.has(a.id);
+                        return (
+                          <button
+                            key={a.id}
+                            type="button"
+                            onClick={() => toggleAddon(a.id)}
+                            className={`w-full text-left rounded-lg border px-4 py-3 transition-colors flex items-center justify-between gap-3 ${
+                              checked
+                                ? "border-emerald-500 bg-emerald-50"
+                                : "border-stone-200 bg-white hover:border-stone-900"
+                            }`}
+                          >
+                            <span className="flex items-center gap-2.5 min-w-0">
+                              <span
+                                className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                                  checked ? "border-emerald-600 bg-emerald-600" : "border-stone-300 bg-white"
+                                }`}
+                              >
+                                {checked && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                              </span>
+                              <span className="block text-[15px] font-medium text-stone-900 truncate">{a.name}</span>
+                            </span>
+                            <span className="shrink-0 text-[13px] text-stone-500 tabular-nums whitespace-nowrap">
+                              +{a.durationMin} min
+                              {showPrices ? ` · ${a.isFree ? "Free" : `+$${a.price}`}` : ""}
+                            </span>
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={continueAddons}
+                        className="mt-1 w-full inline-flex items-center justify-center gap-2 bg-stone-900 text-white font-medium text-[14px] rounded-lg px-5 py-2.5 hover:bg-stone-800 transition-colors"
+                      >
+                        {chosenAddons.length
+                          ? `Continue${showPrices && addonPriceTotal > 0 ? ` · +$${addonPriceTotal}` : ""} (+${extraMinutes} min)`
+                          : "Continue without add-ons"}
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ── Smart Schedule: when? ── */}
+              {selService && providerChoice && (!hasAddons || addonsTouched) && (
+                <>
+                  <SectionRow
+                    n={stepWhen}
                     label="When"
                     value={scheduleMode ? whenLabel : null}
                     placeholder="Pick a time"
@@ -614,7 +734,23 @@ function PublicBookingPage() {
               <div className="text-emerald-800 text-[15px] font-semibold mt-0.5">
                 {fmtDayHeading(held.slot.startIso, tz)} at {fmtTime(held.slot.startIso, tz)}
               </div>
-              <div className="text-emerald-700 text-[12px] mt-0.5">
+              {chosenAddons.length > 0 && (
+                <div className="mt-2 pt-2 border-t border-emerald-200 space-y-0.5">
+                  {chosenAddons.map((a) => (
+                    <div key={a.id} className="flex items-center justify-between text-emerald-800 text-[12px]">
+                      <span>+ {a.name}</span>
+                      <span className="tabular-nums">
+                        +{a.durationMin} min{showPrices ? ` · ${a.isFree ? "Free" : `$${a.price}`}` : ""}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="flex items-center justify-between text-emerald-900 text-[12px] font-semibold pt-0.5">
+                    <span>{heldTotalDuration} min total</span>
+                    {showPrices && <span className="tabular-nums">${heldTotalPrice}</span>}
+                  </div>
+                </div>
+              )}
+              <div className="text-emerald-700 text-[12px] mt-1.5">
                 Held for you for a few minutes — finish below to confirm.
               </div>
             </div>
@@ -690,11 +826,14 @@ function PublicBookingPage() {
               A confirmation is on its way to your email.
             </p>
             {(() => {
+              const addonTitle = chosenAddons.length
+                ? ` + ${chosenAddons.map((a) => a.name).join(", ")}`
+                : "";
               const links = buildCalendarLinks({
-                title: `${selService?.name ?? "Appointment"} — ${ctx.spaName}`,
+                title: `${selService?.name ?? "Appointment"}${addonTitle} — ${ctx.spaName}`,
                 startIso: confirmed.startIso,
-                durationMin: selService?.durationMin ?? 30,
-                details: `${confirmed.providerName ? `With ${confirmed.providerName}. ` : ""}Booked with ${ctx.spaName}.`,
+                durationMin: (selService?.durationMin ?? 30) + extraMinutes,
+                details: `${confirmed.providerName ? `With ${confirmed.providerName}. ` : ""}${chosenAddons.length ? `Add-ons: ${chosenAddons.map((a) => a.name).join(", ")}. ` : ""}Booked with ${ctx.spaName}.`,
                 location: ctx.spaName,
               });
               return (

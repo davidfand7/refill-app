@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.87.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.87.0 &mdash; Patients can choose add-ons at booking. </strong>The payoff for v1.86.0: on the patient self-book page (<code>/s/&lt;slug&gt;</code>), any service that offers add-ons now shows an <strong>Add-ons</strong> step (after Provider, before When). Each pick <strong>extends the visit</strong> &mdash; the slot engine finds times for the <em>combined</em> duration (base + add-ons), and the confirm screen + calendar event reflect the combined time and price. Chosen add-ons are <strong>snapshotted</strong> onto the appointment (price/duration frozen at booking time) so history stays accurate if the add-on later changes. Eligibility &amp; pricing are re-validated server-side &mdash; the client&rsquo;s prices are never trusted. <strong>Touched</strong>: <code>scheduling.functions.ts</code> (<code>getPublicBookingContext</code> add-ons, <code>listAvailableSlots</code>/<code>holdSlot</code> combined duration + <code>appointment_addons</code> snapshot), <code>s.$slug.tsx</code> (Add-ons accordion step), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.86.0",
     date: "June 2026",
     items: [
