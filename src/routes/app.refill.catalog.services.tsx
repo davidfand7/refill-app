@@ -61,6 +61,7 @@ import {
   type ServiceLinkageBundle,
   type ServiceProductLink,
 } from "@/server/refill-catalog";
+import { reorderServicesFn } from "@/server/scheduling-settings.functions";
 import { cn } from "@/lib/utils";
 import { CategoryCombobox } from "@/components/refill/CategoryCombobox";
 import {
@@ -374,6 +375,36 @@ function ServicesPage() {
     } catch (err) {
       setServices((prev) => prev.map((s) => (s.id === serviceId ? prevSvc : s)));
       toast.error(err instanceof Error ? err.message : "Couldn't move service.");
+    }
+  }
+
+  // Drag-to-reorder within a category (drop onto another row in the same
+  // category). Persists the whole category's new order; optimistic update.
+  async function onReorderServiceCat(draggedId: string, targetId: string) {
+    if (draggedId === targetId) return;
+    const dragged = services.find((s) => s.id === draggedId);
+    const target = services.find((s) => s.id === targetId);
+    if (!dragged || !target || dragged.category !== target.category) return;
+    const cat = target.category;
+    const ids = services
+      .filter((s) => s.category === cat)
+      .sort(
+        (a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || a.name.localeCompare(b.name),
+      )
+      .map((s) => s.id)
+      .filter((id) => id !== draggedId);
+    const tIdx = ids.indexOf(targetId);
+    ids.splice(tIdx < 0 ? ids.length : tIdx, 0, draggedId);
+    const pos = new Map(ids.map((id, i) => [id, i]));
+    const prev = services;
+    setServices((cur) => cur.map((s) => (pos.has(s.id) ? { ...s, sortOrder: pos.get(s.id)! } : s)));
+    try {
+      await withToken((token) =>
+        reorderServicesFn({ data: { accessToken: token, viewAsUserId, orderedIds: ids } }),
+      );
+    } catch (err) {
+      setServices(prev);
+      toast.error(err instanceof Error ? err.message : "Couldn't save the new order.");
     }
   }
 
@@ -995,6 +1026,11 @@ function ServicesPage() {
                         onDragEndRow={() => {
                           draggedServiceRef.current = null;
                         }}
+                        onDropRow={() => {
+                          const id = draggedServiceRef.current;
+                          draggedServiceRef.current = null;
+                          if (id) void onReorderServiceCat(id, s.id);
+                        }}
                       />
                     ),
                   )}
@@ -1016,17 +1052,22 @@ function ServiceRow({
   onToggleHidden,
   onDragStartRow,
   onDragEndRow,
+  onDropRow,
 }: {
   service: Service;
   onEdit: () => void;
   onToggleHidden: () => void;
   onDragStartRow?: () => void;
   onDragEndRow?: () => void;
+  onDropRow?: () => void;
 }) {
   const hasCogs = service.cogsPerService !== null;
   const isHidden = service.hiddenAt !== null;
   return (
-    <li>
+    <li
+      onDragOver={onDropRow ? (e) => e.preventDefault() : undefined}
+      onDrop={onDropRow}
+    >
       <div
         className={cn(
           "w-full rounded-xl border bg-white px-5 py-4 transition group flex items-start gap-3",
@@ -1040,7 +1081,7 @@ function ServiceRow({
           onDragStart={onDragStartRow}
           onDragEnd={onDragEndRow}
           className="mt-1 shrink-0 cursor-grab active:cursor-grabbing text-ink-faint/40 hover:text-ink-faint"
-          title="Drag to another category"
+          title="Drag to reorder within this category, or onto a category header to move it"
         >
           <GripVertical className="h-4 w-4" />
         </span>

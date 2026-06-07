@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.81.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.81.1 &mdash; Drag-to-reorder services on the Catalog page too. </strong>You can now reorder services within a category by dragging right on <strong>Catalog &rarr; Services</strong> (it already honored the order; now you can set it there as well as in Booking settings). Same instant save, same order everywhere. <strong>Touched</strong>: <code>src/routes/app.refill.catalog.services.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.81.0",
     date: "June 2026",
     items: [
