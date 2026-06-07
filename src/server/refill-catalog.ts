@@ -346,6 +346,8 @@ export type Service = {
   isFree: boolean;
   /** Paid service whose fee is applied toward a treatment (e.g. a consult). */
   feeCredit: boolean;
+  /** Offerable as an add-on to other services. */
+  isAddon: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -363,6 +365,7 @@ type ServiceRow = {
   sort_order: number | null;
   is_free: boolean | null;
   fee_credit: boolean | null;
+  is_addon: boolean | null;
   created_at: string;
   updated_at: string;
 };
@@ -388,6 +391,7 @@ function rowToService(r: ServiceRow): Service {
     sortOrder: r.sort_order ?? null,
     isFree: r.is_free ?? false,
     feeCredit: r.fee_credit ?? false,
+    isAddon: r.is_addon ?? false,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -406,6 +410,7 @@ const servicePayload = z.object({
   notes: z.string().trim().max(500).nullable(),
   isFree: z.boolean().optional(),
   feeCredit: z.boolean().optional(),
+  isAddon: z.boolean().optional(),
 });
 
 const createServiceInput = z.object({
@@ -493,6 +498,7 @@ export const createServiceFn = createServerFn({ method: "POST" })
         notes: data.service.notes,
         is_free: data.service.isFree ?? false,
         fee_credit: data.service.feeCredit ?? false,
+        is_addon: data.service.isAddon ?? false,
       })
       .select("*")
       .single();
@@ -528,6 +534,7 @@ export const updateServiceFn = createServerFn({ method: "POST" })
         // and other partial updates leave them intact).
         ...(data.service.isFree !== undefined ? { is_free: data.service.isFree } : {}),
         ...(data.service.feeCredit !== undefined ? { fee_credit: data.service.feeCredit } : {}),
+        ...(data.service.isAddon !== undefined ? { is_addon: data.service.isAddon } : {}),
       })
       .eq("id", data.id)
       .eq("tenant_id", tenantId)
@@ -1697,4 +1704,73 @@ export const addServicesFromLibraryFn = createServerFn({ method: "POST" })
       .select("*");
     if (error) throw new Error(`Couldn't add services: ${error.message}`);
     return { created: (rows ?? []).map(rowToService), skipped };
+  });
+
+// ── Service add-on eligibility (which add-ons a base service offers) ──────────
+
+/** Ordered add-on service ids offered with a base service. */
+export const getServiceAddonIdsFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) =>
+    z
+      .object({
+        accessToken: z.string().min(10),
+        viewAsUserId: z.string().uuid().optional(),
+        serviceId: z.string().uuid(),
+      })
+      .parse(raw),
+  )
+  .handler(async ({ data }): Promise<string[]> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const { data: rows } = await sb
+      .from("service_addons")
+      .select("addon_service_id")
+      .eq("tenant_id", tenantId)
+      .eq("service_id", data.serviceId)
+      .order("sort_order");
+    return (rows ?? []).map((r) => r.addon_service_id);
+  });
+
+/** Replace the add-ons offered with a base service (ordered). Tenant-scoped. */
+export const setServiceAddonsFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) =>
+    z
+      .object({
+        accessToken: z.string().min(10),
+        viewAsUserId: z.string().uuid().optional(),
+        serviceId: z.string().uuid(),
+        addonServiceIds: z.array(z.string().uuid()).max(100),
+      })
+      .parse(raw),
+  )
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    // Replace the whole set for this base service (simplest correct semantics).
+    await sb
+      .from("service_addons")
+      .delete()
+      .eq("tenant_id", tenantId)
+      .eq("service_id", data.serviceId);
+    const rows = data.addonServiceIds
+      .filter((id) => id !== data.serviceId)
+      .map((id, i) => ({
+        tenant_id: tenantId,
+        service_id: data.serviceId,
+        addon_service_id: id,
+        sort_order: i,
+      }));
+    if (rows.length > 0) {
+      const { error } = await sb.from("service_addons").insert(rows);
+      if (error) throw new Error(`Couldn't save add-ons: ${error.message}`);
+    }
+    return { ok: true };
   });

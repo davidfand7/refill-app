@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.86.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.86.0 &mdash; Set up service add-ons (owner setup). </strong>On a service in <strong>Catalog &rarr; Services</strong> you can now mark it <strong>&ldquo;Offer as an add-on to other services,&rdquo;</strong> and on any base service&rsquo;s editor pick which add-ons it offers (e.g. <em>Signature Facial &rarr; Dermaplane, LED</em>). Each add-on keeps its own price &amp; duration (and can be Free). This is the setup layer &mdash; patients will be able to choose add-ons at booking in the next release. <strong>Touched</strong>: <code>services.is_addon</code> + <code>service_addons</code>, <code>refill-catalog.ts</code> (<code>getServiceAddonIdsFn</code>/<code>setServiceAddonsFn</code>), <code>app.refill.catalog.services.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.85.0",
     date: "June 2026",
     items: [

@@ -56,6 +56,8 @@ import {
   unlinkServiceProductFn,
   updateServiceFn,
   updateServiceProductQuantityFn,
+  getServiceAddonIdsFn,
+  setServiceAddonsFn,
   type Product,
   type RecategorizeReceipt,
   type Service,
@@ -88,6 +90,7 @@ type ServiceDraft = {
   notes: string;
   isFree: boolean;
   feeCredit: boolean;
+  isAddon: boolean;
 };
 
 const EMPTY_DRAFT: ServiceDraft = {
@@ -98,6 +101,7 @@ const EMPTY_DRAFT: ServiceDraft = {
   notes: "",
   isFree: false,
   feeCredit: false,
+  isAddon: false,
 };
 
 function serviceToDraft(s: Service): ServiceDraft {
@@ -109,6 +113,7 @@ function serviceToDraft(s: Service): ServiceDraft {
     notes: s.notes ?? "",
     isFree: s.isFree,
     feeCredit: s.feeCredit,
+    isAddon: s.isAddon,
   };
 }
 
@@ -130,6 +135,7 @@ function draftToPayload(d: ServiceDraft) {
     notes: d.notes.trim() ? d.notes.trim() : null,
     isFree: d.isFree,
     feeCredit: d.isFree ? false : d.feeCredit,
+    isAddon: d.isAddon,
   };
 }
 
@@ -1166,6 +1172,9 @@ function ServicesPage() {
                         onUpdateQuantity={onUpdateQuantity}
                         onUnlink={onUnlink}
                         onToggleCogsSource={onToggleCogsSource}
+                        serviceId={s.id}
+                        addonCandidates={services.filter((c) => c.isAddon && c.id !== s.id)}
+                        viewAsUserId={viewAsUserId}
                       />
                     ) : (
                       <ServiceRow
@@ -1333,11 +1342,17 @@ function ServiceFormCard({
   onUnlink,
   onToggleCogsSource,
   categoryOptions,
+  serviceId,
+  addonCandidates,
+  viewAsUserId,
 }: {
   mode: "add" | "edit";
   draft: ServiceDraft;
   onChange: (d: ServiceDraft) => void;
   categoryOptions: CategoryOption[];
+  serviceId?: string;
+  addonCandidates?: Service[];
+  viewAsUserId?: string;
   onSubmit: (e: FormEvent) => void;
   onCancel: () => void;
   onDelete?: () => void;
@@ -1429,6 +1444,16 @@ function ServiceFormCard({
                 Fee applied toward treatment
               </label>
             )}
+            <label className="flex items-center gap-2 text-[13px] text-ink cursor-pointer">
+              <input
+                type="checkbox"
+                checked={draft.isAddon}
+                onChange={(e) => onChange({ ...draft, isAddon: e.target.checked })}
+                disabled={busy}
+                className="h-3.5 w-3.5 rounded border-rule accent-emerald"
+              />
+              Offer as an add-on to other services
+            </label>
           </div>
         </FormField>
 
@@ -1476,6 +1501,14 @@ function ServiceFormCard({
           onUpdateQuantity={onUpdateQuantity}
           onUnlink={onUnlink}
           onToggleCogsSource={onToggleCogsSource}
+        />
+      )}
+
+      {mode === "edit" && serviceId && (addonCandidates?.length ?? 0) > 0 && (
+        <AddonEligibilitySection
+          serviceId={serviceId}
+          candidates={addonCandidates ?? []}
+          viewAsUserId={viewAsUserId}
         />
       )}
 
@@ -1536,6 +1569,99 @@ function ServiceFormCard({
         )}
       </div>
     </form>
+  );
+}
+
+function AddonEligibilitySection({
+  serviceId,
+  candidates,
+  viewAsUserId,
+}: {
+  serviceId: string;
+  candidates: Service[];
+  viewAsUserId?: string;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess.session?.access_token;
+        if (!token) return;
+        const ids = await getServiceAddonIdsFn({ data: { accessToken: token, viewAsUserId, serviceId } });
+        if (!cancelled) {
+          setSelected(new Set(ids));
+          setLoaded(true);
+        }
+      } catch {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [serviceId, viewAsUserId]);
+
+  async function toggle(id: string) {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+    setSaving(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Not signed in.");
+      const ordered = candidates.filter((c) => next.has(c.id)).map((c) => c.id);
+      await setServiceAddonsFn({ data: { accessToken: token, viewAsUserId, serviceId, addonServiceIds: ordered } });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't save add-ons.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section className="rounded-lg border border-rule bg-bg-soft p-4 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <h4 className="text-[12px] uppercase tracking-wider font-semibold text-ink-faint">
+          Add-ons offered with this service
+        </h4>
+        {saving && <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-faint" />}
+      </div>
+      <p className="text-[12px] text-ink-soft">
+        Patients can tack these on when booking this service — each adds its own time and price.
+      </p>
+      {!loaded ? (
+        <div className="text-[12px] text-ink-soft flex items-center gap-2">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-1.5">
+          {candidates.map((c) => (
+            <label
+              key={c.id}
+              className="flex items-center gap-2 text-[13px] text-ink cursor-pointer rounded-md px-1.5 py-1 hover:bg-white"
+            >
+              <input
+                type="checkbox"
+                checked={selected.has(c.id)}
+                onChange={() => void toggle(c.id)}
+                className="h-3.5 w-3.5 rounded border-rule accent-emerald shrink-0"
+              />
+              <span className="truncate">{c.name}</span>
+              <span className="ml-auto text-[12px] text-ink-faint shrink-0">
+                {c.isFree ? "Free" : `$${c.servicePrice}`}
+              </span>
+            </label>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
