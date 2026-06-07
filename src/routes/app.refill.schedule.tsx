@@ -163,7 +163,7 @@ function SchedulePage() {
   if (membership.status !== "tenant") {
     return (
       <div className="min-h-screen bg-background">
-        <PageHeader title="Schedule" description="Your day at a glance." />
+        <PageHeader wide title="Schedule" description="Your day at a glance." />
         <div className="px-6 lg:px-10 py-10 text-[14px] text-ink-soft">
           Use the persona switcher (upper-right) to view as a spa.
         </div>
@@ -173,9 +173,9 @@ function SchedulePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PageHeader title="Schedule" description="Bookings, holds, and blocked time — day, week, or month." />
+      <PageHeader wide title="Schedule" description="Bookings, holds, and blocked time — day, week, or month." />
 
-      <div className="px-6 lg:px-10 py-4 max-w-[960px] w-full mx-auto">
+      <div className="px-6 lg:px-10 py-4 max-w-[1280px] w-full mx-auto">
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-1.5">

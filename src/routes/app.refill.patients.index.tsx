@@ -637,7 +637,7 @@ function PatientsPage() {
   if (rows === null && !error) {
     return (
       <div>
-        <PageHeader
+        <PageHeader wide
           title="Patients"
           description="Everyone who's walked through your doors."
         />
@@ -652,7 +652,7 @@ function PatientsPage() {
   if (error) {
     return (
       <div>
-        <PageHeader
+        <PageHeader wide
           title="Patients"
           description="Everyone who's walked through your doors."
         />
@@ -670,7 +670,7 @@ function PatientsPage() {
   if (rows && rows.length === 0) {
     return (
       <div>
-        <PageHeader
+        <PageHeader wide
           title="Patients"
           description="Everyone who's walked through your doors."
         />
@@ -701,7 +701,7 @@ function PatientsPage() {
 
   return (
     <div>
-      <PageHeader
+      <PageHeader wide
         title="Patients"
         description={
           rows ? `${rows.length.toLocaleString()} in your patient book.` : undefined
@@ -733,7 +733,7 @@ function PatientsPage() {
         }
       />
 
-      <div className="px-6 lg:px-10 py-6 space-y-5 max-w-[960px] mx-auto">
+      <div className="px-6 lg:px-10 py-6 space-y-5 max-w-[1280px] mx-auto">
         {/* Search + window toggle */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[240px]">

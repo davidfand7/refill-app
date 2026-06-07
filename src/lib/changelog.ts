@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.78.2",
+    date: "June 2026",
+    items: [
+      "<strong>v1.78.2 &mdash; Two-tier desktop widths. </strong>Card and form pages keep the comfortable centered <code>960px</code> column, while the genuinely data-dense screens &mdash; <strong>Schedule</strong>, <strong>Patients</strong> (list + contacts), <strong>Appointments</strong>, <strong>Reports</strong>, and <strong>Waitlist bulk</strong> &mdash; widen to <code>1280px</code> so calendars and tables breathe. Page headers on those screens match the wider column. <strong>Touched</strong>: <code>src/components/PageHeader.tsx</code> (new <code>wide</code> prop), 6 data-page containers + their headers, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.78.1",
     date: "June 2026",
     items: [

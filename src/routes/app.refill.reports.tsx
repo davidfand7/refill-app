@@ -74,7 +74,7 @@ function ReportsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PageHeader
+      <PageHeader wide
         eyebrow="Emma(OS)"
         title="Reports"
         description="How your campaigns are converting — from message sent to revenue attributed."
@@ -84,7 +84,7 @@ function ReportsPage() {
         ]}
       />
 
-      <div className="px-6 lg:px-10 py-8 max-w-[960px] w-full mx-auto space-y-8">
+      <div className="px-6 lg:px-10 py-8 max-w-[1280px] w-full mx-auto space-y-8">
         {loadError && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
             {loadError}

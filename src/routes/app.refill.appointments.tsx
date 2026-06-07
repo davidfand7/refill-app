@@ -179,7 +179,7 @@ function AppointmentsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <PageHeader
+      <PageHeader wide
         eyebrow="Emma(OS)"
         title="Appointments"
         description="Drop your PMS export (Acuity, Boulevard, Mangomint, Vagaro, AestheticsPro, Aesthetic Record — auto-detected). Emma keeps the schedule and runs the pre-show reminder cadence."
@@ -199,7 +199,7 @@ function AppointmentsPage() {
         }
       />
 
-      <div className="px-6 lg:px-10 py-8 max-w-[960px] w-full mx-auto space-y-6">
+      <div className="px-6 lg:px-10 py-8 max-w-[1280px] w-full mx-auto space-y-6">
         {loadError && (
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
             {loadError}

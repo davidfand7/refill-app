@@ -205,7 +205,7 @@ function ContactsPage() {
 
   return (
     <div>
-      <PageHeader
+      <PageHeader wide
         eyebrow="Emma(OS) · Patients"
         title="Contacts"
         description="Connect phone and email to every patient so Emma can reach them."
@@ -246,7 +246,7 @@ function ContactsPage() {
         }
       />
 
-      <div className="px-6 lg:px-10 py-8 max-w-[960px] mx-auto space-y-6">
+      <div className="px-6 lg:px-10 py-8 max-w-[1280px] mx-auto space-y-6">
         {/* Coverage card */}
         {overview && <CoverageCard overview={overview} />}
 
