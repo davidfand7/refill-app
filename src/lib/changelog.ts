@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.74.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.74.1 &mdash; Patient time picker: Acuity-style day columns on desktop. </strong>The &ldquo;pick a time&rdquo; step now lays the available days out as <strong>side-by-side columns</strong> on desktop (each day a column of open times, only days with openings shown) while staying a clean vertical stack on mobile. Same live availability under the hood &mdash; real openings from the chosen provider&rsquo;s hours. <strong>Touched</strong>: <code>src/routes/s.$slug.tsx</code> (responsive day-column layout), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.74.0",
     date: "June 2026",
     items: [

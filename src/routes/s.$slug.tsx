@@ -463,17 +463,21 @@ function PublicBookingPage() {
                 No open times in the next {RANGE_DAYS} days. Please check back soon.
               </p>
             ) : (
-              <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1">
+              <div
+                className="flex flex-col sm:flex-row gap-y-5 sm:gap-x-4 max-h-[60vh] overflow-y-auto sm:overflow-y-hidden sm:overflow-x-auto pr-1 sm:pb-2"
+              >
                 {dayGroups.map((g) => (
-                  <div key={g.key}>
-                    <div className="text-[13px] font-semibold text-stone-700 mb-2">{g.heading}</div>
-                    <div className="grid grid-cols-3 gap-2">
+                  <div key={g.key} className="sm:shrink-0 sm:w-36 sm:max-h-[56vh] sm:overflow-y-auto">
+                    <div className="text-[13px] font-semibold text-stone-700 mb-2 sm:text-center sm:sticky sm:top-0 sm:bg-white sm:pb-1">
+                      {g.heading}
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-1 gap-2">
                       {g.slots.map((s) => (
                         <button
                           key={`${s.startIso}-${s.providerId}`}
                           type="button"
                           onClick={() => onPickSlot(s)}
-                          className="rounded-lg border border-stone-200 bg-stone-50 px-2 py-2 text-[14px] text-stone-800 hover:border-stone-900 hover:bg-white transition-colors tabular-nums"
+                          className="rounded-lg border border-stone-200 bg-stone-50 px-2 py-2 text-[14px] text-stone-800 hover:border-stone-900 hover:bg-white transition-colors tabular-nums sm:text-center"
                         >
                           {fmtTime(s.startIso, tz)}
                         </button>
