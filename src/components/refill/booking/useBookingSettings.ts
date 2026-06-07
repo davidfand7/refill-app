@@ -195,6 +195,24 @@ export function useBookingSettings({
   function toggleAllCats() {
     setCollapsedSvcCats(allCatsCollapsed ? new Set() : new Set(visibleCats));
   }
+  // Bulk Bookable by category: the rows shown under each header, so a spa can
+  // flip a whole treatment family (e.g. all "RF Microneedling" areas) on/off at
+  // once. State reflects exactly what's visible; persists with the batched Save.
+  const visibleByCat = new Map<string, BookableServiceDraft[]>();
+  for (const s of sortedVisible) {
+    const arr = visibleByCat.get(svcCat(s)) ?? [];
+    arr.push(s);
+    visibleByCat.set(svcCat(s), arr);
+  }
+  function setCategoryBookable(cat: string, next: boolean) {
+    const ids = new Set((visibleByCat.get(cat) ?? []).map((s) => s.id));
+    if (ids.size === 0) return;
+    setDraft((d) =>
+      d
+        ? { ...d, services: d.services.map((s) => (ids.has(s.id) ? { ...s, onlineBookable: next } : s)) }
+        : d,
+    );
+  }
 
   // Keep the selected provider valid (e.g. after deactivating the selected one).
   useEffect(() => {
@@ -732,7 +750,7 @@ export function useBookingSettings({
     draggedSvcRef, startAutoScroll, stopAutoScroll,
     dirty, activeProviders, activeResourceTypes, selHours, selProviderName,
     svcQuery, inactiveCount, visibleServices, svcCat, sortedVisible, svcCatCounts, categoryOptions,
-    allCatsCollapsed, toggleAllCats,
+    allCatsCollapsed, toggleAllCats, visibleByCat, setCategoryBookable,
     setDurationFormat, patchSettings, applyToBoth, mapSelectedHours, patchDay, toggleSelDay,
     applyHoursToSelected, setSelectedClosed, withToken,
     syncProviderAdd, syncProviderUpdate, onAddProvider, commitRename, onToggleProviderActive,

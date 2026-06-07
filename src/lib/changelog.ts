@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.71.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.71.0 &mdash; Make a whole category bookable at once. </strong>On <strong>Booking &rarr; Bookable services</strong>, every category header now has an <strong>All bookable</strong> checkbox that flips every service in that family on or off in one click &mdash; handy when a spa offers, say, all of its <em>RF Microneedling</em> areas (Face, Neck, Chest&hellip;) or none of them. The box shows a dash when a category is partly on. Individual service toggles still work as before; click <strong>Save changes</strong> to keep it. <em>Tip: to switch a category back on after turning it all off, use <strong>Show inactive</strong> to bring those services back into view.</em> <strong>Touched</strong>: <code>src/components/refill/booking/useBookingSettings.ts</code> (<code>setCategoryBookable</code> + per-category visible map), <code>src/components/refill/booking/BookableServicesSection.tsx</code> (category-header checkbox), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.70.0",
     date: "June 2026",
     items: [

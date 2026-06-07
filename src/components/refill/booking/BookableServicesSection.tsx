@@ -28,6 +28,7 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
     draggedSvcRef, startAutoScroll, stopAutoScroll,
     activeProviders, activeResourceTypes, svcQuery, inactiveCount, visibleServices,
     svcCat, sortedVisible, svcCatCounts, categoryOptions, allCatsCollapsed, toggleAllCats,
+    visibleByCat, setCategoryBookable,
     performsService, togglePerforms, toggleCategoryPerforms,
     overrideFor, psFieldValue, offersService, commitOverride, toggleOffered,
     patchService, commitCategoryRename, onAddService, onDeleteService,
@@ -286,6 +287,9 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
                     const cat = svcCat(s);
                     const showHeader = idx === 0 || svcCat(sortedVisible[idx - 1]) !== cat;
                     const collapsed = collapsedSvcCats.has(cat);
+                    const catRows = visibleByCat.get(cat) ?? [];
+                    const catOnCount = catRows.filter((r) => r.onlineBookable).length;
+                    const catAllOn = catRows.length > 0 && catOnCount === catRows.length;
                     return (
                       <Fragment key={s.id}>
                         {showHeader && (
@@ -371,6 +375,21 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
                               </span>
                             )}
                             <span className="flex-1 border-t border-rule/40 ml-1" />
+                            <label
+                              className="flex items-center gap-1.5 text-[11px] font-medium text-ink-soft cursor-pointer shrink-0 pr-0.5"
+                              title={
+                                catAllOn
+                                  ? `Make all ${catRows.length} ${categoryLabel(cat)} services not bookable`
+                                  : `Make all ${catRows.length} ${categoryLabel(cat)} services bookable`
+                              }
+                            >
+                              <span className="hidden sm:inline">All bookable</span>
+                              <TriCheckbox
+                                checked={catAllOn}
+                                indeterminate={catOnCount > 0 && !catAllOn}
+                                onChange={() => setCategoryBookable(cat, !catAllOn)}
+                              />
+                            </label>
                           </div>
                         )}
                         {!collapsed && (
