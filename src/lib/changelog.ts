@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.70.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.70.0 &mdash; Category management comes to the Catalog. </strong>The <strong>Catalog &rarr; Services</strong> page now matches Booking: a <strong>+ Add category</strong> button creates a category on its own (it appears as a highlighted drop zone), every service row has a <strong>drag handle</strong> so you can <strong>drag it into any category</strong> (saved instantly &mdash; no extra step), each category header <strong>collapses</strong> with a chevron, and a <strong>Collapse all / Expand all</strong> control folds the whole list at once. Great for re-organizing a big catalog. <strong>Touched</strong>: <code>src/routes/app.refill.catalog.services.tsx</code> (add-category, drag-to-recategorize, collapse), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.69.1",
     date: "June 2026",
     items: [

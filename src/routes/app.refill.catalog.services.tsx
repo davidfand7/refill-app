@@ -16,12 +16,16 @@
  */
 
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
+  ChevronDown,
+  ChevronsDownUp,
+  ChevronsUpDown,
   ClipboardList,
   Eye,
   EyeOff,
+  GripVertical,
   Link2,
   Loader2,
   Pencil,
@@ -64,6 +68,7 @@ import {
   categoryLabel,
   categoryRank,
   DEFAULT_SERVICE_CATEGORY,
+  normalizeCategory,
   type CategoryOption,
 } from "@/lib/service-categories";
 
@@ -152,6 +157,14 @@ function ServicesPage() {
   >(null);
   // v1.34.9.1: show hidden services
   const [showHidden, setShowHidden] = useState(false);
+  // Category management (mirrors Booking): create a category on its own, then
+  // drag existing services into it. Categories are free text on each service
+  // row, so a brand-new one is "pending" (empty) until a service uses it.
+  const [addingCat, setAddingCat] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [pendingCats, setPendingCats] = useState<string[]>([]);
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
+  const draggedServiceRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (membership.status !== "tenant") return;
@@ -229,11 +242,18 @@ function ServicesPage() {
     return counts;
   }, [services]);
 
-  // Built-ins + every custom category the tenant already uses (the shared
-  // source that keeps Catalog and Booking mirrored).
+  // Built-ins + every custom category the tenant already uses + any just-created
+  // (still empty) ones — the shared source that keeps Catalog and Booking mirrored.
   const categoryOptions: CategoryOption[] = useMemo(
-    () => buildCategoryList(services.map((s) => s.category)),
-    [services],
+    () => buildCategoryList([...services.map((s) => s.category), ...pendingCats]),
+    [services, pendingCats],
+  );
+  // Categories created but not yet used by any service — rendered as empty,
+  // droppable headers so existing services can be sorted into them.
+  const usedCats = useMemo(() => new Set(services.map((s) => s.category)), [services]);
+  const emptyPendingCats = useMemo(
+    () => pendingCats.filter((c) => !usedCats.has(c)),
+    [pendingCats, usedCats],
   );
 
   const filteredServices = useMemo(() => {
@@ -250,6 +270,22 @@ function ServicesPage() {
     }
     return groups;
   }, [filteredServices]);
+
+  // Expand/collapse ALL category groups at once.
+  const visibleCats = useMemo(() => [...byCategory.keys()], [byCategory]);
+  const allCatsCollapsed =
+    visibleCats.length > 0 && visibleCats.every((c) => collapsedCats.has(c));
+  function toggleAllCats() {
+    setCollapsedCats(allCatsCollapsed ? new Set() : new Set(visibleCats));
+  }
+  function toggleCatCollapsed(cat: ServiceCategory) {
+    setCollapsedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  }
 
   async function withToken<T>(fn: (token: string) => Promise<T>): Promise<T> {
     const { data: sess } = await supabase.auth.getSession();
@@ -277,6 +313,60 @@ function ServicesPage() {
       toast.error(err instanceof Error ? err.message : "Couldn't add service.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  // Register a new (empty) category to drag services into. No row of its own —
+  // it lives once a service uses it — so it's a pending empty group until then.
+  function onAddCategory() {
+    const norm = normalizeCategory(newCatName);
+    setNewCatName("");
+    setAddingCat(false);
+    if (!norm) return;
+    const exists = services.some((s) => s.category === norm) || pendingCats.includes(norm);
+    if (exists) {
+      setCollapsedCats((prev) => {
+        if (!prev.has(norm)) return prev;
+        const next = new Set(prev);
+        next.delete(norm);
+        return next;
+      });
+      toast.info(`“${categoryLabel(norm)}” already exists.`);
+      return;
+    }
+    setPendingCats((prev) => [...prev, norm]);
+    toast.success(`Category “${categoryLabel(norm)}” added — drag services into it.`);
+  }
+
+  // Move a service to another category (drag-drop). Catalog persists per-service
+  // immediately (no batched Save), so this writes through optimistically.
+  async function onRecategorizeService(serviceId: string, category: ServiceCategory) {
+    const svc = services.find((s) => s.id === serviceId);
+    if (!svc || svc.category === category) return;
+    const prevSvc = svc;
+    setServices((prev) => prev.map((s) => (s.id === serviceId ? { ...s, category } : s)));
+    try {
+      const updated = await withToken((token) =>
+        updateServiceFn({
+          data: {
+            accessToken: token,
+            viewAsUserId,
+            id: serviceId,
+            service: {
+              name: svc.name,
+              category,
+              servicePrice: svc.servicePrice,
+              cogsPerService: svc.cogsPerService,
+              notes: svc.notes,
+            },
+          },
+        }),
+      );
+      setServices((prev) => prev.map((s) => (s.id === serviceId ? updated : s)));
+      toast.success(`Moved ${svc.name} to “${categoryLabel(category)}.”`);
+    } catch (err) {
+      setServices((prev) => prev.map((s) => (s.id === serviceId ? prevSvc : s)));
+      toast.error(err instanceof Error ? err.message : "Couldn't move service.");
     }
   }
 
@@ -543,6 +633,17 @@ function ServicesPage() {
               <button
                 type="button"
                 onClick={() => {
+                  setAddingCat(true);
+                  setNewCatName("");
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-ink hover:border-emerald/40 transition"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add category
+              </button>
+              <button
+                type="button"
+                onClick={() => {
                   setAdding(true);
                   setAddDraft(EMPTY_DRAFT);
                 }}
@@ -612,7 +713,25 @@ function ServicesPage() {
                 Clear
               </button>
             )}
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              {visibleCats.length > 1 && (
+                <button
+                  type="button"
+                  onClick={toggleAllCats}
+                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium border border-rule bg-white text-ink-soft hover:border-emerald/40 hover:text-ink transition"
+                  title={allCatsCollapsed ? "Expand every category" : "Collapse every category"}
+                >
+                  {allCatsCollapsed ? (
+                    <>
+                      <ChevronsUpDown className="h-3 w-3" /> Expand all
+                    </>
+                  ) : (
+                    <>
+                      <ChevronsDownUp className="h-3 w-3" /> Collapse all
+                    </>
+                  )}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setShowHidden((v) => !v)}
@@ -708,6 +827,75 @@ function ServicesPage() {
           />
         )}
 
+        {addingCat && (
+          <div className="flex flex-wrap items-end gap-2 rounded-xl border-2 border-emerald/30 bg-white px-5 py-4 shadow-sm">
+            <div className="flex-1 min-w-[200px] max-w-sm">
+              <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1.5 block">
+                New category name
+              </label>
+              <input
+                type="text"
+                autoFocus
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") onAddCategory();
+                  if (e.key === "Escape") setAddingCat(false);
+                }}
+                placeholder="e.g. Body Contouring"
+                className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={onAddCategory}
+              disabled={!newCatName.trim()}
+              className="inline-flex items-center gap-1.5 rounded-md bg-emerald px-4 py-2 text-[14px] font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
+            >
+              <Plus className="h-4 w-4" /> Add category
+            </button>
+            <button
+              type="button"
+              onClick={() => setAddingCat(false)}
+              className="inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-ink transition"
+            >
+              <X className="h-3.5 w-3.5" /> Cancel
+            </button>
+          </div>
+        )}
+
+        {emptyPendingCats.length > 0 && (
+          <div className="space-y-2">
+            {emptyPendingCats.map((cat) => (
+              <div
+                key={cat}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => {
+                  const id = draggedServiceRef.current;
+                  draggedServiceRef.current = null;
+                  if (id) void onRecategorizeService(id, cat);
+                }}
+                title="Drop a service here to put it in this category"
+                className="flex items-center gap-2 rounded-xl border-2 border-dashed border-emerald/50 bg-emerald-soft/40 px-4 py-3"
+              >
+                <Sparkles className="h-3.5 w-3.5 text-emerald shrink-0" />
+                <span className="text-[13px] font-semibold text-ink">{categoryLabel(cat)}</span>
+                <span className="text-[12px] text-ink-faint tabular-nums">· 0</span>
+                <span className="text-[12px] text-ink-faint italic">— drag services here</span>
+                <button
+                  type="button"
+                  onClick={() => setPendingCats((p) => p.filter((c) => c !== cat))}
+                  className="ml-auto shrink-0 text-ink-faint hover:text-ink transition p-1"
+                  aria-label="Discard this empty category"
+                  title="Discard this empty category"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         {loading ? (
           <div className="rounded-xl border border-rule bg-white px-5 py-8 text-center">
             <Loader2 className="mx-auto h-5 w-5 animate-spin text-ink-soft" />
@@ -742,13 +930,31 @@ function ServicesPage() {
               .sort(
                 ([a], [b]) => categoryRank(a) - categoryRank(b) || a.localeCompare(b),
               )
-              .map(([cat, rows]) => (
+              .map(([cat, rows]) => {
+                const collapsed = collapsedCats.has(cat);
+                return (
               <section key={cat} className="space-y-3">
-                <h2 className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint flex items-center gap-2">
-                  <Sparkles className="h-3.5 w-3.5 text-emerald" />
-                  {categoryLabel(cat)}
-                  <span className="text-ink-soft">· {rows.length}</span>
-                </h2>
+                <div
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => {
+                    const id = draggedServiceRef.current;
+                    draggedServiceRef.current = null;
+                    if (id) void onRecategorizeService(id, cat);
+                  }}
+                  title="Drop a service here to move it to this category"
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleCatCollapsed(cat)}
+                    className="inline-flex items-center gap-2 text-[11px] uppercase tracking-wider font-semibold text-ink-faint hover:text-ink transition"
+                  >
+                    <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", collapsed && "-rotate-90")} />
+                    <Sparkles className="h-3.5 w-3.5 text-emerald" />
+                    {categoryLabel(cat)}
+                    <span className="text-ink-soft">· {rows.length}</span>
+                  </button>
+                </div>
+                {!collapsed && (
                 <ul className="space-y-2.5">
                   {rows.map((s) =>
                     editingId === s.id ? (
@@ -776,12 +982,20 @@ function ServicesPage() {
                         service={s}
                         onEdit={() => startEdit(s)}
                         onToggleHidden={() => void onToggleHidden(s)}
+                        onDragStartRow={() => {
+                          draggedServiceRef.current = s.id;
+                        }}
+                        onDragEndRow={() => {
+                          draggedServiceRef.current = null;
+                        }}
                       />
                     ),
                   )}
                 </ul>
+                )}
               </section>
-            ))}
+                );
+              })}
           </>
         )}
       </div>
@@ -793,10 +1007,14 @@ function ServiceRow({
   service,
   onEdit,
   onToggleHidden,
+  onDragStartRow,
+  onDragEndRow,
 }: {
   service: Service;
   onEdit: () => void;
   onToggleHidden: () => void;
+  onDragStartRow?: () => void;
+  onDragEndRow?: () => void;
 }) {
   const hasCogs = service.cogsPerService !== null;
   const isHidden = service.hiddenAt !== null;
@@ -804,12 +1022,21 @@ function ServiceRow({
     <li>
       <div
         className={cn(
-          "w-full rounded-xl border bg-white px-5 py-4 transition group flex items-start gap-4",
+          "w-full rounded-xl border bg-white px-5 py-4 transition group flex items-start gap-3",
           isHidden
             ? "border-rule/60 opacity-60 hover:opacity-100"
             : "border-rule hover:border-emerald/40 hover:shadow-sm",
         )}
       >
+        <span
+          draggable
+          onDragStart={onDragStartRow}
+          onDragEnd={onDragEndRow}
+          className="mt-1 shrink-0 cursor-grab active:cursor-grabbing text-ink-faint/40 hover:text-ink-faint"
+          title="Drag to another category"
+        >
+          <GripVertical className="h-4 w-4" />
+        </span>
         <button
           type="button"
           onClick={onEdit}
