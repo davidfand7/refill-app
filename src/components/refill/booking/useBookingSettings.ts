@@ -88,6 +88,13 @@ export function useBookingSettings({
   const [newSvcCategory, setNewSvcCategory] = useState<ServiceCategory>("other");
   const [newSvcPrice, setNewSvcPrice] = useState("");
   const [svcBusy, setSvcBusy] = useState(false);
+  // Add-category form. Categories are free text on each service row, so a brand-
+  // new one has nowhere to live until a service uses it. These "pending" empties
+  // surface as droppable group headers so existing services can be dragged in;
+  // the category persists (on Save) the moment a service lands in it.
+  const [addingCat, setAddingCat] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [pendingCats, setPendingCats] = useState<string[]>([]);
   // Which bookable service is expanded to its per-provider override panel.
   const [expandedSvc, setExpandedSvc] = useState<string | null>(null);
   // Transient override input buffers, keyed `${providerId}|${serviceId}|${field}`.
@@ -163,11 +170,16 @@ export function useBookingSettings({
   // Group the list by category (known categories first, then any extras), each
   // sorted by name — and a per-category count for the headers.
   const svcCat = (s: BookableServiceDraft) => s.category?.trim() || "other";
-  // Built-ins + every custom category in use — the shared source that keeps
-  // Booking mirrored with the Catalog.
-  const categoryOptions: CategoryOption[] = buildCategoryList(
-    (draft?.services ?? []).map((s) => s.category),
-  );
+  // Built-ins + every custom category in use + any just-created (still empty)
+  // ones — the shared source that keeps Booking mirrored with the Catalog.
+  const categoryOptions: CategoryOption[] = buildCategoryList([
+    ...(draft?.services ?? []).map((s) => s.category),
+    ...pendingCats,
+  ]);
+  // Just-created categories that no service uses yet — rendered as empty,
+  // droppable group headers so existing services can be sorted into them.
+  const usedCats = new Set((draft?.services ?? []).map((s) => svcCat(s)));
+  const emptyPendingCats = pendingCats.filter((c) => !usedCats.has(c));
   const sortedVisible = [...visibleServices].sort(
     (a, b) =>
       categoryRank(svcCat(a)) - categoryRank(svcCat(b)) ||
@@ -577,6 +589,29 @@ export function useBookingSettings({
       toast.error(err instanceof Error ? err.message : "Couldn't rename category.");
     }
   }
+  // Create a new (empty) category. It has no row of its own — it lives once a
+  // service uses it — so we just register it as a pending empty group the user
+  // can drag existing services into. No-ops on a name that already exists.
+  function onAddCategory() {
+    const norm = normalizeCategory(newCatName);
+    setNewCatName("");
+    setAddingCat(false);
+    if (!norm) return;
+    const exists = (draft?.services ?? []).some((s) => svcCat(s) === norm) || pendingCats.includes(norm);
+    if (exists) {
+      // Already a category — just make sure it's expanded/visible.
+      setCollapsedSvcCats((p) => {
+        if (!p.has(norm)) return p;
+        const n = new Set(p);
+        n.delete(norm);
+        return n;
+      });
+      toast.info(`“${categoryLabel(norm)}” already exists.`);
+      return;
+    }
+    setPendingCats((p) => [...p, norm]);
+    toast.success(`Category “${categoryLabel(norm)}” added — drag services into it.`);
+  }
   // Create / delete services (immediate persist — separate from the batched Save).
   async function onAddService() {
     const name = newSvcName.trim();
@@ -681,6 +716,8 @@ export function useBookingSettings({
     collapsedSvcCats, setCollapsedSvcCats, renamingCat, setRenamingCat, renameText, setRenameText,
     addingSvc, setAddingSvc, newSvcName, setNewSvcName, newSvcCategory, setNewSvcCategory,
     newSvcPrice, setNewSvcPrice, svcBusy, setSvcBusy, expandedSvc, setExpandedSvc,
+    addingCat, setAddingCat, newCatName, setNewCatName,
+    pendingCats, setPendingCats, emptyPendingCats, onAddCategory,
     psDrafts, setPsDrafts, durFmt, setDurFmt,
     addingResource, setAddingResource, newResourceName, setNewResourceName,
     newResourceType, setNewResourceType, resourceBusy, setResourceBusy,

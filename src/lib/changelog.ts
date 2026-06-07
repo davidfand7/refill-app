@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.69.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.69.0 &mdash; Create categories on their own, then drag services in. </strong>You no longer have to invent a service just to make a category. On <strong>Booking &rarr; Bookable services</strong> there&rsquo;s now a <strong>+ Add category</strong> button next to <strong>+ Add service</strong>: name it (e.g. <em>Body Contouring</em>) and it appears as an empty, highlighted <strong>drop zone</strong> at the top of the list. <strong>Drag any existing service onto it</strong> to file it there, then <strong>Save changes</strong> to keep it &mdash; perfect for re-organizing services you already have. The new category also shows up in every service&rsquo;s category picker, so you can assign it from the dropdown too. (Empty categories are a working draft until a service lands in one &mdash; an unused one simply goes away.) <strong>Touched</strong>: <code>src/components/refill/booking/useBookingSettings.ts</code> (pending-category state + <code>onAddCategory</code>), <code>src/components/refill/booking/BookableServicesSection.tsx</code> (Add-category button, form, and droppable empty headers), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.68.3",
     date: "June 2026",
     items: [

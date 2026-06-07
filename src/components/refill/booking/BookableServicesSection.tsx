@@ -23,6 +23,7 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
     collapsedSvcCats, setCollapsedSvcCats, renamingCat, setRenamingCat, renameText, setRenameText,
     addingSvc, setAddingSvc, newSvcName, setNewSvcName, newSvcCategory, setNewSvcCategory,
     newSvcPrice, setNewSvcPrice, svcBusy, expandedSvc, setExpandedSvc,
+    addingCat, setAddingCat, newCatName, setNewCatName, emptyPendingCats, setPendingCats, onAddCategory,
     psDrafts, setPsDrafts, durFmt, setDurationFormat,
     draggedSvcRef, startAutoScroll, stopAutoScroll,
     activeProviders, activeResourceTypes, svcQuery, inactiveCount, visibleServices,
@@ -129,14 +130,89 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
                     Cancel
                   </button>
                 </div>
+              ) : addingCat ? (
+                <div className="flex flex-wrap items-end gap-2 mb-3 pb-3 border-b border-rule/60">
+                  <div className="flex-1 min-w-[160px] max-w-xs">
+                    <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                      New category name
+                    </label>
+                    <input
+                      type="text"
+                      autoFocus
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") onAddCategory();
+                        if (e.key === "Escape") setAddingCat(false);
+                      }}
+                      placeholder="e.g. Body Contouring"
+                      className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[14px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onAddCategory()}
+                    disabled={!newCatName.trim()}
+                    className="inline-flex items-center gap-1 rounded-md bg-emerald px-3 py-2 text-[13px] font-medium text-paper hover:opacity-95 transition disabled:opacity-50"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAddingCat(false)}
+                    className="rounded-md border border-rule px-3 py-2 text-[13px] text-ink-soft hover:text-ink transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => setAddingSvc(true)}
-                  className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-1.5 text-[13px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Add service
-                </button>
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <button
+                    type="button"
+                    onClick={() => setAddingSvc(true)}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-1.5 text-[13px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add service
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAddingCat(true)}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-1.5 text-[13px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add category
+                  </button>
+                </div>
+              )}
+              {emptyPendingCats.length > 0 && (
+                <div className="space-y-1.5 mb-3">
+                  {emptyPendingCats.map((cat) => (
+                    <div
+                      key={cat}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => {
+                        const id = draggedSvcRef.current;
+                        draggedSvcRef.current = null;
+                        if (id) patchService(id, { category: cat });
+                      }}
+                      title="Drop a service here to put it in this category"
+                      className="flex items-center gap-2 rounded-md border border-dashed border-emerald/50 bg-emerald/5 px-2.5 py-2"
+                    >
+                      <span className="text-[12px] font-semibold text-ink">{categoryLabel(cat)}</span>
+                      <span className="text-[11px] text-ink-faint tabular-nums">0</span>
+                      <span className="text-[11px] text-ink-faint italic">— drag services here, then Save</span>
+                      <span className="flex-1" />
+                      <button
+                        type="button"
+                        onClick={() => setPendingCats((p) => p.filter((c) => c !== cat))}
+                        className="shrink-0 text-ink-faint hover:text-ink transition"
+                        aria-label="Discard this empty category"
+                        title="Discard this empty category"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               )}
               {draft.services.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 mb-3">
