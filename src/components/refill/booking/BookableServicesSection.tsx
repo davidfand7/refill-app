@@ -7,7 +7,7 @@
 import { Fragment } from "react";
 import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
-import { Check, CheckCircle2, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, DoorOpen, ExternalLink, Globe, GripVertical, Link2, Loader2, Pencil, Plus, Search, Sparkles, Trash2, Users, X } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, DoorOpen, ExternalLink, Globe, GripVertical, Link2, Loader2, Pencil, Plus, Search, Sparkles, Trash2, Users, X } from "lucide-react";
 import { CategoryCombobox } from "@/components/refill/CategoryCombobox";
 import { BufferSelect, DurationField, Toggle, TriCheckbox } from "@/components/refill/booking/fields";
 import { categoryLabel, categoryRank } from "@/lib/service-categories";
@@ -420,6 +420,16 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
                               </button>
                             )}
                             <span className="text-[13px] text-ink truncate">{s.name}</span>
+                            {s.onlineBookable &&
+                              activeProviders.length > 0 &&
+                              !activeProviders.some((p) => offersService(p.id, s.id)) && (
+                                <span
+                                  className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+                                  title="No provider performs this service, so it won't appear on your booking page. Expand this row (or a provider in Providers) to assign someone."
+                                >
+                                  <AlertTriangle className="h-2.5 w-2.5" /> No provider
+                                </span>
+                              )}
                           </div>
                           <DurationField
                             minutes={s.durationMin}

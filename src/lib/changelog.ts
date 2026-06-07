@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.79.2",
+    date: "June 2026",
+    items: [
+      "<strong>v1.79.2 &mdash; Warning when a bookable service has no provider. </strong>A service can be marked <strong>Bookable</strong> but still have <em>no provider assigned to perform it</em> &mdash; in which case it silently won&rsquo;t appear on your patient booking page (you can&rsquo;t book what no one does). Now <strong>Booking settings &rarr; Bookable services</strong> shows an amber <strong>No provider</strong> flag on any such service, so you can spot it and assign someone (expand the row, or check it for a provider under Providers). <strong>Touched</strong>: <code>src/components/refill/booking/BookableServicesSection.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.79.1",
     date: "June 2026",
     items: [
