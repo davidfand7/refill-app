@@ -966,8 +966,10 @@ export const assignProviderServicesBulkFn = createServerFn({ method: "POST" })
 
 // ── createBookableServiceFn / deleteBookableServiceFn ────────────────────────
 // Lightweight create/delete over the services catalog, returning the booking
-// draft shape. New services start NOT bookable (default off) with the catalog
-// defaults (30 min, no buffer). Edits to name/category/price flow through the
+// draft shape. Added from the "Bookable services" card, so the new service is
+// bookable on creation (online_bookable=true) — otherwise the list, which hides
+// non-bookable services by default, would swallow it on add. Catalog defaults
+// otherwise apply (30 min, no buffer). Edits to name/category/price flow through the
 // batched Save (saveSchedulingSetupFn). Delete cascades the provider×service
 // rows via FK; appointments don't reference service_id, so they're unaffected.
 
@@ -995,6 +997,7 @@ export const createBookableServiceFn = createServerFn({ method: "POST" })
         name: data.name,
         category: data.category,
         service_price: data.price,
+        online_bookable: true,
         cogs_source: "manual",
       })
       .select(

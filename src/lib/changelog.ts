@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.68.2",
+    date: "June 2026",
+    items: [
+      "<strong>v1.68.2 &mdash; Category picker fixed + new services now stick. </strong>Two fixes to last week&rsquo;s custom-categories release: (1) The <strong>category picker</strong> now shows <strong>all</strong> your categories &mdash; the built-ins plus any you&rsquo;ve made &mdash; the moment you click it, with a <strong>Create &ldquo;&hellip;&rdquo;</strong> row when you type something new. It was previously collapsing to just one option (a quirk of the old browser-native dropdown). Works the same in <strong>Catalog &rarr; Services</strong> and <strong>Booking &rarr; Bookable services</strong>. (2) <strong>Add service</strong> on the Bookable-services card now makes the new service bookable right away, so it appears in the list instead of silently landing in the hidden <em>inactive</em> bucket. <strong>Touched</strong>: <code>src/components/refill/CategoryCombobox.tsx</code> (rewritten as a real combobox popover), <code>src/server/scheduling-settings.functions.ts</code> (new services created bookable), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.68.1",
     date: "June 2026",
     items: [
