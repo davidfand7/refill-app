@@ -3693,6 +3693,42 @@ export type Database = {
           },
         ]
       }
+      service_library: {
+        Row: {
+          category: string
+          created_at: string
+          default_duration_min: number
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          sort_order: number
+          suggested_price: number | null
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          default_duration_min?: number
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          suggested_price?: number | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          default_duration_min?: number
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          suggested_price?: number | null
+        }
+        Relationships: []
+      }
       services: {
         Row: {
           buffer_min: number
@@ -3703,6 +3739,7 @@ export type Database = {
           duration_min: number
           hidden_at: string | null
           id: string
+          library_id: string | null
           name: string
           notes: string | null
           online_bookable: boolean
@@ -3721,6 +3758,7 @@ export type Database = {
           duration_min?: number
           hidden_at?: string | null
           id?: string
+          library_id?: string | null
           name: string
           notes?: string | null
           online_bookable?: boolean
@@ -3739,6 +3777,7 @@ export type Database = {
           duration_min?: number
           hidden_at?: string | null
           id?: string
+          library_id?: string | null
           name?: string
           notes?: string | null
           online_bookable?: boolean
