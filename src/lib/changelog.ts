@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.74.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.74.0 &mdash; Patient booking page: service notes + category groups. </strong>Your public self-book page (<code>/s/&lt;your-link&gt;</code>) now shows each service&rsquo;s <strong>notes</strong> right under its name (e.g. &ldquo;Botox, Jeuveau, Xeomin, or Dysport&rdquo; or &ldquo;$100 fee waived if treating same day&rdquo;) and organizes the menu into <strong>collapsible category groups</strong> &mdash; a patient taps <em>Tox</em>, <em>Filler</em>, <em>Laser</em>&hellip; to see those options. A single-category menu stays flat. This surfaces the rich context that sets us apart. <em>Note: the per-service Notes field is now patient-facing.</em> <strong>Touched</strong>: <code>src/server/scheduling.functions.ts</code> (return <code>category</code> + <code>notes</code> on each public service), <code>src/routes/s.$slug.tsx</code> (grouped, notes-rich service picker), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.73.0",
     date: "June 2026",
     items: [

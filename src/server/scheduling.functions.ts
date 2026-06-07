@@ -278,6 +278,10 @@ export interface PublicServiceOption {
   durationMin: number;
   /** Lowest effective price across offering providers (the "from $X"). */
   fromPrice: number;
+  /** Service category (for grouping the picker). */
+  category: string;
+  /** Freeform patient-facing notes/description (what makes us unique). */
+  notes: string | null;
   /** Active providers who offer this service (v1: all active), with effective price/duration. */
   providers: PublicProviderOption[];
 }
@@ -318,7 +322,7 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
     const [{ data: services }, providers] = await Promise.all([
       sb
         .from("services")
-        .select("id, name, duration_min, buffer_min, service_price, online_bookable, hidden_at")
+        .select("id, name, duration_min, buffer_min, service_price, online_bookable, hidden_at, category, notes")
         .eq("tenant_id", tenant.id)
         .eq("online_bookable", true)
         .is("hidden_at", null)
@@ -378,6 +382,8 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
           name: s.name,
           durationMin: s.duration_min,
           fromPrice,
+          category: s.category,
+          notes: s.notes,
           providers: providerOpts,
         };
       })

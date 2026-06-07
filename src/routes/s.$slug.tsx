@@ -34,6 +34,7 @@ import {
   type PublicServiceOption,
   type PublicSlot,
 } from "@/server/scheduling.functions";
+import { categoryLabel, categoryRank } from "@/lib/service-categories";
 
 export const Route = createFileRoute("/s/$slug")({
   component: PublicBookingPage,
@@ -69,6 +70,30 @@ function PublicBookingPage() {
   );
   const providers = selService?.providers ?? [];
   const multiProvider = providers.length > 1;
+
+  // Group the service menu by category (collapsible turndowns). Built-ins keep
+  // their canonical order; custom categories follow.
+  const serviceGroups = useMemo(() => {
+    const m = new Map<string, PublicServiceOption[]>();
+    for (const s of ctx?.services ?? []) {
+      const c = s.category?.trim() || "other";
+      const arr = m.get(c) ?? [];
+      arr.push(s);
+      m.set(c, arr);
+    }
+    return [...m.entries()]
+      .map(([cat, rows]) => ({ cat, rows: [...rows].sort((a, b) => a.name.localeCompare(b.name)) }))
+      .sort((a, b) => categoryRank(a.cat) - categoryRank(b.cat) || a.cat.localeCompare(b.cat));
+  }, [ctx]);
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
+  function toggleCat(cat: string) {
+    setExpandedCats((p) => {
+      const n = new Set(p);
+      if (n.has(cat)) n.delete(cat);
+      else n.add(cat);
+      return n;
+    });
+  }
   const pricesVary = useMemo(() => new Set(providers.map((p) => p.price)).size > 1, [providers]);
   const bestPrice = providers.length ? Math.min(...providers.map((p) => p.price)) : 0;
 
@@ -256,22 +281,57 @@ function PublicBookingPage() {
               What would you like to book?
             </h1>
             <div className="space-y-2">
-              {ctx.services.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => startService(s)}
-                  className="w-full text-left rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 hover:border-stone-900 hover:bg-white transition-colors flex items-center justify-between gap-3"
-                >
-                  <span className="min-w-0">
-                    <span className="block text-[15px] font-medium text-stone-900 truncate">{s.name}</span>
-                    <span className="block text-[13px] text-stone-500">
-                      {s.durationMin} min · {priceLabel(s)}
-                    </span>
-                  </span>
-                  <ChevronRight className="w-4 h-4 text-stone-400 shrink-0" />
-                </button>
-              ))}
+              {serviceGroups.map(({ cat, rows }) => {
+                // Single category → no turndown; just list the services.
+                const single = serviceGroups.length === 1;
+                const open = single || expandedCats.has(cat);
+                return (
+                  <div key={cat} className={single ? "space-y-2" : "rounded-lg border border-stone-200 overflow-hidden"}>
+                    {!single && (
+                      <button
+                        type="button"
+                        onClick={() => toggleCat(cat)}
+                        className="w-full flex items-center gap-2 px-4 py-2.5 bg-stone-50 hover:bg-stone-100 transition-colors"
+                      >
+                        <ChevronRight
+                          className={`w-4 h-4 text-stone-400 transition-transform ${open ? "rotate-90" : ""}`}
+                        />
+                        <span className="text-[14px] font-semibold text-stone-900">{categoryLabel(cat)}</span>
+                        <span className="text-[12px] text-stone-400 tabular-nums">{rows.length}</span>
+                      </button>
+                    )}
+                    {open && (
+                      <div className={single ? "space-y-2" : "divide-y divide-stone-100"}>
+                        {rows.map((s) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => startService(s)}
+                            className={
+                              single
+                                ? "w-full text-left rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 hover:border-stone-900 hover:bg-white transition-colors flex items-start justify-between gap-3"
+                                : "w-full text-left px-4 py-3 hover:bg-stone-50 transition-colors flex items-start justify-between gap-3"
+                            }
+                          >
+                            <span className="min-w-0">
+                              <span className="block text-[15px] font-medium text-stone-900">{s.name}</span>
+                              {s.notes && (
+                                <span className="block text-[13px] text-stone-500 mt-0.5 leading-snug whitespace-pre-line">
+                                  {s.notes}
+                                </span>
+                              )}
+                              <span className="block text-[12px] text-stone-400 mt-1 tabular-nums">
+                                {s.durationMin} min · {priceLabel(s)}
+                              </span>
+                            </span>
+                            <ChevronRight className="w-4 h-4 text-stone-400 shrink-0 mt-1" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
