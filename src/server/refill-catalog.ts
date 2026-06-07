@@ -342,6 +342,10 @@ export type Service = {
   notes: string | null;
   hiddenAt: string | null;
   sortOrder: number | null;
+  /** Intentionally free / no-charge (distinct from price 0 = unpriced). */
+  isFree: boolean;
+  /** Paid service whose fee is applied toward a treatment (e.g. a consult). */
+  feeCredit: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -357,6 +361,8 @@ type ServiceRow = {
   notes: string | null;
   hidden_at: string | null;
   sort_order: number | null;
+  is_free: boolean | null;
+  fee_credit: boolean | null;
   created_at: string;
   updated_at: string;
 };
@@ -380,6 +386,8 @@ function rowToService(r: ServiceRow): Service {
     notes: r.notes,
     hiddenAt: r.hidden_at ?? null,
     sortOrder: r.sort_order ?? null,
+    isFree: r.is_free ?? false,
+    feeCredit: r.fee_credit ?? false,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -396,6 +404,8 @@ const servicePayload = z.object({
   servicePrice: z.number().nonnegative("Price can't be negative."),
   cogsPerService: z.number().nonnegative("COGS can't be negative.").nullable(),
   notes: z.string().trim().max(500).nullable(),
+  isFree: z.boolean().optional(),
+  feeCredit: z.boolean().optional(),
 });
 
 const createServiceInput = z.object({
@@ -481,6 +491,8 @@ export const createServiceFn = createServerFn({ method: "POST" })
         cogs_per_service: data.service.cogsPerService,
         cogs_source: "manual",
         notes: data.service.notes,
+        is_free: data.service.isFree ?? false,
+        fee_credit: data.service.feeCredit ?? false,
       })
       .select("*")
       .single();
@@ -512,6 +524,10 @@ export const updateServiceFn = createServerFn({ method: "POST" })
         cogs_per_service: data.service.cogsPerService,
         cogs_source: "manual",
         notes: data.service.notes,
+        // Only touch pricing-mode flags when the caller set them (recategorize
+        // and other partial updates leave them intact).
+        ...(data.service.isFree !== undefined ? { is_free: data.service.isFree } : {}),
+        ...(data.service.feeCredit !== undefined ? { fee_credit: data.service.feeCredit } : {}),
       })
       .eq("id", data.id)
       .eq("tenant_id", tenantId)

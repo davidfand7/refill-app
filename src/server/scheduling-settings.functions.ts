@@ -90,6 +90,8 @@ export interface BookableServiceDraft {
   requiredResourceType: ResourceType | null;
   /** Manual position within its category (lower first; null = unordered). */
   sortOrder: number | null;
+  /** Intentionally free / no-charge (the set-price guardrail skips these). */
+  isFree: boolean;
 }
 
 export interface ProviderRow {
@@ -306,7 +308,7 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
         sb
           .from("services")
           .select(
-            "id, name, category, duration_min, buffer_min, service_price, online_bookable, required_resource_type, hidden_at, sort_order",
+            "id, name, category, duration_min, buffer_min, service_price, online_bookable, required_resource_type, hidden_at, sort_order, is_free",
           )
           .eq("tenant_id", tenantId)
           .is("hidden_at", null)
@@ -387,6 +389,7 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
       onlineBookable: s.online_bookable,
       requiredResourceType: normalizeResourceTypeOrNull(s.required_resource_type),
       sortOrder: s.sort_order,
+      isFree: s.is_free ?? false,
     }));
 
     return {
@@ -1227,7 +1230,7 @@ export const createBookableServiceFn = createServerFn({ method: "POST" })
         cogs_source: "manual",
       })
       .select(
-        "id, name, category, duration_min, buffer_min, service_price, online_bookable, required_resource_type, sort_order",
+        "id, name, category, duration_min, buffer_min, service_price, online_bookable, required_resource_type, sort_order, is_free",
       )
       .single();
     if (error || !row) throw new Error(`Couldn't add service: ${error?.message ?? "unknown"}`);
@@ -1242,6 +1245,7 @@ export const createBookableServiceFn = createServerFn({ method: "POST" })
         onlineBookable: row.online_bookable,
         requiredResourceType: normalizeResourceTypeOrNull(row.required_resource_type),
         sortOrder: row.sort_order,
+        isFree: row.is_free ?? false,
       },
     };
   });

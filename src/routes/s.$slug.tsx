@@ -397,6 +397,11 @@ function PublicBookingPage() {
                                   {s.notes}
                                 </span>
                               )}
+                              {showPrices && s.feeCredit && !s.isFree && (
+                                <span className="block text-[12px] text-emerald-700 mt-0.5">
+                                  Fee applied toward your treatment
+                                </span>
+                              )}
                             </span>
                             <span className="shrink-0 text-[13px] text-stone-500 tabular-nums whitespace-nowrap">
                               {s.durationMin} min{showPrices ? ` · ${priceLabel(s)}` : ""}
@@ -720,8 +725,9 @@ function PublicBookingPage() {
   );
 }
 
-/** "$350" or "from $320" when providers price the service differently. */
+/** "Free", "$350", or "from $320" when providers price the service differently. */
 function priceLabel(s: PublicServiceOption): string {
+  if (s.isFree) return "Free";
   const prices = s.providers.map((p) => p.price);
   const varies = prices.length > 1 && new Set(prices).size > 1;
   return varies ? `from $${s.fromPrice}` : `$${s.fromPrice}`;

@@ -307,6 +307,10 @@ export interface PublicServiceOption {
   notes: string | null;
   /** Manual position within its category (lower first; null = unordered). */
   sortOrder: number | null;
+  /** Intentionally free / no-charge → shows "Free". */
+  isFree: boolean;
+  /** Paid service whose fee is applied toward a treatment (e.g. a consult). */
+  feeCredit: boolean;
   /** Active providers who offer this service (v1: all active), with effective price/duration. */
   providers: PublicProviderOption[];
 }
@@ -353,7 +357,7 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
     const [{ data: services }, providers] = await Promise.all([
       sb
         .from("services")
-        .select("id, name, duration_min, buffer_min, service_price, online_bookable, hidden_at, category, notes, sort_order")
+        .select("id, name, duration_min, buffer_min, service_price, online_bookable, hidden_at, category, notes, sort_order, is_free, fee_credit")
         .eq("tenant_id", tenant.id)
         .eq("online_bookable", true)
         .is("hidden_at", null)
@@ -416,12 +420,15 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
           category: s.category,
           notes: s.notes,
           sortOrder: s.sort_order,
+          isFree: s.is_free ?? false,
+          feeCredit: s.fee_credit ?? false,
           providers: providerOpts,
         };
       })
       // Hide a service no active provider performs; and, when prices are shown,
-      // hide any still at $0 (unpriced) so nothing goes live mispriced.
-      .filter((s) => s.providers.length > 0 && (!showPrices || s.fromPrice > 0));
+      // hide any still at $0 UNLESS it's intentionally free (so nothing goes
+      // live mispriced, but free services still show).
+      .filter((s) => s.providers.length > 0 && (!showPrices || s.fromPrice > 0 || s.isFree));
 
     return {
       ok: true,

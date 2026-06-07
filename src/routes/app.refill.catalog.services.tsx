@@ -86,6 +86,8 @@ type ServiceDraft = {
   servicePrice: string;
   cogsPerService: string;
   notes: string;
+  isFree: boolean;
+  feeCredit: boolean;
 };
 
 const EMPTY_DRAFT: ServiceDraft = {
@@ -94,6 +96,8 @@ const EMPTY_DRAFT: ServiceDraft = {
   servicePrice: "",
   cogsPerService: "",
   notes: "",
+  isFree: false,
+  feeCredit: false,
 };
 
 function serviceToDraft(s: Service): ServiceDraft {
@@ -103,13 +107,16 @@ function serviceToDraft(s: Service): ServiceDraft {
     servicePrice: String(s.servicePrice),
     cogsPerService: s.cogsPerService === null ? "" : String(s.cogsPerService),
     notes: s.notes ?? "",
+    isFree: s.isFree,
+    feeCredit: s.feeCredit,
   };
 }
 
 function draftToPayload(d: ServiceDraft) {
-  const price = Number.parseFloat(d.servicePrice);
+  const price = d.isFree ? 0 : Number.parseFloat(d.servicePrice);
   if (!d.name.trim()) throw new Error("Service name is required.");
-  if (!Number.isFinite(price) || price < 0) throw new Error("Price must be a non-negative number.");
+  if (!d.isFree && (!Number.isFinite(price) || price < 0))
+    throw new Error("Price must be a non-negative number.");
   let cogs: number | null = null;
   if (d.cogsPerService.trim() !== "") {
     cogs = Number.parseFloat(d.cogsPerService);
@@ -118,9 +125,11 @@ function draftToPayload(d: ServiceDraft) {
   return {
     name: d.name.trim(),
     category: d.category,
-    servicePrice: price,
+    servicePrice: d.isFree ? 0 : price,
     cogsPerService: cogs,
     notes: d.notes.trim() ? d.notes.trim() : null,
+    isFree: d.isFree,
+    feeCredit: d.isFree ? false : d.feeCredit,
   };
 }
 
@@ -1263,9 +1272,14 @@ function ServiceRow({
         </button>
         <div className="text-right tabular-nums shrink-0">
           <div className="text-[13px] text-ink-soft">
-            {hasCogs
-              ? `${fmtUsd(service.servicePrice)} sell · ${fmtUsd(service.cogsPerService as number)} cost`
-              : `${fmtUsd(service.servicePrice)} sell · COGS not set`}
+            {service.isFree
+              ? "Free / no charge"
+              : hasCogs
+                ? `${fmtUsd(service.servicePrice)} sell · ${fmtUsd(service.cogsPerService as number)} cost`
+                : `${fmtUsd(service.servicePrice)} sell · COGS not set`}
+            {!service.isFree && service.feeCredit && (
+              <span className="block text-[11px] text-emerald">applied toward treatment</span>
+            )}
           </div>
           <div className="text-[15px] font-semibold text-emerald mt-0.5">
             {service.marginPerService !== null ? (
@@ -1383,12 +1397,39 @@ function ServiceFormCard({
             type="number"
             step="0.01"
             min="0"
-            value={draft.servicePrice}
+            value={draft.isFree ? "" : draft.servicePrice}
             onChange={(e) => onChange({ ...draft, servicePrice: e.target.value })}
-            placeholder="0.00"
-            disabled={busy}
-            className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums"
+            placeholder={draft.isFree ? "Free" : "0.00"}
+            disabled={busy || draft.isFree}
+            className={cn(
+              "w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums",
+              draft.isFree && "bg-stone-100 cursor-not-allowed",
+            )}
           />
+          <div className="mt-2 space-y-1.5">
+            <label className="flex items-center gap-2 text-[13px] text-ink cursor-pointer">
+              <input
+                type="checkbox"
+                checked={draft.isFree}
+                onChange={(e) => onChange({ ...draft, isFree: e.target.checked })}
+                disabled={busy}
+                className="h-3.5 w-3.5 rounded border-rule accent-emerald"
+              />
+              Free / no charge
+            </label>
+            {!draft.isFree && (
+              <label className="flex items-center gap-2 text-[13px] text-ink cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={draft.feeCredit}
+                  onChange={(e) => onChange({ ...draft, feeCredit: e.target.checked })}
+                  disabled={busy}
+                  className="h-3.5 w-3.5 rounded border-rule accent-emerald"
+                />
+                Fee applied toward treatment
+              </label>
+            )}
+          </div>
         </FormField>
 
         <FormField

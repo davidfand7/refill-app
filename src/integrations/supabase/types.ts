@@ -3740,8 +3740,10 @@ export type Database = {
           cogs_source: string
           created_at: string
           duration_min: number
+          fee_credit: boolean
           hidden_at: string | null
           id: string
+          is_free: boolean
           library_id: string | null
           name: string
           notes: string | null
@@ -3759,8 +3761,10 @@ export type Database = {
           cogs_source?: string
           created_at?: string
           duration_min?: number
+          fee_credit?: boolean
           hidden_at?: string | null
           id?: string
+          is_free?: boolean
           library_id?: string | null
           name: string
           notes?: string | null
@@ -3778,8 +3782,10 @@ export type Database = {
           cogs_source?: string
           created_at?: string
           duration_min?: number
+          fee_credit?: boolean
           hidden_at?: string | null
           id?: string
+          is_free?: boolean
           library_id?: string | null
           name?: string
           notes?: string | null

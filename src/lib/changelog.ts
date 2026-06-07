@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.85.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.85.0 &mdash; Free services + &ldquo;fee applied toward treatment.&rdquo; </strong>On a service in <strong>Catalog &rarr; Services</strong> you can now mark it <strong>Free / no charge</strong> (shows &ldquo;Free&rdquo; on the booking page and stays bookable &mdash; the set-price guardrail no longer holds it back) or, for a paid service like a consult, <strong>Fee applied toward treatment</strong> (renders a clean &ldquo;applied toward your treatment&rdquo; line for patients). This closes the &ldquo;$0 is ambiguous&rdquo; gap: <em>Free</em> is intentional; <em>$0 and not free</em> still means unpriced. <strong>Touched</strong>: <code>services.is_free</code> + <code>services.fee_credit</code>, <code>refill-catalog.ts</code>, <code>app.refill.catalog.services.tsx</code>, <code>scheduling.functions.ts</code>, <code>scheduling-settings.functions.ts</code>, <code>BookableServicesSection.tsx</code>, <code>s.$slug.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.84.0",
     date: "June 2026",
     items: [
