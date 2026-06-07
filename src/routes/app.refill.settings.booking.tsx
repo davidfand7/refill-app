@@ -188,10 +188,7 @@ function BookingSettingsPage() {
             {/* ── Providers ── */}
             <ProvidersSection bk={bk} />
 
-            {/* ── Rooms & resources ── */}
-            <RoomsSection bk={bk} />
-
-            {/* ── Business hours ── */}
+            {/* ── Provider hours (sits right under Providers) ── */}
             <BusinessHoursSection
               activeProviders={activeProviders}
               selProviderId={selProviderId}
@@ -209,6 +206,9 @@ function BookingSettingsPage() {
               patchDay={patchDay}
               toggleSelDay={toggleSelDay}
             />
+
+            {/* ── Rooms & resources ── */}
+            <RoomsSection bk={bk} />
 
             {/* ── Booking rules ── */}
             <BookingRulesSection settings={draft.settings} patchSettings={patchSettings} />

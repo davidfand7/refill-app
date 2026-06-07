@@ -6,7 +6,7 @@
 
 import { Fragment } from "react";
 import { cn } from "@/lib/utils";
-import { Check, CheckCircle2, ChevronDown, Copy, DoorOpen, ExternalLink, Globe, GripVertical, Link2, Loader2, Pencil, Plus, Search, Sparkles, Trash2, Users, X } from "lucide-react";
+import { Check, CheckCircle2, ChevronDown, Clock, Copy, DoorOpen, ExternalLink, Globe, GripVertical, Link2, Loader2, Pencil, Plus, Search, Sparkles, Trash2, Users, X } from "lucide-react";
 import { CategoryCombobox } from "@/components/refill/CategoryCombobox";
 import { BufferSelect, DurationField, Toggle, TriCheckbox } from "@/components/refill/booking/fields";
 import { categoryLabel, categoryRank } from "@/lib/service-categories";
@@ -15,7 +15,7 @@ import type { BookingSettings } from "@/components/refill/booking/useBookingSett
 
 export function ProvidersSection({ bk }: { bk: BookingSettings }) {
   const {
-    draft, setDraft, selProviderId,
+    draft, setDraft, selProviderId, setSelProviderId,
     addingProvider, setAddingProvider, newProviderName, setNewProviderName, providerBusy,
     nameDrafts, setNameDrafts, expandedProvider, setExpandedProvider, providerSearch, setProviderSearch,
     expandedCats, setExpandedCats, svcSearch, setSvcSearch, showInactive, setShowInactive,
@@ -87,6 +87,23 @@ export function ProvidersSection({ bk }: { bk: BookingSettings }) {
                           <span className="text-[10px] uppercase tracking-wider font-semibold text-ink-faint">
                             Inactive
                           </span>
+                        )}
+                        {p.isActive && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelProviderId(p.id);
+                              if (typeof document !== "undefined") {
+                                document
+                                  .getElementById("provider-hours")
+                                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                              }
+                            }}
+                            className="shrink-0 inline-flex items-center gap-1 rounded-md border border-rule px-2 py-1 text-[11px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition"
+                            title="Set this provider's weekly hours"
+                          >
+                            <Clock className="h-3 w-3" /> Hours
+                          </button>
                         )}
                         <Toggle checked={p.isActive} onChange={() => void onToggleProviderActive(p)} />
                       </div>

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.76.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.76.1 &mdash; Find each provider&rsquo;s schedule from the provider. </strong>Setting a provider&rsquo;s weekly availability was always there, but buried under &ldquo;Business hours&rdquo; below other sections. Now in <strong>Booking settings</strong>: the hours editor sits <strong>right under Providers</strong> and is titled <strong>Provider hours</strong> when you have a team, and each active provider has a <strong>Hours</strong> button that jumps straight to their week. (Each provider keeps their own Mon–Sun open/close; one-off days off still go through <strong>Block</strong> on the Schedule.) <strong>Touched</strong>: <code>src/routes/app.refill.settings.booking.tsx</code> (reorder), <code>src/components/refill/booking/BusinessHoursSection.tsx</code> (title + anchor), <code>src/components/refill/booking/ProvidersSection.tsx</code> (per-provider Hours jump), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.76.0",
     date: "June 2026",
     items: [

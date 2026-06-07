@@ -55,11 +55,13 @@ export function BusinessHoursSection({
   toggleSelDay: (dow: number) => void;
 }) {
   return (
-    <section className="rounded-xl border border-rule bg-white px-5 py-4">
+    <section id="provider-hours" className="scroll-mt-24 rounded-xl border border-rule bg-white px-5 py-4">
       <div className="flex items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-2">
           <Clock className="h-4 w-4 text-emerald" />
-          <h3 className="text-[14px] font-semibold text-ink">Business hours</h3>
+          <h3 className="text-[14px] font-semibold text-ink">
+            {activeProviders.length > 1 ? "Provider hours" : "Business hours"}
+          </h3>
         </div>
         {activeProviders.length > 1 && (
           <select
