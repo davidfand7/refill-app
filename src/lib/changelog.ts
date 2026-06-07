@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.75.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.75.0 &mdash; Patient booking is now a clean 3-step accordion with Smart Schedule. </strong>Replaced the multi-page flow on <code>/s/&lt;your-link&gt;</code> with one tidy page: <strong>1) Choose a service</strong>, <strong>2) Choose a provider</strong> (Anyone / Best value / a specific person &mdash; only those who perform it), then <strong>3) When</strong> &mdash; our <strong>Smart Schedule</strong> step with two ways to find a time: <strong>Soonest available</strong> (earliest openings across all days) or <strong>Pick a day</strong> (choose a date). Each step collapses to a summary as you go, so patients always see where they are. Real availability under the hood as before. <strong>Touched</strong>: <code>src/routes/s.$slug.tsx</code> (accordion + Smart Schedule), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.74.1",
     date: "June 2026",
     items: [

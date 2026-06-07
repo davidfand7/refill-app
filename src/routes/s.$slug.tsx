@@ -42,7 +42,9 @@ export const Route = createFileRoute("/s/$slug")({
 
 type Ctx = Extract<PublicBookingContext, { ok: true }>;
 
-type Screen = "loading" | "error" | "service" | "provider" | "time" | "contact" | "confirmed";
+type Screen = "loading" | "error" | "choose" | "contact" | "confirmed";
+type Section = "service" | "provider" | "when";
+type ScheduleMode = "soonest" | "day";
 
 const RANGE_DAYS = 30;
 const FIRST = "first" as const; // "first available" sentinel for provider choice
@@ -54,7 +56,12 @@ function PublicBookingPage() {
   const [errMsg, setErrMsg] = useState("");
   const [ctx, setCtx] = useState<Ctx | null>(null);
   const [serviceId, setServiceId] = useState<string | null>(null);
-  const [providerChoice, setProviderChoice] = useState<string | null>(null); // FIRST | providerId
+  const [providerChoice, setProviderChoice] = useState<string | null>(null); // FIRST | BEST | providerId
+  // Accordion: which of the two collapsed selections (+ When) is open.
+  const [openSection, setOpenSection] = useState<Section>("service");
+  // Smart Schedule: how the patient wants to find a time.
+  const [scheduleMode, setScheduleMode] = useState<ScheduleMode | null>(null);
+  const [pickedDay, setPickedDay] = useState<string>(""); // YYYY-MM-DD for "Pick a day"
   const [slots, setSlots] = useState<PublicSlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [held, setHeld] = useState<{ token: string; slot: PublicSlot } | null>(null);
@@ -121,11 +128,12 @@ function PublicBookingPage() {
           setScreen("error");
           return;
         }
+        setScreen("choose");
+        // Single service → preselect it and jump to the next open selection.
         if (r.services.length === 1) {
-          setServiceId(r.services[0].id);
           startService(r.services[0]);
         } else {
-          setScreen("service");
+          setOpenSection("service");
         }
       } catch (e) {
         if (!cancelled) {
@@ -140,17 +148,29 @@ function PublicBookingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
-  /** Advance from a chosen service: skip the provider step for solo spas. */
+  /** Pick a service → collapse section 1, open the next needed selection. Solo
+   *  spas (≤1 provider for the service) skip straight to the When section. */
   function startService(s: PublicServiceOption) {
     setServiceId(s.id);
     setBanner(null);
+    setScheduleMode(null);
+    setSlots([]);
     if (s.providers.length <= 1) {
       setProviderChoice(s.providers[0]?.id ?? FIRST);
-      setScreen("time");
+      setOpenSection("when");
     } else {
       setProviderChoice(null);
-      setScreen("provider");
+      setOpenSection("provider");
     }
+  }
+
+  /** Pick a provider (or a smart option) → collapse section 2, open When. */
+  function chooseProvider(choice: string) {
+    setProviderChoice(choice);
+    setBanner(null);
+    setScheduleMode(null);
+    setSlots([]);
+    setOpenSection("when");
   }
 
   const loadSlots = useCallback(async () => {
@@ -180,10 +200,10 @@ function PublicBookingPage() {
     }
   }, [ctx, serviceId, providerChoice]);
 
-  // Load slots when we reach the time step (service + provider chosen).
+  // Load slots once the patient chooses how to schedule (Smart Schedule).
   useEffect(() => {
-    if (screen === "time") void loadSlots();
-  }, [screen, loadSlots]);
+    if (screen === "choose" && scheduleMode && serviceId && providerChoice) void loadSlots();
+  }, [screen, scheduleMode, serviceId, providerChoice, loadSlots]);
 
   // Group slots by local day for rendering.
   const dayGroups = useMemo(() => {
@@ -201,6 +221,34 @@ function PublicBookingPage() {
     }
     return groups;
   }, [slots, tz]);
+
+  // "Pick a day": default the date to the soonest day that has openings.
+  useEffect(() => {
+    if (scheduleMode === "day" && !pickedDay && dayGroups.length > 0) {
+      setPickedDay(dayGroups[0].key);
+    }
+  }, [scheduleMode, pickedDay, dayGroups]);
+
+  // "Pick a day" filters the day groups to the chosen date; "Soonest" shows all.
+  const visibleDayGroups = useMemo(() => {
+    if (scheduleMode !== "day") return dayGroups;
+    if (!pickedDay) return dayGroups.slice(0, 1);
+    return dayGroups.filter((g) => g.key === pickedDay);
+  }, [dayGroups, scheduleMode, pickedDay]);
+
+  // Date-input bounds (today → RANGE_DAYS out), in the practice timezone.
+  const todayKey = dayKey(new Date().toISOString(), tz);
+  const maxKey = dayKey(new Date(Date.now() + RANGE_DAYS * 86_400_000).toISOString(), tz);
+
+  // Collapsed-header summaries.
+  const providerLabel =
+    providerChoice === FIRST
+      ? "Anyone"
+      : providerChoice === BEST
+        ? "Best value"
+        : nameOf(providerChoice) ?? "Choose…";
+  const whenLabel =
+    scheduleMode === "soonest" ? "Soonest available" : scheduleMode === "day" ? "Pick a day" : "Choose…";
 
   async function onPickSlot(slot: PublicSlot) {
     if (!ctx || !serviceId) return;
@@ -242,7 +290,8 @@ function PublicBookingPage() {
       });
       if (!r.ok) {
         setBanner(r.reason);
-        setScreen("time");
+        setScreen("choose");
+        setOpenSection("when");
         setHeld(null);
         await loadSlots();
         return;
@@ -270,18 +319,28 @@ function PublicBookingPage() {
 
         {screen === "error" && <ErrorCard title="Booking unavailable" body={errMsg} />}
 
-        {/* ── Step 1: pick a service ── */}
-        {screen === "service" && ctx && (
-          <div className="bg-white border border-stone-200 rounded-xl p-7 shadow-sm">
+        {/* ── Booking accordion: Service → Provider → Smart Schedule ── */}
+        {screen === "choose" && ctx && (
+          <div className="bg-white border border-stone-200 rounded-xl p-5 sm:p-7 shadow-sm">
             <div className="flex items-center gap-2 text-stone-400 text-xs uppercase tracking-wider font-medium mb-4">
               <CalendarCheck className="w-3.5 h-3.5" />
               Book with {ctx.spaName}
             </div>
-            <h1 className="text-xl font-semibold text-stone-900 leading-tight mb-4">
-              What would you like to book?
-            </h1>
-            <div className="space-y-2">
-              {serviceGroups.map(({ cat, rows }) => {
+
+            <div className="border border-stone-200 rounded-xl divide-y divide-stone-200 overflow-hidden">
+              {/* ── 1. Choose a service ── */}
+              <SectionRow
+                n={1}
+                label="Service"
+                value={selService?.name ?? null}
+                placeholder="Choose a service"
+                done={!!selService}
+                open={openSection === "service"}
+                onToggle={() => setOpenSection("service")}
+              />
+              {openSection === "service" && (
+                <div className="px-4 py-4 space-y-2 bg-stone-50/40">
+                  {serviceGroups.map(({ cat, rows }) => {
                 // Single category → no turndown; just list the services.
                 const single = serviceGroups.length === 1;
                 const open = single || expandedCats.has(cat);
@@ -332,161 +391,178 @@ function PublicBookingPage() {
                   </div>
                 );
               })}
-            </div>
-          </div>
-        )}
+                </div>
+              )}
 
-        {/* ── Step 2: pick a provider (only when >1) ── */}
-        {screen === "provider" && ctx && selService && (
-          <div className="bg-white border border-stone-200 rounded-xl p-7 shadow-sm">
-            <BackLink
-              show={ctx.services.length > 1}
-              label="Back to services"
-              onClick={() => setScreen("service")}
-            />
-            <h1 className="text-xl font-semibold text-stone-900 leading-tight mb-1">
-              {selService.name}
-            </h1>
-            <p className="text-stone-500 text-sm mb-4">Who would you like to see?</p>
-
-            <div className="space-y-2">
-              {/* Smart options. Order leads with the spa's chosen default
-                  (Best deal vs First available); Best deal only when prices vary. */}
-              {(() => {
-                const firstCard = (
-                  <button
-                    key="first"
-                    type="button"
-                    onClick={() => {
-                      setProviderChoice(FIRST);
-                      setScreen("time");
-                    }}
-                    className="w-full text-left rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 hover:border-emerald-500 transition-colors flex items-center justify-between gap-3"
-                  >
-                    <span className="flex items-center gap-2.5 min-w-0">
-                      <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <span className="min-w-0">
-                        <span className="block text-[15px] font-medium text-stone-900">First available</span>
-                        <span className="block text-[13px] text-emerald-700">
-                          Soonest opening with any of our team
-                        </span>
-                      </span>
-                    </span>
-                    <span className="text-[13px] text-stone-500 shrink-0">from ${selService.fromPrice}</span>
-                  </button>
-                );
-                const bestCard = pricesVary ? (
-                  <button
-                    key="best"
-                    type="button"
-                    onClick={() => {
-                      setProviderChoice(BEST);
-                      setScreen("time");
-                    }}
-                    className="w-full text-left rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 hover:border-amber-500 transition-colors flex items-center justify-between gap-3"
-                  >
-                    <span className="flex items-center gap-2.5 min-w-0">
-                      <BadgeDollarSign className="w-4 h-4 text-amber-600 shrink-0" />
-                      <span className="min-w-0">
-                        <span className="block text-[15px] font-medium text-stone-900">Best deal</span>
-                        <span className="block text-[13px] text-amber-700">
-                          Lowest price with an opening
-                        </span>
-                      </span>
-                    </span>
-                    <span className="text-[13px] text-stone-600 font-medium shrink-0">${bestPrice}</span>
-                  </button>
-                ) : null;
-                return ctx.leadOption === "best_deal"
-                  ? [bestCard, firstCard]
-                  : [firstCard, bestCard];
-              })()}
-
-              {providers.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => {
-                    setProviderChoice(p.id);
-                    setScreen("time");
-                  }}
-                  className="w-full text-left rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 hover:border-stone-900 hover:bg-white transition-colors flex items-center justify-between gap-3"
-                >
-                  <span className="flex items-center gap-2.5 min-w-0">
-                    <span className="w-7 h-7 rounded-full bg-stone-200 flex items-center justify-center shrink-0">
-                      <User className="w-3.5 h-3.5 text-stone-500" />
-                    </span>
-                    <span className="block text-[15px] font-medium text-stone-900 truncate">{p.name}</span>
-                  </span>
-                  <span className="text-[13px] text-stone-500 shrink-0">
-                    ${p.price}
-                    {p.durationMin !== selService.durationMin && ` · ${p.durationMin} min`}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ── Step 3: pick a time ── */}
-        {screen === "time" && ctx && selService && (
-          <div className="bg-white border border-stone-200 rounded-xl p-7 shadow-sm">
-            <BackLink
-              show={multiProvider || ctx.services.length > 1}
-              label={multiProvider ? "Back to providers" : "Back to services"}
-              onClick={() => setScreen(multiProvider ? "provider" : "service")}
-            />
-            <h1 className="text-xl font-semibold text-stone-900 leading-tight mb-0.5">
-              {selService.name}
-            </h1>
-            <p className="text-stone-500 text-sm mb-4">
-              {providerChoice === FIRST
-                ? "First available"
-                : providerChoice === BEST
-                  ? "Best deal"
-                  : `with ${nameOf(providerChoice) ?? "your provider"}`}{" "}
-              · {selService.durationMin} min
-            </p>
-
-            {banner && (
-              <div className="mb-3 text-[13px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                {banner}
-              </div>
-            )}
-
-            {slotsLoading ? (
-              <div className="flex items-center gap-2 text-stone-500 text-sm py-4">
-                <Loader2 className="w-4 h-4 animate-spin" /> Finding open times…
-              </div>
-            ) : dayGroups.length === 0 ? (
-              <p className="text-stone-500 text-sm py-4">
-                No open times in the next {RANGE_DAYS} days. Please check back soon.
-              </p>
-            ) : (
-              <div
-                className="flex flex-col sm:flex-row gap-y-5 sm:gap-x-4 max-h-[60vh] overflow-y-auto sm:overflow-y-hidden sm:overflow-x-auto pr-1 sm:pb-2"
-              >
-                {dayGroups.map((g) => (
-                  <div key={g.key} className="sm:shrink-0 sm:w-36 sm:max-h-[56vh] sm:overflow-y-auto">
-                    <div className="text-[13px] font-semibold text-stone-700 mb-2 sm:text-center sm:sticky sm:top-0 sm:bg-white sm:pb-1">
-                      {g.heading}
-                    </div>
-                    <div className="grid grid-cols-3 sm:grid-cols-1 gap-2">
-                      {g.slots.map((s) => (
+              {/* ── 2. Choose a provider (only when the service has options) ── */}
+              {selService && multiProvider && (
+                <>
+                  <SectionRow
+                    n={2}
+                    label="Provider"
+                    value={providerChoice ? providerLabel : null}
+                    placeholder="Choose a provider"
+                    done={!!providerChoice}
+                    open={openSection === "provider"}
+                    onToggle={() => setOpenSection("provider")}
+                  />
+                  {openSection === "provider" && (
+                    <div className="px-4 py-4 space-y-2 bg-stone-50/40">
+                      {(() => {
+                        const firstCard = (
+                          <button
+                            key="first"
+                            type="button"
+                            onClick={() => chooseProvider(FIRST)}
+                            className="w-full text-left rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 hover:border-emerald-500 transition-colors flex items-center justify-between gap-3"
+                          >
+                            <span className="flex items-center gap-2.5 min-w-0">
+                              <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span className="min-w-0">
+                                <span className="block text-[15px] font-medium text-stone-900">Anyone</span>
+                                <span className="block text-[13px] text-emerald-700">Any of our team</span>
+                              </span>
+                            </span>
+                            <span className="text-[13px] text-stone-500 shrink-0">from ${selService.fromPrice}</span>
+                          </button>
+                        );
+                        const bestCard = pricesVary ? (
+                          <button
+                            key="best"
+                            type="button"
+                            onClick={() => chooseProvider(BEST)}
+                            className="w-full text-left rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 hover:border-amber-500 transition-colors flex items-center justify-between gap-3"
+                          >
+                            <span className="flex items-center gap-2.5 min-w-0">
+                              <BadgeDollarSign className="w-4 h-4 text-amber-600 shrink-0" />
+                              <span className="min-w-0">
+                                <span className="block text-[15px] font-medium text-stone-900">Best value</span>
+                                <span className="block text-[13px] text-amber-700">Lowest price with an opening</span>
+                              </span>
+                            </span>
+                            <span className="text-[13px] text-stone-600 font-medium shrink-0">${bestPrice}</span>
+                          </button>
+                        ) : null;
+                        return ctx.leadOption === "best_deal" ? [bestCard, firstCard] : [firstCard, bestCard];
+                      })()}
+                      {providers.map((p) => (
                         <button
-                          key={`${s.startIso}-${s.providerId}`}
+                          key={p.id}
                           type="button"
-                          onClick={() => onPickSlot(s)}
-                          className="rounded-lg border border-stone-200 bg-stone-50 px-2 py-2 text-[14px] text-stone-800 hover:border-stone-900 hover:bg-white transition-colors tabular-nums sm:text-center"
+                          onClick={() => chooseProvider(p.id)}
+                          className="w-full text-left rounded-lg border border-stone-200 bg-white px-4 py-3 hover:border-stone-900 transition-colors flex items-center justify-between gap-3"
                         >
-                          {fmtTime(s.startIso, tz)}
+                          <span className="flex items-center gap-2.5 min-w-0">
+                            <span className="w-7 h-7 rounded-full bg-stone-200 flex items-center justify-center shrink-0">
+                              <User className="w-3.5 h-3.5 text-stone-500" />
+                            </span>
+                            <span className="block text-[15px] font-medium text-stone-900 truncate">{p.name}</span>
+                          </span>
+                          <span className="text-[13px] text-stone-500 shrink-0">
+                            ${p.price}
+                            {p.durationMin !== selService.durationMin && ` · ${p.durationMin} min`}
+                          </span>
                         </button>
                       ))}
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  )}
+                </>
+              )}
+
+              {/* ── 3. Smart Schedule: when? ── */}
+              {selService && providerChoice && (
+                <>
+                  <SectionRow
+                    n={multiProvider ? 3 : 2}
+                    label="When"
+                    value={scheduleMode ? whenLabel : null}
+                    placeholder="Pick a time"
+                    done={!!scheduleMode}
+                    open={openSection === "when"}
+                    onToggle={() => setOpenSection("when")}
+                  />
+                  {openSection === "when" && (
+                    <div className="px-4 py-4 space-y-3 bg-stone-50/40">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setScheduleMode("soonest");
+                            setPickedDay("");
+                          }}
+                          className={`rounded-lg border px-3 py-3 text-left transition-colors ${scheduleMode === "soonest" ? "border-emerald-500 bg-emerald-50" : "border-stone-200 bg-white hover:border-stone-900"}`}
+                        >
+                          <Sparkles className="w-4 h-4 text-emerald-600 mb-1" />
+                          <span className="block text-[14px] font-medium text-stone-900">Soonest available</span>
+                          <span className="block text-[12px] text-stone-500">First openings, all days</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setScheduleMode("day")}
+                          className={`rounded-lg border px-3 py-3 text-left transition-colors ${scheduleMode === "day" ? "border-emerald-500 bg-emerald-50" : "border-stone-200 bg-white hover:border-stone-900"}`}
+                        >
+                          <CalendarCheck className="w-4 h-4 text-stone-600 mb-1" />
+                          <span className="block text-[14px] font-medium text-stone-900">Pick a day</span>
+                          <span className="block text-[12px] text-stone-500">Choose a specific date</span>
+                        </button>
+                      </div>
+
+                      {scheduleMode === "day" && (
+                        <input
+                          type="date"
+                          value={pickedDay}
+                          min={todayKey}
+                          max={maxKey}
+                          onChange={(e) => setPickedDay(e.target.value)}
+                          className="w-full rounded-lg border border-stone-300 px-3 py-2 text-[14px] text-stone-900 outline-none focus:border-stone-900"
+                        />
+                      )}
+
+                      {banner && (
+                        <div className="text-[13px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          {banner}
+                        </div>
+                      )}
+
+                      {scheduleMode &&
+                        (slotsLoading ? (
+                          <div className="flex items-center gap-2 text-stone-500 text-sm py-4">
+                            <Loader2 className="w-4 h-4 animate-spin" /> Finding open times…
+                          </div>
+                        ) : visibleDayGroups.length === 0 ? (
+                          <p className="text-stone-500 text-sm py-4">
+                            {scheduleMode === "day"
+                              ? "No openings that day — try another date."
+                              : `No open times in the next ${RANGE_DAYS} days. Please check back soon.`}
+                          </p>
+                        ) : (
+                          <div className="flex flex-col sm:flex-row gap-y-5 sm:gap-x-4 max-h-[60vh] overflow-y-auto sm:overflow-y-hidden sm:overflow-x-auto pr-1 sm:pb-2">
+                            {visibleDayGroups.map((g) => (
+                              <div key={g.key} className="sm:shrink-0 sm:w-36 sm:max-h-[56vh] sm:overflow-y-auto">
+                                <div className="text-[13px] font-semibold text-stone-700 mb-2 sm:text-center sm:sticky sm:top-0 sm:bg-stone-50 sm:pb-1">
+                                  {g.heading}
+                                </div>
+                                <div className="grid grid-cols-3 sm:grid-cols-1 gap-2">
+                                  {g.slots.map((s) => (
+                                    <button
+                                      key={`${s.startIso}-${s.providerId}`}
+                                      type="button"
+                                      onClick={() => onPickSlot(s)}
+                                      className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-[14px] text-stone-800 hover:border-stone-900 transition-colors tabular-nums sm:text-center"
+                                    >
+                                      {fmtTime(s.startIso, tz)}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         )}
 
@@ -498,7 +574,8 @@ function PublicBookingPage() {
               label="Choose a different time"
               onClick={() => {
                 setHeld(null);
-                setScreen("time");
+                setScreen("choose");
+                setOpenSection("when");
               }}
             />
 
@@ -591,6 +668,51 @@ function priceLabel(s: PublicServiceOption): string {
   const prices = s.providers.map((p) => p.price);
   const varies = prices.length > 1 && new Set(prices).size > 1;
   return varies ? `from $${s.fromPrice}` : `$${s.fromPrice}`;
+}
+
+function SectionRow({
+  n,
+  label,
+  value,
+  placeholder,
+  done,
+  open,
+  onToggle,
+}: {
+  n: number;
+  label: string;
+  value: string | null;
+  placeholder: string;
+  done: boolean;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="w-full flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-stone-50 transition-colors text-left"
+    >
+      <span className="flex items-center gap-3 min-w-0">
+        <span
+          className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[12px] font-semibold tabular-nums ${
+            done ? "bg-emerald-600 text-white" : open ? "bg-stone-900 text-white" : "bg-stone-200 text-stone-500"
+          }`}
+        >
+          {n}
+        </span>
+        <span className="min-w-0">
+          <span className="block text-[11px] uppercase tracking-wider text-stone-400 font-semibold">{label}</span>
+          <span
+            className={`block text-[15px] font-medium truncate ${value ? "text-stone-900" : "text-stone-400"}`}
+          >
+            {value ?? placeholder}
+          </span>
+        </span>
+      </span>
+      <ChevronRight className={`w-4 h-4 text-stone-400 shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
+    </button>
+  );
 }
 
 function BackLink({ show, label, onClick }: { show: boolean; label: string; onClick: () => void }) {
