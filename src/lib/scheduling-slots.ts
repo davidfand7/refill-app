@@ -65,6 +65,17 @@ export interface ProviderHoursRow {
   isClosed: boolean;
 }
 
+/** A whole-day override of the weekly hours for one calendar date. When present
+ *  for a date, it REPLACES that day's weekly hours (closed, or new open/close). */
+export interface DateOverrideRow {
+  /** Calendar date "YYYY-MM-DD" in the tenant timezone. */
+  date: string;
+  isClosed: boolean;
+  /** Wall-clock "HH:MM[:SS]" — null when closed. */
+  openTime: string | null;
+  closeTime: string | null;
+}
+
 /** An existing appointment that occupies time (status <> 'cancelled'). */
 export interface ExistingAppointment {
   /** UTC start, ms since epoch. */
@@ -98,6 +109,8 @@ export interface AvailableSlotsArgs {
   settings: SlotEngineSettings;
   /** The provider's weekly hours (0..6). Missing weekday ⇒ closed. */
   hours: ProviderHoursRow[];
+  /** Whole-day overrides keyed by date; replace weekly hours for that date. */
+  dateOverrides?: DateOverrideRow[];
   /** Existing non-cancelled appointments for this provider. */
   busy: ExistingAppointment[];
   /** Hard-block windows overlapping the range. */
@@ -209,6 +222,10 @@ function overlaps(aS: number, aE: number, bS: number, bE: number): boolean {
  */
 export function availableSlots(args: AvailableSlotsArgs): Slot[] {
   const { settings, hours, busy, blocks, service, rangeStart, rangeEnd, now } = args;
+  // Date-specific overrides win over weekly hours for the matching calendar date.
+  const overrideByDate = new Map<string, DateOverrideRow>();
+  for (const o of args.dateOverrides ?? []) overrideByDate.set(o.date, o);
+  const pad2 = (n: number) => String(n).padStart(2, "0");
 
   const granMs = settings.slotGranularityMin * MIN;
   const bodyMs = service.durationMin * MIN;
@@ -247,9 +264,17 @@ export function availableSlots(args: AvailableSlotsArgs): Slot[] {
     const { weekday } = zonedDateParts(dayMidnightUtc, settings.timezone);
     const h = hoursByDow.get(weekday);
 
-    if (h && !h.isClosed) {
-      const open = parseWallClock(h.openTime);
-      const close = parseWallClock(h.closeTime);
+    // Resolve the day's effective open band: a date override (if any) replaces
+    // the weekly hours entirely; otherwise fall back to the weekday row.
+    const dateK = `${cursorY}-${pad2(cursorM)}-${pad2(cursorD)}`;
+    const ov = overrideByDate.get(dateK);
+    const effClosed = ov ? ov.isClosed || !ov.openTime || !ov.closeTime : !h || h.isClosed;
+    const effOpenTime = ov ? ov.openTime : h?.openTime;
+    const effCloseTime = ov ? ov.closeTime : h?.closeTime;
+
+    if (!effClosed && effOpenTime && effCloseTime) {
+      const open = parseWallClock(effOpenTime);
+      const close = parseWallClock(effCloseTime);
       const openUtc = zonedWallClockToUtc(
         cursorY, cursorM, cursorD, open.hour, open.minute, settings.timezone,
       ).getTime();

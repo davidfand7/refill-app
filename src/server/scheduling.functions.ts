@@ -37,6 +37,7 @@ import type { Database } from "@/integrations/supabase/types";
 import {
   availableSlots,
   type BlockInterval,
+  type DateOverrideRow,
   type ExistingAppointment,
   type ProviderHoursRow,
   type Slot,
@@ -203,28 +204,50 @@ async function loadEngineInputs(
   bufferMin: number,
   fromIso: string,
   toIso: string,
-): Promise<{ hours: ProviderHoursRow[]; blocks: BlockInterval[]; busy: ExistingAppointment[] }> {
-  const [{ data: hoursRows }, { data: blockRows }, { data: busyRows }] = await Promise.all([
-    sb.from("scheduling_hours").select("*").eq("provider_id", providerId),
-    // Whole-practice blocks (provider_id null) OR this provider's blocks.
-    sb
-      .from("scheduling_blocks")
-      .select("during, provider_id")
-      .or(`provider_id.is.null,provider_id.eq.${providerId}`),
-    sb
-      .from("emma_appointments")
-      .select("scheduled_at, duration_min, status, slot_held_until")
-      .eq("provider_id", providerId)
-      .neq("status", "cancelled")
-      .gte("scheduled_at", new Date(new Date(fromIso).getTime() - 24 * 60 * 60_000).toISOString())
-      .lt("scheduled_at", new Date(new Date(toIso).getTime() + 24 * 60 * 60_000).toISOString()),
-  ]);
+): Promise<{
+  hours: ProviderHoursRow[];
+  dateOverrides: DateOverrideRow[];
+  blocks: BlockInterval[];
+  busy: ExistingAppointment[];
+}> {
+  // Widen the date-override window by a day each side so tz-edge dates are covered.
+  const fromDate = new Date(new Date(fromIso).getTime() - 24 * 60 * 60_000).toISOString().slice(0, 10);
+  const toDate = new Date(new Date(toIso).getTime() + 24 * 60 * 60_000).toISOString().slice(0, 10);
+  const [{ data: hoursRows }, { data: overrideRows }, { data: blockRows }, { data: busyRows }] =
+    await Promise.all([
+      sb.from("scheduling_hours").select("*").eq("provider_id", providerId),
+      sb
+        .from("scheduling_date_overrides")
+        .select("the_date, is_closed, open_time, close_time")
+        .eq("provider_id", providerId)
+        .gte("the_date", fromDate)
+        .lte("the_date", toDate),
+      // Whole-practice blocks (provider_id null) OR this provider's blocks.
+      sb
+        .from("scheduling_blocks")
+        .select("during, provider_id")
+        .or(`provider_id.is.null,provider_id.eq.${providerId}`),
+      sb
+        .from("emma_appointments")
+        .select("scheduled_at, duration_min, status, slot_held_until")
+        .eq("provider_id", providerId)
+        .neq("status", "cancelled")
+        .gte("scheduled_at", new Date(new Date(fromIso).getTime() - 24 * 60 * 60_000).toISOString())
+        .lt("scheduled_at", new Date(new Date(toIso).getTime() + 24 * 60 * 60_000).toISOString()),
+    ]);
 
   const hours: ProviderHoursRow[] = (hoursRows ?? []).map((h) => ({
     dayOfWeek: h.day_of_week,
     openTime: h.open_time,
     closeTime: h.close_time,
     isClosed: h.is_closed,
+  }));
+
+  const dateOverrides: DateOverrideRow[] = (overrideRows ?? []).map((o) => ({
+    date: o.the_date,
+    isClosed: o.is_closed,
+    openTime: o.open_time,
+    closeTime: o.close_time,
   }));
 
   const blocks: BlockInterval[] = (blockRows ?? [])
@@ -243,7 +266,7 @@ async function loadEngineInputs(
       bufferMin,
     }));
 
-  return { hours, blocks, busy };
+  return { hours, dateOverrides, blocks, busy };
 }
 
 /** Parse a Postgres tstzrange literal like ["2026-08-10 11:00:00+00","...") to ms. */
@@ -476,7 +499,7 @@ export const listAvailableSlots = createServerFn({ method: "GET" })
     const perProvider = await Promise.all(
       targets.map(async (p) => {
         const eff = effective(base, overrides.get(p.id));
-        const { hours, blocks, busy } = await loadEngineInputs(
+        const { hours, dateOverrides, blocks, busy } = await loadEngineInputs(
           sb,
           p.id,
           eff.bufferMin,
@@ -486,6 +509,7 @@ export const listAvailableSlots = createServerFn({ method: "GET" })
         let slots = availableSlots({
           settings: base.settings,
           hours,
+          dateOverrides,
           blocks,
           busy,
           service: { durationMin: eff.durationMin, bufferMin: eff.bufferMin },
@@ -576,7 +600,7 @@ export const holdSlot = createServerFn({ method: "POST" })
     //    — never trust the client.
     const dayStart = new Date(startMs - 12 * 60 * 60_000);
     const dayEnd = new Date(startMs + 12 * 60 * 60_000);
-    const { hours, blocks, busy } = await loadEngineInputs(
+    const { hours, dateOverrides, blocks, busy } = await loadEngineInputs(
       sb,
       provider.id,
       eff.bufferMin,
@@ -586,6 +610,7 @@ export const holdSlot = createServerFn({ method: "POST" })
     const slots = availableSlots({
       settings: base.settings,
       hours,
+      dateOverrides,
       blocks,
       busy,
       service: { durationMin: eff.durationMin, bufferMin: eff.bufferMin },

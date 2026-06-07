@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.77.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.77.0 &mdash; Date-specific provider availability. </strong>Under <strong>Provider hours</strong> in Booking settings there&rsquo;s now <strong>Date-specific hours</strong>: override a provider&rsquo;s weekly schedule for a single date &mdash; <strong>closed all day</strong> (a holiday) or <strong>different open/close</strong> just that day (e.g. &ldquo;Michelle 10–2 on Jul 3&rdquo;). The booking engine honors these everywhere openings are computed: the patient self-book page, owner Smart Schedule, and the calendar. Recurring weekly hours stay the default; a partial-day time-off still uses <strong>Block</strong> on the Schedule. <strong>Touched</strong>: <code>supabase/migrations/20260707000000_v1_77_0_provider_date_overrides.sql</code> (new <code>scheduling_date_overrides</code> table), <code>src/lib/scheduling-slots.ts</code> (engine honors overrides), <code>src/server/scheduling.functions.ts</code>, <code>src/server/scheduling-settings.functions.ts</code> (bundle + upsert/delete fns), <code>src/components/refill/booking/{useBookingSettings,DateOverridesSection}.tsx</code>, <code>src/routes/app.refill.settings.booking.tsx</code>, <code>src/integrations/supabase/types.ts</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.76.1",
     date: "June 2026",
     items: [

@@ -135,6 +135,19 @@ export interface SchedulingSetupBundle {
   services: BookableServiceDraft[];
   /** Per-provider duration/buffer/price overrides (only rows that exist). */
   providerServices: ProviderServiceOverrideRow[];
+  /** providerId → that provider's date-specific availability overrides. */
+  dateOverridesByProvider: Record<string, DateOverrideDraft[]>;
+}
+
+/** A whole-day availability override for one provider on one calendar date. */
+export interface DateOverrideDraft {
+  id: string;
+  /** Calendar date "YYYY-MM-DD" in the tenant timezone. */
+  date: string;
+  isClosed: boolean;
+  /** Wall-clock "HH:MM" — null when closed. */
+  openTime: string | null;
+  closeTime: string | null;
 }
 
 const DEFAULT_SETTINGS: SchedulingSettingsDraft = {
@@ -307,6 +320,26 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
       price: r.price,
     }));
 
+    // Upcoming date-specific availability overrides (past ones aren't editable).
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const { data: overrideRows } = await sb
+      .from("scheduling_date_overrides")
+      .select("id, provider_id, the_date, is_closed, open_time, close_time")
+      .in("provider_id", providerIds.length ? providerIds : [providerId])
+      .gte("the_date", todayStr)
+      .order("the_date");
+    const dateOverridesByProvider: Record<string, DateOverrideDraft[]> = {};
+    for (const pid of providerIds) dateOverridesByProvider[pid] = [];
+    for (const o of overrideRows ?? []) {
+      (dateOverridesByProvider[o.provider_id] ??= []).push({
+        id: o.id,
+        date: o.the_date,
+        isClosed: o.is_closed,
+        openTime: o.open_time ? hhmm(o.open_time) : null,
+        closeTime: o.close_time ? hhmm(o.close_time) : null,
+      });
+    }
+
     const settings: SchedulingSettingsDraft = settingsRow
       ? {
           timezone: settingsRow.timezone,
@@ -355,7 +388,103 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
       hoursByProvider,
       services,
       providerServices,
+      dateOverridesByProvider,
     };
+  });
+
+// ── upsert / delete date-specific availability overrides (immediate persist) ──
+// Whole-day overrides of a provider's weekly hours for one calendar date.
+
+const upsertDateOverrideInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+  providerId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  isClosed: z.boolean(),
+  openTime: z.string().regex(/^\d{2}:\d{2}$/).nullable(),
+  closeTime: z.string().regex(/^\d{2}:\d{2}$/).nullable(),
+});
+
+export const upsertDateOverrideFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => upsertDateOverrideInput.parse(raw))
+  .handler(async ({ data }): Promise<{ override: DateOverrideDraft }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    // Provider must belong to this tenant.
+    const { data: prov } = await sb
+      .from("scheduling_providers")
+      .select("id")
+      .eq("id", data.providerId)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (!prov) throw new Error("Provider not found.");
+    // Closed days carry no times; open days need both, open before close.
+    const open = data.isClosed ? null : data.openTime;
+    const close = data.isClosed ? null : data.closeTime;
+    if (!data.isClosed) {
+      if (!open || !close) throw new Error("Open and close times are required.");
+      if (open >= close) throw new Error("Open time must be before close time.");
+    }
+    const { data: row, error } = await sb
+      .from("scheduling_date_overrides")
+      .upsert(
+        {
+          provider_id: data.providerId,
+          the_date: data.date,
+          is_closed: data.isClosed,
+          open_time: open,
+          close_time: close,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "provider_id,the_date" },
+      )
+      .select("id, the_date, is_closed, open_time, close_time")
+      .single();
+    if (error || !row) throw new Error(`Couldn't save override: ${error?.message ?? "unknown"}`);
+    return {
+      override: {
+        id: row.id,
+        date: row.the_date,
+        isClosed: row.is_closed,
+        openTime: row.open_time ? hhmm(row.open_time) : null,
+        closeTime: row.close_time ? hhmm(row.close_time) : null,
+      },
+    };
+  });
+
+const deleteDateOverrideInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+  overrideId: z.string().uuid(),
+});
+
+export const deleteDateOverrideFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => deleteDateOverrideInput.parse(raw))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    // Scope the delete to this tenant's providers (FK has no tenant column).
+    const { data: provRows } = await sb
+      .from("scheduling_providers")
+      .select("id")
+      .eq("tenant_id", tenantId);
+    const ids = (provRows ?? []).map((p) => p.id);
+    if (ids.length === 0) return { ok: true };
+    const { error } = await sb
+      .from("scheduling_date_overrides")
+      .delete()
+      .eq("id", data.overrideId)
+      .in("provider_id", ids);
+    if (error) throw new Error(`Couldn't delete override: ${error.message}`);
+    return { ok: true };
   });
 
 // ── saveSchedulingSetupFn ────────────────────────────────────────────────────

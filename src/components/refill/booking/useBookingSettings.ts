@@ -16,6 +16,8 @@ import {
   assignProviderServiceFn,
   assignProviderServicesBulkFn,
   createBookableServiceFn,
+  upsertDateOverrideFn,
+  deleteDateOverrideFn,
   createProviderFn,
   createResourceFn,
   deleteBookableServiceFn,
@@ -28,6 +30,7 @@ import {
   type BookableServiceDraft,
   type ServiceAssignmentResult,
   type ProviderRow,
+  type DateOverrideDraft,
   type ProviderServiceOverrideRow,
   type ResourceRow,
   type ResourceType,
@@ -114,6 +117,13 @@ export function useBookingSettings({
   const [newResourceType, setNewResourceType] = useState<ResourceType>("room");
   const [resourceBusy, setResourceBusy] = useState(false);
   const [resourceNameDrafts, setResourceNameDrafts] = useState<Record<string, string>>({});
+  // Per-provider date-specific availability overrides (add form, for selProvider).
+  const [addingOverride, setAddingOverride] = useState(false);
+  const [ovDate, setOvDate] = useState("");
+  const [ovClosed, setOvClosed] = useState(false);
+  const [ovOpen, setOvOpen] = useState("09:00");
+  const [ovClose, setOvClose] = useState("17:00");
+  const [ovBusy, setOvBusy] = useState(false);
 
   useEffect(() => {
     if (!isTenant) return;
@@ -158,6 +168,7 @@ export function useBookingSettings({
   }, [draft]);
   const selHours = draft?.hoursByProvider[selProviderId] ?? [];
   const selProviderName = draft?.providers.find((p) => p.id === selProviderId)?.name ?? "";
+  const selDateOverrides: DateOverrideDraft[] = draft?.dateOverridesByProvider?.[selProviderId] ?? [];
 
   // Bookable-services list: default to active (bookable); search/show-inactive reveal the rest.
   const svcQuery = svcSearch.trim().toLowerCase();
@@ -576,6 +587,73 @@ export function useBookingSettings({
       toast.error(err instanceof Error ? err.message : "Couldn't update resource.");
     }
   }
+
+  // ── Date-specific availability overrides (immediate persist) ──────────────
+  /** Add/replace a whole-day override for the selected provider on a date. */
+  async function onAddDateOverride() {
+    if (!selProviderId || !ovDate) return;
+    if (!ovClosed && ovOpen >= ovClose) {
+      toast.error("Open time must be before close time.");
+      return;
+    }
+    setOvBusy(true);
+    try {
+      const res = await withToken((token) =>
+        upsertDateOverrideFn({
+          data: {
+            accessToken: token,
+            viewAsUserId,
+            providerId: selProviderId,
+            date: ovDate,
+            isClosed: ovClosed,
+            openTime: ovClosed ? null : ovOpen,
+            closeTime: ovClosed ? null : ovClose,
+          },
+        }),
+      );
+      if (!res) return;
+      const merge = (b: SchedulingSetupBundle): SchedulingSetupBundle => {
+        const existing = (b.dateOverridesByProvider[selProviderId] ?? []).filter(
+          (o) => o.date !== res.override.date,
+        );
+        const next = [...existing, res.override].sort((a, c) => a.date.localeCompare(c.date));
+        return {
+          ...b,
+          dateOverridesByProvider: { ...b.dateOverridesByProvider, [selProviderId]: next },
+        };
+      };
+      applyToBoth(merge);
+      setOvDate("");
+      setOvClosed(false);
+      setAddingOverride(false);
+      toast.success("Date override saved.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save override.");
+    } finally {
+      setOvBusy(false);
+    }
+  }
+  async function onRemoveDateOverride(providerId: string, overrideId: string) {
+    try {
+      const res = await withToken((token) =>
+        deleteDateOverrideFn({ data: { accessToken: token, viewAsUserId, overrideId } }),
+      );
+      if (!res) return;
+      applyToBoth((b) => ({
+        ...b,
+        dateOverridesByProvider: {
+          ...b.dateOverridesByProvider,
+          [providerId]: (b.dateOverridesByProvider[providerId] ?? []).filter(
+            (o) => o.id !== overrideId,
+          ),
+        },
+      }));
+      toast.success("Override removed.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't remove override.");
+    }
+  }
+
   function patchService(id: string, patch: Partial<BookableServiceDraft>) {
     setDraft((d) =>
       d ? { ...d, services: d.services.map((s) => (s.id === id ? { ...s, ...patch } : s)) } : d,
@@ -747,6 +825,9 @@ export function useBookingSettings({
     addingResource, setAddingResource, newResourceName, setNewResourceName,
     newResourceType, setNewResourceType, resourceBusy, setResourceBusy,
     resourceNameDrafts, setResourceNameDrafts,
+    addingOverride, setAddingOverride, ovDate, setOvDate, ovClosed, setOvClosed,
+    ovOpen, setOvOpen, ovClose, setOvClose, ovBusy,
+    selDateOverrides, onAddDateOverride, onRemoveDateOverride,
     draggedSvcRef, startAutoScroll, stopAutoScroll,
     dirty, activeProviders, activeResourceTypes, selHours, selProviderName,
     svcQuery, inactiveCount, visibleServices, svcCat, sortedVisible, svcCatCounts, categoryOptions,

@@ -23,6 +23,7 @@ import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { cn } from "@/lib/utils";
 import { BusinessHoursSection } from "@/components/refill/booking/BusinessHoursSection";
+import { DateOverridesSection } from "@/components/refill/booking/DateOverridesSection";
 import { BookingRulesSection } from "@/components/refill/booking/BookingRulesSection";
 import { ProvidersSection } from "@/components/refill/booking/ProvidersSection";
 import { RoomsSection } from "@/components/refill/booking/RoomsSection";
@@ -206,6 +207,9 @@ function BookingSettingsPage() {
               patchDay={patchDay}
               toggleSelDay={toggleSelDay}
             />
+
+            {/* ── Date-specific availability (overrides weekly hours per date) ── */}
+            <DateOverridesSection bk={bk} />
 
             {/* ── Rooms & resources ── */}
             <RoomsSection bk={bk} />

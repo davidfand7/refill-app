@@ -3396,6 +3396,47 @@ export type Database = {
           },
         ]
       }
+      scheduling_date_overrides: {
+        Row: {
+          close_time: string | null
+          created_at: string
+          id: string
+          is_closed: boolean
+          open_time: string | null
+          provider_id: string
+          the_date: string
+          updated_at: string
+        }
+        Insert: {
+          close_time?: string | null
+          created_at?: string
+          id?: string
+          is_closed?: boolean
+          open_time?: string | null
+          provider_id: string
+          the_date: string
+          updated_at?: string
+        }
+        Update: {
+          close_time?: string | null
+          created_at?: string
+          id?: string
+          is_closed?: boolean
+          open_time?: string | null
+          provider_id?: string
+          the_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduling_date_overrides_provider_id_fkey"
+            columns: ["provider_id"]
+            isOneToOne: false
+            referencedRelation: "scheduling_providers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scheduling_hours: {
         Row: {
           close_time: string
