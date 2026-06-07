@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.73.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.73.0 &mdash; Add booking is now service-first. </strong>In <strong>Schedule &rarr; Add booking</strong>, you now pick the <strong>service first</strong>, then the <strong>provider</strong> &mdash; and the provider list shows only the people who actually perform that service. If just one provider does it, they&rsquo;re chosen automatically (&ldquo;with Michelle&rdquo;); if none do, you&rsquo;re told to assign one in Booking settings. Matches how you think about a booking: the treatment, then who does it. <strong>Touched</strong>: <code>src/components/refill/schedule/dialogs.tsx</code> (reordered fields + provider eligibility), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.72.1",
     date: "June 2026",
     items: [

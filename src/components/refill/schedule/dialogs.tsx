@@ -198,19 +198,21 @@ export function BookDialog({
     }
   }, [open, initialDate, initialTime, initialProviderId, providers]);
 
-  // Only the services the chosen provider actually performs (opt-out model).
-  const offeredServices = useMemo(() => {
-    const blocked = new Set(providerUnoffered[providerId] ?? []);
-    return services.filter((s) => !blocked.has(s.id));
-  }, [services, providerUnoffered, providerId]);
+  // Service-first flow: pick the service, then choose among the providers who
+  // actually perform it (opt-out model — all providers unless explicitly off).
+  const eligibleProviders = useMemo(() => {
+    if (!serviceId) return providers;
+    return providers.filter((p) => !(providerUnoffered[p.id] ?? []).includes(serviceId));
+  }, [providers, providerUnoffered, serviceId]);
 
-  // If switching provider makes the picked service unavailable, clear it so the
-  // operator can't book a service the provider doesn't perform.
+  // Keep the selected provider valid for the chosen service — auto-pick the only
+  // eligible one, or switch off an ineligible carry-over.
   useEffect(() => {
-    if (serviceId && (providerUnoffered[providerId] ?? []).includes(serviceId)) {
-      setServiceId("");
+    if (!serviceId) return;
+    if (!eligibleProviders.some((p) => p.id === providerId)) {
+      setProviderId(eligibleProviders[0]?.id ?? "");
     }
-  }, [providerId, serviceId, providerUnoffered]);
+  }, [serviceId, eligibleProviders, providerId]);
 
   async function submit() {
     if (!serviceId || !name.trim() || busy) return;
@@ -243,18 +245,28 @@ export function BookDialog({
           <DialogDescription>Pick the day, time, and service to book a patient in.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          {providers.length > 1 && (
+          <Labeled label="Service">
+            <ServicePicker services={services} value={serviceId} onChange={setServiceId} />
+          </Labeled>
+          {serviceId && eligibleProviders.length > 1 && (
             <Labeled label="Provider">
               <select value={providerId} onChange={(e) => setProviderId(e.target.value)} className={inputCls}>
-                {providers.map((p) => (
+                {eligibleProviders.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
             </Labeled>
           )}
-          <Labeled label="Service">
-            <ServicePicker services={offeredServices} value={serviceId} onChange={setServiceId} />
-          </Labeled>
+          {serviceId && providers.length > 1 && eligibleProviders.length === 1 && (
+            <p className="text-[12px] text-ink-soft -mt-1">
+              with <span className="font-medium text-ink">{eligibleProviders[0].name}</span>
+            </p>
+          )}
+          {serviceId && eligibleProviders.length === 0 && (
+            <p className="text-[12px] text-rose">
+              No provider currently performs this service — assign one in Booking settings.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Labeled label="Day"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Labeled>
             <Labeled label="Time"><TimeSelect value={time} onChange={setTime} className={`${inputCls} tabular-nums`} /></Labeled>
@@ -267,7 +279,7 @@ export function BookDialog({
         </div>
         <DialogFooter>
           <button type="button" disabled={busy} onClick={onClose} className={btnGhost}>Cancel</button>
-          <button type="button" disabled={busy || !serviceId || !name.trim()} onClick={submit} className={btnPrimary}>
+          <button type="button" disabled={busy || !serviceId || !providerId || !name.trim()} onClick={submit} className={btnPrimary}>
             {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}<Plus className="h-3.5 w-3.5" /> Book
           </button>
         </DialogFooter>
