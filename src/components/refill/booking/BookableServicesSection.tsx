@@ -64,6 +64,80 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
                 (plus any cleanup buffer between appointments). Turning <strong>Bookable</strong> off
                 tucks a service into <em>inactive</em> to keep this list tidy.
               </p>
+              {/* Add a new service (immediate). Kept at the TOP so its category
+                  dropdown opens in view without scrolling past the whole list. */}
+              {addingSvc ? (
+                <div className="flex flex-wrap items-end gap-2 mb-3 pb-3 border-b border-rule/60">
+                  <div className="flex-1 min-w-[160px]">
+                    <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                      Name
+                    </label>
+                    <input
+                      type="text"
+                      autoFocus
+                      value={newSvcName}
+                      onChange={(e) => setNewSvcName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void onAddService();
+                        if (e.key === "Escape") setAddingSvc(false);
+                      }}
+                      placeholder="e.g. Lip filler"
+                      className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[14px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                      Category
+                    </label>
+                    <CategoryCombobox
+                      value={newSvcCategory}
+                      onChange={(c) => setNewSvcCategory(c)}
+                      options={categoryOptions}
+                      className="w-full rounded-md border border-rule bg-white px-2 py-2 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                      Price
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[12px] text-ink-faint">$</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={newSvcPrice}
+                        onChange={(e) => setNewSvcPrice(e.target.value)}
+                        placeholder="0"
+                        className="w-20 rounded-md border border-rule bg-white px-2 py-2 text-[14px] text-ink text-right outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void onAddService()}
+                    disabled={svcBusy || !newSvcName.trim()}
+                    className="inline-flex items-center gap-1 rounded-md bg-emerald px-3 py-2 text-[13px] font-medium text-paper hover:opacity-95 transition disabled:opacity-50"
+                  >
+                    {svcBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAddingSvc(false)}
+                    className="rounded-md border border-rule px-3 py-2 text-[13px] text-ink-soft hover:text-ink transition"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAddingSvc(true)}
+                  className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-1.5 text-[13px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add service
+                </button>
+              )}
               {draft.services.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 mb-3">
                   <div className="relative flex-1 min-w-[180px]">
@@ -426,80 +500,6 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
                     );
                   })}
                 </div>
-              )}
-
-              {/* Add a new service to the catalog (immediate). */}
-              {addingSvc ? (
-                <div className="flex flex-wrap items-end gap-2 mt-3 pt-3 border-t border-rule/60">
-                  <div className="flex-1 min-w-[160px]">
-                    <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
-                      Name
-                    </label>
-                    <input
-                      type="text"
-                      autoFocus
-                      value={newSvcName}
-                      onChange={(e) => setNewSvcName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") void onAddService();
-                        if (e.key === "Escape") setAddingSvc(false);
-                      }}
-                      placeholder="e.g. Lip filler"
-                      className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[14px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
-                      Category
-                    </label>
-                    <CategoryCombobox
-                      value={newSvcCategory}
-                      onChange={(c) => setNewSvcCategory(c)}
-                      options={categoryOptions}
-                      className="w-full rounded-md border border-rule bg-white px-2 py-2 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
-                      Price
-                    </label>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[12px] text-ink-faint">$</span>
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={newSvcPrice}
-                        onChange={(e) => setNewSvcPrice(e.target.value)}
-                        placeholder="0"
-                        className="w-20 rounded-md border border-rule bg-white px-2 py-2 text-[14px] text-ink text-right outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums"
-                      />
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void onAddService()}
-                    disabled={svcBusy || !newSvcName.trim()}
-                    className="inline-flex items-center gap-1 rounded-md bg-emerald px-3 py-2 text-[13px] font-medium text-paper hover:opacity-95 transition disabled:opacity-50"
-                  >
-                    {svcBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Add
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAddingSvc(false)}
-                    className="rounded-md border border-rule px-3 py-2 text-[13px] text-ink-soft hover:text-ink transition"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setAddingSvc(true)}
-                  className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-1.5 text-[13px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition"
-                >
-                  <Plus className="h-3.5 w-3.5" /> Add service
-                </button>
               )}
             </section>
   );

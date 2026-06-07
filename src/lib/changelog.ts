@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.68.3",
+    date: "June 2026",
+    items: [
+      "<strong>v1.68.3 &mdash; Add-a-service moved to the top + clearer &ldquo;create category.&rdquo; </strong>On <strong>Booking &rarr; Bookable services</strong>, the <strong>Add service</strong> form now sits at the <strong>top</strong> of the card instead of the bottom &mdash; so you don&rsquo;t scroll past the whole list to add one, and its category dropdown opens in view. The category picker also now shows a persistent <strong>Type a name to create a new category</strong> hint, so it&rsquo;s obvious you can make your own (e.g. <em>Body Contouring</em>) and not just pick a built-in. <strong>Touched</strong>: <code>src/components/refill/booking/BookableServicesSection.tsx</code> (add-form moved to top), <code>src/components/refill/CategoryCombobox.tsx</code> (create-category hint), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.68.2",
     date: "June 2026",
     items: [

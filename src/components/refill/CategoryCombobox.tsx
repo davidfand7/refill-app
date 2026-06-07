@@ -162,7 +162,7 @@ export function CategoryCombobox({
         className={cn(className, "pr-7")}
       />
       <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-ink-faint" />
-      {open && rowCount > 0 && (
+      {open && (
         <ul
           id={listId}
           role="listbox"
@@ -205,6 +205,18 @@ export function CategoryCombobox({
               <span className="text-ink">
                 Create “<span className="font-medium">{categoryLabel(norm)}</span>”
               </span>
+            </li>
+          )}
+          {!canCreate && (
+            <li
+              onMouseDown={(e) => {
+                e.preventDefault();
+                inputRef.current?.select();
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] text-ink-faint border-t border-rule/60 cursor-text"
+            >
+              <Plus className="h-3.5 w-3.5 shrink-0" />
+              <span>Type a name to create a new category</span>
             </li>
           )}
         </ul>
