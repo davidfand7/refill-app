@@ -3696,6 +3696,63 @@ export type Database = {
           },
         ]
       }
+      appointment_addons: {
+        Row: {
+          addon_service_id: string | null
+          appointment_id: string
+          created_at: string
+          duration_min: number
+          id: string
+          name: string
+          price: number
+        }
+        Insert: {
+          addon_service_id?: string | null
+          appointment_id: string
+          created_at?: string
+          duration_min?: number
+          id?: string
+          name: string
+          price?: number
+        }
+        Update: {
+          addon_service_id?: string | null
+          appointment_id?: string
+          created_at?: string
+          duration_min?: number
+          id?: string
+          name?: string
+          price?: number
+        }
+        Relationships: []
+      }
+      service_addons: {
+        Row: {
+          addon_service_id: string
+          created_at: string
+          id: string
+          service_id: string
+          sort_order: number
+          tenant_id: string
+        }
+        Insert: {
+          addon_service_id: string
+          created_at?: string
+          id?: string
+          service_id: string
+          sort_order?: number
+          tenant_id: string
+        }
+        Update: {
+          addon_service_id?: string
+          created_at?: string
+          id?: string
+          service_id?: string
+          sort_order?: number
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       service_library: {
         Row: {
           category: string
@@ -3743,6 +3800,7 @@ export type Database = {
           fee_credit: boolean
           hidden_at: string | null
           id: string
+          is_addon: boolean
           is_free: boolean
           library_id: string | null
           name: string
@@ -3764,6 +3822,7 @@ export type Database = {
           fee_credit?: boolean
           hidden_at?: string | null
           id?: string
+          is_addon?: boolean
           is_free?: boolean
           library_id?: string | null
           name: string
@@ -3785,6 +3844,7 @@ export type Database = {
           fee_credit?: boolean
           hidden_at?: string | null
           id?: string
+          is_addon?: boolean
           is_free?: boolean
           library_id?: string | null
           name?: string
