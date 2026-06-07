@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.80.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.80.0 &mdash; Patient booking flow polish. </strong>(1) The <strong>Anyone</strong> provider option now reads &ldquo;Any available provider&rdquo; and shows the right price (no more &ldquo;from&rdquo; when every provider charges the same). (2) The collapsed <strong>When</strong> step now shows the chosen date (e.g. <em>Pick a day · Tue, Jun 24</em>), not just the mode. (3) The contact step validates the <strong>email format</strong> with an inline hint and only enables <strong>Confirm</strong> for a valid address. <strong>Touched</strong>: <code>src/routes/s.$slug.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.79.2",
     date: "June 2026",
     items: [

@@ -248,7 +248,15 @@ function PublicBookingPage() {
         ? "Best value"
         : nameOf(providerChoice) ?? "Choose…";
   const whenLabel =
-    scheduleMode === "soonest" ? "Soonest available" : scheduleMode === "day" ? "Pick a day" : "Choose…";
+    scheduleMode === "soonest"
+      ? "Soonest available"
+      : scheduleMode === "day"
+        ? pickedDay
+          ? `Pick a day · ${shortDate(pickedDay)}`
+          : "Pick a day"
+        : "Choose…";
+  // Basic email shape check (browser type=email is permissive; this gates submit).
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
 
   async function onPickSlot(slot: PublicSlot) {
     if (!ctx || !serviceId) return;
@@ -277,7 +285,7 @@ function PublicBookingPage() {
   async function onConfirm(e: FormEvent) {
     e.preventDefault();
     if (!held || submitting) return;
-    if (!form.name.trim() || !form.email.trim()) return;
+    if (!form.name.trim() || !emailValid) return;
     setSubmitting(true);
     try {
       const r = await confirmBooking({
@@ -420,10 +428,10 @@ function PublicBookingPage() {
                               <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
                               <span className="min-w-0">
                                 <span className="block text-[15px] font-medium text-stone-900">Anyone</span>
-                                <span className="block text-[13px] text-emerald-700">Any of our team</span>
+                                <span className="block text-[13px] text-emerald-700">Any available provider</span>
                               </span>
                             </span>
-                            <span className="text-[13px] text-stone-500 shrink-0">from ${selService.fromPrice}</span>
+                            <span className="text-[13px] text-stone-500 shrink-0">{priceLabel(selService)}</span>
                           </button>
                         );
                         const bestCard = pricesVary ? (
@@ -609,8 +617,15 @@ function PublicBookingPage() {
                   required
                   value={form.email}
                   onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                  className="w-full bg-stone-50 border border-stone-200 rounded-lg px-3 py-2.5 text-[15px] text-stone-900 focus:border-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-200"
+                  className={`w-full bg-stone-50 border rounded-lg px-3 py-2.5 text-[15px] text-stone-900 focus:outline-none focus:ring-2 ${
+                    form.email.trim() && !emailValid
+                      ? "border-rose-300 focus:border-rose-400 focus:ring-rose-100"
+                      : "border-stone-200 focus:border-stone-400 focus:ring-stone-200"
+                  }`}
                 />
+                {form.email.trim() && !emailValid && (
+                  <span className="block text-[12px] text-rose-600 mt-1">Enter a valid email address.</span>
+                )}
               </Field>
               <Field label="Phone (optional)">
                 <input
@@ -630,7 +645,7 @@ function PublicBookingPage() {
 
             <button
               type="submit"
-              disabled={submitting || !form.name.trim() || !form.email.trim()}
+              disabled={submitting || !form.name.trim() || !emailValid}
               className="mt-6 w-full inline-flex items-center justify-center gap-2 bg-stone-900 text-white font-medium text-[15px] rounded-lg px-5 py-3 hover:bg-stone-800 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
             >
               {submitting ? (
@@ -745,6 +760,18 @@ function fmtDayHeading(iso: string, tz: string): string {
     month: "short",
     day: "numeric",
   }).format(new Date(iso));
+}
+
+/** "2026-06-24" → "Tue, Jun 24" (parsed as a plain calendar date, no tz drift). */
+function shortDate(d: string): string {
+  const [y, m, day] = d.split("-").map((n) => parseInt(n, 10));
+  if (!y || !m || !day) return d;
+  return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString("en-US", {
+    timeZone: "UTC",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function dayKey(iso: string, tz: string): string {
