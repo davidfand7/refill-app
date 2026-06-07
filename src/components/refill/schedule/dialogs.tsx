@@ -187,6 +187,7 @@ export function BookDialog({
 }) {
   const [serviceId, setServiceId] = useState("");
   const [providerId, setProviderId] = useState("");
+  const [selectedAddons, setSelectedAddons] = useState<Set<string>>(new Set());
   const [date, setDate] = useState(initialDate);
   const [time, setTime] = useState(initialTime);
   const [name, setName] = useState("");
@@ -211,8 +212,39 @@ export function BookDialog({
       setWhenMode("soonest");
       setPickedDay("");
       setChosenSlotIso(null);
+      setSelectedAddons(new Set());
     }
   }, [open, initialDate, initialTime, initialProviderId, providers]);
+
+  // Add-ons offered with the chosen service. Each selection extends the visit
+  // (combined duration drives the slot engine; combined price shows inline).
+  const selService = useMemo(() => services.find((s) => s.id === serviceId) ?? null, [services, serviceId]);
+  const addOns = selService?.addOns ?? [];
+  const hasAddons = addOns.length > 0;
+  const selectedAddonList = useMemo(
+    () => addOns.filter((a) => selectedAddons.has(a.id)),
+    [addOns, selectedAddons],
+  );
+  const extraMinutes = useMemo(
+    () => selectedAddonList.reduce((s, a) => s + a.durationMin, 0),
+    [selectedAddonList],
+  );
+  const addonPriceTotal = useMemo(
+    () => selectedAddonList.reduce((s, a) => s + (a.isFree ? 0 : a.price), 0),
+    [selectedAddonList],
+  );
+  function toggleAddon(id: string) {
+    setSelectedAddons((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+  // Switching service invalidates a prior service's add-on picks.
+  useEffect(() => {
+    setSelectedAddons(new Set());
+  }, [serviceId]);
 
   // Load the chosen provider's real openings for Smart Schedule (not Custom).
   useEffect(() => {
@@ -231,6 +263,7 @@ export function BookDialog({
             tenantId,
             serviceId,
             providerId,
+            extraMinutes: extraMinutes || undefined,
             fromIso: now.toISOString(),
             toIso: to.toISOString(),
           },
@@ -243,7 +276,7 @@ export function BookDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, whenMode, tenantId, serviceId, providerId]);
+  }, [open, whenMode, tenantId, serviceId, providerId, extraMinutes]);
 
   // Group openings by day; "Pick a day" filters to the chosen date.
   const dayGroups = useMemo(() => {
@@ -286,10 +319,11 @@ export function BookDialog({
   // A time is chosen if Custom (manual fields) or a slot was clicked.
   const timeReady = whenMode === "custom" || chosenSlotIso !== null;
 
-  // A prior slot pick is void once the service/provider/mode context changes.
+  // A prior slot pick is void once the service/provider/mode/add-ons change
+  // (add-ons change the visit length, so the held slot may no longer fit).
   useEffect(() => {
     setChosenSlotIso(null);
-  }, [serviceId, providerId, whenMode]);
+  }, [serviceId, providerId, whenMode, extraMinutes]);
 
   // Service-first flow: pick the service, then choose among the providers who
   // actually perform it (opt-out model — all providers unless explicitly off).
@@ -318,7 +352,7 @@ export function BookDialog({
       const [hh, mm] = time.split(":").map((n) => parseInt(n, 10));
       const startIso = zonedWallClockToUtc(y, m, d, hh, mm, timezone).toISOString();
       const r = await ownerCreateAppointmentFn({
-        data: { accessToken: token, viewAsUserId, serviceId, providerId: providerId || undefined, startIso, patientName: name.trim(), patientEmail: email.trim() || undefined, patientPhone: phone.trim() || undefined },
+        data: { accessToken: token, viewAsUserId, serviceId, providerId: providerId || undefined, startIso, patientName: name.trim(), patientEmail: email.trim() || undefined, patientPhone: phone.trim() || undefined, addonServiceIds: selectedAddonList.map((a) => a.id) },
       });
       if (!r.ok) { toast.error(r.reason); return; }
       toast.success("Booked.");
@@ -359,6 +393,50 @@ export function BookDialog({
             <p className="text-[12px] text-rose">
               No provider currently performs this service — assign one in Booking settings.
             </p>
+          )}
+          {serviceId && hasAddons && (
+            <Labeled label="Add-ons (optional)">
+              <div className="rounded-md border border-rule divide-y divide-rule/50 overflow-hidden">
+                {addOns.map((a) => {
+                  const checked = selectedAddons.has(a.id);
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => toggleAddon(a.id)}
+                      className={
+                        "w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-[13px] transition " +
+                        (checked ? "bg-emerald/10" : "hover:bg-paper/50")
+                      }
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        <span
+                          className={
+                            "h-4 w-4 rounded border flex items-center justify-center shrink-0 " +
+                            (checked ? "border-emerald bg-emerald" : "border-rule bg-white")
+                          }
+                        >
+                          {checked && <Check className="h-3 w-3 text-paper" />}
+                        </span>
+                        <span className="truncate text-ink">{a.name}</span>
+                      </span>
+                      <span className="text-ink-faint tabular-nums shrink-0 whitespace-nowrap">
+                        +{a.durationMin} min{a.isFree ? " · Free" : ` · +$${a.price}`}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedAddonList.length > 0 && (
+                <p className="mt-1.5 text-[12px] text-ink-soft">
+                  Total visit:{" "}
+                  <span className="font-medium text-ink tabular-nums">
+                    {(selService?.durationMin ?? 0) + extraMinutes} min
+                  </span>
+                  {addonPriceTotal > 0 ? ` · +$${addonPriceTotal} add-ons` : ""}
+                </p>
+              )}
+            </Labeled>
           )}
           {serviceId && providerId && (
             <div>
@@ -677,6 +755,24 @@ export function EditDialog({
             </Labeled>
             <Labeled label="Patient name"><input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} /></Labeled>
           </div>
+          {appt && appt.addOns.length > 0 && (
+            <div className="rounded-md border border-rule bg-paper/40 px-3 py-2">
+              <div className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1">Add-ons</div>
+              <ul className="space-y-0.5">
+                {appt.addOns.map((a, i) => (
+                  <li key={i} className="flex items-center justify-between text-[13px] text-ink-soft">
+                    <span className="truncate">{a.name}</span>
+                    <span className="tabular-nums shrink-0 whitespace-nowrap">
+                      +{a.durationMin} min{a.price > 0 ? ` · $${a.price}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1 text-[11px] text-ink-faint">
+                Duration above includes add-on time. Editing duration won&rsquo;t change the saved add-ons.
+              </p>
+            </div>
+          )}
         </div>
         <DialogFooter className="sm:justify-between">
           <button type="button" disabled={busy} onClick={() => appt && onCancelAppt(appt)} className="inline-flex items-center gap-1.5 rounded-lg border border-bad/30 bg-white px-4 py-2 text-sm text-bad hover:bg-bad/5 transition disabled:opacity-40">

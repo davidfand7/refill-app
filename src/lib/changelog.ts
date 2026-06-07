@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.88.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.88.0 &mdash; Add-ons in the owner calendar too. </strong>Completes the add-ons arc: when you book a patient from <strong>Schedule &rarr; Add booking</strong>, any service with add-ons now shows an <strong>Add-ons</strong> picker (with a live &ldquo;total visit&rdquo; duration + price). Picks <strong>extend the visit</strong> &mdash; the time grid finds openings for the combined duration, and the appointment saves the chosen add-ons (snapshotted, price/min frozen). Open any appointment&rsquo;s <strong>Edit</strong> dialog and you&rsquo;ll see its add-ons listed. Eligibility &amp; pricing are re-validated server-side. <strong>Touched</strong>: <code>scheduling-owner.functions.ts</code> (service add-ons in day/week/month payloads, <code>ownerCreateAppointmentFn</code> combined duration + <code>appointment_addons</code> snapshot, add-ons hydrated onto appointments), <code>schedule/shared.ts</code> (<code>ServiceLite.addOns</code>), <code>schedule/dialogs.tsx</code> (Book add-ons picker + Edit detail), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.87.0",
     date: "June 2026",
     items: [

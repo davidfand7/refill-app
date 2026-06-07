@@ -4,10 +4,17 @@
  * No React — pure date/layout math + per-provider accent constants.
  */
 
-import type { DayAppointment, DayBlock } from "@/server/scheduling-owner.functions";
+import type { AddOnLite, DayAppointment, DayBlock } from "@/server/scheduling-owner.functions";
 
 export type View = "day" | "week" | "month";
-export type ServiceLite = { id: string; name: string; durationMin: number; category: string; sortOrder: number | null };
+export type ServiceLite = {
+  id: string;
+  name: string;
+  durationMin: number;
+  category: string;
+  sortOrder: number | null;
+  addOns: AddOnLite[];
+};
 
 // Zoom = pixels-per-minute for the positioned grids. Default is "comfortable"
 // so a 30-min appt is tall enough to show name + time without clipping.

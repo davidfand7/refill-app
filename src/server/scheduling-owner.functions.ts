@@ -71,6 +71,32 @@ export interface ProviderLite {
   name: string;
 }
 
+/** An add-on offered with a service (its own price + duration). */
+export interface AddOnLite {
+  id: string;
+  name: string;
+  price: number;
+  durationMin: number;
+  isFree: boolean;
+}
+
+/** A service in the owner booking picker, with its eligible add-ons. */
+export interface OwnerServiceLite {
+  id: string;
+  name: string;
+  durationMin: number;
+  category: string;
+  sortOrder: number | null;
+  addOns: AddOnLite[];
+}
+
+/** An add-on snapshotted onto an appointment (price/min frozen at booking). */
+export interface ApptAddon {
+  name: string;
+  price: number;
+  durationMin: number;
+}
+
 /** Open band for one day, minutes-from-midnight (local). */
 export interface DayBand {
   isOpen: boolean;
@@ -87,6 +113,8 @@ export interface DayAppointment {
   status: string;
   patientName: string | null;
   source: string;
+  /** Add-ons chosen for this appointment (snapshot), if any. */
+  addOns: ApptAddon[];
 }
 
 export interface DayBlock {
@@ -108,7 +136,7 @@ export interface DaySchedule {
   openByProvider: Record<string, DayBand>;
   appointments: DayAppointment[];
   blocks: DayBlock[];
-  services: Array<{ id: string; name: string; durationMin: number; category: string; sortOrder: number | null }>;
+  services: OwnerServiceLite[];
   /** providerId → serviceIds that provider does NOT offer (opt-out). */
   providerUnoffered: Record<string, string[]>;
 }
@@ -157,7 +185,67 @@ async function loadProviderUnoffered(
   return m;
 }
 
-/** Map raw appointment rows → DayAppointment[], resolving display names. */
+/**
+ * Eligible add-ons per base service (serviceId → AddOnLite[]), in display order.
+ * Add-on details come from the services table (add-ons may be add-on-only, i.e.
+ * not online_bookable, so they're fetched by id rather than from a filtered list).
+ */
+async function loadServiceAddons(
+  sb: ReturnType<typeof admin>,
+  tenantId: string,
+): Promise<Map<string, AddOnLite[]>> {
+  const map = new Map<string, AddOnLite[]>();
+  const { data: saRows } = await sb
+    .from("service_addons")
+    .select("service_id, addon_service_id, sort_order")
+    .eq("tenant_id", tenantId)
+    .order("sort_order");
+  if (!saRows?.length) return map;
+  const addonIds = [...new Set(saRows.map((r) => r.addon_service_id))];
+  const { data: addonRows } = await sb
+    .from("services")
+    .select("id, name, service_price, duration_min, is_free")
+    .in("id", addonIds)
+    .is("hidden_at", null);
+  const byId = new Map<string, AddOnLite>();
+  for (const a of addonRows ?? [])
+    byId.set(a.id, {
+      id: a.id,
+      name: a.name,
+      price: a.is_free ? 0 : a.service_price,
+      durationMin: a.duration_min,
+      isFree: a.is_free ?? false,
+    });
+  for (const r of saRows) {
+    const a = byId.get(r.addon_service_id);
+    if (!a) continue;
+    const arr = map.get(r.service_id) ?? [];
+    arr.push(a);
+    map.set(r.service_id, arr);
+  }
+  return map;
+}
+
+/** Snapshotted add-ons per appointment (appointmentId → ApptAddon[]). */
+async function loadApptAddons(
+  sb: ReturnType<typeof admin>,
+  apptIds: string[],
+): Promise<Map<string, ApptAddon[]>> {
+  const map = new Map<string, ApptAddon[]>();
+  if (!apptIds.length) return map;
+  const { data } = await sb
+    .from("appointment_addons")
+    .select("appointment_id, name, price, duration_min")
+    .in("appointment_id", apptIds);
+  for (const r of data ?? []) {
+    const arr = map.get(r.appointment_id) ?? [];
+    arr.push({ name: r.name, price: Number(r.price), durationMin: r.duration_min });
+    map.set(r.appointment_id, arr);
+  }
+  return map;
+}
+
+/** Map raw appointment rows → DayAppointment[], resolving display names + add-ons. */
 async function hydrateAppointments(
   sb: ReturnType<typeof admin>,
   rows: ApptRow[],
@@ -170,6 +258,7 @@ async function hydrateAppointments(
     const { data: nodes } = await sb.from("knowledge_nodes").select("id, title").in("id", nodeIds);
     for (const n of nodes ?? []) titleById.set(n.id, n.title ?? "");
   }
+  const addonsByAppt = await loadApptAddons(sb, rows.map((a) => a.id));
   return rows.map((a) => ({
     id: a.id,
     providerId: a.provider_id,
@@ -179,6 +268,7 @@ async function hydrateAppointments(
     status: a.status,
     patientName: a.booking_name ?? (a.patient_node_id ? titleById.get(a.patient_node_id) ?? null : null),
     source: a.source,
+    addOns: addonsByAppt.get(a.id) ?? [],
   }));
 }
 
@@ -245,6 +335,7 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
 
     // Native bookings carry booking_name; matched ones resolve via knowledge_nodes.
     const appointments = await hydrateAppointments(sb, apptRows ?? []);
+    const serviceAddons = await loadServiceAddons(sb, tenantId);
 
     const blocks: DayBlock[] = (blockRows ?? [])
       .map((b) => {
@@ -289,6 +380,7 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
         durationMin: s.duration_min,
         category: s.category,
         sortOrder: s.sort_order,
+        addOns: serviceAddons.get(s.id) ?? [],
       })),
       providerUnoffered: await loadProviderUnoffered(sb, idFilter),
     };
@@ -312,7 +404,7 @@ export interface RangeSchedule {
   blocks: DayBlock[];
   /** providerId → that provider's weekly availability pattern (0..6). */
   weeklyHoursByProvider: Record<string, WeeklyHoursRow[]>;
-  services: Array<{ id: string; name: string; durationMin: number; category: string; sortOrder: number | null }>;
+  services: OwnerServiceLite[];
   /** providerId → serviceIds that provider does NOT offer (opt-out). */
   providerUnoffered: Record<string, string[]>;
 }
@@ -378,6 +470,7 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
       ]);
 
     const appointments = await hydrateAppointments(sb, apptRows ?? []);
+    const serviceAddons = await loadServiceAddons(sb, tenantId);
     const blocks: DayBlock[] = (blockRows ?? [])
       .map((b) => {
         const r = parseRange(b.during);
@@ -416,6 +509,7 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
         durationMin: s.duration_min,
         category: s.category,
         sortOrder: s.sort_order,
+        addOns: serviceAddons.get(s.id) ?? [],
       })),
       providerUnoffered: await loadProviderUnoffered(sb, idFilter),
     };
@@ -433,6 +527,8 @@ const createApptInput = z.object({
   patientName: z.string().min(1).max(120),
   patientEmail: z.string().email().max(200).optional(),
   patientPhone: z.string().max(40).optional(),
+  /** Chosen add-on service ids (validated + re-priced server-side). */
+  addonServiceIds: z.array(z.string().uuid()).optional().default([]),
 });
 
 export type OwnerCreateResult =
@@ -481,7 +577,37 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
       .eq("provider_id", providerId)
       .eq("service_id", svc.id)
       .maybeSingle();
-    const effectiveDuration = override?.duration_min ?? svc.duration_min;
+    const baseDuration = override?.duration_min ?? svc.duration_min;
+
+    // Resolve chosen add-ons against eligibility (never trust client price/min).
+    // Each add-on extends the visit; the snapshot freezes price/min at booking.
+    type ChosenAddon = { id: string; name: string; price: number; durationMin: number };
+    let chosenAddons: ChosenAddon[] = [];
+    const requestedAddonIds = [...new Set(data.addonServiceIds)];
+    if (requestedAddonIds.length) {
+      const { data: eligRows } = await sb
+        .from("service_addons")
+        .select("addon_service_id")
+        .eq("tenant_id", tenantId)
+        .eq("service_id", svc.id)
+        .in("addon_service_id", requestedAddonIds);
+      const eligible = new Set((eligRows ?? []).map((r) => r.addon_service_id));
+      if (requestedAddonIds.some((id) => !eligible.has(id))) {
+        return { ok: false, reason: "An add-on isn't available for this service.", code: "invalid" };
+      }
+      const { data: addonRows } = await sb
+        .from("services")
+        .select("id, name, service_price, duration_min, is_free")
+        .in("id", requestedAddonIds)
+        .is("hidden_at", null);
+      chosenAddons = (addonRows ?? []).map((a) => ({
+        id: a.id,
+        name: a.name,
+        price: a.is_free ? 0 : a.service_price,
+        durationMin: a.duration_min,
+      }));
+    }
+    const effectiveDuration = baseDuration + chosenAddons.reduce((s, a) => s + a.durationMin, 0);
 
     // If the service needs a room/resource, claim a free one of that type.
     let resourceId: string | null = null;
@@ -521,6 +647,19 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
         return { ok: false, reason: "That time overlaps an existing appointment.", code: "conflict" };
       }
       return { ok: false, reason: `Couldn't book: ${error.message}`, code: "invalid" };
+    }
+
+    // Snapshot chosen add-ons onto the new appointment (price/min frozen now).
+    if (chosenAddons.length) {
+      await sb.from("appointment_addons").insert(
+        chosenAddons.map((a) => ({
+          appointment_id: created.id,
+          addon_service_id: a.id,
+          name: a.name,
+          price: a.price,
+          duration_min: a.durationMin,
+        })),
+      );
     }
 
     // Confirmation email when the owner supplied a patient email (best-effort).
