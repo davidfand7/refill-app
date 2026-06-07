@@ -99,6 +99,7 @@ export interface DayBlock {
 }
 
 export interface DaySchedule {
+  tenantId: string;
   timezone: string;
   dateIso: string;
   /** Active providers, ordered by created_at (the day-view columns). */
@@ -275,6 +276,7 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
     }
 
     return {
+      tenantId,
       timezone,
       dateIso: data.dateIso,
       providers,
@@ -301,6 +303,7 @@ export interface WeeklyHoursRow {
 }
 
 export interface RangeSchedule {
+  tenantId: string;
   timezone: string;
   /** Active providers, ordered by created_at. */
   providers: ProviderLite[];
@@ -400,6 +403,7 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
     }
 
     return {
+      tenantId,
       timezone,
       providers,
       appointments,

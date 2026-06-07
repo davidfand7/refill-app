@@ -5,9 +5,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Ban, Plus, ChevronDown, Check } from "lucide-react";
+import { Loader2, Ban, Plus, ChevronDown, Check, CalendarClock, CalendarRange, Pencil } from "lucide-react";
 import { zonedWallClockToUtc } from "@/lib/scheduling-slots";
 import { categoryLabel, categoryRank } from "@/lib/service-categories";
+import { listAvailableSlots, type PublicSlot } from "@/server/scheduling.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { TimeSelect } from "@/components/refill/TimeSelect";
 import {
@@ -160,6 +161,7 @@ export function BookDialog({
   services,
   providers,
   providerUnoffered,
+  tenantId,
   timezone,
   initialDate,
   initialTime,
@@ -173,6 +175,7 @@ export function BookDialog({
   providers: ProviderLite[];
   /** providerId → serviceIds that provider does NOT offer (hidden from picker). */
   providerUnoffered: Record<string, string[]>;
+  tenantId: string;
   timezone: string;
   initialDate: string;
   initialTime: string;
@@ -189,14 +192,100 @@ export function BookDialog({
   const [phone, setPhone] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // Smart Schedule (mirrors the patient page): show the provider's real openings.
+  // Owners keep a "Custom time" escape to book walk-ins / off-hours overrides.
+  const [whenMode, setWhenMode] = useState<"soonest" | "day" | "custom">("soonest");
+  const [pickedDay, setPickedDay] = useState("");
+  const [chosenSlotIso, setChosenSlotIso] = useState<string | null>(null);
+  const [slots, setSlots] = useState<PublicSlot[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+
   // Reseed date+time+provider whenever the dialog is (re)opened.
   useEffect(() => {
     if (open) {
       setDate(initialDate);
       setTime(initialTime);
       setProviderId(initialProviderId ?? providers[0]?.id ?? "");
+      setWhenMode("soonest");
+      setPickedDay("");
+      setChosenSlotIso(null);
     }
   }, [open, initialDate, initialTime, initialProviderId, providers]);
+
+  // Load the chosen provider's real openings for Smart Schedule (not Custom).
+  useEffect(() => {
+    if (!open || whenMode === "custom" || !tenantId || !serviceId || !providerId) {
+      setSlots([]);
+      return;
+    }
+    let cancelled = false;
+    setSlotsLoading(true);
+    void (async () => {
+      try {
+        const now = new Date();
+        const to = new Date(now.getTime() + 30 * 86_400_000);
+        const r = await listAvailableSlots({
+          data: {
+            tenantId,
+            serviceId,
+            providerId,
+            fromIso: now.toISOString(),
+            toIso: to.toISOString(),
+          },
+        });
+        if (!cancelled) setSlots(r.ok ? r.slots : []);
+      } finally {
+        if (!cancelled) setSlotsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, whenMode, tenantId, serviceId, providerId]);
+
+  // Group openings by day; "Pick a day" filters to the chosen date.
+  const dayGroups = useMemo(() => {
+    const byKey = new Map<string, { key: string; heading: string; slots: PublicSlot[] }>();
+    const out: Array<{ key: string; heading: string; slots: PublicSlot[] }> = [];
+    for (const s of slots) {
+      const key = dayKey(s.startIso, timezone);
+      let g = byKey.get(key);
+      if (!g) {
+        g = { key, heading: fmtDayLabel(s.startIso), slots: [] };
+        byKey.set(key, g);
+        out.push(g);
+      }
+      g.slots.push(s);
+    }
+    return out;
+  }, [slots, timezone]);
+  const visibleDayGroups = useMemo(() => {
+    if (whenMode !== "day") return dayGroups;
+    if (!pickedDay) return dayGroups.slice(0, 1);
+    return dayGroups.filter((g) => g.key === pickedDay);
+  }, [dayGroups, whenMode, pickedDay]);
+
+  // Default the "Pick a day" date to the soonest day with openings.
+  useEffect(() => {
+    if (whenMode === "day" && !pickedDay && dayGroups.length > 0) setPickedDay(dayGroups[0].key);
+  }, [whenMode, pickedDay, dayGroups]);
+
+  const todayKey = dayKey(new Date().toISOString(), timezone);
+  const maxKey = dayKey(new Date(Date.now() + 30 * 86_400_000).toISOString(), timezone);
+
+  /** Picking a slot fills date+time so submit() builds the same startIso. */
+  function pickSlot(s: PublicSlot) {
+    setDate(dayKey(s.startIso, timezone));
+    setTime(minToHHMM(localMinutes(s.startIso, timezone)));
+    setChosenSlotIso(s.startIso);
+  }
+  // A time is chosen if Custom (manual fields) or a slot was clicked.
+  const timeReady = whenMode === "custom" || chosenSlotIso !== null;
+
+  // A prior slot pick is void once the service/provider/mode context changes.
+  useEffect(() => {
+    setChosenSlotIso(null);
+  }, [serviceId, providerId, whenMode]);
 
   // Service-first flow: pick the service, then choose among the providers who
   // actually perform it (opt-out model — all providers unless explicitly off).
@@ -267,10 +356,89 @@ export function BookDialog({
               No provider currently performs this service — assign one in Booking settings.
             </p>
           )}
-          <div className="grid grid-cols-2 gap-3">
-            <Labeled label="Day"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Labeled>
-            <Labeled label="Time"><TimeSelect value={time} onChange={setTime} className={`${inputCls} tabular-nums`} /></Labeled>
-          </div>
+          {serviceId && providerId && (
+            <div>
+              <div className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1.5">When</div>
+              <div className="inline-flex rounded-md border border-rule overflow-hidden text-[12px] mb-3">
+                {([
+                  { k: "soonest", label: "Soonest", icon: CalendarClock },
+                  { k: "day", label: "Pick a day", icon: CalendarRange },
+                  { k: "custom", label: "Custom time", icon: Pencil },
+                ] as const).map(({ k, label, icon: Icon }, i) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setWhenMode(k)}
+                    className={
+                      "inline-flex items-center gap-1.5 px-2.5 py-1.5 font-medium transition " +
+                      (i > 0 ? "border-l border-rule " : "") +
+                      (whenMode === k ? "bg-emerald text-paper" : "text-ink-soft hover:text-ink")
+                    }
+                  >
+                    <Icon className="h-3.5 w-3.5" /> {label}
+                  </button>
+                ))}
+              </div>
+
+              {whenMode === "custom" ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <Labeled label="Day"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Labeled>
+                  <Labeled label="Time"><TimeSelect value={time} onChange={setTime} className={`${inputCls} tabular-nums`} /></Labeled>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {whenMode === "day" && (
+                    <input
+                      type="date"
+                      value={pickedDay}
+                      min={todayKey}
+                      max={maxKey}
+                      onChange={(e) => setPickedDay(e.target.value)}
+                      className={inputCls}
+                    />
+                  )}
+                  {slotsLoading ? (
+                    <div className="flex items-center gap-2 text-ink-soft text-[13px] py-3">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Finding open times…
+                    </div>
+                  ) : visibleDayGroups.length === 0 ? (
+                    <p className="text-[13px] text-ink-soft py-3">
+                      {whenMode === "day"
+                        ? "No openings that day — try another date or Custom time."
+                        : "No open times in the next 30 days. Use Custom time to override."}
+                    </p>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row gap-y-4 sm:gap-x-3 max-h-[40vh] overflow-y-auto sm:overflow-y-hidden sm:overflow-x-auto pr-1 sm:pb-2">
+                      {visibleDayGroups.map((g) => (
+                        <div key={g.key} className="sm:shrink-0 sm:w-32 sm:max-h-[38vh] sm:overflow-y-auto">
+                          <div className="text-[12px] font-semibold text-ink-soft mb-1.5 sm:text-center sm:sticky sm:top-0 sm:bg-paper sm:pb-1">
+                            {g.heading}
+                          </div>
+                          <div className="grid grid-cols-3 sm:grid-cols-1 gap-1.5">
+                            {g.slots.map((s) => (
+                              <button
+                                key={`${s.startIso}-${s.providerId}`}
+                                type="button"
+                                onClick={() => pickSlot(s)}
+                                className={
+                                  "rounded-md border px-2 py-1.5 text-[13px] tabular-nums transition sm:text-center " +
+                                  (chosenSlotIso === s.startIso
+                                    ? "border-emerald bg-emerald text-paper"
+                                    : "border-rule bg-white text-ink hover:border-emerald")
+                                }
+                              >
+                                {fmtTime(s.startIso, timezone)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           <Labeled label="Patient name"><input type="text" value={name} onChange={(e) => setName(e.target.value)} className={inputCls} /></Labeled>
           <div className="grid grid-cols-2 gap-3">
             <Labeled label="Email (optional)"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputCls} /></Labeled>
@@ -279,7 +447,7 @@ export function BookDialog({
         </div>
         <DialogFooter>
           <button type="button" disabled={busy} onClick={onClose} className={btnGhost}>Cancel</button>
-          <button type="button" disabled={busy || !serviceId || !providerId || !name.trim()} onClick={submit} className={btnPrimary}>
+          <button type="button" disabled={busy || !serviceId || !providerId || !timeReady || !name.trim()} onClick={submit} className={btnPrimary}>
             {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />}<Plus className="h-3.5 w-3.5" /> Book
           </button>
         </DialogFooter>

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.76.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.76.0 &mdash; Smart Schedule in the owner Add-booking dialog. </strong>When you add a booking from the <strong>Schedule</strong> tab, the time step now offers the same Smart Schedule as patients: <strong>Soonest</strong> (the provider&rsquo;s real openings), <strong>Pick a day</strong> (a date, then that day&rsquo;s openings), and <strong>Custom time</strong> (manual day + time for walk-ins / off-hours overrides). Tapping a real opening fills the time for you, so you can&rsquo;t accidentally pick a slot the provider isn&rsquo;t free. <strong>Touched</strong>: <code>src/server/scheduling-owner.functions.ts</code> (return tenantId), <code>src/components/refill/schedule/dialogs.tsx</code> (Smart Schedule picker + Custom escape), <code>src/routes/app.refill.schedule.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.75.0",
     date: "June 2026",
     items: [

@@ -122,6 +122,7 @@ function SchedulePage() {
   const providers: ProviderLite[] = (view === "day" ? day?.providers : range?.providers) ?? [];
   const providerUnoffered: Record<string, string[]> =
     (view === "day" ? day?.providerUnoffered : range?.providerUnoffered) ?? {};
+  const tenantId = (view === "day" ? day?.tenantId : range?.tenantId) ?? "";
 
   /** Drag-to-move: reschedule (and, in multi-column day, reassign provider). */
   async function onMove(appt: DayAppointment, startIso: string, providerId?: string) {
@@ -277,7 +278,7 @@ function SchedulePage() {
         ) : null}
       </div>
 
-      <BookDialog open={!!bookSeed} initialDate={bookSeed?.date ?? dateIso} initialTime={bookSeed?.time ?? "09:00"} initialProviderId={bookSeed?.providerId} providers={providers} onClose={() => setBookSeed(null)} services={services} providerUnoffered={providerUnoffered} timezone={tz} viewAsUserId={viewAsUserId} onBooked={() => { setBookSeed(null); void load(); }} />
+      <BookDialog open={!!bookSeed} initialDate={bookSeed?.date ?? dateIso} initialTime={bookSeed?.time ?? "09:00"} initialProviderId={bookSeed?.providerId} providers={providers} onClose={() => setBookSeed(null)} services={services} providerUnoffered={providerUnoffered} tenantId={tenantId} timezone={tz} viewAsUserId={viewAsUserId} onBooked={() => { setBookSeed(null); void load(); }} />
       <BlockDialog open={blockOpen} onClose={() => setBlockOpen(false)} timezone={tz} dateIso={dateIso} viewAsUserId={viewAsUserId} onBlocked={() => { setBlockOpen(false); void load(); }} />
       <CancelDialog appt={cancelTarget} tz={tz} viewAsUserId={viewAsUserId} onClose={() => setCancelTarget(null)} onCancelled={() => { setCancelTarget(null); void load(); }} />
       <EditDialog appt={editTarget} tz={tz} providers={providers} viewAsUserId={viewAsUserId} onClose={() => setEditTarget(null)} onSaved={() => { setEditTarget(null); void load(); }} onCancelAppt={(a) => { setEditTarget(null); setCancelTarget(a); }} />
