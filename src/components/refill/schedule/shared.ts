@@ -7,7 +7,7 @@
 import type { DayAppointment, DayBlock } from "@/server/scheduling-owner.functions";
 
 export type View = "day" | "week" | "month";
-export type ServiceLite = { id: string; name: string; durationMin: number };
+export type ServiceLite = { id: string; name: string; durationMin: number; category: string };
 
 // Zoom = pixels-per-minute for the positioned grids. Default is "comfortable"
 // so a 30-min appt is tall enough to show name + time without clipping.

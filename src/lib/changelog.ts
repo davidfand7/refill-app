@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.72.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.72.0 &mdash; Booking service picker is now grouped by category (collapsed by default). </strong>In <strong>Schedule &rarr; Add booking</strong>, the Service field used to be one long alphabetical dropdown of every service. It&rsquo;s now organized into <strong>collapsible category groups</strong> &mdash; all collapsed by default &mdash; so you tap a category (e.g. <em>BBL</em>, <em>RF Microneedling</em>) to reveal its services, then pick one. The chosen service shows at the top, and reopening jumps you back to its category. Far easier to scan a big catalog. <strong>Touched</strong>: <code>src/components/refill/schedule/dialogs.tsx</code> (new collapsible ServicePicker), <code>src/components/refill/schedule/shared.ts</code> + <code>src/server/scheduling-owner.functions.ts</code> (carry <code>category</code> on each bookable service), <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.71.0",
     date: "June 2026",
     items: [

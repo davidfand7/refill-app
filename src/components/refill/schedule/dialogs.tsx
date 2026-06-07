@@ -5,8 +5,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Ban, Plus } from "lucide-react";
+import { Loader2, Ban, Plus, ChevronDown, Check } from "lucide-react";
 import { zonedWallClockToUtc } from "@/lib/scheduling-slots";
+import { categoryLabel, categoryRank } from "@/lib/service-categories";
 import { supabase } from "@/integrations/supabase/client";
 import { TimeSelect } from "@/components/refill/TimeSelect";
 import {
@@ -33,6 +34,123 @@ import {
   minToHHMM,
   localMinutes,
 } from "@/components/refill/schedule/shared";
+
+// ── Service picker (collapsible category turndowns) ──────────────────────────
+// Replaces a flat alphabetical <select> of every service with category groups
+// that are COLLAPSED by default — so a long catalog (e.g. dozens of BBL / RF
+// areas) is scannable. Pick a category to reveal its services, then a service.
+function ServicePicker({
+  services,
+  value,
+  onChange,
+}: {
+  services: ServiceLite[];
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const groups = useMemo(() => {
+    const m = new Map<string, ServiceLite[]>();
+    for (const s of services) {
+      const c = s.category?.trim() || "other";
+      const arr = m.get(c) ?? [];
+      arr.push(s);
+      m.set(c, arr);
+    }
+    return [...m.entries()]
+      .map(([cat, rows]) => ({
+        cat,
+        rows: [...rows].sort((a, b) => a.name.localeCompare(b.name)),
+      }))
+      .sort((a, b) => categoryRank(a.cat) - categoryRank(b.cat) || a.cat.localeCompare(b.cat));
+  }, [services]);
+
+  const selected = services.find((s) => s.id === value) ?? null;
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // Reveal the selected service's category (e.g. on reopen) — otherwise default
+  // is everything collapsed.
+  useEffect(() => {
+    if (!value) return;
+    const svc = services.find((s) => s.id === value);
+    if (!svc) return;
+    const cat = svc.category?.trim() || "other";
+    setExpanded((p) => (p.has(cat) ? p : new Set(p).add(cat)));
+  }, [value, services]);
+
+  function toggle(cat: string) {
+    setExpanded((p) => {
+      const n = new Set(p);
+      if (n.has(cat)) n.delete(cat);
+      else n.add(cat);
+      return n;
+    });
+  }
+
+  return (
+    <div className="rounded-md border border-rule overflow-hidden">
+      <div className="px-3 py-2 text-[13px] border-b border-rule bg-paper/40">
+        {selected ? (
+          <span className="text-ink">
+            {selected.name} <span className="text-ink-faint">· {selected.durationMin} min</span>
+          </span>
+        ) : (
+          <span className="text-ink-faint">Choose a service…</span>
+        )}
+      </div>
+      <div className="max-h-56 overflow-auto divide-y divide-rule/50">
+        {groups.map(({ cat, rows }) => {
+          const open = expanded.has(cat);
+          const selectedHere = !!selected && rows.some((r) => r.id === value);
+          return (
+            <div key={cat}>
+              <button
+                type="button"
+                onClick={() => toggle(cat)}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-paper/50 transition"
+              >
+                <ChevronDown
+                  className={`h-3.5 w-3.5 text-ink-faint transition-transform ${open ? "" : "-rotate-90"}`}
+                />
+                <span className="text-[13px] font-medium text-ink">{categoryLabel(cat)}</span>
+                <span className="text-[11px] text-ink-faint tabular-nums">{rows.length}</span>
+                {selectedHere && !open && (
+                  <span className="ml-auto text-[11px] text-emerald truncate max-w-[55%]">
+                    {selected!.name}
+                  </span>
+                )}
+              </button>
+              {open && (
+                <ul className="pb-1">
+                  {rows.map((s) => (
+                    <li key={s.id}>
+                      <button
+                        type="button"
+                        onClick={() => onChange(s.id)}
+                        className={`w-full flex items-center gap-2 pl-9 pr-3 py-1.5 text-left text-[13px] transition ${
+                          value === s.id
+                            ? "bg-emerald/10 text-ink font-medium"
+                            : "text-ink-soft hover:bg-paper/60 hover:text-ink"
+                        }`}
+                      >
+                        <span className="flex-1 truncate">
+                          {s.name} <span className="text-ink-faint">· {s.durationMin} min</span>
+                        </span>
+                        {value === s.id && <Check className="h-3.5 w-3.5 text-emerald shrink-0" />}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+        {groups.length === 0 && (
+          <p className="px-3 py-3 text-[12px] text-ink-soft">No bookable services yet.</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ── Dialogs ──────────────────────────────────────────────────────────────────
 
@@ -118,12 +236,7 @@ export function BookDialog({
             </Labeled>
           )}
           <Labeled label="Service">
-            <select value={serviceId} onChange={(e) => setServiceId(e.target.value)} className={inputCls}>
-              <option value="">Choose a service…</option>
-              {services.map((s) => (
-                <option key={s.id} value={s.id}>{s.name} · {s.durationMin} min</option>
-              ))}
-            </select>
+            <ServicePicker services={services} value={serviceId} onChange={setServiceId} />
           </Labeled>
           <div className="grid grid-cols-2 gap-3">
             <Labeled label="Day"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputCls} /></Labeled>
