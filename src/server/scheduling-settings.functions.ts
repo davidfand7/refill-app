@@ -72,6 +72,8 @@ export interface SchedulingSettingsDraft {
   samedayReminderEnabled: boolean;
   /** Which smart option leads on the public page when prices vary. */
   bookingLeadOption: BookingLeadOption;
+  /** Show prices on the public booking page. Off → prices hidden + no "Best value". */
+  showPrices: boolean;
 }
 
 export interface BookableServiceDraft {
@@ -164,6 +166,7 @@ const DEFAULT_SETTINGS: SchedulingSettingsDraft = {
   reminderLeadHours: 24,
   samedayReminderEnabled: true,
   bookingLeadOption: "best_deal",
+  showPrices: true,
 };
 
 /** "HH:MM:SS" or "HH:MM" → "HH:MM". */
@@ -359,6 +362,7 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
             settingsRow.booking_lead_option === "first_available"
               ? "first_available"
               : "best_deal",
+          showPrices: settingsRow.show_prices,
         }
       : { ...DEFAULT_SETTINGS };
 
@@ -598,6 +602,7 @@ const settingsDraftSchema = z.object({
   reminderLeadHours: z.number().int().min(0).max(336),
   samedayReminderEnabled: z.boolean(),
   bookingLeadOption: z.enum(["best_deal", "first_available"]),
+  showPrices: z.boolean(),
 });
 
 const serviceDraftSchema = z.object({
@@ -668,6 +673,7 @@ export const saveSchedulingSetupFn = createServerFn({ method: "POST" })
         reminder_lead_hours: data.settings.reminderLeadHours,
         sameday_reminder_enabled: data.settings.samedayReminderEnabled,
         booking_lead_option: data.settings.bookingLeadOption,
+        show_prices: data.settings.showPrices,
         updated_at: nowIso,
       },
       { onConflict: "tenant_id" },

@@ -321,6 +321,8 @@ export type PublicBookingContext =
       leadOption: "best_deal" | "first_available";
       /** Tenant's manual category order (names; unlisted fall back to default). */
       categoryOrder: string[];
+      /** Whether to show prices on the public page (off → hide $, no "Best value"). */
+      showPrices: boolean;
       services: PublicServiceOption[];
     }
   | { ok: false; reason: string };
@@ -338,7 +340,7 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
 
     const { data: settings } = await sb
       .from("scheduling_settings")
-      .select("timezone, online_booking_enabled, booking_lead_option, category_order")
+      .select("timezone, online_booking_enabled, booking_lead_option, category_order, show_prices")
       .eq("tenant_id", tenant.id)
       .maybeSingle();
     if (!settings || !settings.online_booking_enabled) {
@@ -346,6 +348,7 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
     }
     const leadOption = settings.booking_lead_option === "first_available" ? "first_available" : "best_deal";
     const categoryOrder = settings.category_order ?? [];
+    const showPrices = settings.show_prices !== false;
 
     const [{ data: services }, providers] = await Promise.all([
       sb
@@ -416,8 +419,9 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
           providers: providerOpts,
         };
       })
-      // Hide a service no active provider performs.
-      .filter((s) => s.providers.length > 0);
+      // Hide a service no active provider performs; and, when prices are shown,
+      // hide any still at $0 (unpriced) so nothing goes live mispriced.
+      .filter((s) => s.providers.length > 0 && (!showPrices || s.fromPrice > 0));
 
     return {
       ok: true,
@@ -426,6 +430,7 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
       timezone: settings.timezone,
       leadOption,
       categoryOrder,
+      showPrices,
       services: serviceOptions,
     };
   });

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.84.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.84.0 &mdash; Show-prices toggle + a set-price guardrail. </strong>New in <strong>Booking settings &rarr; Booking rules</strong>: <strong>Show prices on your booking page</strong>. Off &rarr; patients never see prices and the price-based &ldquo;Best value&rdquo; option disappears. On &rarr; a bookable service still at <strong>$0</strong> is treated as <em>unpriced</em>: it&rsquo;s held back from your public page (so nothing goes live mispriced) and shows an amber <strong>Set price</strong> flag in Bookable services until you price it. Library-added services (which come in at $0) won&rsquo;t surprise-publish. <strong>Touched</strong>: <code>scheduling_settings.show_prices</code>, <code>scheduling-settings.functions.ts</code>, <code>scheduling.functions.ts</code>, <code>s.$slug.tsx</code>, <code>BookableServicesSection.tsx</code>, <code>BookingRulesSection.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.83.1",
     date: "June 2026",
     items: [

@@ -77,32 +77,51 @@ export function BookingRulesSection({
           </label>
         </div>
 
-        {/* Smart-option default — which leads when prices vary by provider. */}
+        {/* Pricing display + the price-dependent smart-option default. */}
         <div className="sm:col-span-2 pt-1 border-t border-rule/60">
-          <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1.5 block mt-3">
-            When prices vary by provider, lead with
+          <label className="flex items-center gap-2 text-[13px] text-ink mt-3">
+            <input
+              type="checkbox"
+              checked={settings.showPrices}
+              onChange={(e) => patchSettings({ showPrices: e.target.checked })}
+              className="h-4 w-4 rounded border-rule accent-emerald"
+            />
+            Show prices on your booking page
           </label>
-          <div className="inline-flex rounded-md border border-rule overflow-hidden">
-            {(["best_deal", "first_available"] as const).map((opt) => (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => patchSettings({ bookingLeadOption: opt })}
-                className={cn(
-                  "px-3 py-1.5 text-[13px] font-medium transition",
-                  settings.bookingLeadOption === opt
-                    ? "bg-emerald text-paper"
-                    : "text-ink-soft hover:text-ink",
-                )}
-              >
-                {opt === "best_deal" ? "Best deal" : "First available"}
-              </button>
-            ))}
-          </div>
-          <p className="text-[12px] text-ink-soft mt-1.5 leading-relaxed">
-            Patients always see both. This picks which appears first — and only matters for
-            services you price differently per provider.
+          <p className="text-[12px] text-ink-soft mt-1 leading-relaxed">
+            When off, patients don&rsquo;t see prices and the &ldquo;Best value&rdquo; option is hidden.
+            While prices are shown, a service left at <strong>$0</strong> stays hidden from your booking
+            page until you price it.
           </p>
+
+          {settings.showPrices && (
+            <div className="mt-4">
+              <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1.5 block">
+                When prices vary by provider, lead with
+              </label>
+              <div className="inline-flex rounded-md border border-rule overflow-hidden">
+                {(["best_deal", "first_available"] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => patchSettings({ bookingLeadOption: opt })}
+                    className={cn(
+                      "px-3 py-1.5 text-[13px] font-medium transition",
+                      settings.bookingLeadOption === opt
+                        ? "bg-emerald text-paper"
+                        : "text-ink-soft hover:text-ink",
+                    )}
+                  >
+                    {opt === "best_deal" ? "Best deal" : "First available"}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[12px] text-ink-soft mt-1.5 leading-relaxed">
+                Patients always see both. This picks which appears first — and only matters for
+                services you price differently per provider.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </section>

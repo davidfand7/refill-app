@@ -3646,6 +3646,7 @@ export type Database = {
           online_booking_enabled: boolean
           reminder_lead_hours: number
           sameday_reminder_enabled: boolean
+          show_prices: boolean
           slot_granularity_min: number
           tenant_id: string
           timezone: string
@@ -3662,6 +3663,7 @@ export type Database = {
           online_booking_enabled?: boolean
           reminder_lead_hours?: number
           sameday_reminder_enabled?: boolean
+          show_prices?: boolean
           slot_granularity_min?: number
           tenant_id: string
           timezone?: string
@@ -3678,6 +3680,7 @@ export type Database = {
           online_booking_enabled?: boolean
           reminder_lead_hours?: number
           sameday_reminder_enabled?: boolean
+          show_prices?: boolean
           slot_granularity_min?: number
           tenant_id?: string
           timezone?: string

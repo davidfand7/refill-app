@@ -455,6 +455,14 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
                                   <AlertTriangle className="h-2.5 w-2.5" /> No provider
                                 </span>
                               )}
+                            {s.onlineBookable && draft.settings.showPrices && s.price === 0 && (
+                              <span
+                                className="shrink-0 inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+                                title="This service is $0. While you show prices, it stays hidden from your booking page until you set a price (on the Catalog page)."
+                              >
+                                <AlertTriangle className="h-2.5 w-2.5" /> Set price
+                              </span>
+                            )}
                           </div>
                           <DurationField
                             minutes={s.durationMin}

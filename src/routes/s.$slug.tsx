@@ -77,6 +77,7 @@ function PublicBookingPage() {
   );
   const providers = selService?.providers ?? [];
   const multiProvider = providers.length > 1;
+  const showPrices = ctx?.showPrices !== false;
 
   // Group the service menu by category (collapsible turndowns). Built-ins keep
   // their canonical order; custom categories follow.
@@ -398,7 +399,7 @@ function PublicBookingPage() {
                               )}
                             </span>
                             <span className="shrink-0 text-[13px] text-stone-500 tabular-nums whitespace-nowrap">
-                              {s.durationMin} min · {priceLabel(s)}
+                              {s.durationMin} min{showPrices ? ` · ${priceLabel(s)}` : ""}
                             </span>
                             <ChevronRight className="w-4 h-4 text-stone-400 shrink-0 mt-0.5" />
                           </button>
@@ -440,10 +441,12 @@ function PublicBookingPage() {
                                 <span className="block text-[13px] text-emerald-700">Any available provider</span>
                               </span>
                             </span>
-                            <span className="text-[13px] text-stone-500 shrink-0">{priceLabel(selService)}</span>
+                            {showPrices && (
+                              <span className="text-[13px] text-stone-500 shrink-0">{priceLabel(selService)}</span>
+                            )}
                           </button>
                         );
-                        const bestCard = pricesVary ? (
+                        const bestCard = pricesVary && showPrices ? (
                           <button
                             key="best"
                             type="button"
@@ -476,8 +479,9 @@ function PublicBookingPage() {
                             <span className="block text-[15px] font-medium text-stone-900 truncate">{p.name}</span>
                           </span>
                           <span className="text-[13px] text-stone-500 shrink-0">
-                            ${p.price}
-                            {p.durationMin !== selService.durationMin && ` · ${p.durationMin} min`}
+                            {showPrices && `$${p.price}`}
+                            {p.durationMin !== selService.durationMin &&
+                              `${showPrices ? " · " : ""}${p.durationMin} min`}
                           </span>
                         </button>
                       ))}
