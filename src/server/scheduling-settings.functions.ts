@@ -554,6 +554,30 @@ export const reorderCategoriesFn = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// Lightweight read of the tenant's category order (used by the Catalog page,
+// which doesn't load the full scheduling bundle).
+const getCategoryOrderInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+});
+
+export const getCategoryOrderFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => getCategoryOrderInput.parse(raw))
+  .handler(async ({ data }): Promise<{ order: string[] }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const { data: row } = await sb
+      .from("scheduling_settings")
+      .select("category_order")
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    return { order: row?.category_order ?? [] };
+  });
+
 // ── saveSchedulingSetupFn ────────────────────────────────────────────────────
 
 const hoursDraftSchema = z.object({

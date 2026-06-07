@@ -61,13 +61,13 @@ import {
   type ServiceLinkageBundle,
   type ServiceProductLink,
 } from "@/server/refill-catalog";
-import { reorderServicesFn } from "@/server/scheduling-settings.functions";
+import { reorderServicesFn, reorderCategoriesFn, getCategoryOrderFn } from "@/server/scheduling-settings.functions";
 import { cn } from "@/lib/utils";
 import { CategoryCombobox } from "@/components/refill/CategoryCombobox";
 import {
   buildCategoryList,
   categoryLabel,
-  categoryRank,
+  orderedCategoryRank,
   DEFAULT_SERVICE_CATEGORY,
   normalizeCategory,
   type CategoryOption,
@@ -166,6 +166,8 @@ function ServicesPage() {
   const [pendingCats, setPendingCats] = useState<string[]>([]);
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
   const draggedServiceRef = useRef<string | null>(null);
+  const draggedCategoryRef = useRef<string | null>(null);
+  const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
 
   useEffect(() => {
     if (membership.status !== "tenant") return;
@@ -176,13 +178,15 @@ function ServicesPage() {
         const { data: sess } = await supabase.auth.getSession();
         const token = sess.session?.access_token;
         if (!token) return;
-        const [svcs, prods] = await Promise.all([
+        const [svcs, prods, catOrder] = await Promise.all([
           listServicesFn({ data: { accessToken: token, viewAsUserId, includeHidden: showHidden } }),
           listProductsFn({ data: { accessToken: token, viewAsUserId } }),
+          getCategoryOrderFn({ data: { accessToken: token, viewAsUserId } }),
         ]);
         if (!cancelled) {
           setServices(svcs);
           setProducts(prods);
+          setCategoryOrder(catOrder.order);
         }
       } catch (err) {
         if (!cancelled) {
@@ -405,6 +409,31 @@ function ServicesPage() {
     } catch (err) {
       setServices(prev);
       toast.error(err instanceof Error ? err.message : "Couldn't save the new order.");
+    }
+  }
+
+  // Drag-to-reorder categories (drop one category header onto another). Persists
+  // the full ordered list of in-use categories; optimistic update.
+  async function onReorderCategoryCat(draggedCat: string, targetCat: string) {
+    if (draggedCat === targetCat) return;
+    const cats = [...new Set(services.map((s) => s.category))]
+      .sort(
+        (a, b) =>
+          orderedCategoryRank(a, categoryOrder) - orderedCategoryRank(b, categoryOrder) ||
+          a.localeCompare(b),
+      )
+      .filter((c) => c !== draggedCat);
+    const tIdx = cats.indexOf(targetCat);
+    cats.splice(tIdx < 0 ? cats.length : tIdx, 0, draggedCat);
+    const prev = categoryOrder;
+    setCategoryOrder(cats);
+    try {
+      await withToken((token) =>
+        reorderCategoriesFn({ data: { accessToken: token, viewAsUserId, order: cats } }),
+      );
+    } catch (err) {
+      setCategoryOrder(prev);
+      toast.error(err instanceof Error ? err.message : "Couldn't save category order.");
     }
   }
 
@@ -966,21 +995,40 @@ function ServicesPage() {
           <>
             {Array.from(byCategory.entries())
               .sort(
-                ([a], [b]) => categoryRank(a) - categoryRank(b) || a.localeCompare(b),
+                ([a], [b]) =>
+                  orderedCategoryRank(a, categoryOrder) - orderedCategoryRank(b, categoryOrder) ||
+                  a.localeCompare(b),
               )
               .map(([cat, rows]) => {
                 const collapsed = collapsedCats.has(cat);
                 return (
               <section key={cat} className="space-y-3">
                 <div
+                  className="flex items-center gap-1.5"
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={() => {
-                    const id = draggedServiceRef.current;
+                    const svcId = draggedServiceRef.current;
+                    const draggedC = draggedCategoryRef.current;
                     draggedServiceRef.current = null;
-                    if (id) void onRecategorizeService(id, cat);
+                    draggedCategoryRef.current = null;
+                    if (svcId) void onRecategorizeService(svcId, cat);
+                    else if (draggedC) void onReorderCategoryCat(draggedC, cat);
                   }}
-                  title="Drop a service here to move it to this category"
+                  title="Drop a service here to move it to this category; drag the handle to reorder categories"
                 >
+                  <span
+                    draggable
+                    onDragStart={() => {
+                      draggedCategoryRef.current = cat;
+                    }}
+                    onDragEnd={() => {
+                      draggedCategoryRef.current = null;
+                    }}
+                    className="shrink-0 cursor-grab active:cursor-grabbing text-ink-faint/40 hover:text-ink-faint"
+                    title="Drag to reorder this category"
+                  >
+                    <GripVertical className="h-3.5 w-3.5" />
+                  </span>
                   <button
                     type="button"
                     onClick={() => toggleCatCollapsed(cat)}

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.82.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.82.1 &mdash; Catalog now matches: category order + category drag. </strong>The <strong>Catalog &rarr; Services</strong> page now shows categories in your chosen order and lets you <strong>drag category headers to reorder</strong> them right there &mdash; same as Booking settings. Service order and category order are now consistent across Booking settings, Catalog, and the patient page. (The internal Add-booking picker still lists categories in the default order by design.) <strong>Touched</strong>: <code>getCategoryOrderFn</code>, <code>src/routes/app.refill.catalog.services.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.82.0",
     date: "June 2026",
     items: [
