@@ -251,7 +251,9 @@ export function BookDialog({
       const key = dayKey(s.startIso, timezone);
       let g = byKey.get(key);
       if (!g) {
-        g = { key, heading: fmtDayLabel(s.startIso), slots: [] };
+        // fmtDayLabel expects a "YYYY-MM-DD" date key (it appends T12:00:00Z),
+        // NOT a full ISO timestamp — pass key, not s.startIso.
+        g = { key, heading: fmtDayLabel(key), slots: [] };
         byKey.set(key, g);
         out.push(g);
       }

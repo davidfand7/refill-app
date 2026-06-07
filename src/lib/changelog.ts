@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.77.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.77.1 &mdash; Fix: Add booking crashed when picking a service with openings. </strong>In <strong>Schedule &rarr; Add booking</strong>, selecting a service that had available times threw an &ldquo;Invalid time value&rdquo; error and blanked the page. The day-heading formatter was being handed a full timestamp instead of a date — fixed. <strong>Touched</strong>: <code>src/components/refill/schedule/dialogs.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.77.0",
     date: "June 2026",
     items: [
