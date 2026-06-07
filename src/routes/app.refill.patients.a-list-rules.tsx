@@ -421,7 +421,7 @@ function AListRulesPage() {
         }
       />
 
-      <div className="px-6 lg:px-10 py-6 space-y-6 max-w-[1600px] mx-auto">
+      <div className="px-6 lg:px-10 py-6 space-y-6 max-w-[960px] mx-auto">
         {/* Rules form */}
         <section className="rounded-2xl border border-rule bg-white p-6 space-y-5">
           <div className="flex items-baseline justify-between gap-3">

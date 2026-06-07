@@ -322,7 +322,7 @@ function PreshowAgentPage() {
       />
       <AgentsTabStrip active="preshow" />
 
-      <div className="px-6 lg:px-10 py-6 space-y-6 max-w-[1600px] mx-auto">
+      <div className="px-6 lg:px-10 py-6 space-y-6 max-w-[960px] mx-auto">
         {loadError && (
           <div className="rounded-xl border border-rose/30 bg-rose-soft px-4 py-3 text-sm text-rose">
             {loadError}

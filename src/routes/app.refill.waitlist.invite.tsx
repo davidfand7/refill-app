@@ -319,7 +319,7 @@ function WaitlistInvitePage() {
         }
       />
 
-      <div className="px-6 lg:px-10 py-6 space-y-6 max-w-[1600px] mx-auto">
+      <div className="px-6 lg:px-10 py-6 space-y-6 max-w-[960px] mx-auto">
         {/* Result panel */}
         {result && (
           <section

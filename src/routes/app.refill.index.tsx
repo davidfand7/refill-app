@@ -235,7 +235,7 @@ function ClaimedDashboard({
         }
       />
 
-      <div className="px-6 lg:px-10 py-8 space-y-6 max-w-[1600px] mx-auto">
+      <div className="px-6 lg:px-10 py-8 space-y-6 max-w-[960px] mx-auto">
         <ActivationBanner />
         <OverdueTodayCard />
         <ProfileEditor profile={profile} onProfileUpdate={onProfileUpdate} />

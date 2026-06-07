@@ -246,7 +246,7 @@ function ContactsPage() {
         }
       />
 
-      <div className="px-6 lg:px-10 py-8 max-w-[1600px] mx-auto space-y-6">
+      <div className="px-6 lg:px-10 py-8 max-w-[960px] mx-auto space-y-6">
         {/* Coverage card */}
         {overview && <CoverageCard overview={overview} />}
 

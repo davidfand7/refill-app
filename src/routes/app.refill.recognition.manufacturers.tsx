@@ -129,7 +129,7 @@ function ManufacturersPage() {
       />
 
       <div className="border-b border-rule bg-paper/50">
-        <div className="max-w-[1600px] mx-auto px-4 lg:px-10 flex items-center gap-1">
+        <div className="max-w-[960px] mx-auto px-4 lg:px-10 flex items-center gap-1">
           <Link
             to="/app/refill/recognition/inventory"
             className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium border-b-2 -mb-px border-transparent text-ink-soft hover:text-ink transition"
@@ -147,7 +147,7 @@ function ManufacturersPage() {
         </div>
       </div>
 
-      <div className="flex-1 px-4 py-6 lg:px-10 max-w-[1600px] w-full mx-auto space-y-5">
+      <div className="flex-1 px-4 py-6 lg:px-10 max-w-[960px] w-full mx-auto space-y-5">
         {loadError ? (
           <div className="rounded-2xl border border-rose/30 bg-rose-soft p-5 text-sm">
             <div className="font-semibold text-rose">Couldn't load</div>

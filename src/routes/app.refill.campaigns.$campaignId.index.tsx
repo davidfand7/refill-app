@@ -150,7 +150,7 @@ function CampaignDetailPage() {
         }
       />
 
-      <div className="flex-1 px-4 py-6 lg:px-10 max-w-[1600px] w-full mx-auto space-y-5">
+      <div className="flex-1 px-4 py-6 lg:px-10 max-w-[960px] w-full mx-auto space-y-5">
         {loading ? (
           <div className="flex items-center justify-center text-sm text-ink-soft py-16">
             <Loader2 className="h-4 w-4 animate-spin mr-2" />

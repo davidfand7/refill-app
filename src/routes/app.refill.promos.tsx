@@ -129,7 +129,7 @@ function RefillPromosPage() {
         description="Manufacturer offers based on the products you carry. Express interest to flag it for your rep."
       />
 
-      <div className="px-6 lg:px-10 py-6 max-w-[1600px] mx-auto">
+      <div className="px-6 lg:px-10 py-6 max-w-[960px] mx-auto">
         {/* Summary strip */}
         <div className="mb-5 flex items-center justify-between rounded-xl border border-rule bg-white px-4 py-3">
           <div className="flex items-center gap-3">

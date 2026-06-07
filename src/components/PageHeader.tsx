@@ -31,7 +31,7 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, description, actions }: PageHeaderProps) {
   return (
-    <div className="px-6 lg:px-10 pt-2 pb-4 max-w-[1600px] w-full mx-auto">
+    <div className="px-6 lg:px-10 pt-2 pb-4 max-w-[960px] w-full mx-auto">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1

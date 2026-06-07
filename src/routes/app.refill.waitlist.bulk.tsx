@@ -269,7 +269,7 @@ function WaitlistBulkPage() {
   }, [results]);
 
   return (
-    <div className="px-6 py-6 max-w-[1600px] mx-auto">
+    <div className="px-6 py-6 max-w-[960px] mx-auto">
       <PageHeader
         title="Bulk Waitlist Seed"
         description="Generate opt-in links for many patients in one pass. URLs work today regardless of SMS provider state — distribute via email blast or any channel; the rescue engine picks up active opt-ins automatically."

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.78.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.78.1 &mdash; Dialed the desktop width to a comfortable 960px, centered. </strong>v1.78.0&rsquo;s 1600px felt too wide for card/form content; pages now use a centered <code>960px</code> column &mdash; roomier than the old layout but easy on the eye. <strong>Touched</strong>: <code>src/components/PageHeader.tsx</code> + ~30 <code>src/routes/app.refill.*</code> containers, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.78.0",
     date: "June 2026",
     items: [

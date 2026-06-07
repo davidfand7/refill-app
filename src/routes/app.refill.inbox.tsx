@@ -181,7 +181,7 @@ function InboxPage() {
         }
       />
 
-      <div className="flex-1 px-6 lg:px-10 py-6 space-y-5 max-w-[1600px] w-full mx-auto">
+      <div className="flex-1 px-6 lg:px-10 py-6 space-y-5 max-w-[960px] w-full mx-auto">
         <div className="flex items-center gap-2 flex-wrap">
           <FilterChip
             label="Unread"
