@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.79.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.79.0 &mdash; Patient booking page uses desktop width. </strong>Your public self-book page (<code>/s/&lt;your-link&gt;</code>) was a phone-width card even on a big screen, so the <strong>Soonest available</strong> week got chopped at ~2 days. It now widens on desktop to show a fuller week of openings, while staying single-column on phones. The contact and confirmation steps stay a tidy centered width on purpose. <strong>Touched</strong>: <code>src/routes/s.$slug.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.78.3",
     date: "June 2026",
     items: [

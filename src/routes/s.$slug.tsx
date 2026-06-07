@@ -309,7 +309,7 @@ function PublicBookingPage() {
 
   return (
     <main className="min-h-screen bg-[#fafaf7] text-stone-900 flex items-start justify-center px-5 py-12 sm:py-16">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-md sm:max-w-4xl">
         {screen === "loading" && (
           <div className="flex items-center gap-3 text-stone-500">
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -568,7 +568,7 @@ function PublicBookingPage() {
 
         {/* ── Step 4: contact ── */}
         {screen === "contact" && ctx && held && (
-          <form onSubmit={onConfirm} className="bg-white border border-stone-200 rounded-xl p-7 shadow-sm">
+          <form onSubmit={onConfirm} className="bg-white border border-stone-200 rounded-xl p-7 shadow-sm sm:max-w-lg sm:mx-auto">
             <BackLink
               show
               label="Choose a different time"
@@ -646,7 +646,7 @@ function PublicBookingPage() {
 
         {/* ── Done ── */}
         {screen === "confirmed" && ctx && confirmed && (
-          <div className="bg-white border border-stone-200 rounded-xl p-7 shadow-sm">
+          <div className="bg-white border border-stone-200 rounded-xl p-7 shadow-sm sm:max-w-lg sm:mx-auto">
             <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center mb-4">
               <CheckCircle2 className="w-5 h-5 text-emerald-700" />
             </div>
