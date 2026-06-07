@@ -109,7 +109,7 @@ function SharingPage() {
         title="Rep aggregates"
         description="Let specific reps see aggregate counts from your patient book. Patient names and details never leave your practice."
       />
-      <div className="px-6 lg:px-10 py-8 max-w-4xl mx-auto space-y-5">
+      <div className="px-6 lg:px-10 py-8 max-w-[1600px] mx-auto space-y-5">
         <PrivacyExplainer />
         {reps === null && !error && (
           <div className="rounded-2xl border border-border bg-card p-10 flex items-center justify-center gap-2 text-sm text-ink-soft">

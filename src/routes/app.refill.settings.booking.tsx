@@ -87,7 +87,7 @@ function BookingSettingsPage() {
       />
       <SettingsTabStrip active="booking" />
 
-      <div className="px-6 lg:px-10 py-6 max-w-3xl space-y-6">
+      <div className="px-6 lg:px-10 py-6 max-w-[1600px] mx-auto space-y-6">
         {loading || !draft ? (
           <div className="flex items-center gap-2 text-[14px] text-ink-soft py-10">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading booking settings…

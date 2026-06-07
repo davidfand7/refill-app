@@ -92,7 +92,7 @@ function NewCampaignPage() {
           </Link>
         }
       />
-      <div className="px-6 lg:px-10 py-8 max-w-5xl mx-auto">
+      <div className="px-6 lg:px-10 py-8 max-w-[1600px] mx-auto">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {CAMPAIGN_TEMPLATES.map((t) => (
             <TemplateCard

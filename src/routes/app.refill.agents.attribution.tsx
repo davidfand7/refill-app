@@ -204,7 +204,7 @@ function AttributionAgentPage() {
       />
       <AgentsTabStrip active="attribution" />
 
-      <div className="flex-1 px-4 py-6 lg:px-10 max-w-4xl w-full mx-auto space-y-5">
+      <div className="flex-1 px-4 py-6 lg:px-10 max-w-[1600px] w-full mx-auto space-y-5">
         {loadError ? (
           <div className="rounded-2xl border border-rose/30 bg-rose-soft p-5 text-sm">
             <div className="font-semibold text-rose">Couldn't load Attribution settings</div>

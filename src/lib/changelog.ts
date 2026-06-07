@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.78.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.78.0 &mdash; Full-width on desktop. </strong>The app now uses far more of your screen on a desktop monitor. Every data-rich screen &mdash; <strong>Schedule</strong>, <strong>Patients</strong>, <strong>Appointments</strong>, <strong>Catalog</strong>, <strong>Reports</strong>, <strong>Recovery/Rescue</strong>, <strong>Campaigns</strong>, <strong>Inbox</strong>, <strong>Recognition</strong>, <strong>Booking settings</strong>, and the page headers &mdash; widened from a narrow centered column to a roomy <code>1600px</code> layout, so tables, calendars, and lists breathe. Single-column forms and setup wizards stay a comfortable reading width on purpose. <strong>Touched</strong>: <code>src/components/PageHeader.tsx</code> + ~30 <code>src/routes/app.refill.*</code> page containers, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.77.2",
     date: "June 2026",
     items: [

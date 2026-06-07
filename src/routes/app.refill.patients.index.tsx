@@ -733,7 +733,7 @@ function PatientsPage() {
         }
       />
 
-      <div className="px-6 lg:px-10 py-6 space-y-5 max-w-7xl mx-auto">
+      <div className="px-6 lg:px-10 py-6 space-y-5 max-w-[1600px] mx-auto">
         {/* Search + window toggle */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex-1 min-w-[240px]">

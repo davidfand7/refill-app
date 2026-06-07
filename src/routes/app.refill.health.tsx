@@ -70,7 +70,7 @@ function EngineHealthPage() {
   const status = vitals ? computeStatus(vitals) : null;
 
   return (
-    <div className="container mx-auto max-w-5xl px-4 py-8">
+    <div className="container mx-auto max-w-[1600px] px-4 py-8">
       <PageHeader
         eyebrow="Emma(OS)"
         title="Engine health"

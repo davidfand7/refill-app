@@ -151,7 +151,7 @@ function ImportPatientsPage() {
         }
       />
 
-      <div className="px-6 lg:px-10 py-8 max-w-4xl mx-auto space-y-6">
+      <div className="px-6 lg:px-10 py-8 max-w-[1600px] mx-auto space-y-6">
         {viewAsUserId && membership.status === "tenant" && (
           <div
             className="rounded-lg border px-3 py-2 text-[12px] flex items-center gap-2"
