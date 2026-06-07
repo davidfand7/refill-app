@@ -139,6 +139,8 @@ export interface SchedulingSetupBundle {
   providerServices: ProviderServiceOverrideRow[];
   /** providerId → that provider's date-specific availability overrides. */
   dateOverridesByProvider: Record<string, DateOverrideDraft[]>;
+  /** Tenant's manual category order (category names; unlisted fall back to default). */
+  categoryOrder: string[];
 }
 
 /** A whole-day availability override for one provider on one calendar date. */
@@ -393,6 +395,7 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
       services,
       providerServices,
       dateOverridesByProvider,
+      categoryOrder: settingsRow?.category_order ?? [],
     };
   });
 
@@ -521,6 +524,33 @@ export const reorderServicesFn = createServerFn({ method: "POST" })
           .eq("tenant_id", tenantId),
       ),
     );
+    return { ok: true };
+  });
+
+// ── reorderCategoriesFn (immediate persist) ──────────────────────────────────
+// Stores the tenant's manual category order (list of category names). Categories
+// not in the list fall back to the built-in canonical order, then alphabetical.
+
+const reorderCategoriesInput = z.object({
+  accessToken: z.string().min(10),
+  viewAsUserId: z.string().uuid().optional(),
+  order: z.array(z.string().trim().min(1).max(40)).max(200),
+});
+
+export const reorderCategoriesFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => reorderCategoriesInput.parse(raw))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const { error } = await sb
+      .from("scheduling_settings")
+      .update({ category_order: data.order })
+      .eq("tenant_id", tenantId);
+    if (error) throw new Error(`Couldn't save category order: ${error.message}`);
     return { ok: true };
   });
 

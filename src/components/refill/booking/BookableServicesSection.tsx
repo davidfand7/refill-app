@@ -32,6 +32,7 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
     performsService, togglePerforms, toggleCategoryPerforms,
     overrideFor, psFieldValue, offersService, commitOverride, toggleOffered,
     patchService, commitCategoryRename, onAddService, onDeleteService, onReorderService,
+    draggedCatRef, onReorderCategory,
   } = bk;
   if (!draft) return null;
   return (
@@ -297,12 +298,28 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
                             className="flex items-center gap-2 pt-3 pb-1"
                             onDragOver={(e) => e.preventDefault()}
                             onDrop={() => {
-                              const id = draggedSvcRef.current;
+                              const svcId = draggedSvcRef.current;
+                              const draggedC = draggedCatRef.current;
                               draggedSvcRef.current = null;
-                              if (id) patchService(id, { category: cat });
+                              draggedCatRef.current = null;
+                              if (svcId) patchService(svcId, { category: cat });
+                              else if (draggedC) void onReorderCategory(draggedC, cat);
                             }}
-                            title="Drop a service here to move it to this category"
+                            title="Drop a service here to move it to this category; drag the handle to reorder categories"
                           >
+                            <span
+                              draggable
+                              onDragStart={() => {
+                                draggedCatRef.current = cat;
+                              }}
+                              onDragEnd={() => {
+                                draggedCatRef.current = null;
+                              }}
+                              className="shrink-0 cursor-grab active:cursor-grabbing text-ink-faint/40 hover:text-ink-faint"
+                              title="Drag to reorder this category"
+                            >
+                              <GripVertical className="h-3.5 w-3.5" />
+                            </span>
                             <button
                               type="button"
                               onClick={() =>

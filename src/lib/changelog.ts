@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.82.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.82.0 &mdash; Reorder your categories too. </strong>In <strong>Booking settings &rarr; Bookable services</strong>, each category header now has a <strong>drag handle</strong> &mdash; drag a category up or down to set the order your categories appear in (e.g. lead with <em>Tox</em> and <em>Filler</em>, push <em>Other</em> to the bottom). The order shows on your <strong>patient booking page</strong>. Combined with service reorder, you now control the <em>entire</em> menu layout &mdash; something Acuity simply can&rsquo;t do. <strong>Touched</strong>: <code>reorderCategoriesFn</code> + <code>scheduling_settings.category_order</code>, <code>orderedCategoryRank</code> helper, <code>scheduling-settings.functions.ts</code>, <code>scheduling.functions.ts</code>, <code>useBookingSettings.ts</code>, <code>BookableServicesSection.tsx</code>, <code>s.$slug.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.81.1",
     date: "June 2026",
     items: [

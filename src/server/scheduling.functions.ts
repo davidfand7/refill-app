@@ -319,6 +319,8 @@ export type PublicBookingContext =
       timezone: string;
       /** Which smart option leads when a service is priced differently by provider. */
       leadOption: "best_deal" | "first_available";
+      /** Tenant's manual category order (names; unlisted fall back to default). */
+      categoryOrder: string[];
       services: PublicServiceOption[];
     }
   | { ok: false; reason: string };
@@ -336,13 +338,14 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
 
     const { data: settings } = await sb
       .from("scheduling_settings")
-      .select("timezone, online_booking_enabled, booking_lead_option")
+      .select("timezone, online_booking_enabled, booking_lead_option, category_order")
       .eq("tenant_id", tenant.id)
       .maybeSingle();
     if (!settings || !settings.online_booking_enabled) {
       return { ok: false, reason: "Online booking isn't available for this practice right now." };
     }
     const leadOption = settings.booking_lead_option === "first_available" ? "first_available" : "best_deal";
+    const categoryOrder = settings.category_order ?? [];
 
     const [{ data: services }, providers] = await Promise.all([
       sb
@@ -422,6 +425,7 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
       spaName: tenant.name,
       timezone: settings.timezone,
       leadOption,
+      categoryOrder,
       services: serviceOptions,
     };
   });

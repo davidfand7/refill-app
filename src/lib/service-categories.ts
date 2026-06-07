@@ -66,6 +66,17 @@ export function categoryRank(value: string): number {
 }
 
 /**
+ * Sort key for category grouping that honors a tenant's MANUAL order list.
+ * Categories present in `order` lead (in that order); the rest fall back to the
+ * built-in canonical order, then alphabetical (caller adds a label tiebreak).
+ */
+export function orderedCategoryRank(value: string, order: string[]): number {
+  const v = normalizeCategory(value);
+  const i = order.findIndex((c) => normalizeCategory(c) === v);
+  return i >= 0 ? i : order.length + categoryRank(value);
+}
+
+/**
  * Build the full option list for a tenant: the built-ins (canonical order)
  * followed by any distinct custom categories already in use (alphabetized).
  * `existing` is the set of category values across that tenant's services.

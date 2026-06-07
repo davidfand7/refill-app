@@ -17,6 +17,7 @@ import {
   assignProviderServicesBulkFn,
   createBookableServiceFn,
   reorderServicesFn,
+  reorderCategoriesFn,
   upsertDateOverrideFn,
   deleteDateOverrideFn,
   createProviderFn,
@@ -44,6 +45,7 @@ import {
   buildCategoryList,
   categoryLabel,
   categoryRank,
+  orderedCategoryRank,
   normalizeCategory,
   type CategoryOption,
 } from "@/lib/service-categories";
@@ -84,6 +86,9 @@ export function useBookingSettings({
   const [renamingCat, setRenamingCat] = useState<string | null>(null);
   const [renameText, setRenameText] = useState("");
   const draggedSvcRef = useRef<string | null>(null);
+  // Which category is being dragged (header grip) — distinguishes a category
+  // reorder from a service drop on a category header.
+  const draggedCatRef = useRef<string | null>(null);
   // Auto-scroll the window while dragging a service near the top/bottom edge.
   const { start: startAutoScroll, stop: stopAutoScroll } = useDragAutoScroll();
   // Add-service form.
@@ -192,9 +197,10 @@ export function useBookingSettings({
   // droppable group headers so existing services can be sorted into them.
   const usedCats = new Set((draft?.services ?? []).map((s) => svcCat(s)));
   const emptyPendingCats = pendingCats.filter((c) => !usedCats.has(c));
+  const categoryOrder = draft?.categoryOrder ?? [];
   const sortedVisible = [...visibleServices].sort(
     (a, b) =>
-      categoryRank(svcCat(a)) - categoryRank(svcCat(b)) ||
+      orderedCategoryRank(svcCat(a), categoryOrder) - orderedCategoryRank(svcCat(b), categoryOrder) ||
       svcCat(a).localeCompare(svcCat(b)) ||
       (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) ||
       a.name.localeCompare(b.name),
@@ -690,6 +696,29 @@ export function useBookingSettings({
     }
   }
 
+  /** Drag-to-reorder categories (drop one category header onto another).
+   *  Persists the full ordered list of in-use categories. */
+  async function onReorderCategory(draggedCat: string, targetCat: string) {
+    if (!draft || draggedCat === targetCat) return;
+    const cats = [...new Set(draft.services.map((s) => svcCat(s)))]
+      .sort(
+        (a, b) =>
+          orderedCategoryRank(a, categoryOrder) - orderedCategoryRank(b, categoryOrder) ||
+          a.localeCompare(b),
+      )
+      .filter((c) => c !== draggedCat);
+    const tIdx = cats.indexOf(targetCat);
+    cats.splice(tIdx < 0 ? cats.length : tIdx, 0, draggedCat);
+    applyToBoth((b) => ({ ...b, categoryOrder: cats }));
+    try {
+      await withToken((token) =>
+        reorderCategoriesFn({ data: { accessToken: token, viewAsUserId, order: cats } }),
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save category order.");
+    }
+  }
+
   function patchService(id: string, patch: Partial<BookableServiceDraft>) {
     setDraft((d) =>
       d ? { ...d, services: d.services.map((s) => (s.id === id ? { ...s, ...patch } : s)) } : d,
@@ -864,7 +893,7 @@ export function useBookingSettings({
     addingOverride, setAddingOverride, ovDate, setOvDate, ovClosed, setOvClosed,
     ovOpen, setOvOpen, ovClose, setOvClose, ovBusy,
     selDateOverrides, onAddDateOverride, onRemoveDateOverride,
-    draggedSvcRef, startAutoScroll, stopAutoScroll,
+    draggedSvcRef, draggedCatRef, categoryOrder, onReorderCategory, startAutoScroll, stopAutoScroll,
     dirty, activeProviders, activeResourceTypes, selHours, selProviderName,
     svcQuery, inactiveCount, visibleServices, svcCat, sortedVisible, svcCatCounts, categoryOptions,
     allCatsCollapsed, toggleAllCats, visibleByCat, setCategoryBookable,

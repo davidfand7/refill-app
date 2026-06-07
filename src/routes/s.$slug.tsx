@@ -34,7 +34,7 @@ import {
   type PublicServiceOption,
   type PublicSlot,
 } from "@/server/scheduling.functions";
-import { categoryLabel, categoryRank } from "@/lib/service-categories";
+import { categoryLabel, orderedCategoryRank } from "@/lib/service-categories";
 
 export const Route = createFileRoute("/s/$slug")({
   component: PublicBookingPage,
@@ -95,7 +95,11 @@ function PublicBookingPage() {
           (a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || a.name.localeCompare(b.name),
         ),
       }))
-      .sort((a, b) => categoryRank(a.cat) - categoryRank(b.cat) || a.cat.localeCompare(b.cat));
+      .sort(
+        (a, b) =>
+          orderedCategoryRank(a.cat, ctx?.categoryOrder ?? []) -
+            orderedCategoryRank(b.cat, ctx?.categoryOrder ?? []) || a.cat.localeCompare(b.cat),
+      );
   }, [ctx]);
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   function toggleCat(cat: string) {
