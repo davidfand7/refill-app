@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.79.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.79.1 &mdash; Booking service rows: one line, less scrolling. </strong>On the patient booking page, each service now shows its <strong>name on the left and duration · price on the right of the same line</strong> instead of stacking three lines &mdash; using the desktop width and cutting the scrolling way down. Notes that simply repeat the service name are hidden; genuinely useful notes still show beneath. <strong>Touched</strong>: <code>src/routes/s.$slug.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.79.0",
     date: "June 2026",
     items: [

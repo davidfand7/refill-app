@@ -372,18 +372,18 @@ function PublicBookingPage() {
                                 : "w-full text-left px-4 py-3 hover:bg-stone-50 transition-colors flex items-start justify-between gap-3"
                             }
                           >
-                            <span className="min-w-0">
-                              <span className="block text-[15px] font-medium text-stone-900">{s.name}</span>
-                              {s.notes && (
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-[15px] font-medium text-stone-900 truncate">{s.name}</span>
+                              {s.notes && s.notes.trim().toLowerCase() !== s.name.trim().toLowerCase() && (
                                 <span className="block text-[13px] text-stone-500 mt-0.5 leading-snug whitespace-pre-line">
                                   {s.notes}
                                 </span>
                               )}
-                              <span className="block text-[12px] text-stone-400 mt-1 tabular-nums">
-                                {s.durationMin} min · {priceLabel(s)}
-                              </span>
                             </span>
-                            <ChevronRight className="w-4 h-4 text-stone-400 shrink-0 mt-1" />
+                            <span className="shrink-0 text-[13px] text-stone-500 tabular-nums whitespace-nowrap">
+                              {s.durationMin} min · {priceLabel(s)}
+                            </span>
+                            <ChevronRight className="w-4 h-4 text-stone-400 shrink-0 mt-0.5" />
                           </button>
                         ))}
                       </div>
