@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      billing_config: {
+        Row: {
+          monthly_base_usd: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          monthly_base_usd?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          monthly_base_usd?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      billing_fee_rules: {
+        Row: {
+          amount: number
+          enabled: boolean
+          id: string
+          metric_key: string
+          mode: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          enabled?: boolean
+          id?: string
+          metric_key: string
+          mode?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          enabled?: boolean
+          id?: string
+          metric_key?: string
+          mode?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       reward_signal_imports: {
         Row: {
           contacts_filled_count: number
@@ -1150,6 +1198,7 @@ export type Database = {
           created_at: string
           id: string
           matched_transaction_id: string | null
+          metric_key: string
           notes: string | null
           patient_node_id: string | null
           recovery_agent: string
@@ -1167,6 +1216,7 @@ export type Database = {
           created_at?: string
           id?: string
           matched_transaction_id?: string | null
+          metric_key?: string
           notes?: string | null
           patient_node_id?: string | null
           recovery_agent: string
@@ -1184,6 +1234,7 @@ export type Database = {
           created_at?: string
           id?: string
           matched_transaction_id?: string | null
+          metric_key?: string
           notes?: string | null
           patient_node_id?: string | null
           recovery_agent?: string
@@ -2914,9 +2965,11 @@ export type Database = {
       refill_invoices: {
         Row: {
           created_at: string
+          fee_breakdown: Json
           generated_at: string
           id: string
-          monthly_flat_usd: number
+          monthly_base_usd: number
+          monthly_flat_usd: number | null
           notes: string | null
           paid_at: string | null
           period_end: string
@@ -2925,7 +2978,7 @@ export type Database = {
           recovered_revenue_count: number
           recovered_revenue_usd: number
           referred_by_rep_id: string | null
-          revenue_share_pct: number
+          revenue_share_pct: number | null
           sent_at: string | null
           share_due_usd: number
           status: string
@@ -2938,9 +2991,11 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          fee_breakdown?: Json
           generated_at?: string
           id?: string
-          monthly_flat_usd: number
+          monthly_base_usd?: number
+          monthly_flat_usd?: number | null
           notes?: string | null
           paid_at?: string | null
           period_end: string
@@ -2949,7 +3004,7 @@ export type Database = {
           recovered_revenue_count?: number
           recovered_revenue_usd?: number
           referred_by_rep_id?: string | null
-          revenue_share_pct: number
+          revenue_share_pct?: number | null
           sent_at?: string | null
           share_due_usd?: number
           status?: string
@@ -2962,9 +3017,11 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          fee_breakdown?: Json
           generated_at?: string
           id?: string
-          monthly_flat_usd?: number
+          monthly_base_usd?: number
+          monthly_flat_usd?: number | null
           notes?: string | null
           paid_at?: string | null
           period_end?: string
@@ -2973,7 +3030,7 @@ export type Database = {
           recovered_revenue_count?: number
           recovered_revenue_usd?: number
           referred_by_rep_id?: string | null
-          revenue_share_pct?: number
+          revenue_share_pct?: number | null
           sent_at?: string | null
           share_due_usd?: number
           status?: string

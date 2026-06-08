@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.93.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.93.0 &mdash; Billing is now &ldquo;Free + $5 per win,&rdquo; configurable (Patient-Profitability OS, P0 ship #2). </strong>Retired the old tiered plans (Starter/Pro/Predictable revenue-share). Billing is now <strong>one formula</strong>: a monthly base (<strong>$0 by default</strong>) plus a per-metric fee for each win Refill creates &mdash; a flat dollar amount <em>or</em> a percent of that win&rsquo;s revenue, each toggleable. The <strong>Billing</strong> page got a live admin panel (tune every metric + the base) and a <strong>visible ledger</strong>: &ldquo;if this month closed today&rdquo; with every win priced line-by-line. The Recovery dashboard&rsquo;s month-to-date preview now reads from the <em>same</em> math, so it can never drift from the real invoice. Default config = $0 base + <strong>$5 per filled slot</strong> (Recall / Cross-Sell / Acquire metrics are pre-wired and light up as those Solutions ship). Percent mode is kept for a future hybrid. You only ever pay on value demonstrably created. <strong>New tables</strong>: <code>billing_config</code>, <code>billing_fee_rules</code>; <code>metric_key</code> added to recovery events; <code>fee_breakdown</code> on invoices. <strong>Touched</strong>: new <code>billing-metrics.ts</code> + <code>billing-fee-core.ts</code> + <code>refill-fee-rules.functions.ts</code>, <code>refill-billing.ts</code> (cron + preview swapped to fee-rules), <code>app.billing.tsx</code> (full rebuild), <code>app.refill.recovery.tsx</code>, <code>types.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.92.1",
     date: "June 2026",
     items: [

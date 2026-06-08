@@ -1,49 +1,44 @@
 /**
- * /app/billing — Refill pricing plan + monthly invoices (v1.4).
+ * /app/billing — Refill billing: fee-rules config + live ledger + invoices.
  *
- * Where the $$ flows. Three plans, one click to choose.
- *
- * History: the working BillingPage component lived for weeks inside
- * app.refill.billing.tsx behind a useShell() === "refill" redirect to
- * /app/billing — a route that was speced (v391) but the frontend was
- * never created. v1.4 finishes the lift: this file is the canonical
- * Refill billing surface; app.refill.billing.tsx is now a thin
- * back-compat redirect shim for any stale email links / bookmarks.
- *
- * The backend (server/refill-billing.ts) + Stripe checkout/portal
- * routes (api.refill-checkout.ts, api.refill-portal.ts) ship draft
- * invoices today. Stripe payment-method capture flips on per-tenant.
+ * v1.93.0 retired the tiered plan picker (starter/predictable/pro). Billing
+ * is now one formula — Invoice = monthly_base + Σ(per-metric fee × wins) —
+ * configured here: a monthly base (default $0) and a per-metric rule (flat $X
+ * per win OR X% of the win's revenue, on/off). The default config IS the
+ * marketed "Free + $5 per win." A visible counterfactual ledger shows the
+ * current period's wins priced line-by-line, and the invoice history sits
+ * below. Card capture is unchanged (Stripe hosted checkout / portal).
  */
 
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
   CheckCircle2,
   CreditCard,
-  DollarSign,
   ExternalLink,
   FileText,
   Loader2,
   Plus,
   RefreshCw,
-  Sparkles,
-  Zap,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  applyPricingPlan,
-  getActivePlan,
   getPaymentMethodStatus,
-  getPlanEconomics,
   listInvoices,
-  type RefillActivePlan,
   type RefillInvoice,
   type RefillPaymentMethodStatus,
-  type RefillPricingPlan,
 } from "@/server/refill-billing";
+import {
+  getBillingSettings,
+  getBillingLedger,
+  updateFeeRule,
+  updateBillingConfig,
+  type BillingSettings,
+  type FeeRuleView,
+  type BillingLedger,
+} from "@/server/refill-fee-rules.functions";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { cn } from "@/lib/utils";
 
@@ -51,48 +46,20 @@ export const Route = createFileRoute("/app/billing")({
   component: BillingPage,
 });
 
-// PLAN_META is keyed on RefillPricingPlan (starter/predictable/pro), the
-// canonical internal name. Visible labels keep the emma-era brand language
-// (Performance/Predictable/Hybrid) so Karen's mental model isn't disturbed
-// by an internal cleanup. A future copy-refresh ship can rename labels if
-// the marketing story shifts.
-const PLAN_META: Record<
-  RefillPricingPlan,
-  { label: string; tagline: string; icon: typeof Zap; tone: "primary" | "neutral" | "amber" }
-> = {
-  starter: {
-    label: "Performance",
-    tagline: "Free. You only pay when Refill recovers revenue.",
-    icon: Zap,
-    tone: "primary",
-  },
-  predictable: {
-    label: "Predictable",
-    tagline: "Flat monthly fee. Everything included, no revenue share.",
-    icon: FileText,
-    tone: "neutral",
-  },
-  pro: {
-    label: "Hybrid",
-    tagline: "Lower monthly. Smaller share. Best of both.",
-    icon: Sparkles,
-    tone: "amber",
-  },
-};
+function money(n: number): string {
+  return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 function BillingPage() {
-  const [active, setActive] = useState<RefillActivePlan>(null);
+  const [settings, setSettings] = useState<BillingSettings | null>(null);
+  const [ledger, setLedger] = useState<BillingLedger | null>(null);
   const [invoices, setInvoices] = useState<RefillInvoice[] | null>(null);
   const [pm, setPm] = useState<RefillPaymentMethodStatus | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [applyingPlan, setApplyingPlan] = useState<RefillPricingPlan | null>(null);
   const [redirecting, setRedirecting] = useState<"add" | "manage" | null>(null);
 
-  // v1.20: admin viewing-as plumbing — getActivePlan + listInvoices accept
-  // viewAsUserId. getPaymentMethodStatus is intentionally NOT opted-in;
-  // it touches Stripe and admin shouldn't be inadvertently observing the
-  // tenant's PM unless we explicitly choose to.
   const membership = useTenantMembership();
   const viewAsUserId =
     membership.status === "tenant" ? membership.viewAsUserId : undefined;
@@ -106,16 +73,15 @@ function BillingPage() {
         setLoadError("Please sign in.");
         return;
       }
-      const [a, inv, pmStatus] = await Promise.all([
-        getActivePlan({ data: { accessToken: token, viewAsUserId } }),
+      setAccessToken(token);
+      const [s, led, inv, pmStatus] = await Promise.all([
+        getBillingSettings({ data: { accessToken: token, viewAsUserId } }),
+        getBillingLedger({ data: { accessToken: token, viewAsUserId } }),
         listInvoices({ data: { accessToken: token, viewAsUserId } }),
-        // Card lookup hits Stripe — keep it best-effort so a Stripe outage
-        // doesn't take down the rest of the billing page.
-        getPaymentMethodStatus({ data: { accessToken: token } }).catch(
-          () => null,
-        ),
+        getPaymentMethodStatus({ data: { accessToken: token } }).catch(() => null),
       ]);
-      setActive(a);
+      setSettings(s);
+      setLedger(led);
       setInvoices(inv);
       setPm(pmStatus);
       setLoadError(null);
@@ -127,18 +93,11 @@ function BillingPage() {
   }, [viewAsUserId]);
 
   useEffect(() => {
-    // v1.34.8.2: wait for tenant-membership before firing the load —
-    // same race as the Recovery page. Without this gate, admin viewers
-    // briefly hit getInvoicePreview without viewAsUserId and flash the
-    // "No Refill tenant" error before the real data renders.
     if (membership.status === "loading") return;
     void load();
   }, [load, membership.status]);
 
-  // Handle return from Stripe Checkout setup-mode flow. The success_url in
-  // api.refill-checkout.ts pins ?upgrade=success&plan=… on the URL; we
-  // toast + reload to pick up the freshly-attached payment method, then
-  // strip the search params so a refresh doesn't re-trigger the toast.
+  // Return from Stripe Checkout setup-mode flow.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
@@ -153,10 +112,6 @@ function BillingPage() {
     }
   }, [load]);
 
-  // Add-card always uses Checkout setup mode (plan="starter") — captures
-  // the card with no charge regardless of which plan the spa is on. Per
-  // [[project-trial-first-no-money-asks]], we never charge upfront; the
-  // card just sits on file until the first verified-recovery invoice runs.
   async function handleAddCard() {
     setRedirecting("add");
     try {
@@ -169,10 +124,7 @@ function BillingPage() {
       }
       const res = await fetch("/api/refill-checkout", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ plan: "starter" }),
       });
       const body = (await res.json()) as { url?: string; error?: string };
@@ -215,42 +167,12 @@ function BillingPage() {
     }
   }
 
-  async function pickPlan(plan: RefillPricingPlan) {
-    if (active?.plan === plan) {
-      toast.info(`You're already on the ${PLAN_META[plan].label} plan.`);
-      return;
-    }
-    if (
-      !window.confirm(
-        active
-          ? `Switch from ${PLAN_META[active.plan].label} to ${PLAN_META[plan].label}? Past invoices keep the plan they were generated under.`
-          : `Activate the ${PLAN_META[plan].label} plan?`,
-      )
-    )
-      return;
-    setApplyingPlan(plan);
-    try {
-      const { data: sess } = await supabase.auth.getSession();
-      const token = sess.session?.access_token;
-      if (!token) return;
-      const updated = await applyPricingPlan({
-        data: { accessToken: token, plan, viewAsUserId },
-      });
-      setActive(updated);
-      toast.success(`${PLAN_META[plan].label} plan activated.`);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Couldn't apply plan.");
-    } finally {
-      setApplyingPlan(null);
-    }
-  }
-
   return (
     <div className="min-h-screen bg-background">
       <PageHeader
         eyebrow="Refill"
         title="Billing"
-        description="The pricing model is the killshot: free + a small percentage of recovered revenue, with two alternatives if you prefer something predictable. Pick the shape that fits your model — you can switch anytime."
+        description="One formula: a monthly base (free by default) plus a small fee per win Refill creates for you. Tune each metric below — you only ever pay on value created, and the ledger shows every charge."
         breadcrumbs={[
           { label: "Refill", to: "/app/refill" },
           { label: "Billing" },
@@ -261,11 +183,7 @@ function BillingPage() {
             onClick={() => void load()}
             disabled={refreshing}
             className="inline-flex items-center gap-1.5 text-[12px] font-semibold rounded-full px-3 py-1.5 transition disabled:opacity-50"
-            style={{
-              background: "transparent",
-              color: "#5a6068",
-              border: "1px solid #e6e2d6",
-            }}
+            style={{ background: "transparent", color: "#5a6068", border: "1px solid #e6e2d6" }}
           >
             <RefreshCw className={cn("h-3.5 w-3.5", refreshing && "animate-spin")} />
             Refresh
@@ -280,46 +198,10 @@ function BillingPage() {
           </div>
         )}
 
-        {/* Active plan banner */}
-        {active && (
-          <div className="rounded-xl border border-emerald/30 bg-emerald-soft p-5 flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-emerald text-paper flex items-center justify-center shrink-0">
-              <CheckCircle2 className="h-5 w-5" />
-            </div>
-            <div className="flex-1">
-              <div className="text-[11px] font-semibold text-emerald mb-0.5">
-                Active plan
-              </div>
-              <div className="text-base font-semibold text-foreground">
-                {PLAN_META[active.plan].label} ·{" "}
-                <span className="text-ink-soft font-normal">
-                  {planSummary(active.plan, active.revenueSharePct, active.monthlyFlatUsd)}
-                </span>
-              </div>
-              <div className="text-[11px] text-ink-soft mt-1">
-                Since {new Date(active.planStartedAt).toLocaleDateString()}
-                {pm?.hasCardOnFile
-                  ? " · Card on file · invoices charge automatically"
-                  : " · No card on file yet · invoices stay in draft until added"}
-              </div>
-            </div>
-          </div>
-        )}
+        {/* This-month ledger */}
+        <LedgerCard ledger={ledger} />
 
-        {!active && !loadError && (
-          <div className="rounded-xl border border-amber/30 bg-amber-soft p-5">
-            <h2 className="text-base font-semibold text-foreground mb-1">
-              No active plan yet
-            </h2>
-            <p className="text-sm text-ink-soft">
-              Pick a plan below. Until you do, Refill's recovery engine still
-              runs — but no invoices generate. Your settings and data are
-              independent of your billing choice.
-            </p>
-          </div>
-        )}
-
-        {/* Card on file (v1.6) */}
+        {/* Card on file */}
         <CardOnFileSection
           pm={pm}
           onAdd={handleAddCard}
@@ -327,30 +209,19 @@ function BillingPage() {
           redirecting={redirecting}
         />
 
-        {/* Plan selector */}
-        <section>
-          <h2 className="text-[15px] font-semibold text-foreground mb-3">
-            Pick your plan
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {(["starter", "predictable", "pro"] as RefillPricingPlan[]).map((p) => (
-              <PlanCard
-                key={p}
-                plan={p}
-                isActive={active?.plan === p}
-                applying={applyingPlan === p}
-                disabled={applyingPlan !== null}
-                onPick={() => void pickPlan(p)}
-              />
-            ))}
-          </div>
-        </section>
+        {/* Fee-rules config */}
+        {settings && accessToken && (
+          <FeeRulesPanel
+            settings={settings}
+            accessToken={accessToken}
+            viewAsUserId={viewAsUserId}
+            onChanged={() => void load()}
+          />
+        )}
 
         {/* Invoice history */}
         <section>
-          <h2 className="text-[15px] font-semibold text-foreground mb-3">
-            Invoice history
-          </h2>
+          <h2 className="text-[15px] font-semibold text-foreground mb-3">Invoice history</h2>
           {invoices === null ? (
             <div className="flex items-center gap-2 text-sm text-ink-soft py-6">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -362,9 +233,9 @@ function BillingPage() {
                 <FileText className="h-6 w-6 text-ink-soft" />
               </div>
               <p className="text-sm text-ink-soft max-w-md mx-auto">
-                No invoices yet. The first one generates on the 1st of next
-                month, computed from verified recovery events the month
-                prior. You'll see it here as a draft you can audit.
+                No invoices yet. The first one generates on the 1st of next month,
+                computed from the wins Refill created the month prior. You'll see it
+                here as a draft you can audit.
               </p>
             </div>
           ) : (
@@ -373,10 +244,7 @@ function BillingPage() {
                 <thead className="bg-muted/30 text-[11px] font-medium tracking-wider text-ink-soft uppercase">
                   <tr>
                     <th className="px-4 py-2.5 text-left">Period</th>
-                    <th className="px-3 py-2.5 text-left">Plan</th>
-                    <th className="px-3 py-2.5 text-right">Recovered</th>
-                    <th className="px-3 py-2.5 text-right">Share</th>
-                    <th className="px-3 py-2.5 text-right">Flat</th>
+                    <th className="px-3 py-2.5 text-right">Wins</th>
                     <th className="px-3 py-2.5 text-right">Due</th>
                     <th className="px-3 py-2.5 text-center">Status</th>
                   </tr>
@@ -395,10 +263,9 @@ function BillingPage() {
         <div className="rounded-xl bg-muted/30 border border-border p-4 flex items-start gap-3">
           <CreditCard className="h-4 w-4 text-ink-soft mt-0.5 shrink-0" />
           <p className="text-xs text-ink-soft leading-relaxed">
-            Card capture is via Stripe — same hosted checkout you've seen
-            anywhere reputable on the web. We never see your card number.
-            Invoices charge automatically when you confirm a verified
-            recovery; you can manage or remove the card anytime via Manage.
+            Card capture is via Stripe — the same hosted checkout you've seen anywhere
+            reputable. We never see your card number. Invoices charge automatically once
+            a win is verified; manage or remove the card anytime via Manage.
           </p>
         </div>
       </div>
@@ -406,107 +273,273 @@ function BillingPage() {
   );
 }
 
-// ─── Plan card ────────────────────────────────────────────────────────────
+// ─── This-month ledger ──────────────────────────────────────────────────────
 
-function PlanCard({
-  plan,
-  isActive,
-  applying,
-  disabled,
-  onPick,
+function LedgerCard({ ledger }: { ledger: BillingLedger | null }) {
+  if (!ledger) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-5 flex items-center gap-2 text-sm text-ink-soft">
+        <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+        Loading this month…
+      </div>
+    );
+  }
+  const monthLabel = new Date(ledger.periodStart).toLocaleDateString(undefined, {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+  const activeLines = ledger.lines.filter((l) => l.count > 0);
+
+  return (
+    <section className="rounded-2xl border border-emerald/30 bg-emerald-soft/40 overflow-hidden">
+      <div className="px-5 sm:px-6 py-3.5 border-b border-emerald/20 flex items-center justify-between gap-3 flex-wrap">
+        <span className="text-xs font-semibold tracking-wider text-emerald uppercase">
+          If this month closed today · {monthLabel}
+        </span>
+        <span className="text-2xl font-bold tabular-nums text-emerald">
+          {money(ledger.totalDueUsd)}
+        </span>
+      </div>
+      <div className="px-5 sm:px-6 py-4 space-y-1.5">
+        {ledger.monthlyBaseUsd > 0 && (
+          <Row label="Monthly base" value={money(ledger.monthlyBaseUsd)} />
+        )}
+        {activeLines.map((l) => (
+          <Row
+            key={l.metricKey}
+            label={`${l.label} · ${l.count} ${l.count === 1 ? "win" : "wins"}${
+              l.mode === "percent" ? ` (${money(l.revenueUsd)})` : ""
+            }`}
+            value={money(l.charge)}
+          />
+        ))}
+        {activeLines.length === 0 && ledger.monthlyBaseUsd === 0 && (
+          <p className="text-sm text-ink-soft">
+            No billable wins yet this month — that's $0 due. Every win Refill creates will
+            appear here, priced.
+          </p>
+        )}
+        {ledger.wins.length > 0 && (
+          <details className="pt-2 text-[12px]">
+            <summary className="cursor-pointer text-emerald hover:underline">
+              View the {ledger.wins.length} most recent {ledger.wins.length === 1 ? "win" : "wins"}
+            </summary>
+            <ul className="mt-2 divide-y divide-emerald/10">
+              {ledger.wins.map((w) => (
+                <li key={w.id} className="flex items-center justify-between gap-3 py-1.5">
+                  <span className="text-ink-soft min-w-0 truncate">
+                    {new Date(w.date).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                    })}{" "}
+                    · {w.label} · {w.patientName ?? "—"}
+                  </span>
+                  <span className="tabular-nums font-medium text-foreground shrink-0">
+                    {money(w.charge)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 text-sm">
+      <span className="text-ink-soft min-w-0">{label}</span>
+      <span className="tabular-nums font-medium text-foreground shrink-0">{value}</span>
+    </div>
+  );
+}
+
+// ─── Fee-rules config panel ─────────────────────────────────────────────────
+
+function FeeRulesPanel({
+  settings,
+  accessToken,
+  viewAsUserId,
+  onChanged,
 }: {
-  plan: RefillPricingPlan;
-  isActive: boolean;
-  applying: boolean;
-  disabled: boolean;
-  onPick: () => void;
+  settings: BillingSettings;
+  accessToken: string;
+  viewAsUserId: string | undefined;
+  onChanged: () => void;
 }) {
-  const meta = PLAN_META[plan];
-  const econ = getPlanEconomics(plan);
-  const Icon = meta.icon;
+  const [baseInput, setBaseInput] = useState(String(settings.monthlyBaseUsd));
+  const [savingBase, setSavingBase] = useState(false);
+
+  async function saveBase() {
+    const val = Number(baseInput);
+    if (!Number.isFinite(val) || val < 0) {
+      setBaseInput(String(settings.monthlyBaseUsd));
+      return;
+    }
+    if (val === settings.monthlyBaseUsd) return;
+    setSavingBase(true);
+    try {
+      await updateBillingConfig({ data: { accessToken, viewAsUserId, monthlyBaseUsd: val } });
+      toast.success("Monthly base saved.");
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't save base.");
+    } finally {
+      setSavingBase(false);
+    }
+  }
 
   return (
-    <div
-      className={cn(
-        "rounded-xl border bg-card p-5 flex flex-col gap-3 transition",
-        isActive
-          ? "border-emerald bg-emerald-soft shadow-sm"
-          : "border-border hover:border-foreground/30",
-      )}
-    >
-      <div className="flex items-center gap-2">
-        <div
-          className={cn(
-            "h-9 w-9 rounded-full flex items-center justify-center shrink-0",
-            meta.tone === "primary" && "bg-emerald-soft text-emerald",
-            meta.tone === "neutral" && "bg-muted/40 text-foreground",
-            meta.tone === "amber" && "bg-amber-soft text-amber",
-          )}
-        >
-          <Icon className="h-4 w-4" />
+    <section>
+      <h2 className="text-[15px] font-semibold text-foreground mb-1">How you're billed</h2>
+      <p className="text-xs text-ink-soft mb-3 max-w-2xl">
+        Free by default. Set a fee per win for each thing Refill does for you — a flat
+        dollar amount, or a percentage of the revenue that win created. Turn any metric
+        off and it never bills.
+      </p>
+
+      <div className="rounded-xl border border-border bg-card divide-y divide-border">
+        {/* Monthly base */}
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <div>
+            <div className="text-sm font-medium text-foreground">Monthly base</div>
+            <div className="text-[11px] text-ink-soft">
+              A flat monthly fee on top of per-win charges. $0 = the free plan.
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-ink-soft text-sm">$</span>
+            <input
+              type="number"
+              min={0}
+              step="1"
+              value={baseInput}
+              onChange={(e) => setBaseInput(e.target.value)}
+              onBlur={() => void saveBase()}
+              className="w-24 rounded border border-border bg-background px-2 py-1.5 text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald/30"
+            />
+            <span className="text-[11px] text-ink-soft">/mo</span>
+            {savingBase && <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-soft" />}
+          </div>
         </div>
-        <h3 className="text-base font-semibold text-foreground">{meta.label}</h3>
-        {isActive && (
-          <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-soft text-emerald text-[10px] font-semibold uppercase tracking-wider">
-            Active
-          </span>
-        )}
-      </div>
-      <p className="text-xs text-ink-soft min-h-[2.5em]">{meta.tagline}</p>
 
-      <div className="border-t border-border pt-3 space-y-1.5">
-        <Line
-          label="Monthly fee"
-          value={econ.monthly_flat_usd > 0 ? `$${econ.monthly_flat_usd}` : "$0 free"}
-        />
-        <Line
-          label="Revenue share"
-          value={
-            econ.revenue_share_pct > 0
-              ? `${(econ.revenue_share_pct * 100).toFixed(0)}% of recovered`
-              : "0%"
-          }
-        />
-        <Line
-          label="Contract"
-          value="Month-to-month, cancel anytime"
-        />
+        {/* Per-metric rules */}
+        {settings.rules.map((rule) => (
+          <FeeRuleRow
+            key={rule.metricKey}
+            rule={rule}
+            accessToken={accessToken}
+            viewAsUserId={viewAsUserId}
+            onChanged={onChanged}
+          />
+        ))}
       </div>
-
-      <button
-        type="button"
-        onClick={onPick}
-        disabled={disabled || isActive}
-        className={cn(
-          "mt-auto inline-flex items-center justify-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold transition",
-          isActive
-            ? "bg-muted/40 text-ink-soft cursor-not-allowed"
-            : "bg-emerald text-paper hover:opacity-90 disabled:opacity-50",
-        )}
-      >
-        {applying ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : isActive ? (
-          <CheckCircle2 className="h-4 w-4" />
-        ) : (
-          <Zap className="h-4 w-4" />
-        )}
-        {isActive ? "Current plan" : `Pick ${meta.label}`}
-      </button>
-    </div>
+    </section>
   );
 }
 
-function Line({ label, value }: { label: string; value: string }) {
+function FeeRuleRow({
+  rule,
+  accessToken,
+  viewAsUserId,
+  onChanged,
+}: {
+  rule: FeeRuleView;
+  accessToken: string;
+  viewAsUserId: string | undefined;
+  onChanged: () => void;
+}) {
+  // In percent mode the stored amount is a fraction (0.12); show it as 12.
+  const display = rule.mode === "percent" ? rule.amount * 100 : rule.amount;
+  const [amountInput, setAmountInput] = useState(String(display));
+  const [saving, setSaving] = useState(false);
+
+  async function save(next: { mode?: "flat" | "percent"; amount?: number; enabled?: boolean }) {
+    const mode = next.mode ?? rule.mode;
+    let amount = next.amount ?? (mode === "percent" ? rule.amount * 100 : rule.amount);
+    // Convert the displayed value back to storage units.
+    amount = mode === "percent" ? +(amount / 100).toFixed(4) : +amount.toFixed(2);
+    const enabled = next.enabled ?? rule.enabled;
+    setSaving(true);
+    try {
+      await updateFeeRule({
+        data: { accessToken, viewAsUserId, metricKey: rule.metricKey, mode, amount, enabled },
+      });
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't save rule.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <div className="flex items-baseline justify-between text-xs">
-      <span className="text-ink-soft">{label}</span>
-      <span className="font-medium text-foreground">{value}</span>
+    <div className="flex items-center justify-between gap-3 px-4 py-3">
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-foreground flex items-center gap-2">
+          {rule.label}
+          {!rule.live && (
+            <span className="inline-flex items-center rounded-full bg-muted/50 text-ink-soft px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
+              Coming soon
+            </span>
+          )}
+        </div>
+        <div className="text-[11px] text-ink-soft">{rule.description}</div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <select
+          value={rule.mode}
+          onChange={(e) => void save({ mode: e.target.value as "flat" | "percent" })}
+          disabled={saving}
+          className="rounded border border-border bg-background px-1.5 py-1.5 text-[12px] focus:outline-none focus:ring-2 focus:ring-emerald/30"
+        >
+          <option value="flat">$ / win</option>
+          <option value="percent">% of revenue</option>
+        </select>
+        <div className="flex items-center gap-1">
+          {rule.mode === "flat" && <span className="text-ink-soft text-sm">$</span>}
+          <input
+            type="number"
+            min={0}
+            step={rule.mode === "percent" ? "0.5" : "1"}
+            value={amountInput}
+            onChange={(e) => setAmountInput(e.target.value)}
+            onBlur={() => {
+              const v = Number(amountInput);
+              if (Number.isFinite(v) && v >= 0) void save({ amount: v });
+            }}
+            className="w-20 rounded border border-border bg-background px-2 py-1.5 text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald/30"
+          />
+          {rule.mode === "percent" && <span className="text-ink-soft text-sm">%</span>}
+        </div>
+        <button
+          type="button"
+          onClick={() => void save({ enabled: !rule.enabled })}
+          disabled={saving}
+          aria-pressed={rule.enabled}
+          className={cn(
+            "relative h-5 w-9 rounded-full transition shrink-0",
+            rule.enabled ? "bg-emerald" : "bg-muted",
+          )}
+          title={rule.enabled ? "Billing on" : "Billing off"}
+        >
+          <span
+            className={cn(
+              "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all",
+              rule.enabled ? "left-[18px]" : "left-0.5",
+            )}
+          />
+        </button>
+        {saving && <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-soft" />}
+      </div>
     </div>
   );
 }
 
-// ─── Card on file (v1.6) ─────────────────────────────────────────────────
+// ─── Card on file ────────────────────────────────────────────────────────────
 
 function CardOnFileSection({
   pm,
@@ -519,7 +552,6 @@ function CardOnFileSection({
   onManage: () => void;
   redirecting: "add" | "manage" | null;
 }) {
-  // Loading state — keep the row compact so the page doesn't jump on hydrate.
   if (!pm) {
     return (
       <div className="rounded-xl border border-border bg-card p-5 flex items-center gap-3 text-sm text-ink-soft">
@@ -536,9 +568,7 @@ function CardOnFileSection({
           <CreditCard className="h-5 w-5" />
         </div>
         <div className="flex-1">
-          <div className="text-[11px] font-semibold text-emerald mb-0.5">
-            Card on file
-          </div>
+          <div className="text-[11px] font-semibold text-emerald mb-0.5">Card on file</div>
           <div className="text-base font-semibold text-foreground">
             {formatBrand(pm.brand)} &middot;&middot; {pm.last4}
             {pm.expMonth && pm.expYear && (
@@ -549,9 +579,7 @@ function CardOnFileSection({
             )}
           </div>
           {pm.stripeMode === "test" && (
-            <div className="text-[11px] text-amber mt-1">
-              Stripe test mode — no real charges
-            </div>
+            <div className="text-[11px] text-amber mt-1">Stripe test mode — no real charges</div>
           )}
         </div>
         <button
@@ -577,12 +605,9 @@ function CardOnFileSection({
         <CreditCard className="h-5 w-5" />
       </div>
       <div className="flex-1">
-        <div className="text-base font-semibold text-foreground">
-          No card on file yet
-        </div>
+        <div className="text-base font-semibold text-foreground">No card on file yet</div>
         <div className="text-xs text-ink-soft mt-0.5">
-          Add one whenever you'd like — Refill never charges until a verified
-          recovery lands AND you confirm it on the Recovery tab.
+          Add one whenever you'd like — Refill never charges until a win is verified.
         </div>
       </div>
       <button
@@ -591,11 +616,7 @@ function CardOnFileSection({
         disabled={redirecting !== null}
         className="inline-flex items-center gap-1.5 rounded-md bg-emerald text-paper px-3.5 py-2 text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
       >
-        {redirecting === "add" ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Plus className="h-4 w-4" />
-        )}
+        {redirecting === "add" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
         Add payment method
       </button>
     </div>
@@ -619,11 +640,6 @@ function formatBrand(b: string | null): string {
 // ─── Invoice row ──────────────────────────────────────────────────────────
 
 function InvoiceRow({ invoice }: { invoice: RefillInvoice }) {
-  // periodStart is the UTC month boundary (e.g. 2026-05-01T00:00:00Z).
-  // Without timeZone:"UTC" toLocaleString shifts it back one day in any
-  // negative-offset locale (May 1 UTC → April 30 in MT), and the rendered
-  // month-and-year flips to "April 2026". Pin to UTC so the period label
-  // matches the period the row actually covers.
   const start = new Date(invoice.periodStart);
   const periodLabel = start.toLocaleString("en-US", {
     month: "long",
@@ -638,32 +654,14 @@ function InvoiceRow({ invoice }: { invoice: RefillInvoice }) {
           Generated {new Date(invoice.generatedAt).toLocaleDateString()}
         </div>
       </td>
-      <td className="px-3 py-3 text-left text-xs text-ink-soft">
-        {PLAN_META[invoice.planAtInvoice].label}
-      </td>
       <td className="px-3 py-3 text-right tabular-nums">
-        <div>${invoice.recoveredRevenueUsd.toLocaleString()}</div>
-        <div className="text-[10px] text-ink-soft">
-          {invoice.recoveredRevenueCount} event{invoice.recoveredRevenueCount === 1 ? "" : "s"}
-        </div>
-      </td>
-      <td className="px-3 py-3 text-right tabular-nums">
-        {invoice.shareDueUsd > 0
-          ? `$${invoice.shareDueUsd.toLocaleString()}`
-          : "—"}
-        {invoice.revenueSharePct > 0 && (
-          <div className="text-[10px] text-ink-soft">
-            @ {(invoice.revenueSharePct * 100).toFixed(0)}%
-          </div>
+        <div>{invoice.recoveredRevenueCount}</div>
+        {invoice.recoveredRevenueUsd > 0 && (
+          <div className="text-[10px] text-ink-soft">{money(invoice.recoveredRevenueUsd)} value</div>
         )}
       </td>
-      <td className="px-3 py-3 text-right tabular-nums">
-        {invoice.monthlyFlatUsd > 0
-          ? `$${invoice.monthlyFlatUsd.toLocaleString()}`
-          : "—"}
-      </td>
       <td className="px-3 py-3 text-right tabular-nums font-semibold">
-        ${invoice.totalDueUsd.toLocaleString()}
+        {money(invoice.totalDueUsd)}
       </td>
       <td className="px-3 py-3 text-center">
         <InvoiceStatusPill status={invoice.status} />
@@ -673,10 +671,7 @@ function InvoiceRow({ invoice }: { invoice: RefillInvoice }) {
 }
 
 function InvoiceStatusPill({ status }: { status: RefillInvoice["status"] }) {
-  const cfg: Record<
-    RefillInvoice["status"],
-    { bg: string; fg: string; label: string }
-  > = {
+  const cfg: Record<RefillInvoice["status"], { bg: string; fg: string; label: string }> = {
     draft: { bg: "bg-muted/40", fg: "text-ink-soft", label: "Draft" },
     sent: { bg: "bg-amber-soft", fg: "text-amber", label: "Sent" },
     paid: { bg: "bg-emerald-soft", fg: "text-emerald", label: "Paid" },
@@ -686,26 +681,9 @@ function InvoiceStatusPill({ status }: { status: RefillInvoice["status"] }) {
   const c = cfg[status];
   return (
     <span
-      className={cn(
-        "inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium",
-        c.bg,
-        c.fg,
-      )}
+      className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium", c.bg, c.fg)}
     >
       {c.label}
     </span>
   );
-}
-
-function planSummary(
-  plan: RefillPricingPlan,
-  revenueSharePct: number,
-  monthlyFlatUsd: number,
-): string {
-  const sharePart = revenueSharePct > 0 ? `${(revenueSharePct * 100).toFixed(0)}% of recovered` : null;
-  const flatPart = monthlyFlatUsd > 0 ? `$${monthlyFlatUsd}/mo` : null;
-  if (sharePart && flatPart) return `${flatPart} + ${sharePart}`;
-  if (sharePart) return sharePart;
-  if (flatPart) return flatPart;
-  return "free";
 }

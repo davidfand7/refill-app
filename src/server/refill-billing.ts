@@ -36,7 +36,7 @@ import { createClient } from "@supabase/supabase-js";
 import Stripe from "stripe";
 import { z } from "zod";
 
-import type { Database } from "@/integrations/supabase/types";
+import type { Database, Json } from "@/integrations/supabase/types";
 import {
   REFILL_PLAN_PREDICTABLE_MONTHLY_USD,
   REFILL_PLAN_PREDICTABLE_REV_SHARE,
@@ -52,6 +52,12 @@ import {
 } from "@/lib/stripe-mode";
 import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
+import {
+  loadEffectiveFeeConfig,
+  aggregateMetricsForTenant,
+  computeInvoiceTotal,
+  type LedgerLine,
+} from "@/server/billing-fee-core";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -133,7 +139,7 @@ type SupabaseAdmin = ReturnType<typeof admin>;
  * Throws if the user has NO tenant membership (UI must drive them through
  * the onboarding wizard first; billing is post-trial).
  */
-async function getTenantIdForUser(sb: SupabaseAdmin, userId: string): Promise<string> {
+export async function getTenantIdForUser(sb: SupabaseAdmin, userId: string): Promise<string> {
   const { data, error } = await sb
     .from("tenant_memberships")
     .select("tenant_id, created_at")
@@ -456,40 +462,30 @@ export async function generateMonthlyInvoiceForTenant(args: {
 }): Promise<{ created: boolean; reason?: string }> {
   const { sb, tenantId, periodStart, periodEnd } = args;
 
-  // Active plan AS OF period_end (mid-period plan switch invoices under
-  // the plan that was active when the month closed).
-  const { data: plan } = await sb
-    .from("refill_pricing_plans")
-    .select("plan, revenue_share_pct, monthly_flat_usd")
-    .eq("tenant_id", tenantId)
-    .lte("plan_started_at", periodEnd.toISOString())
-    .or(`plan_ended_at.is.null,plan_ended_at.gte.${periodEnd.toISOString()}`)
-    .order("plan_started_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!plan) {
-    return { created: false, reason: "No active paid plan for this period." };
+  // v1.93.0: fee-rules model. Bill any tenant from its configured rules
+  // (defaults = $0 base + $5/win) — no plan row required. Aggregate verified
+  // wins per metric_key and price by the rules. Tiered plans retired as the
+  // rate-source; refill_pricing_plans is kept only for historical snapshots.
+  const cfg = await loadEffectiveFeeConfig(sb, tenantId);
+  const agg = await aggregateMetricsForTenant({ sb, tenantId, periodStart, periodEnd });
+  const { totalDueUsd, lines } = computeInvoiceTotal(cfg, agg);
+
+  // Back-compat rollups for the legacy invoice columns + the metric-charge
+  // subtotal (total minus the monthly base).
+  let recoveredRevenueUsd = 0;
+  let recoveredRevenueCount = 0;
+  for (const a of agg.values()) {
+    recoveredRevenueUsd += a.revenueUsd;
+    recoveredRevenueCount += a.count;
   }
+  recoveredRevenueUsd = +recoveredRevenueUsd.toFixed(2);
+  const metricChargesUsd = +(totalDueUsd - cfg.monthlyBaseUsd).toFixed(2);
 
-  // v1.26.23: aggregation step delegated to the shared helper above so the
-  // dashboard preview locks math parity against this path. Note: no-membership
-  // tenants will silently aggregate to 0/0 here rather than returning the
-  // earlier "No memberships on this tenant" reason — but the `if (!plan)`
-  // guard above already short-circuits no-membership tenants in practice
-  // (they can't have picked a plan), so the reason-message regression is
-  // theoretical only.
-  const { recoveredRevenueUsd, recoveredRevenueCount } =
-    await aggregateRecoveryForTenant({
-      sb,
-      tenantId,
-      periodStart,
-      periodEnd,
-    });
-
-  const sharePct = Number(plan.revenue_share_pct);
-  const flat = Number(plan.monthly_flat_usd);
-  const shareDueUsd = +(recoveredRevenueUsd * sharePct).toFixed(2);
-  const totalDueUsd = +(shareDueUsd + flat).toFixed(2);
+  // Nothing billable this period → skip (no empty draft rows). Replaces the
+  // old "no active plan" gate now that plans aren't the rate-source.
+  if (totalDueUsd <= 0 && recoveredRevenueCount === 0) {
+    return { created: false, reason: "No billable wins this period." };
+  }
 
   // Idempotent upsert on (tenant_id, period_start). Status starts at "draft"
   // and gets bumped to "sent" below if the Stripe push succeeds. The select
@@ -502,12 +498,14 @@ export async function generateMonthlyInvoiceForTenant(args: {
         tenant_id: tenantId,
         period_start: periodStart.toISOString(),
         period_end: periodEnd.toISOString(),
-        plan_at_invoice: plan.plan,
-        revenue_share_pct: sharePct,
-        monthly_flat_usd: flat,
+        plan_at_invoice: "fee_rules",
+        revenue_share_pct: null,
+        monthly_flat_usd: null,
+        monthly_base_usd: cfg.monthlyBaseUsd,
+        fee_breakdown: lines as unknown as Json,
         recovered_revenue_count: recoveredRevenueCount,
         recovered_revenue_usd: recoveredRevenueUsd,
-        share_due_usd: shareDueUsd,
+        share_due_usd: metricChargesUsd,
         total_due_usd: totalDueUsd,
         status: "draft",
         generated_at: new Date().toISOString(),
@@ -565,10 +563,9 @@ export async function generateMonthlyInvoiceForTenant(args: {
             year: "numeric",
             timeZone: "UTC",
           });
-          const description =
-            plan.plan === "starter"
-              ? `Refill recovery share — ${periodLabel} (${(sharePct * 100).toFixed(0)}% of $${recoveredRevenueUsd.toLocaleString()} recovered)`
-              : `Refill ${plan.plan} plan — ${periodLabel}`;
+          const description = `Refill — ${periodLabel} (${recoveredRevenueCount} win${
+            recoveredRevenueCount === 1 ? "" : "s"
+          } → $${totalDueUsd.toLocaleString()})`;
 
           // v1.7.1 — switched to invoice-scoped-items pattern. v1.7 used
           // the "pending pool" pattern (create InvoiceItem with no invoice,
@@ -778,21 +775,20 @@ export function getPlanEconomics(plan: RefillPricingPlan) {
  */
 
 export type RefillInvoicePreview = {
-  /** null when the tenant hasn't selected a plan yet — UI prompts them to. */
-  plan: RefillPricingPlan | null;
-  revenueSharePct: number;
-  monthlyFlatUsd: number;
   /** UTC start of the current calendar month (the period being previewed). */
   periodStart: string;
   /** UTC start of the next calendar month — the period closes here. */
   periodEnd: string;
-  /** Sum of verified attributed_revenue_usd in [periodStart, periodEnd). */
+  /** Per-tenant monthly base ($0 on the default free plan). */
+  monthlyBaseUsd: number;
+  /** Per-metric breakdown (count / revenue / charge) for the period. */
+  lines: LedgerLine[];
+  /** Total verified attributed revenue across metrics (display only). */
   mtdRecoveredUsd: number;
+  /** Total verified wins across metrics. */
   mtdRecoveredCount: number;
-  /** `mtdRecoveredUsd * revenueSharePct`, rounded to cents. */
-  shareDueUsd: number;
-  /** `shareDueUsd + monthlyFlatUsd`. The number the spa owner would see
-   *  if the period closed today — anchored in code, not the UI. */
+  /** monthly_base + Σ(metric charges) — what the spa would owe if the period
+   *  closed today. Anchored in code (fee-rules model), not the UI. */
   totalDueUsd: number;
 };
 
@@ -814,51 +810,25 @@ export const getInvoicePreview = createServerFn({ method: "POST" })
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1),
     );
 
-    const [planRes, agg] = await Promise.all([
-      sb
-        .from("refill_pricing_plans")
-        .select("plan, revenue_share_pct, monthly_flat_usd")
-        .eq("tenant_id", tenantId)
-        .is("plan_ended_at", null)
-        .order("plan_started_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      aggregateRecoveryForTenant({ sb, tenantId, periodStart, periodEnd }),
-    ]);
-
-    const periodStartIso = periodStart.toISOString();
-    const periodEndIso = periodEnd.toISOString();
-    const { recoveredRevenueUsd: mtdRecoveredUsd, recoveredRevenueCount: mtdRecoveredCount } = agg;
-
-    if (!planRes.data) {
-      return {
-        plan: null,
-        revenueSharePct: 0,
-        monthlyFlatUsd: 0,
-        periodStart: periodStartIso,
-        periodEnd: periodEndIso,
-        mtdRecoveredUsd,
-        mtdRecoveredCount,
-        shareDueUsd: 0,
-        totalDueUsd: 0,
-      };
+    // Fee-rules model — same math as the cron invoice + the billing ledger,
+    // so the dashboard preview can never drift from what we actually bill.
+    const cfg = await loadEffectiveFeeConfig(sb, tenantId);
+    const agg = await aggregateMetricsForTenant({ sb, tenantId, periodStart, periodEnd });
+    const { totalDueUsd, lines } = computeInvoiceTotal(cfg, agg);
+    let mtdRecoveredUsd = 0;
+    let mtdRecoveredCount = 0;
+    for (const a of agg.values()) {
+      mtdRecoveredUsd += a.revenueUsd;
+      mtdRecoveredCount += a.count;
     }
 
-    const plan = planRes.data.plan as RefillPricingPlan;
-    const revenueSharePct = Number(planRes.data.revenue_share_pct);
-    const monthlyFlatUsd = Number(planRes.data.monthly_flat_usd);
-    const shareDueUsd = +(mtdRecoveredUsd * revenueSharePct).toFixed(2);
-    const totalDueUsd = +(shareDueUsd + monthlyFlatUsd).toFixed(2);
-
     return {
-      plan,
-      revenueSharePct,
-      monthlyFlatUsd,
-      periodStart: periodStartIso,
-      periodEnd: periodEndIso,
-      mtdRecoveredUsd,
+      periodStart: periodStart.toISOString(),
+      periodEnd: periodEnd.toISOString(),
+      monthlyBaseUsd: cfg.monthlyBaseUsd,
+      lines,
+      mtdRecoveredUsd: +mtdRecoveredUsd.toFixed(2),
       mtdRecoveredCount,
-      shareDueUsd,
       totalDueUsd,
     };
   });

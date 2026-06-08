@@ -16,7 +16,7 @@
  */
 
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -663,12 +663,6 @@ function MoMDelta({
 // refill source. Pre-v1.26.23 any tenant on a refill-side plan rendered
 // the raw enum string ("starter") in this card because the label map
 // only knew about the legacy names.
-const PLAN_LABEL: Record<string, string> = {
-  starter: "Starter",
-  predictable: "Predictable",
-  pro: "Pro",
-};
-
 function RefillInvoicePreviewCard({
   invoice,
   stats,
@@ -680,51 +674,25 @@ function RefillInvoicePreviewCard({
 }) {
   // Period close-out date — friendly label for "if this month closed today".
   // periodStart / periodEnd come back as UTC midnight ISO strings; without an
-  // explicit timeZone:"UTC" the toLocaleDateString call shifts the date back
-  // into the previous day in any negative-offset timezone, so e.g. the May
-  // billing period renders as "April 2026" west of UTC. (v377.1.)
+  // explicit timeZone the toLocaleDateString call shifts the date back into the
+  // previous day in any negative-offset timezone (v377.1).
   const periodEnd = new Date(invoice.periodEnd);
   const monthLabel = new Date(invoice.periodStart).toLocaleDateString(
     undefined,
     { month: "long", year: "numeric", timeZone: "America/Denver" },
   );
 
-  // No plan selected → friendlier prompt, no math shown.
-  if (invoice.plan === null) {
-    return (
-      <section className="rounded-2xl border border-border bg-gradient-to-br from-emerald-500/5 via-card to-card p-5 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="shrink-0 mt-0.5 h-9 w-9 rounded-full bg-emerald-500/10 text-emerald-700 flex items-center justify-center">
-              <Receipt className="h-4 w-4" />
-            </div>
-            <div>
-              <h3 className="text-base font-semibold text-foreground">
-                Pick a pricing plan to see your invoice preview
-              </h3>
-              <p className="text-xs text-ink-soft mt-1 max-w-xl leading-relaxed">
-                You're saving revenue with {brandName} — the only question left
-                is how you'd like to be billed for it. Performance (free + 12%
-                of recovered) is the default; you can switch anytime.
-              </p>
-            </div>
-          </div>
-          <Link
-            to="/app/billing"
-            className="inline-flex items-center gap-1.5 text-xs font-medium rounded-full border border-border bg-background px-3 py-1.5 hover:bg-muted/30 transition shrink-0"
-          >
-            Choose a plan
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-      </section>
-    );
-  }
-
-  const planLabel = PLAN_LABEL[invoice.plan] ?? invoice.plan;
-  const sharePct = (invoice.revenueSharePct * 100).toFixed(invoice.revenueSharePct % 0.01 === 0 ? 0 : 1);
-  const hasShare = invoice.revenueSharePct > 0;
-  const hasFlat = invoice.monthlyFlatUsd > 0;
+  // v1.93.0 fee-rules model: show only metrics that actually have wins this
+  // period. The headline rate comes from the slot_fill rule (the live metric).
+  const activeLines = invoice.lines.filter((l) => l.count > 0);
+  const base = invoice.monthlyBaseUsd;
+  const slot = invoice.lines.find((l) => l.metricKey === "slot_fill");
+  const rateLabel = slot
+    ? slot.mode === "percent"
+      ? `${+(slot.amount * 100).toFixed(2)}% of revenue`
+      : `$${slot.amount}/win`
+    : "$5/win";
+  void brandName;
 
   return (
     <section className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/5 via-card to-card overflow-hidden">
@@ -740,44 +708,41 @@ function RefillInvoicePreviewCard({
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-700/10 text-emerald-800 px-2.5 py-0.5 text-[11px] font-medium">
           <ShieldCheck className="h-2.5 w-2.5" />
-          {planLabel} plan
-          {hasShare && ` · ${sharePct}% of recovered`}
-          {!hasShare && hasFlat && ` · $${invoice.monthlyFlatUsd}/mo flat`}
+          {base > 0 ? `$${base}/mo + ${rateLabel}` : `Free + ${rateLabel}`}
         </span>
       </div>
 
       <div className="px-5 sm:px-6 py-5">
         {/* The math, laid out so the spa owner can audit it line-by-line. */}
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-x-6 gap-y-2 items-baseline">
-          {hasShare && (
+          {base > 0 && (
             <>
-              <div className="text-sm text-ink-soft">
-                Recovered this month{" "}
-                <span className="text-[11px] text-ink-soft/70">
-                  ({invoice.mtdRecoveredCount} verified)
-                </span>
-              </div>
+              <div className="text-sm text-ink-soft">Monthly base</div>
               <div className="text-sm tabular-nums text-foreground sm:text-right">
-                {formatMoney(invoice.mtdRecoveredUsd)}
-              </div>
-
-              <div className="text-sm text-ink-soft">
-                × {sharePct}% revenue share
-              </div>
-              <div className="text-sm tabular-nums text-foreground sm:text-right">
-                = {formatMoney(invoice.shareDueUsd)}
+                {formatMoney(base)}
               </div>
             </>
           )}
 
-          {hasFlat && (
-            <>
+          {activeLines.map((l) => (
+            <Fragment key={l.metricKey}>
               <div className="text-sm text-ink-soft">
-                + {planLabel} plan monthly
+                {l.label}{" "}
+                <span className="text-[11px] text-ink-soft/70">
+                  ({l.count} {l.count === 1 ? "win" : "wins"}
+                  {l.mode === "percent" ? ` · ${formatMoney(l.revenueUsd)}` : ""})
+                </span>
               </div>
               <div className="text-sm tabular-nums text-foreground sm:text-right">
-                {formatMoney(invoice.monthlyFlatUsd)}
+                {formatMoney(l.charge)}
               </div>
+            </Fragment>
+          ))}
+
+          {activeLines.length === 0 && base === 0 && (
+            <>
+              <div className="text-sm text-ink-soft">No billable wins yet this month</div>
+              <div className="text-sm tabular-nums text-ink-soft sm:text-right">$0.00</div>
             </>
           )}
 
