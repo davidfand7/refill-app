@@ -29,7 +29,7 @@ import { ProvidersSection } from "@/components/refill/booking/ProvidersSection";
 import { RoomsSection } from "@/components/refill/booking/RoomsSection";
 import { BookableServicesSection } from "@/components/refill/booking/BookableServicesSection";
 import { useBookingSettings } from "@/components/refill/booking/useBookingSettings";
-import { useSectionCollapse } from "@/components/refill/booking/useSectionCollapse";
+import { setAllBookingSections, useSectionCollapse } from "@/components/refill/booking/useSectionCollapse";
 import { bookingUrl, Toggle } from "@/components/refill/booking/fields";
 import { ChevronDown } from "lucide-react";
 
@@ -54,6 +54,7 @@ function BookingSettingsPage() {
 
   const bk = useBookingSettings({ viewAsUserId, isTenant: membership.status === "tenant" });
   const linkSection = useSectionCollapse("link");
+  const master = useSectionCollapse("master", true);
   const {
     loading, saving, server, draft,
     selDays, setSelDays, bulkOpen, setBulkOpen, bulkClose, setBulkClose,
@@ -97,6 +98,25 @@ function BookingSettingsPage() {
           </div>
         ) : (
           <>
+            {/* ── Expand / collapse all ── */}
+            <div className="flex items-center justify-end gap-2 text-[12px] -mb-3">
+              <button
+                type="button"
+                onClick={() => setAllBookingSections(true)}
+                className="text-ink-soft hover:text-ink transition"
+              >
+                Expand all
+              </button>
+              <span className="text-rule">·</span>
+              <button
+                type="button"
+                onClick={() => setAllBookingSections(false)}
+                className="text-ink-soft hover:text-ink transition"
+              >
+                Collapse all
+              </button>
+            </div>
+
             {/* ── Your public booking link ── */}
             {draft.slug && (
               <section className="rounded-xl border border-rule bg-white px-5 py-4">
@@ -148,57 +168,64 @@ function BookingSettingsPage() {
               </section>
             )}
 
-            {/* ── Master + timezone ── */}
-            <section className="rounded-xl border border-rule bg-white px-5 py-4 space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="rounded-full bg-emerald-soft p-2 shrink-0">
-                  <Sparkles className="h-4 w-4 text-emerald" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-3">
-                    <label className="text-[14px] font-semibold text-ink">
-                      Online booking
-                    </label>
-                    <Toggle
-                      checked={draft.settings.onlineBookingEnabled}
-                      onChange={(v) => patchSettings({ onlineBookingEnabled: v })}
-                    />
-                  </div>
-                  <p className="text-[12px] text-ink-soft mt-1 leading-relaxed">
+            {/* ── Master + timezone (collapsible; on/off toggle stays in the header) ── */}
+            <section className="rounded-xl border border-rule bg-white px-5 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={master.toggle}
+                  className="flex items-center gap-2 text-left min-w-0"
+                >
+                  <ChevronDown
+                    className={cn(
+                      "h-4 w-4 text-ink-faint transition-transform shrink-0",
+                      master.open ? "" : "-rotate-90",
+                    )}
+                  />
+                  <Sparkles className="h-4 w-4 text-emerald shrink-0" />
+                  <h3 className="text-[14px] font-semibold text-ink">Online booking</h3>
+                </button>
+                <Toggle
+                  checked={draft.settings.onlineBookingEnabled}
+                  onChange={(v) => patchSettings({ onlineBookingEnabled: v })}
+                />
+              </div>
+              {master.open && (
+                <div className="mt-3 space-y-4">
+                  <p className="text-[12px] text-ink-soft leading-relaxed">
                     When on, patients can self-book on your public page. Off keeps the page
                     private while you finish setup.
                   </p>
+                  <div className="flex items-start gap-3 pt-3 border-t border-rule/70">
+                    <div className="rounded-full bg-emerald-soft p-2 shrink-0 mt-0.5">
+                      <Globe className="h-4 w-4 text-emerald" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1.5 block">
+                        Timezone
+                      </label>
+                      <select
+                        value={draft.settings.timezone}
+                        onChange={(e) => patchSettings({ timezone: e.target.value })}
+                        className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                      >
+                        {TIMEZONES.map((tz) => (
+                          <option key={tz.value} value={tz.value}>
+                            {tz.label}
+                          </option>
+                        ))}
+                        {/* Preserve an unknown stored tz so save never silently changes it. */}
+                        {!TIMEZONES.some((t) => t.value === draft.settings.timezone) && (
+                          <option value={draft.settings.timezone}>{draft.settings.timezone}</option>
+                        )}
+                      </select>
+                      <p className="text-[12px] text-ink-soft mt-1.5 leading-relaxed">
+                        All slot times are shown and stored against this timezone.
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-              <div className="flex items-start gap-3 pt-1 border-t border-rule/70">
-                <div className="rounded-full bg-emerald-soft p-2 shrink-0 mt-3">
-                  <Globe className="h-4 w-4 text-emerald" />
-                </div>
-                <div className="flex-1 min-w-0 pt-3">
-                  <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1.5 block">
-                    Timezone
-                  </label>
-                  <select
-                    value={draft.settings.timezone}
-                    onChange={(e) => patchSettings({ timezone: e.target.value })}
-                    className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
-                  >
-                    {TIMEZONES.map((tz) => (
-                      <option key={tz.value} value={tz.value}>
-                        {tz.label}
-                      </option>
-                    ))}
-                    {/* Preserve an unknown stored tz so save never silently changes it. */}
-                    {!TIMEZONES.some((t) => t.value === draft.settings.timezone) && (
-                      <option value={draft.settings.timezone}>{draft.settings.timezone}</option>
-                    )}
-                  </select>
-                  <p className="text-[12px] text-ink-soft mt-1.5 leading-relaxed">
-                    All slot times are shown and stored against this timezone.
-                  </p>
-                </div>
-              </div>
+              )}
             </section>
 
             {/* ── Providers ── */}

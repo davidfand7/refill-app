@@ -629,11 +629,12 @@ function AppointmentRow({
   );
 }
 
-function StatusPill({ status }: { status: AppointmentStatus }) {
-  const cfg: Record<
-    AppointmentStatus,
-    { bg: string; fg: string; label: string }
-  > = {
+function StatusPill({ status }: { status: AppointmentStatus | string }) {
+  // Keyed by string (not AppointmentStatus) because emma_appointments.status is a
+  // free DB column shared with the native scheduler, which writes statuses outside
+  // the import union (e.g. "held"). Any unmapped value falls back instead of
+  // crashing the section — the prior bug was cfg[status] being undefined → .bg throw.
+  const cfg: Record<string, { bg: string; fg: string; label: string }> = {
     scheduled: { bg: "bg-muted/40", fg: "text-ink-soft", label: "Scheduled" },
     confirmed: {
       bg: "bg-emerald-500/10",
@@ -652,8 +653,13 @@ function StatusPill({ status }: { status: AppointmentStatus }) {
       label: "Showed",
     },
     rescheduled: { bg: "bg-amber-500/10", fg: "text-amber-700", label: "Rescheduled" },
+    held: { bg: "bg-muted/40", fg: "text-ink-soft", label: "Held" },
   };
-  const c = cfg[status];
+  const c = cfg[status] ?? {
+    bg: "bg-muted/40",
+    fg: "text-ink-soft",
+    label: String(status).replace(/_/g, " ").replace(/^\w/, (m) => m.toUpperCase()),
+  };
   return (
     <span
       className={cn(

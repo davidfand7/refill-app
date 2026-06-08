@@ -8,7 +8,7 @@
  * 2026-06-02):
  *   - Documented: portal-issued credits (Alle for Business / APP / Aspire /
  *     Evolus). Captured with manufacturer + program + period + source ref.
- *   - Anonymous: on-hand product, NO provenance fields. Just brand + SKU +
+ *   - Anonymous: promo/samples product, NO provenance fields. Just brand + SKU +
  *     units. The wall holds: nothing in the schema links back to a specific
  *     verbal deal / rep / off-the-record sample-bridge.
  *
@@ -219,7 +219,7 @@ function RecognitionInventoryPage() {
       setRows((prev) => (prev ? [entry, ...prev] : [entry]));
       setAnonDraft(EMPTY_ANON_DRAFT);
       setAddPanel("none");
-      toast.success(`Added ${entry.unitsTotal} × ${entry.brand} (on-hand).`);
+      toast.success(`Added ${entry.unitsTotal} × ${entry.brand} (promo/samples).`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't save.");
     } finally {
@@ -287,7 +287,7 @@ function RecognitionInventoryPage() {
     <div>
       <PageHeader
         title="Recognition inventory"
-        description="The pool of manufacturer-rebate units you can deploy to recognize specific patients. Two kinds: documented (portal-issued) and on-hand."
+        description="The pool of manufacturer-rebate units you can deploy to recognize specific patients. Two kinds: documented (portal-issued) and promo/samples."
       />
 
       <div className="border-b border-rule bg-paper/50">
@@ -340,7 +340,7 @@ function RecognitionInventoryPage() {
             )}
           >
             <ShieldOff className="h-4 w-4" />
-            Add on-hand
+            Add promo/samples
           </button>
           {rows && rows.length > 0 && (
             <span className="text-xs text-ink-soft ml-auto">
@@ -399,7 +399,7 @@ function RecognitionInventoryPage() {
             )}
             {anonymous.length > 0 && (
               <InventoryGroup
-                title="On-hand"
+                title="Promo/samples"
                 subtitle="No source recorded — deploy at your discretion."
                 kind="anonymous"
                 rows={anonymous}
@@ -430,7 +430,7 @@ function EmptyState({ onAddDocumented }: { onAddDocumented: () => void }) {
         <p className="text-sm text-ink-soft leading-relaxed max-w-md mx-auto">
           Add the manufacturer-rebate units you can deploy to recognize specific
           patients. Portal-issued entries (from APP / Aspire / Alle) include
-          program + period; on-hand entries are just brand + units.
+          program + period; promo/samples entries are just brand + units.
         </p>
       </div>
       <button
@@ -875,7 +875,7 @@ function AnonymousForm({
     >
       <header className="flex items-center gap-2 text-sm font-semibold text-ink">
         <ShieldOff className="h-4 w-4" />
-        Add on-hand inventory
+        Add promo/samples inventory
       </header>
       <p className="text-xs text-ink-soft">
         Product you have available to deploy. No source recorded — just brand +

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.90.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.90.0 &mdash; Appointments crash fix + Booking-settings polish + Recognition rename. </strong><strong>Fix:</strong> the <strong>Appointments</strong> page could crash to a &ldquo;Something went wrong&rdquo; screen when the list contained an appointment whose status wasn&rsquo;t one of the six import statuses &mdash; the native scheduler writes <code>held</code> into the same table, and the status pill had no entry for it (<code>cfg[status]</code> was undefined). The pill now renders <strong>any</strong> status safely (and labels <em>Held</em> properly) so the section can never crash on an unexpected value. <strong>Polish:</strong> Booking-settings sections now <strong>default collapsed</strong> for a clean entry view, the master <strong>Online booking</strong> card got its own chevron, and there&rsquo;s an <strong>Expand all / Collapse all</strong> control. <strong>Rename:</strong> Recognition inventory&rsquo;s &ldquo;on-hand&rdquo; bucket is now <strong>Promo/samples</strong> (clearer; same underlying data). <strong>Touched</strong>: <code>app.refill.appointments.tsx</code>, <code>app.refill.settings.booking.tsx</code>, <code>booking/useSectionCollapse.ts</code>, <code>app.refill.recognition.inventory.tsx</code>, <code>src/lib/changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.89.0",
     date: "June 2026",
     items: [
