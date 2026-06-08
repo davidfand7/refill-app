@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.92.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.92.0 &mdash; Truncation sweep: every count now reads your whole book. </strong>Found and killed a systemic data-integrity bug: Supabase silently caps <em>every</em> read at <strong>1,000 rows</strong> (a <code>.limit(2000)</code> doesn&rsquo;t override it), so at scale a bunch of headline numbers were computed over a 1,000-row slice and shown as complete. Most visibly, the <strong>Patients</strong> page said &ldquo;1,000 in your patient book&rdquo; when the real count is higher &mdash; and every filter on it (Overdue, A-list, per-manufacturer, tags) was counting only that slice. Fixed with one shared paginator applied to the load-bearing reads: <strong>patient list</strong> (+ all its filter counts), <strong>recovery lifetime revenue</strong> (a pay-for-performance under-bill risk), <strong>Reports funnel</strong> (targeted&rarr;sent&rarr;booked&rarr;revenue), <strong>campaign cohorts</strong> (patients past row 1,000 were silently never messaged), the <strong>invoice cron</strong>, and the new <strong>reward signals</strong> summary. <strong>Touched</strong>: new <code>server/paginate.ts</code> (<code>fetchAllRows</code>), <code>patient-ingest</code>, <code>emma-attribution</code>, <code>emma-reports</code>, <code>emma-blast</code>, <code>refill-billing</code>, <code>manufacturer-reward-ingest</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.91.1",
     date: "June 2026",
     items: [

@@ -50,6 +50,7 @@ import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
+import { fetchAllRows } from "@/server/paginate";
 
 // ─── Public types exported to UI ──────────────────────────────────────────
 
@@ -157,22 +158,49 @@ export const getEmmaReports = createServerFn({ method: "POST" })
     //    campaign in one read — at spa scale this is small (tens of
     //    thousands at most) and lets us aggregate in JS without a
     //    per-campaign roundtrip.
-    const { data: stateRows, error: sErr } = await sb
-      .from("patient_outreach_state")
-      .select(
-        "id, campaign_node_id, state, scheduled_at, last_touched_at, booking_confirmed_at, showed_at, attributed_revenue_usd, updated_at",
-      )
-      .eq("user_id", effectiveUserId);
-    if (sErr) throw new Error(`Couldn't load state rows: ${sErr.message}`);
+    // v1.92.0: page past PostgREST's 1,000-row cap. At "tens of thousands"
+    // of state/outreach rows the funnel was being summed over a 1,000-row
+    // slice and shown to the owner as complete.
+    const stateRows = await fetchAllRows<{
+      id: string;
+      campaign_node_id: string;
+      state: string;
+      scheduled_at: string | null;
+      last_touched_at: string | null;
+      booking_confirmed_at: string | null;
+      showed_at: string | null;
+      attributed_revenue_usd: number | null;
+      updated_at: string;
+    }>((from, to) =>
+      sb
+        .from("patient_outreach_state")
+        .select(
+          "id, campaign_node_id, state, scheduled_at, last_touched_at, booking_confirmed_at, showed_at, attributed_revenue_usd, updated_at",
+        )
+        .eq("user_id", effectiveUserId)
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
 
-    // 3) All outreach rows for this spa. Same one-shot read pattern.
-    const { data: outreachRows, error: oErr } = await sb
-      .from("patient_outreach")
-      .select(
-        "patient_outreach_state_id, direction, channel, sent_at, opened_at, replied_at, skip_reason",
-      )
-      .eq("user_id", effectiveUserId);
-    if (oErr) throw new Error(`Couldn't load outreach rows: ${oErr.message}`);
+    // 3) All outreach rows for this spa. Same paginated read pattern.
+    const outreachRows = await fetchAllRows<{
+      patient_outreach_state_id: string;
+      direction: string;
+      channel: string;
+      sent_at: string | null;
+      opened_at: string | null;
+      replied_at: string | null;
+      skip_reason: string | null;
+    }>((from, to) =>
+      sb
+        .from("patient_outreach")
+        .select(
+          "patient_outreach_state_id, direction, channel, sent_at, opened_at, replied_at, skip_reason",
+        )
+        .eq("user_id", effectiveUserId)
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
 
     // 4) Build a map: campaignId → funnel accumulator. We also accumulate
     //    a `totals` row in parallel so we only iterate each row once.

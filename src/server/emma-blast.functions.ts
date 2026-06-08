@@ -26,6 +26,7 @@ import { z } from "zod";
 
 import type { Database, Json } from "@/integrations/supabase/types";
 import { verifyAuth } from "@/server/auth-helpers";
+import { fetchAllRows } from "@/server/paginate";
 import { callGeminiOneShot } from "@/server/gemini-oneshot";
 import { sendSms } from "@/server/sms-provider";
 import { bookingUrlFor, ensureBookingToken } from "@/server/emma-booking.functions";
@@ -366,13 +367,22 @@ async function collectAllMatches(
   // caller with a different size.
   // (No early-return on small cohorts — we always do the full scan since
   // the inline predicate keeps the type narrow.)
-  const { data: patients, error } = await sb
-    .from("knowledge_nodes")
-    .select("id, title, attachments")
-    .eq("user_id", userId)
-    .eq("node_type", "patient")
-    .eq("context", "patients");
-  if (error) throw new Error(`Couldn't read patients: ${error.message}`);
+  // v1.92.0: page past the 1,000-row cap — a truncated cohort silently drops
+  // patients past row 1,000 from the campaign (they never get messaged).
+  const patients = await fetchAllRows<{
+    id: string;
+    title: string;
+    attachments: unknown;
+  }>((from, to) =>
+    sb
+      .from("knowledge_nodes")
+      .select("id, title, attachments")
+      .eq("user_id", userId)
+      .eq("node_type", "patient")
+      .eq("context", "patients")
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
   // Re-do the kind affinity Set for `hasPurchasedKind` / `notPurchasedKind`.
   // This duplicates the doResolveCohort logic — acceptable for v1 of the

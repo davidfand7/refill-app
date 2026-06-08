@@ -27,6 +27,7 @@ import { z } from "zod";
 
 import type { Database, Json } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
+import { fetchAllRows } from "@/server/paginate";
 import {
   normalizeCustomTag,
   parsePatientDetailCsv,
@@ -1828,17 +1829,20 @@ export const listPatients = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const limit = data.limit ?? 2000;
-    const { data: rows, error } = await sb
-      .from("knowledge_nodes")
-      .select("*")
-      .eq("user_id", effectiveUserId)
-      .eq("node_type", "patient")
-      .eq("context", "patients")
-      .order("updated_at", { ascending: false })
-      .limit(limit);
-    if (error) throw new Error(`Couldn't list patients: ${error.message}`);
-    const all = (rows ?? []).map(hydratePatientListRow);
+    // v1.92.0: page past PostgREST's 1,000-row server cap — a `.limit(2000)`
+    // was silently truncated to 1,000, so a 1,126-patient book showed "1,000"
+    // and every filter/overdue/manufacturer count was computed over the slice.
+    const rows = await fetchAllRows<KnowledgeNodeRow>((from, to) =>
+      sb
+        .from("knowledge_nodes")
+        .select("*")
+        .eq("user_id", effectiveUserId)
+        .eq("node_type", "patient")
+        .eq("context", "patients")
+        .order("updated_at", { ascending: false })
+        .range(from, data.limit ? Math.min(to, data.limit - 1) : to),
+    );
+    const all = rows.map(hydratePatientListRow);
     // v1.34.9.3: filter soft-hidden patients out by default. Karen toggles
     // "Show hidden" on the patient list to include them.
     if (data.includeHidden) return all;

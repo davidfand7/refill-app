@@ -39,6 +39,7 @@ import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import { fetchAllRows } from "@/server/paginate";
 import { loadAttributionSettings } from "@/server/refill-attribution-agent.functions";
 
 // ─── Public types ─────────────────────────────────────────────────────────
@@ -490,11 +491,18 @@ export const getRecoveryStats = createServerFn({ method: "POST" })
           .gte("verified_at", priorMonthStart.toISOString())
           .lt("verified_at", monthStart.toISOString())
           .not("verified_at", "is", null),
-        sb
-          .from("emma_recovery_events")
-          .select("attributed_revenue_usd")
-          .eq("user_id", effectiveUserId)
-          .not("verified_at", "is", null),
+        // v1.92.0: lifetime verified revenue feeds the recovery dashboard (and
+        // pay-for-performance billing) — page past the 1,000-row cap so the
+        // SUM is the real lifetime total, not a truncated slice that underbills.
+        fetchAllRows<{ attributed_revenue_usd: number | null }>((from, to) =>
+          sb
+            .from("emma_recovery_events")
+            .select("attributed_revenue_usd")
+            .eq("user_id", effectiveUserId)
+            .not("verified_at", "is", null)
+            .order("id", { ascending: true })
+            .range(from, to),
+        ),
         sb
           .from("emma_recovery_events")
           .select("id", { count: "exact", head: true })
@@ -505,7 +513,7 @@ export const getRecoveryStats = createServerFn({ method: "POST" })
 
     const monthRows = monthRes.data ?? [];
     const priorMonthRows = priorMonthRes.data ?? [];
-    const lifetimeRows = lifetimeRes.data ?? [];
+    const lifetimeRows = lifetimeRes;
 
     const monthVerifiedUsd = monthRows.reduce(
       (sum, r) => sum + Number(r.attributed_revenue_usd ?? 0),

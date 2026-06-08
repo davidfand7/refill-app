@@ -51,6 +51,7 @@ import {
   type StripeMode,
 } from "@/lib/stripe-mode";
 import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
+import { fetchAllRows } from "@/server/paginate";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -709,11 +710,17 @@ export async function generateMonthlyInvoicesForAll(args: {
     );
   }
 
-  const { data: plans } = await sb
-    .from("refill_pricing_plans")
-    .select("tenant_id")
-    .is("plan_ended_at", null);
-  const tenantIds = Array.from(new Set((plans ?? []).map((p) => p.tenant_id)));
+  // v1.92.0: page past the 1,000-row cap so the invoice cron never silently
+  // skips active tenants once Refill scales past 1,000 of them.
+  const plans = await fetchAllRows<{ tenant_id: string }>((from, to) =>
+    sb
+      .from("refill_pricing_plans")
+      .select("tenant_id")
+      .is("plan_ended_at", null)
+      .order("tenant_id", { ascending: true })
+      .range(from, to),
+  );
+  const tenantIds = Array.from(new Set(plans.map((p) => p.tenant_id)));
 
   let invoiced = 0;
   const errors: string[] = [];

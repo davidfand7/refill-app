@@ -26,6 +26,7 @@ import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import { fetchAllRows } from "@/server/paginate";
 import {
   parseRewardCsv,
   summarizeRewardEntries,
@@ -401,22 +402,23 @@ export const listRewardSignal = createServerFn({ method: "POST" })
       patient_node_id: string | null;
       updated_at: string;
     };
-    const PAGE = 1000;
-    const list: RewardDbRow[] = [];
-    for (let from = 0; from <= 50000; from += PAGE) {
+    // Paginate by id (unique → stable offset paging); sort for display after.
+    const list = await fetchAllRows<RewardDbRow>((from, to) => {
       let q = sb
         .from("patient_reward_entries")
         .select(SELECT_COLS)
         .eq("user_id", effectiveUserId)
-        .order("expiration_date", { ascending: true, nullsFirst: false })
-        .range(from, from + PAGE - 1);
+        .order("id", { ascending: true })
+        .range(from, to);
       if (data.manufacturer) q = q.eq("manufacturer", data.manufacturer);
-      const { data: page, error } = await q;
-      if (error) throw new Error(`Couldn't load reward signals: ${error.message}`);
-      const rows = (page ?? []) as RewardDbRow[];
-      list.push(...rows);
-      if (rows.length < PAGE) break;
-    }
+      return q;
+    });
+    // Soonest-expiring first for the table (nulls last).
+    list.sort((a, b) => {
+      const ax = a.expiration_date ?? "9999-12-31";
+      const bx = b.expiration_date ?? "9999-12-31";
+      return ax < bx ? -1 : ax > bx ? 1 : 0;
+    });
 
     // Resolve patient display names for matched entries in one query.
     const nodeIds = Array.from(
