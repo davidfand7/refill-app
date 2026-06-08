@@ -456,13 +456,18 @@ export function summarizeRewardEntries(
   let eligibleNow = 0;
   let expiringSoon = 0;
   let dollarsOnTable = 0;
+  // Reward amount is a patient-level value duplicated onto every brand row, so
+  // sum it once per patient (match key) — not once per entry — or the headline
+  // double-counts a two-brand patient.
+  const dollarsCounted = new Set<string>();
 
   const todayMs = Date.parse(`${todayIso}T00:00:00Z`);
   const windowMs = expiringWindowDays * 86_400_000;
 
   for (const e of entries) {
     byStatus[e.statusNorm]++;
-    patientKeys.add(rewardMatchKey(e));
+    const key = rewardMatchKey(e);
+    patientKeys.add(key);
     if (e.statusNorm === "eligible" || e.statusNorm === "expiring_soon") {
       eligibleNow++;
     }
@@ -474,7 +479,10 @@ export function summarizeRewardEntries(
       }
     }
     if (expiring) expiringSoon++;
-    if (e.rewardAmountUsd != null) dollarsOnTable += e.rewardAmountUsd;
+    if (e.rewardAmountUsd != null && !dollarsCounted.has(key)) {
+      dollarsOnTable += e.rewardAmountUsd;
+      dollarsCounted.add(key);
+    }
   }
 
   return {

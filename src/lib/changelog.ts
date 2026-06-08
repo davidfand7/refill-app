@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.91.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.91.1 &mdash; Reward-signal headline math fix. </strong>The <strong>Rewards</strong> stat tiles (eligible-now / expiring / patients / dollars) were computed over a <strong>1,000-row slice</strong> of the import &mdash; PostgREST caps a read at 1,000 rows, and a single 879-patient Evolus export is 1,758 signals, so the headline undercounted. The summary now <strong>pages through the full set</strong> before counting. Also fixed: <strong>dollars-on-the-table</strong> no longer double-counts a patient whose reward shows on both their Jeuveau and Evolysse rows (summed once per patient). The entries table still streams the soonest-expiring first. <strong>Touched</strong>: <code>manufacturer-reward-ingest.functions.ts</code> (paginated summary read), <code>manufacturer-reward-csv.ts</code> (per-patient dollar dedupe), <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.91.0",
     date: "June 2026",
     items: [

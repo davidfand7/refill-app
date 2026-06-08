@@ -378,19 +378,45 @@ export const listRewardSignal = createServerFn({ method: "POST" })
     });
     const sb = admin();
 
-    let q = sb
-      .from("patient_reward_entries")
-      .select(
-        "id, manufacturer, program, brand_product, product_kind, status_raw, status_norm, eligible_date, expiration_date, reward_amount_usd, contact_name, contact_phone, contact_email, last_visit, patient_node_id, updated_at",
-      )
-      .eq("user_id", effectiveUserId)
-      .order("expiration_date", { ascending: true, nullsFirst: false })
-      .limit(5000);
-    if (data.manufacturer) q = q.eq("manufacturer", data.manufacturer);
-
-    const { data: rows, error } = await q;
-    if (error) throw new Error(`Couldn't load reward signals: ${error.message}`);
-    const list = rows ?? [];
+    // Page past PostgREST's default 1,000-row cap so the SUMMARY is computed
+    // over the full population, not a truncated slice. (v1.91.1 — the capped
+    // single read undercounted the headline tiles.)
+    const SELECT_COLS =
+      "id, manufacturer, program, brand_product, product_kind, status_raw, status_norm, eligible_date, expiration_date, reward_amount_usd, contact_name, contact_phone, contact_email, last_visit, patient_node_id, updated_at";
+    type RewardDbRow = {
+      id: string;
+      manufacturer: string;
+      program: string | null;
+      brand_product: string;
+      product_kind: string | null;
+      status_raw: string | null;
+      status_norm: string;
+      eligible_date: string | null;
+      expiration_date: string | null;
+      reward_amount_usd: number | null;
+      contact_name: string | null;
+      contact_phone: string | null;
+      contact_email: string | null;
+      last_visit: string | null;
+      patient_node_id: string | null;
+      updated_at: string;
+    };
+    const PAGE = 1000;
+    const list: RewardDbRow[] = [];
+    for (let from = 0; from <= 50000; from += PAGE) {
+      let q = sb
+        .from("patient_reward_entries")
+        .select(SELECT_COLS)
+        .eq("user_id", effectiveUserId)
+        .order("expiration_date", { ascending: true, nullsFirst: false })
+        .range(from, from + PAGE - 1);
+      if (data.manufacturer) q = q.eq("manufacturer", data.manufacturer);
+      const { data: page, error } = await q;
+      if (error) throw new Error(`Couldn't load reward signals: ${error.message}`);
+      const rows = (page ?? []) as RewardDbRow[];
+      list.push(...rows);
+      if (rows.length < PAGE) break;
+    }
 
     // Resolve patient display names for matched entries in one query.
     const nodeIds = Array.from(
