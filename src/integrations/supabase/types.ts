@@ -14,6 +14,147 @@ export type Database = {
   }
   public: {
     Tables: {
+      reward_signal_imports: {
+        Row: {
+          contacts_filled_count: number
+          created_at: string
+          entry_count: number
+          id: string
+          imported_at: string
+          manufacturer: string
+          matched_count: number
+          new_contacts_count: number
+          program: string | null
+          row_count: number
+          source_filename: string | null
+          user_id: string
+        }
+        Insert: {
+          contacts_filled_count?: number
+          created_at?: string
+          entry_count?: number
+          id?: string
+          imported_at?: string
+          manufacturer: string
+          matched_count?: number
+          new_contacts_count?: number
+          program?: string | null
+          row_count?: number
+          source_filename?: string | null
+          user_id: string
+        }
+        Update: {
+          contacts_filled_count?: number
+          created_at?: string
+          entry_count?: number
+          id?: string
+          imported_at?: string
+          manufacturer?: string
+          matched_count?: number
+          new_contacts_count?: number
+          program?: string | null
+          row_count?: number
+          source_filename?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      patient_reward_entries: {
+        Row: {
+          brand_product: string
+          contact_email: string | null
+          contact_name: string | null
+          contact_phone: string | null
+          created_at: string
+          eligible_date: string | null
+          expiration_date: string | null
+          id: string
+          import_id: string | null
+          last_visit: string | null
+          manufacturer: string
+          match_key: string
+          member_since: string | null
+          patient_node_id: string | null
+          product_kind: string | null
+          program: string | null
+          reward_amount_usd: number | null
+          row_hash: string
+          status_norm: string
+          status_raw: string | null
+          total_checkins: number | null
+          updated_at: string
+          user_id: string
+          zip: string | null
+        }
+        Insert: {
+          brand_product: string
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          eligible_date?: string | null
+          expiration_date?: string | null
+          id?: string
+          import_id?: string | null
+          last_visit?: string | null
+          manufacturer: string
+          match_key: string
+          member_since?: string | null
+          patient_node_id?: string | null
+          product_kind?: string | null
+          program?: string | null
+          reward_amount_usd?: number | null
+          row_hash: string
+          status_norm?: string
+          status_raw?: string | null
+          total_checkins?: number | null
+          updated_at?: string
+          user_id: string
+          zip?: string | null
+        }
+        Update: {
+          brand_product?: string
+          contact_email?: string | null
+          contact_name?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          eligible_date?: string | null
+          expiration_date?: string | null
+          id?: string
+          import_id?: string | null
+          last_visit?: string | null
+          manufacturer?: string
+          match_key?: string
+          member_since?: string | null
+          patient_node_id?: string | null
+          product_kind?: string | null
+          program?: string | null
+          reward_amount_usd?: number | null
+          row_hash?: string
+          status_norm?: string
+          status_raw?: string | null
+          total_checkins?: number | null
+          updated_at?: string
+          user_id?: string
+          zip?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "patient_reward_entries_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "reward_signal_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "patient_reward_entries_patient_node_id_fkey"
+            columns: ["patient_node_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_audit_log: {
         Row: {
           acted_at: string

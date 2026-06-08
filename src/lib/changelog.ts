@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.91.0",
+    date: "June 2026",
+    items: [
+      "<strong>v1.91.0 &mdash; Manufacturer reward signals (Patient-Profitability OS, Phase 0). </strong>New <strong>Recognition &rarr; Rewards</strong> tab: upload a manufacturer&rsquo;s patient-insights export and Refill matches every patient to <em>your</em> book, then shows you the money their own emails never move &mdash; who&rsquo;s <strong>eligible now</strong>, whose reward is <strong>expiring &le;60 days</strong>, who&rsquo;s lapsed, and the total dollars on the table. <strong>Evolus first</strong> (Jeuveau + Evolysse), validated against a real 879-patient export &mdash; each row becomes one signal per brand, matched by email&rarr;phone&rarr;name, with blank patient contact gaps filled in automatically. Re-upload anytime; signals collapse onto one row per patient-brand (latest snapshot wins). Allergan &amp; Galderma slot into the same engine next. This is the raw material the upcoming <strong>Recall</strong> solution turns into booked appointments. <strong>New tables</strong>: <code>reward_signal_imports</code>, <code>patient_reward_entries</code>. <strong>Touched</strong>: new <code>manufacturer-reward-csv.ts</code> (pure parser + Evolus mapper), <code>manufacturer-reward-ingest.functions.ts</code> (match + upsert + gap-fill), <code>app.refill.recognition.rewards.tsx</code>, Recognition sub-nav, <code>types.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.90.0",
     date: "June 2026",
     items: [

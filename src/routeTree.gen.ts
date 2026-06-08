@@ -93,6 +93,7 @@ import { Route as AppRefillSettingsBoulevardInstallRouteImport } from './routes/
 import { Route as AppRefillSettingsBookingRouteImport } from './routes/app.refill.settings.booking'
 import { Route as AppRefillSettingsBookerInstallRouteImport } from './routes/app.refill.settings.booker-install'
 import { Route as AppRefillSettingsAccountRouteImport } from './routes/app.refill.settings.account'
+import { Route as AppRefillRecognitionRewardsRouteImport } from './routes/app.refill.recognition.rewards'
 import { Route as AppRefillRecognitionManufacturersRouteImport } from './routes/app.refill.recognition.manufacturers'
 import { Route as AppRefillRecognitionInventoryRouteImport } from './routes/app.refill.recognition.inventory'
 import { Route as AppRefillPatientsImportRouteImport } from './routes/app.refill.patients.import'
@@ -562,6 +563,12 @@ const AppRefillSettingsAccountRoute =
     path: '/settings/account',
     getParentRoute: () => AppRefillRoute,
   } as any)
+const AppRefillRecognitionRewardsRoute =
+  AppRefillRecognitionRewardsRouteImport.update({
+    id: '/recognition/rewards',
+    path: '/recognition/rewards',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
 const AppRefillRecognitionManufacturersRoute =
   AppRefillRecognitionManufacturersRouteImport.update({
     id: '/recognition/manufacturers',
@@ -872,6 +879,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
   '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
+  '/app/refill/recognition/rewards': typeof AppRefillRecognitionRewardsRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
   '/app/refill/settings/booking': typeof AppRefillSettingsBookingRoute
@@ -989,6 +997,7 @@ export interface FileRoutesByTo {
   '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
   '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
+  '/app/refill/recognition/rewards': typeof AppRefillRecognitionRewardsRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
   '/app/refill/settings/booking': typeof AppRefillSettingsBookingRoute
@@ -1112,6 +1121,7 @@ export interface FileRoutesById {
   '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
   '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
+  '/app/refill/recognition/rewards': typeof AppRefillRecognitionRewardsRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
   '/app/refill/settings/booking': typeof AppRefillSettingsBookingRoute
@@ -1236,6 +1246,7 @@ export interface FileRouteTypes {
     | '/app/refill/patients/import'
     | '/app/refill/recognition/inventory'
     | '/app/refill/recognition/manufacturers'
+    | '/app/refill/recognition/rewards'
     | '/app/refill/settings/account'
     | '/app/refill/settings/booker-install'
     | '/app/refill/settings/booking'
@@ -1353,6 +1364,7 @@ export interface FileRouteTypes {
     | '/app/refill/patients/import'
     | '/app/refill/recognition/inventory'
     | '/app/refill/recognition/manufacturers'
+    | '/app/refill/recognition/rewards'
     | '/app/refill/settings/account'
     | '/app/refill/settings/booker-install'
     | '/app/refill/settings/booking'
@@ -1475,6 +1487,7 @@ export interface FileRouteTypes {
     | '/app/refill/patients/import'
     | '/app/refill/recognition/inventory'
     | '/app/refill/recognition/manufacturers'
+    | '/app/refill/recognition/rewards'
     | '/app/refill/settings/account'
     | '/app/refill/settings/booker-install'
     | '/app/refill/settings/booking'
@@ -2145,6 +2158,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillSettingsAccountRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/refill/recognition/rewards': {
+      id: '/app/refill/recognition/rewards'
+      path: '/recognition/rewards'
+      fullPath: '/app/refill/recognition/rewards'
+      preLoaderRoute: typeof AppRefillRecognitionRewardsRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/recognition/manufacturers': {
       id: '/app/refill/recognition/manufacturers'
       path: '/recognition/manufacturers'
@@ -2476,6 +2496,7 @@ interface AppRefillRouteChildren {
   AppRefillCatalogServicesRoute: typeof AppRefillCatalogServicesRoute
   AppRefillRecognitionInventoryRoute: typeof AppRefillRecognitionInventoryRoute
   AppRefillRecognitionManufacturersRoute: typeof AppRefillRecognitionManufacturersRoute
+  AppRefillRecognitionRewardsRoute: typeof AppRefillRecognitionRewardsRoute
   AppRefillSettingsAccountRoute: typeof AppRefillSettingsAccountRoute
   AppRefillSettingsBookerInstallRoute: typeof AppRefillSettingsBookerInstallRoute
   AppRefillSettingsBookingRoute: typeof AppRefillSettingsBookingRoute
@@ -2516,6 +2537,7 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillRecognitionInventoryRoute: AppRefillRecognitionInventoryRoute,
   AppRefillRecognitionManufacturersRoute:
     AppRefillRecognitionManufacturersRoute,
+  AppRefillRecognitionRewardsRoute: AppRefillRecognitionRewardsRoute,
   AppRefillSettingsAccountRoute: AppRefillSettingsAccountRoute,
   AppRefillSettingsBookerInstallRoute: AppRefillSettingsBookerInstallRoute,
   AppRefillSettingsBookingRoute: AppRefillSettingsBookingRoute,

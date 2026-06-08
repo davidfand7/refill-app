@@ -20,6 +20,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Edit3,
+  Gift,
   Layers,
   Loader2,
   Plus,
@@ -143,6 +144,13 @@ function ManufacturersPage() {
           >
             <Sparkles className="h-3.5 w-3.5" />
             Manufacturers
+          </Link>
+          <Link
+            to="/app/refill/recognition/rewards"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium border-b-2 -mb-px border-transparent text-ink-soft hover:text-ink transition"
+          >
+            <Gift className="h-3.5 w-3.5" />
+            Rewards
           </Link>
         </div>
       </div>
