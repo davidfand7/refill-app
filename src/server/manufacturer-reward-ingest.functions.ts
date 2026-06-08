@@ -178,15 +178,24 @@ export async function doIngestRewards(
 
   // 2) Pre-fetch the spa's patient nodes once, build email/phone/name match
   //    maps in memory (same approach as patient-ingest's existing-node fetch).
-  const { data: nodes, error: nodesErr } = await sb
-    .from("knowledge_nodes")
-    .select("id, lookup_key, title, attachments")
-    .eq("user_id", userId)
-    .eq("node_type", "patient")
-    .eq("context", "patients");
-  if (nodesErr) {
-    throw new Error(`Couldn't read your patients: ${nodesErr.message}`);
-  }
+  // v1.92.1: page past the 1,000-row cap — matching only against the first
+  // 1,000 of a 1,140-patient book understated the match rate (entries for
+  // patients past row 1,000 were wrongly flagged "not in your book").
+  const nodes = await fetchAllRows<{
+    id: string;
+    lookup_key: string | null;
+    title: string;
+    attachments: unknown;
+  }>((from, to) =>
+    sb
+      .from("knowledge_nodes")
+      .select("id, lookup_key, title, attachments")
+      .eq("user_id", userId)
+      .eq("node_type", "patient")
+      .eq("context", "patients")
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
   const byEmail = new Map<string, string>();
   const byPhone = new Map<string, string>();
@@ -420,16 +429,20 @@ export const listRewardSignal = createServerFn({ method: "POST" })
       return ax < bx ? -1 : ax > bx ? 1 : 0;
     });
 
-    // Resolve patient display names for matched entries in one query.
+    // Resolve patient display names for matched entries. Chunk the id list:
+    // a single `.in()` both caps at 1,000 rows and risks a 414 URI-too-long
+    // once matched patients climb past several hundred UUIDs.
     const nodeIds = Array.from(
       new Set(list.map((r) => r.patient_node_id).filter((x): x is string => !!x)),
     );
     const nameByNode = new Map<string, string>();
-    if (nodeIds.length > 0) {
+    const ID_CHUNK = 300;
+    for (let i = 0; i < nodeIds.length; i += ID_CHUNK) {
+      const slice = nodeIds.slice(i, i + ID_CHUNK);
       const { data: nodes } = await sb
         .from("knowledge_nodes")
         .select("id, title")
-        .in("id", nodeIds);
+        .in("id", slice);
       for (const n of nodes ?? []) nameByNode.set(n.id, n.title ?? "");
     }
 

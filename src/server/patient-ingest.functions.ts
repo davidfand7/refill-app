@@ -2096,7 +2096,11 @@ async function doListOverdue(
       .eq("user_id", userId)
       .in("product_kind", targetKinds)
       .gt("amount_usd", 0) // only count real purchases, not redemption / refund / discount lines
+      // v1.92.1: secondary unique key (id) stabilizes offset paging — keeps
+      // "first-seen = most-recent" correct AND prevents a row straddling a
+      // page boundary from being skipped.
       .order("transaction_date", { ascending: false })
+      .order("id", { ascending: false })
       .range(from, from + PAGE - 1);
     if (error) throw new Error(`Couldn't load transactions: ${error.message}`);
     if (!chunk || chunk.length === 0) break;
@@ -2512,6 +2516,10 @@ async function forEachPatient(
       .eq("user_id", userId)
       .eq("node_type", "patient")
       .eq("context", "patients")
+      // v1.92.1: stable unique order — offset paging without an ORDER BY can
+      // skip/dupe rows across page boundaries (no guarantee), which would
+      // silently drop a patient from the overdue hydration.
+      .order("id", { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) throw new Error(`Couldn't read patients: ${error.message}`);
     if (!data || data.length === 0) return;

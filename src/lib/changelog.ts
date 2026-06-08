@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v1.92.1",
+    date: "June 2026",
+    items: [
+      "<strong>v1.92.1 &mdash; Truncation sweep, round 2 (overdue + reward matching). </strong>Chasing the &ldquo;Overdue&rdquo; count: confirmed it&rsquo;s computed by a <em>separate, already-paginated</em> path (so it was correct all along &mdash; that&rsquo;s why it didn&rsquo;t move when the patient book grew), but found three more reads to harden. <strong>(1)</strong> The reward-signal importer was matching patients against only the first <strong>1,000</strong> of a 1,140-patient book &mdash; so the match rate was understated and some patients were wrongly flagged &ldquo;not in your book.&rdquo; It now matches against the <strong>whole</strong> book (<strong>re-upload your export to pick up the newly-matched patients</strong>). <strong>(2)</strong> The reward name-lookup is now chunked (a single lookup capped at 1,000 and risked a too-long-URL error as matches grew). <strong>(3)</strong> The overdue patient-hydration and transaction pagers now use a stable unique <code>ORDER BY</code> so offset paging can never skip a row. <strong>Touched</strong>: <code>patient-ingest.functions.ts</code>, <code>manufacturer-reward-ingest.functions.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v1.92.0",
     date: "June 2026",
     items: [
