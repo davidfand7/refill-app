@@ -42,6 +42,7 @@ import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
 import { sendSms } from "@/server/sms-provider";
+import { fetchAllRows } from "@/server/paginate";
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
 import {
   resolveOwnerDisplayName,
@@ -153,12 +154,19 @@ async function selectFitPatients(
     lifetimeSpend: number;
   }>
 > {
-  const { data: waitlist } = await sb
-    .from("emma_waitlist")
-    .select("id, patient_node_id, treatment_types")
-    .eq("user_id", userId)
-    .eq("status", "active");
-  if (!waitlist || waitlist.length === 0) return [];
+  // Paginated: a capped read silently drops waitlist members past row 1,000,
+  // excluding them from EVERY rescue attempt (silent lost recovery revenue on
+  // the core path). The treatment filter below runs in JS over the full set.
+  const waitlist = await fetchAllRows<WaitlistRow>((from, to) =>
+    sb
+      .from("emma_waitlist")
+      .select("id, patient_node_id, treatment_types")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .order("id")
+      .range(from, to),
+  );
+  if (waitlist.length === 0) return [];
 
   // Treatment filter at the waitlist row level.
   const trtLower = appointmentTreatment?.toLowerCase() ?? "";
@@ -171,12 +179,19 @@ async function selectFitPatients(
   });
   if (candidates.length === 0) return [];
 
-  // Load patient summaries
+  // Load patient summaries. Chunk the id list at 300: a large waitlist (now
+  // paginated above) can yield more candidate ids than PostgREST's 1,000-row
+  // cap or a safe URL length, which would silently drop candidates.
   const patientIds = candidates.map((c) => c.patient_node_id);
-  const { data: patients } = await sb
-    .from("knowledge_nodes")
-    .select("id, attachments")
-    .in("id", patientIds);
+  const patients: { id: string; attachments: unknown }[] = [];
+  const PATIENT_ID_CHUNK = 300;
+  for (let i = 0; i < patientIds.length; i += PATIENT_ID_CHUNK) {
+    const { data: chunk } = await sb
+      .from("knowledge_nodes")
+      .select("id, attachments")
+      .in("id", patientIds.slice(i, i + PATIENT_ID_CHUNK));
+    if (chunk) patients.push(...chunk);
+  }
   const patientById = new Map<
     string,
     {
@@ -238,12 +253,29 @@ async function selectFitPatients(
     const targetProvider = appointmentProvider.trim().toLowerCase();
     const candidateIds = fit.map((f) => f.patientNodeId);
 
-    const { data: aptRows } = await sb
-      .from("emma_appointments")
-      .select("patient_node_id, provider_name")
-      .eq("user_id", userId)
-      .in("patient_node_id", candidateIds)
-      .not("provider_name", "is", null);
+    // Chunk candidate ids at 300, and page each chunk: a candidate's all-time
+    // appointment history is multiplicative, so even a modest candidate pool can
+    // exceed PostgREST's 1,000-row cap — a truncated read would mis-derive
+    // primary providers and wrongly drop candidates from the affinity filter.
+    const aptRows: { patient_node_id: string | null; provider_name: string | null }[] = [];
+    const AFFINITY_ID_CHUNK = 300;
+    for (let i = 0; i < candidateIds.length; i += AFFINITY_ID_CHUNK) {
+      const slice = candidateIds.slice(i, i + AFFINITY_ID_CHUNK);
+      const chunkRows = await fetchAllRows<{
+        patient_node_id: string | null;
+        provider_name: string | null;
+      }>((from, to) =>
+        sb
+          .from("emma_appointments")
+          .select("patient_node_id, provider_name")
+          .eq("user_id", userId)
+          .in("patient_node_id", slice)
+          .not("provider_name", "is", null)
+          .order("id")
+          .range(from, to),
+      );
+      aptRows.push(...chunkRows);
+    }
 
     // Per-patient provider tallies → primary provider per patient.
     const tallyByPatient = new Map<string, Map<string, number>>();

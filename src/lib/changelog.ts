@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.32",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.32 &mdash; The rescue matcher can&rsquo;t silently skip waitlist patients at scale.</strong> When an appointment cancels, the recovery engine picks who to offer the open slot to &mdash; and it did so with three unpaginated reads: the active-waitlist list, the patient-details lookup, and (the riskiest) each candidate&rsquo;s all-time appointment history used to match them to the right provider. Past the database&rsquo;s 1,000-row ceiling, any of these silently returned a partial set &mdash; so waitlist members beyond row 1,000 were <strong>excluded from every rescue</strong>, and a truncated appointment history could mis-read a patient&rsquo;s usual provider and drop them from the match. All three now page through the full set (the appointment read also chunks the candidate list so a big waitlist can&rsquo;t overflow the query). On the core revenue path, no eligible patient gets silently passed over. <strong>Touched</strong>: <code>emma-rescue.functions.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.31",
     date: "June 2026",
     items: [
