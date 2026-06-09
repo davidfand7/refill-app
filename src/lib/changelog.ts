@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.30",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.30 &mdash; Deleting a service cleans up after itself, and new services are bookable by default.</strong> Two Catalog fixes: (1) deleting a service left its provider assignments, add-on links, and product/COGS links behind as dangling rows (no database cascade) &mdash; it now removes them so nothing orphans or resurfaces. (2) A service created in Catalog now defaults to <strong>online-bookable</strong> (matching services created in Booking, and the natural expectation that a service you add can be booked) &mdash; except add-ons, which attach to a service rather than being booked on their own. <strong>Touched</strong>: <code>refill-catalog.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.29",
     date: "June 2026",
     items: [

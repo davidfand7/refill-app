@@ -498,6 +498,10 @@ export const createServiceFn = createServerFn({ method: "POST" })
         is_free: data.service.isFree ?? false,
         fee_credit: data.service.feeCredit ?? false,
         is_addon: data.service.isAddon ?? false,
+        // Bookable ON by default (matches Booking-created services + the
+        // human-first expectation that a service you add can be booked) —
+        // EXCEPT add-ons, which attach to a service and aren't booked alone.
+        online_bookable: !(data.service.isAddon ?? false),
       })
       .select("*")
       .single();
@@ -939,12 +943,39 @@ export const deleteServiceFn = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
-    const { error } = await sb
+    // Delete the service tenant-scoped; .select() confirms it was really this
+    // tenant's before we touch child rows by service_id.
+    const { data: deleted, error } = await sb
       .from("services")
       .delete()
       .eq("id", data.id)
-      .eq("tenant_id", tenantId);
+      .eq("tenant_id", tenantId)
+      .select("id");
     if (error) throw new Error(`Couldn't delete service: ${error.message}`);
+    if (!deleted || deleted.length === 0) {
+      return { ok: true }; // already gone / not this tenant — nothing to clean
+    }
+
+    // Clean up rows that referenced it — there's no FK cascade, so these would
+    // otherwise dangle: clutter provider mappings, break add-on eligibility /
+    // COGS links, and resurface if a new service ever reuses the id. Best-effort
+    // (the service itself is already deleted, the user's intent) — log, don't
+    // fail the op, but don't silently swallow either.
+    const cleanup = await Promise.all([
+      sb.from("scheduling_provider_services").delete().eq("service_id", data.id),
+      sb.from("service_products").delete().eq("service_id", data.id),
+      sb
+        .from("service_addons")
+        .delete()
+        .eq("tenant_id", tenantId)
+        .or(`service_id.eq.${data.id},addon_service_id.eq.${data.id}`),
+    ]);
+    const cleanupErr = cleanup.find((r) => r.error)?.error;
+    if (cleanupErr) {
+      console.error(
+        `[deleteService] orphan cleanup partially failed for ${data.id}: ${cleanupErr.message}`,
+      );
+    }
     return { ok: true };
   });
 
