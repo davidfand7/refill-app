@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.20",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.20 &mdash; Closed a double-billing race on recovery events.</strong> Every billable win (slot-fill, recall, cross-sell) was de-duplicated by an app-level check-then-insert, so two near-simultaneous calls for the same appointment &mdash; a retried claim, a double-tap, a timed-out-then-retried request &mdash; could both slip through and record the win twice, billing $5 twice for one booking. There&rsquo;s now a database-level guarantee of <strong>one win per appointment</strong>, and the recorder treats a lost race as the idempotent success it is (returns the existing win) instead of erroring. Conservative-billing integrity restored. <strong>Touched</strong>: <code>emma-attribution.functions.ts</code>, migration <code>v2_3_20_recovery_event_unique_appointment</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.19",
     date: "June 2026",
     items: [

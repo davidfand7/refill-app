@@ -143,6 +143,17 @@ export async function recordRecoveryEvent(args: {
     .select("id")
     .single();
   if (error || !row) {
+    // 23505 = a concurrent call inserted first (the unique index on
+    // appointment_id, v2.3.20, won the race). That's idempotent success, not a
+    // failure — re-fetch the winning row and return it so we never double-bill.
+    if (error?.code === "23505" && appointmentId) {
+      const { data: winner } = await sb
+        .from("emma_recovery_events")
+        .select("id")
+        .eq("appointment_id", appointmentId)
+        .maybeSingle();
+      if (winner) return { id: winner.id, created: false };
+    }
     throw new Error(`Couldn't record recovery event: ${error?.message ?? "no row"}`);
   }
 
