@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.33",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.33 &mdash; Rebate allocation now considers every patient, not just the first 1,000.</strong> The Recognition allocation engine loaded your patient list with a <code>limit(5000)</code> &mdash; but the database enforces its own 1,000-row ceiling that a client-side limit can&rsquo;t lift, so any spa past 1,000 patients had everyone beyond row 1,000 <strong>silently excluded from rebate allocation</strong>, and the spend-decile cutoff (which decides the &ldquo;top 10% by spend&rdquo; cohort) was computed from that truncated list &mdash; skewing who landed in each cohort. The read now pages through the full patient set, so allocation scores the whole practice. <strong>Touched</strong>: <code>refill-recognition-allocation.functions.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.32",
     date: "June 2026",
     items: [
