@@ -2273,12 +2273,14 @@ const confirmSuggestionInput = z.object({
   accessToken: z.string().min(1),
   patientNodeId: z.string().uuid(),
   candidateId: z.string().uuid(),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const dismissSuggestionInput = z.object({
   accessToken: z.string().min(1),
   candidateId: z.string().uuid(),
   patientNodeId: z.string().uuid().optional(),
+  viewAsUserId: z.string().uuid().optional(),
 });
 
 const overviewInput = z.object({
@@ -2751,7 +2753,13 @@ export const listContactGaps = createServerFn({ method: "POST" })
 export const confirmContactSuggestion = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => confirmSuggestionInput.parse(input))
   .handler(async ({ data }): Promise<PatientListRow> => {
-    const userId = await verifyAuth(data.accessToken);
+    // resolveEffectiveUserId (not raw verifyAuth) so an admin viewing-as a
+    // tenant confirms the suggestion against the TENANT's records, not their
+    // own — otherwise the candidate/patient aren't found under the admin id.
+    const { effectiveUserId: userId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
 
     const [{ data: candidate, error: cErr }, { data: patientNode, error: pErr }] =
@@ -2829,7 +2837,12 @@ export const confirmContactSuggestion = createServerFn({ method: "POST" })
 export const dismissContactSuggestion = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => dismissSuggestionInput.parse(input))
   .handler(async ({ data }): Promise<{ candidateId: string }> => {
-    const userId = await verifyAuth(data.accessToken);
+    // resolveEffectiveUserId so an admin viewing-as a tenant dismisses the
+    // candidate in the TENANT's pool, not silently under the admin id.
+    const { effectiveUserId: userId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
     // Dismissing the candidate globally — it won't be suggested again for
     // any patient. The intent is "this client list row is junk" or "this

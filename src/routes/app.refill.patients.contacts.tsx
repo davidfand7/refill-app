@@ -164,7 +164,7 @@ function ContactsPage() {
     if (!token) return toast.error("Sign-in lost — refresh and try again.");
     try {
       await confirmContactSuggestion({
-        data: { accessToken: token, patientNodeId, candidateId },
+        data: { accessToken: token, patientNodeId, candidateId, viewAsUserId },
       });
       toast.success("Contact info linked.");
       // Optimistic: drop the patient from the gaps list immediately.
@@ -181,7 +181,7 @@ function ContactsPage() {
     if (!token) return toast.error("Sign-in lost — refresh and try again.");
     try {
       await dismissContactSuggestion({
-        data: { accessToken: token, candidateId, patientNodeId },
+        data: { accessToken: token, candidateId, patientNodeId, viewAsUserId },
       });
       toast.success("Suggestion dismissed.");
       // Optimistic: remove just that suggestion. Keep the patient row if

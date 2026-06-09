@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.26",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.26 &mdash; Confirming/dismissing a contact suggestion now works while viewing-as a spa.</strong> On the Contacts page, the &ldquo;confirm match&rdquo; and &ldquo;dismiss&rdquo; actions authed as the raw signed-in user instead of the spa being viewed &mdash; so when an operator was viewing-as a tenant, the candidate and patient were looked up under the wrong account and the action failed or misfiled. Both ends now plumb the view-as identity (matching every other action on the page), so the write lands on the right spa&rsquo;s records. <strong>Touched</strong>: <code>patient-ingest.functions.ts</code>, <code>app.refill.patients.contacts.tsx</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.25",
     date: "June 2026",
     items: [
