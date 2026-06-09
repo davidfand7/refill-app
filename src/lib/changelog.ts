@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.23",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.23 &mdash; The billing ledger now shows every win, and exports.</strong> The expandable win list was capped at the 100 most recent &mdash; so a busy month&rsquo;s summary could say &ldquo;138 wins&rdquo; while the detail listed only 100, with no way to see the rest. The list now shows <strong>all</strong> of the period&rsquo;s wins (paged past Postgres&rsquo;s 1,000-row read cap so nothing is silently dropped), inside a scrollable area, so the count always reconciles with the totals above. Added a <strong>Download CSV</strong> button that exports the full month&rsquo;s billable events (date &middot; type &middot; patient &middot; visit revenue &middot; charge) as an audit-grade record. Reinforces the visible-counterfactual-ledger promise. <strong>Touched</strong>: <code>refill-fee-rules.functions.ts</code>, <code>app.billing.index.tsx</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.22",
     date: "June 2026",
     items: [

@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import {
   CheckCircle2,
   CreditCard,
+  Download,
   ExternalLink,
   FileText,
   Loader2,
@@ -49,6 +50,33 @@ export const Route = createFileRoute("/app/billing/")({
 
 function money(n: number): string {
   return `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// Build a spreadsheet-friendly CSV of every win in the period and download it.
+// The client already holds the full set (the ledger returns all wins), so no
+// extra round-trip — this is the bookkeeping/audit artifact of the ledger.
+function downloadWinsCsv(monthLabel: string, wins: BillingLedger["wins"]) {
+  const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const header = ["Date", "Type", "Patient", "Visit revenue (USD)", "Charge (USD)"];
+  const lines = wins.map((w) =>
+    [
+      w.date ? new Date(w.date).toISOString().slice(0, 10) : "",
+      w.label,
+      w.patientName ?? "",
+      w.revenueUsd.toFixed(2),
+      w.charge.toFixed(2),
+    ]
+      .map((c) => esc(String(c)))
+      .join(","),
+  );
+  const csv = [header.map(esc).join(","), ...lines].join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `refill-ledger-${monthLabel.replace(/\s+/g, "-").toLowerCase()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 function BillingPage() {
@@ -325,9 +353,19 @@ function LedgerCard({ ledger }: { ledger: BillingLedger | null }) {
         {ledger.wins.length > 0 && (
           <details className="pt-2 text-[12px]">
             <summary className="cursor-pointer text-emerald hover:underline">
-              View the {ledger.wins.length} most recent {ledger.wins.length === 1 ? "win" : "wins"}
+              View all {ledger.wins.length} {ledger.wins.length === 1 ? "win" : "wins"} (newest first)
             </summary>
-            <ul className="mt-2 divide-y divide-emerald/10">
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => downloadWinsCsv(monthLabel, ledger.wins)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald/30 px-2.5 py-1 text-emerald hover:bg-emerald/10 transition-colors"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download CSV
+              </button>
+            </div>
+            <ul className="mt-2 max-h-80 overflow-auto divide-y divide-emerald/10">
               {ledger.wins.map((w) => (
                 <li key={w.id} className="flex items-center justify-between gap-3 py-1.5">
                   <span className="text-ink-soft min-w-0 truncate">

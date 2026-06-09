@@ -26,6 +26,7 @@ import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import { getTenantIdForUser } from "@/server/refill-billing";
+import { fetchAllRows } from "@/server/paginate";
 import {
   loadEffectiveFeeConfig,
   aggregateMetricsForTenant,
@@ -217,16 +218,27 @@ export const getBillingLedger = createServerFn({ method: "POST" })
     const userIds = (memberships ?? []).map((m) => m.user_id);
     const wins: LedgerWin[] = [];
     if (userIds.length > 0) {
-      const { data: evRows } = await sb
-        .from("emma_recovery_events")
-        .select("id, metric_key, attributed_revenue_usd, verified_at, patient_node_id")
-        .in("user_id", userIds)
-        .gte("verified_at", periodStart.toISOString())
-        .lt("verified_at", periodEnd.toISOString())
-        .not("verified_at", "is", null)
-        .order("verified_at", { ascending: false })
-        .limit(100);
-      const evs = evRows ?? [];
+      // Full set for the period — paged past PostgREST's 1,000-row cap so a
+      // high-volume month is shown complete (and exportable), never silently
+      // truncated. The list IS the full ledger, so its count matches the
+      // per-metric totals above.
+      const evs = await fetchAllRows<{
+        id: string;
+        metric_key: string | null;
+        attributed_revenue_usd: number | null;
+        verified_at: string | null;
+        patient_node_id: string | null;
+      }>((from, to) =>
+        sb
+          .from("emma_recovery_events")
+          .select("id, metric_key, attributed_revenue_usd, verified_at, patient_node_id")
+          .in("user_id", userIds)
+          .gte("verified_at", periodStart.toISOString())
+          .lt("verified_at", periodEnd.toISOString())
+          .not("verified_at", "is", null)
+          .order("verified_at", { ascending: false })
+          .range(from, to),
+      );
       const nodeIds = Array.from(
         new Set(evs.map((e) => e.patient_node_id).filter((x): x is string => !!x)),
       );
