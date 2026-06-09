@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.24",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.24 &mdash; Old install-wizard URLs no longer drop the connect token on redirect.</strong> The four back-compat redirects (Vagaro, Zenoti, Booker, Boulevard) from the v2.3.18 reorg sent stale bookmarks to the new Calendar paths but stripped the OAuth <code>state</code> (and Boulevard&rsquo;s <code>application_id</code>) query params &mdash; so a bookmark opened mid-connect would land param-less and break the handshake. The redirects now forward those params through. Latent edge (every live caller already points at the new paths), closed for completeness. <strong>Touched</strong>: <code>app.refill.settings.{vagaro,zenoti,booker,boulevard}-install.tsx</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.23",
     date: "June 2026",
     items: [
