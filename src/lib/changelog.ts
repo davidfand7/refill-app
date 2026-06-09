@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.27",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.27 &mdash; Bulk-tagging all patients no longer stops at 1,000, + a date-window edge fixed.</strong> Applying a tag to a large selection read the selected patients in one query that silently capped at 1,000 &mdash; so a select-all on a 1,000+ patient list (Rejuv is ~1.1k) tagged only the first 1,000 and ignored the rest (the write side already batched correctly; the read was the bottleneck). It now reads in chunks so every selected patient is tagged. Also fixed the &ldquo;last 12 months&rdquo; filter on the patient list + detail, which computed the cutoff in local time but compared against UTC dates &mdash; a one-day edge near midnight for non-UTC users. <strong>Touched</strong>: <code>patient-ingest.functions.ts</code>, <code>app.refill.patients.index.tsx</code>, <code>app.refill.patients.$patientId.tsx</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.26",
     date: "June 2026",
     items: [

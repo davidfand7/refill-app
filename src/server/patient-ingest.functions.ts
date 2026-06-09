@@ -1470,16 +1470,26 @@ export const bulkApplyPatientSoftTag = createServerFn({ method: "POST" })
       });
       const sb = admin();
 
-      // Single read of all selected patient attachments.
-      const { data: rows, error: readErr } = await sb
-        .from("knowledge_nodes")
-        .select("id, attachments")
-        .eq("user_id", effectiveUserId)
-        .eq("node_type", "patient")
-        .in("id", data.patientNodeIds);
-      if (readErr)
-        throw new Error(`Couldn't read patients: ${readErr.message}`);
-      if (!rows || rows.length === 0) {
+      // Read the selected patient attachments, chunked by id. A single
+      // .in(allIds) was double-unsafe at scale: a >1,000-id selection (Rejuv's
+      // select-all is ~1.1k) capped the result at 1,000 — silently leaving the
+      // overflow untagged — and a 1,000-UUID value list risks blowing the URL
+      // length. 300/chunk matches the established .in() chunk size in this file.
+      const rows: Array<{ id: string; attachments: unknown }> = [];
+      const READ_CHUNK = 300;
+      for (let i = 0; i < data.patientNodeIds.length; i += READ_CHUNK) {
+        const idChunk = data.patientNodeIds.slice(i, i + READ_CHUNK);
+        const { data: chunkRows, error: readErr } = await sb
+          .from("knowledge_nodes")
+          .select("id, attachments")
+          .eq("user_id", effectiveUserId)
+          .eq("node_type", "patient")
+          .in("id", idChunk);
+        if (readErr)
+          throw new Error(`Couldn't read patients: ${readErr.message}`);
+        if (chunkRows) rows.push(...chunkRows);
+      }
+      if (rows.length === 0) {
         return { ok: true, touched: 0, skipped: data.patientNodeIds.length };
       }
 

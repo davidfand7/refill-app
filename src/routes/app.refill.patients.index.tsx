@@ -494,7 +494,7 @@ function PatientsPage() {
   const cutoffDate = useMemo(() => {
     if (windowMode === "all") return null;
     const d = new Date();
-    d.setMonth(d.getMonth() - 12);
+    d.setUTCMonth(d.getUTCMonth() - 12); // UTC to match the UTC date string below
     return d.toISOString().slice(0, 10);
   }, [windowMode]);
 
