@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.28",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.28 &mdash; A failed service reorder now surfaces instead of silently not saving.</strong> Drag-reordering services fired all the position updates in parallel but never checked whether any failed &mdash; so a network hiccup or row lock could leave the saved order out of sync with what the screen showed, with no error. The reorder now verifies every update and reports a failure, so the on-screen order and the stored order can&rsquo;t silently diverge. <strong>Touched</strong>: <code>scheduling-settings.functions.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.27",
     date: "June 2026",
     items: [

@@ -538,8 +538,10 @@ export const reorderServicesFn = createServerFn({ method: "POST" })
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
     // Position each id by its index; tenant-scoped so a stray id can't touch
-    // another tenant's rows.
-    await Promise.all(
+    // another tenant's rows. Check every result — a swallowed failure here
+    // would leave the persisted order out of sync with the UI's optimistic
+    // reorder (silent data loss on the load-bearing drag).
+    const results = await Promise.all(
       data.orderedIds.map((id, i) =>
         sb
           .from("services")
@@ -548,6 +550,12 @@ export const reorderServicesFn = createServerFn({ method: "POST" })
           .eq("tenant_id", tenantId),
       ),
     );
+    const failed = results.filter((r) => r.error);
+    if (failed.length > 0) {
+      throw new Error(
+        `Reorder failed for ${failed.length} of ${results.length} services: ${failed[0].error?.message}`,
+      );
+    }
     return { ok: true };
   });
 
