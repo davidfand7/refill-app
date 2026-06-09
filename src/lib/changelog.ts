@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.25",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.25 &mdash; Patient import is now safe past 1,000 patients.</strong> The QuickBooks/sales re-upload matched existing patients with one unpaginated query, and read the upsert result the same way &mdash; both silently cap at 1,000 rows. On a tenant with more than 1,000 patients (Rejuv is already ~1.1k), the overflow wasn&rsquo;t recognized as existing, so a re-upload <strong>re-created those patients as duplicates</strong> (wiping the contact fields they&rsquo;d accumulated) and dropped some of their transactions. The import now pages through every existing patient before matching, and chunks the write so the full id map comes back intact &mdash; no duplicates, no dropped history, at any tenant size. <strong>Touched</strong>: <code>patient-ingest.functions.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.24",
     date: "June 2026",
     items: [

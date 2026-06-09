@@ -385,17 +385,26 @@ export async function doIngest(
   //    attachments so the re-roll can preserve client-list contact fields
   //    written by ingestClientListCsv (P1.5) — losing those on a sales
   //    re-upload would silently wipe out the spa owner's contact work.
-  const normalizedNames = parsed.patients.map((p) => p.normalizedName);
-  const { data: existingNodes, error: existingErr } = await sb
-    .from("knowledge_nodes")
-    .select("id, lookup_key, attachments")
-    .eq("user_id", userId)
-    .eq("node_type", "patient")
-    .eq("context", "patients")
-    .in("lookup_key", normalizedNames);
-  if (existingErr) {
-    throw new Error(`Couldn't read existing patients: ${existingErr.message}`);
-  }
+  // Load EVERY existing patient for the tenant, paged past PostgREST's
+  // 1,000-row cap. The prior `.in(normalizedNames)` was double-unsafe at
+  // scale: the value list could blow the URL length AND the result capped at
+  // 1,000 — so on a >1,000-patient tenant (Rejuv is ~1.1k) a re-upload failed
+  // to match the overflow, re-created them as DUPLICATE nodes, and wiped the
+  // prior client-list contact fields (P1.5) those rows carried.
+  const existingNodes = await fetchAllRows<{
+    id: string;
+    lookup_key: string | null;
+    attachments: unknown;
+  }>((from, to) =>
+    sb
+      .from("knowledge_nodes")
+      .select("id, lookup_key, attachments")
+      .eq("user_id", userId)
+      .eq("node_type", "patient")
+      .eq("context", "patients")
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
   const existingByKey = new Map<string, string>();
   const priorContactByKey = new Map<string, Partial<PatientContactSummary>>();
@@ -431,17 +440,24 @@ export async function doIngest(
     ),
   );
 
-  const { data: upserted, error: upsertErr } = await sb
-    .from("knowledge_nodes")
-    .upsert(patientsForUpsert, { onConflict: "id" })
-    .select("id, lookup_key");
-  if (upsertErr) {
-    throw new Error(`Couldn't upsert patients: ${upsertErr.message}`);
-  }
-
+  // Chunk the upsert: the returning .select() is itself capped at 1,000 rows,
+  // so a single upsert of >1,000 patients would hand back an incomplete id map
+  // and drop the overflow's transactions. 500/chunk keeps each return well
+  // under the cap.
+  const UPSERT_CHUNK = 500;
   const nodeIdByKey = new Map<string, string>();
-  for (const row of upserted ?? []) {
-    if (row.lookup_key) nodeIdByKey.set(row.lookup_key, row.id);
+  for (let i = 0; i < patientsForUpsert.length; i += UPSERT_CHUNK) {
+    const slice = patientsForUpsert.slice(i, i + UPSERT_CHUNK);
+    const { data: upserted, error: upsertErr } = await sb
+      .from("knowledge_nodes")
+      .upsert(slice, { onConflict: "id" })
+      .select("id, lookup_key");
+    if (upsertErr) {
+      throw new Error(`Couldn't upsert patients: ${upsertErr.message}`);
+    }
+    for (const row of upserted ?? []) {
+      if (row.lookup_key) nodeIdByKey.set(row.lookup_key, row.id);
+    }
   }
   // Belt-and-suspenders: also seed from the pre-fetch in case of any
   // race / no-op rows. Existing IDs already point at the right node.
