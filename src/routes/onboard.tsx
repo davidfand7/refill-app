@@ -340,10 +340,10 @@ function Header() {
             className="text-[15px] font-semibold tracking-tight"
             style={{ color: "#056048", fontFamily: "Georgia, 'Times New Roman', serif" }}
           >
-            Refill
+            SmartSpa
           </div>
           <div className="text-[11px]" style={{ color: "#8a9098" }}>
-            / refill your schedule, recover your revenue
+            / the patient-profitability OS
           </div>
         </div>
       </div>
@@ -362,7 +362,7 @@ function RefillMark() {
         className="text-[20px] font-semibold leading-none"
         style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
       >
-        R
+        S
       </span>
     </div>
   );

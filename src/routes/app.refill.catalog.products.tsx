@@ -454,16 +454,16 @@ function ProductsPage() {
       <div className="border-b border-rule bg-paper/50">
         <div className="max-w-[960px] mx-auto px-4 lg:px-10 flex items-center gap-1">
           <Link
-            to="/app/refill/catalog/products"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium border-b-2 -mb-px border-emerald text-emerald-ink transition"
-          >
-            Products
-          </Link>
-          <Link
             to="/app/refill/catalog/services"
             className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium border-b-2 -mb-px border-transparent text-ink-soft hover:text-ink transition"
           >
             Services
+          </Link>
+          <Link
+            to="/app/refill/catalog/products"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium border-b-2 -mb-px border-emerald text-emerald-ink transition"
+          >
+            Products
           </Link>
         </div>
       </div>

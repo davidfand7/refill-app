@@ -1,7 +1,7 @@
 /**
- * Light Mode silence-detection cron (v1.42.1 — P2-3 stretch).
+ * Lite Mode silence-detection cron (v1.42.1 — P2-3 stretch).
  *
- * Light Mode connections in status='active' should produce events
+ * Lite Mode connections in status='active' should produce events
  * regularly (booking confirmations + cancellations email through the
  * spa's normal operating tempo). When >24h pass with no parsed event
  * on an active connection, something is probably broken in the chain:
@@ -15,7 +15,7 @@
  * surfaces 'silent' as a warning chip + actionable prompt for the
  * owner to re-verify forwarding.
  *
- * Cron trigger: configured in wrangler.jsonc once Light Mode has its
+ * Cron trigger: configured in wrangler.jsonc once Lite Mode has its
  * first pilot tenant (no value in firing the cron on zero connections).
  * Manually invokable via GET for testing.
  *
@@ -68,7 +68,7 @@ async function runSilenceSweep() {
     Date.now() - SILENCE_THRESHOLD_HOURS * 60 * 60 * 1000,
   ).toISOString();
 
-  // Find active Light Mode connections where last_event_at is stale.
+  // Find active Lite Mode connections where last_event_at is stale.
   // Also include connections where last_event_at is NULL but the
   // connection was created > threshold ago (pending forever = silent).
   const { data: stale } = await sbAny

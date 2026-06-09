@@ -424,7 +424,10 @@ function OfferModal({
               onChange={(e) => setOfferType(e.target.value as OfferType)}
               className="w-full rounded-md border bg-background px-3 py-2 text-sm"
             >
-              {OFFER_TYPES.map((t) => (
+              {/* revenue_share_discount retired — the pricing model is now
+                  free + $5/booking, no revenue share. Type kept defined for
+                  back-compat reads, but no longer creatable. */}
+              {OFFER_TYPES.filter((t) => t !== "revenue_share_discount").map((t) => (
                 <option key={t} value={t}>
                   {labelForOfferType(t)}
                 </option>

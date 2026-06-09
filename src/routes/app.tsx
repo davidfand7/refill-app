@@ -109,7 +109,7 @@ function AppLayout() {
   let inner: ReactNode;
 
   if (isRefillPath && tenantMembership.tenant) {
-    subtitle = "no-show recovery";
+    subtitle = "the patient-profitability OS";
     inner = (
       <RefillShell>
         <Outlet />
@@ -141,7 +141,7 @@ function AppLayout() {
       </RepShell>
     );
   } else if (tenantMembership.tenant) {
-    subtitle = "no-show recovery";
+    subtitle = "the patient-profitability OS";
     inner = (
       <RefillShell>
         <Outlet />

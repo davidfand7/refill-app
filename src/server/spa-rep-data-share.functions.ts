@@ -38,6 +38,7 @@ import {
   daysSince,
   KIND_CADENCE,
 } from "@/lib/patient-cadence";
+import { MFR_LAST_TXN_SOURCE } from "@/lib/manufacturer-transaction-csv";
 
 // ─── Public types (typed boundary lives here) ─────────────────────────────
 
@@ -386,7 +387,10 @@ export async function doGetSpaAggregatesForRep(
       .select("patient_node_id, product_kind, product_manufacturer, transaction_date")
       .eq("user_id", spaUserId)
       .in("product_kind", targetKinds)
-      .gt("amount_usd", 0)
+      // Parity with doListOverdue: real purchases OR manufacturer
+      // last-treatment markers (Lane 2). Keeps rep-facing overdue counts in
+      // step with the owner's.
+      .or(`amount_usd.gt.0,source.eq.${MFR_LAST_TXN_SOURCE}`)
       .order("transaction_date", { ascending: false })
       .range(tFrom, tFrom + PAGE - 1);
     if (error) throw new Error(`Couldn't read transactions: ${error.message}`);

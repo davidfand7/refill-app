@@ -76,6 +76,16 @@ export type ParsedTransaction = {
   amountUsd: number;
   /** Running balance as captured — informational, not load-bearing. */
   balanceUsd: number | null;
+  /**
+   * v2.2.0 (Lane 2): true for manufacturer last-treatment marker rows
+   * (source = MFR_LAST_TXN_SOURCE, amount_usd = 0). These exist ONLY to
+   * sharpen lapsed/overdue detection — they are NOT real visits or revenue.
+   * rollupPatientSummary skips them so the patient-list summary stays
+   * QuickBooks-truth (no inflated visit counts / primary brand). The
+   * lapsed-detection queries read patient_transactions directly and opt
+   * these rows IN by source. Defaults false / undefined for QB lines.
+   */
+  cadenceOnly?: boolean;
 };
 
 export type ParseWarning = {
@@ -1093,6 +1103,11 @@ export function rollupPatientSummary(
   const loyaltyEngagement: Partial<Record<ProductManufacturer, number>> = {};
 
   for (const t of lines) {
+    // Manufacturer last-treatment markers ($0, cadence-only) never count
+    // toward the patient-list summary — they'd inflate visit counts and skew
+    // the primary brand. The lapsed engine reads them straight from
+    // patient_transactions instead. (Lane 2, v2.2.0.)
+    if (t.cadenceOnly) continue;
     dates.add(t.transactionDate);
     if (!firstVisit || t.transactionDate < firstVisit) firstVisit = t.transactionDate;
     if (!lastVisit || t.transactionDate > lastVisit) lastVisit = t.transactionDate;
@@ -1139,7 +1154,9 @@ export function rollupPatientSummary(
     primaryManufacturer,
     productMix,
     loyaltyEngagement,
-    purchasePatterns: computePurchasePatterns(lines),
+    // Cadence-only ($0 manufacturer markers) excluded — the summary stays
+    // QuickBooks-truth; lapsed detection reads the markers from the DB direct.
+    purchasePatterns: computePurchasePatterns(lines.filter((l) => !l.cadenceOnly)),
   };
   if (priorContact) {
     if (priorContact.phone !== undefined) summary.phone = priorContact.phone;

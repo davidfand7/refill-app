@@ -59,7 +59,7 @@ export const Route = createFileRoute("/api/integrations/booker/install-callback"
           } catch { /* fall through */ }
         }
 
-        let errReturnPath = "/app/refill/settings/scheduler";
+        let errReturnPath = "/app/refill/calendar/connections";
         const errReturn = (reason: string) => buildCallbackRedirect(url.origin, errReturnPath, { scheduler_error: reason });
         if (!locationId || !stateRaw) return errReturn("missing_params");
 

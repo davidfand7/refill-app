@@ -9,7 +9,7 @@
  *     client arrival, cancellation, service order completed.
  *   - Reschedule + no-show NOT documented as standalone owner-email
  *     triggers — fallback signal (API webhook) required for those even
- *     under Light Mode.
+ *     under Lite Mode.
  *
  * Activation: a follow-up minor ship after a Boulevard pilot tenant
  * forwards real exemplars (per feedback-validate-against-real-exports).

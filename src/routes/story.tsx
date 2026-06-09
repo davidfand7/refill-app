@@ -234,10 +234,11 @@ function StoryPage() {
           . In other words: we only get paid if you get paid.
         </p>
         <p className="text-base text-ink-soft mb-4 leading-relaxed">
-          We charge <strong className="text-ink">12%</strong> of what we
-          help you refill in lost revenue. So if {brand.name} fills 5 slots
-          in a month at $250 average ticket — that's $1,250 we helped you
-          recover — we earn $150. If we can't fill any?{" "}
+          We charge <strong className="text-ink">$5</strong> for each
+          booking we create for you. So if {brand.name} fills 5 slots in a
+          month that would otherwise have sat empty, you pay us $25 — and you
+          keep every dollar of revenue those visits bring in. If we can't fill
+          any?{" "}
           <strong className="text-ink">
             You owe us $0. Nothing, nada, zip, zilch.
           </strong>

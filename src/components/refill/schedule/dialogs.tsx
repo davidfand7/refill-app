@@ -27,6 +27,7 @@ import {
   type DayAppointment,
   type ProviderLite,
 } from "@/server/scheduling-owner.functions";
+import { recordRecallBookingFn } from "@/server/refill-recall.functions";
 import {
   type ServiceLite,
   dayKey,
@@ -137,6 +138,11 @@ function ServicePicker({
                       >
                         <span className="flex-1 truncate">
                           {s.name} <span className="text-ink-faint">· {s.durationMin} min</span>
+                          {s.activeOffer && (
+                            <span className="ml-1.5 inline-block rounded-full bg-amber-soft text-amber text-[10px] font-semibold px-1.5 py-0.5 align-middle">
+                              {s.activeOffer.label}
+                            </span>
+                          )}
                         </span>
                         {value === s.id && <Check className="h-3.5 w-3.5 text-emerald shrink-0" />}
                       </button>
@@ -168,6 +174,10 @@ export function BookDialog({
   initialDate,
   initialTime,
   initialProviderId,
+  initialName,
+  initialEmail,
+  initialPhone,
+  recallPatientNodeId,
   viewAsUserId,
   onBooked,
 }: {
@@ -182,8 +192,17 @@ export function BookDialog({
   initialDate: string;
   initialTime: string;
   initialProviderId?: string;
+  /** Prefill the patient fields (e.g. booking a known patient from Recall). */
+  initialName?: string;
+  initialEmail?: string;
+  initialPhone?: string;
+  /**
+   * When set, this booking came from a Recall row: on success we record a
+   * recall_booking win against this patient node ($5 on the fee-rules ledger).
+   */
+  recallPatientNodeId?: string;
   viewAsUserId?: string;
-  onBooked: () => void;
+  onBooked: (appointmentId?: string) => void;
 }) {
   const [serviceId, setServiceId] = useState("");
   const [providerId, setProviderId] = useState("");
@@ -213,8 +232,11 @@ export function BookDialog({
       setPickedDay("");
       setChosenSlotIso(null);
       setSelectedAddons(new Set());
+      setName(initialName ?? "");
+      setEmail(initialEmail ?? "");
+      setPhone(initialPhone ?? "");
     }
-  }, [open, initialDate, initialTime, initialProviderId, providers]);
+  }, [open, initialDate, initialTime, initialProviderId, providers, initialName, initialEmail, initialPhone]);
 
   // Add-ons offered with the chosen service. Each selection extends the visit
   // (combined duration drives the slot engine; combined price shows inline).
@@ -355,8 +377,21 @@ export function BookDialog({
         data: { accessToken: token, viewAsUserId, serviceId, providerId: providerId || undefined, startIso, patientName: name.trim(), patientEmail: email.trim() || undefined, patientPhone: phone.trim() || undefined, addonServiceIds: selectedAddonList.map((a) => a.id) },
       });
       if (!r.ok) { toast.error(r.reason); return; }
-      toast.success("Booked.");
-      onBooked();
+      // Recall booking → record the $5 recall_booking win (best-effort; never
+      // block the booking on the attribution write).
+      if (recallPatientNodeId) {
+        try {
+          await recordRecallBookingFn({
+            data: { accessToken: token, viewAsUserId, appointmentId: r.id, patientNodeId: recallPatientNodeId },
+          });
+          toast.success("Booked — recall win recorded.");
+        } catch {
+          toast.success("Booked.");
+        }
+      } else {
+        toast.success("Booked.");
+      }
+      onBooked(r.id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't book.");
     } finally {
@@ -418,7 +453,14 @@ export function BookDialog({
                         >
                           {checked && <Check className="h-3 w-3 text-paper" />}
                         </span>
-                        <span className="truncate text-ink">{a.name}</span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-ink">{a.name}</span>
+                          {a.activeOffer && (
+                            <span className="inline-block mt-0.5 rounded-full bg-amber-soft text-amber text-[10.5px] font-semibold px-1.5 py-0.5">
+                              {a.activeOffer.label}
+                            </span>
+                          )}
+                        </span>
                       </span>
                       <span className="text-ink-faint tabular-nums shrink-0 whitespace-nowrap">
                         +{a.durationMin} min{a.isFree ? " · Free" : ` · +$${a.price}`}

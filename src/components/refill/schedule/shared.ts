@@ -5,6 +5,7 @@
  */
 
 import type { AddOnLite, DayAppointment, DayBlock } from "@/server/scheduling-owner.functions";
+import type { AddOnOffer } from "@/lib/promo-calendar";
 
 export type View = "day" | "week" | "month";
 export type ServiceLite = {
@@ -14,6 +15,7 @@ export type ServiceLite = {
   category: string;
   sortOrder: number | null;
   addOns: AddOnLite[];
+  activeOffer?: AddOnOffer | null;
 };
 
 // Zoom = pixels-per-minute for the positioned grids. Default is "comfortable"

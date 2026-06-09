@@ -23,58 +23,47 @@ import { Link } from "@tanstack/react-router";
 
 export type RefillNavKey =
   | "patients"
-  | "appointments"
-  | "schedule"
+  | "calendar"
   | "catalog"
-  | "promos"
   | "recognition"
-  | "agents"
   | "recovery"
-  | "reports"
-  | "inbox"
-  | "settings"
-  | "billing";
+  | "settings";
 
 type RefillNavItem = {
   key: RefillNavKey;
   to: string;
   label: string;
   shortLabel: string;
+  /** Render a visual group divider after this chip. */
+  dividerAfter?: boolean;
 };
 
-// v1.34.1 (coherency pass): Promos chip promoted into nav. Sits in the
-// "data primitives" cluster (Patients = WHO, Catalog = WHAT we sell,
-// Promos = WHAT manufacturers offer us) before the action chips. The
-// /app/refill/promos route was previously deep-link-only — orphan since
-// the v341 port. Closes the discoverability gap.
+// v2.3.19 (IA reorg, "Solutions-first" grouping): the chip row now reads as
+// two clusters with a divider between them —
+//   [ Solutions ]            [ Spine / data + back-office ]
+//   Calendar · Promos · Refill  |  Patients · Catalog · Account
+// The action Solutions (the daily-driver workspaces) lead; the data
+// primitives (Patients = WHO, Catalog = WHAT) + back-office (Account) follow.
+// (History: v1.34.1 promoted Promos into nav; v2.1.0 made the strip
+// Solution-oriented under the SmartSpa umbrella — Calendar merged
+// Appointments+Schedule + owns booking/connections; "Refill" became the
+// no-show-recovery Solution as the Agents section dissolved.)
 const ITEMS: RefillNavItem[] = [
+  // ── Solutions (action workspaces) ──────────────────────────────────────
+  { key: "calendar", to: "/app/refill/calendar/schedule", label: "Calendar", shortLabel: "Calendar" },
+  // "Promos" Solution (formerly Recognition): rebate inventory, rewards,
+  // recall, allocation + manufacturer "Brand Promos". Route namespace stays
+  // /recognition; the chip + Solution are labeled Promos.
+  { key: "recognition", to: "/app/refill/recognition/inventory", label: "Promos", shortLabel: "Promos" },
+  // The Refill Solution: prevent (reminders) + recover (rescue) no-shows.
+  { key: "recovery", to: "/app/refill/recovery",           label: "Refill",   shortLabel: "Refill", dividerAfter: true },
+  // ── Spine (data primitives + back-office) ──────────────────────────────
   { key: "patients", to: "/app/refill/patients",          label: "Patients", shortLabel: "Patients" },
-  // v1.46.5: Appointments chip promoted into nav. Was card-only on RefillHome
-  // since the port — orphan once you navigate off the home grid (no way back to
-  // your own appointments table). Sits right after Patients (WHO → WHEN pairing).
-  { key: "appointments", to: "/app/refill/appointments",  label: "Appointments", shortLabel: "Appts" },
-  { key: "schedule", to: "/app/refill/schedule",          label: "Schedule", shortLabel: "Schedule" },
-  { key: "catalog",  to: "/app/refill/catalog/products",  label: "Catalog",  shortLabel: "Catalog" },
-  { key: "promos",   to: "/app/refill/promos",            label: "Promos",   shortLabel: "Promos" },
-  // v1.34.2: Recognition Allocation Engine. Lives between Promos and Recovery —
-  // adjacent to Promos (both are manufacturer-rebate concepts) but distinct
-  // (Promos = offers from manufacturers TO spa; Recognition = inventory
-  // deployed FROM spa TO patients).
-  { key: "recognition", to: "/app/refill/recognition/inventory", label: "Recognition", shortLabel: "Recognition" },
-  // v1.34.3: Agents & overrides. Lives between Recognition and Recovery —
-  // adjacent to the data-primitives cluster (Patients/Catalog/Promos/
-  // Recognition) but before the action cluster (Recovery/Inbox).
-  // Preshow lives here for now; Rescue + Attribution agents land in
-  // follow-on ships under the same parent.
-  { key: "agents",   to: "/app/refill/agents/preshow",       label: "Agents",   shortLabel: "Agents" },
-  { key: "recovery", to: "/app/refill/recovery",           label: "Recovery", shortLabel: "Recovery" },
-  // v1.46.5: Reports chip promoted into nav. Was an ungated landing-card-only
-  // orphan (RefillHome ACTIONS) — reachable only from the home grid. Same
-  // orphan shape as Appointments; closed in the same nav-coherency pass.
-  { key: "reports",  to: "/app/refill/reports",            label: "Reports",  shortLabel: "Reports" },
-  { key: "inbox",    to: "/app/refill/inbox",              label: "Inbox",    shortLabel: "Inbox" },
-  { key: "settings", to: "/app/refill/settings/scheduler", label: "Settings", shortLabel: "Settings" },
-  { key: "billing",  to: "/app/billing",                 label: "Billing",  shortLabel: "Billing" },
+  { key: "catalog",  to: "/app/refill/catalog/services",  label: "Catalog",  shortLabel: "Catalog" },
+  // "Account" (Spine back-office): Reports + Login/Sender/Spa profile/
+  // Lite mode + Billing/Attribution. Reports leads, so the chip lands there.
+  // (Inbox→Refill, Billing→here folded in v2.1.1; Reports→here v2.1.2.)
+  { key: "settings", to: "/app/refill/reports",            label: "Account", shortLabel: "Account" },
 ];
 
 export function RefillNav({ active }: { active?: RefillNavKey }) {
@@ -86,20 +75,28 @@ export function RefillNav({ active }: { active?: RefillNavKey }) {
       {ITEMS.map((item) => {
         const isActive = item.key === active;
         return (
-          <Link
-            key={item.key}
-            to={item.to}
-            aria-current={isActive ? "page" : undefined}
-            className="inline-flex items-center rounded-full px-3 py-1.5 text-[12px] font-semibold transition focus-visible:outline-none focus-visible:ring-2"
-            style={{
-              background: isActive ? "#056048" : "transparent",
-              color: isActive ? "#fbfaf7" : "#5a6068",
-              border: isActive ? "1px solid #056048" : "1px solid #e6e2d6",
-            }}
-          >
-            <span className="hidden sm:inline">{item.label}</span>
-            <span className="sm:hidden">{item.shortLabel}</span>
-          </Link>
+          <div key={item.key} className="inline-flex items-center gap-1">
+            <Link
+              to={item.to}
+              aria-current={isActive ? "page" : undefined}
+              className="inline-flex items-center rounded-full px-3 py-1.5 text-[12px] font-semibold transition focus-visible:outline-none focus-visible:ring-2"
+              style={{
+                background: isActive ? "#056048" : "transparent",
+                color: isActive ? "#fbfaf7" : "#5a6068",
+                border: isActive ? "1px solid #056048" : "1px solid #e6e2d6",
+              }}
+            >
+              <span className="hidden sm:inline">{item.label}</span>
+              <span className="sm:hidden">{item.shortLabel}</span>
+            </Link>
+            {item.dividerAfter && (
+              <span
+                aria-hidden="true"
+                className="mx-1.5 hidden h-5 w-px sm:inline-block"
+                style={{ background: "#e6e2d6" }}
+              />
+            )}
+          </div>
         );
       })}
     </nav>

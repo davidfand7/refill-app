@@ -21,6 +21,11 @@ import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import { ensureSetup, getTenantIdForUser } from "@/server/scheduling-settings.functions";
+import {
+  loadTenantPromoOffers,
+  recordCrossSellWin,
+} from "@/server/refill-promo-calendar.functions";
+import { bestActiveOfferForName, type AddOnOffer } from "@/lib/promo-calendar";
 import { zonedWallClockToUtc, zonedDateParts } from "@/lib/scheduling-slots";
 import { sendBookingConfirmation } from "@/server/scheduling-email";
 import { asResourceType, assignFreeResource } from "@/server/scheduling-resources";
@@ -78,6 +83,8 @@ export interface AddOnLite {
   price: number;
   durationMin: number;
   isFree: boolean;
+  /** Active manufacturer promo on this add-on, if any (Cross-Sell badge). */
+  activeOffer?: AddOnOffer | null;
 }
 
 /** A service in the owner booking picker, with its eligible add-ons. */
@@ -88,6 +95,8 @@ export interface OwnerServiceLite {
   category: string;
   sortOrder: number | null;
   addOns: AddOnLite[];
+  /** Active manufacturer promo on this service, if any (Cross-Sell badge). */
+  activeOffer?: AddOnOffer | null;
 }
 
 /** An add-on snapshotted onto an appointment (price/min frozen at booking). */
@@ -272,6 +281,38 @@ async function hydrateAppointments(
   }));
 }
 
+/** Load this tenant's promo offers, badge every eligible add-on (mutating the
+ *  AddOnLite objects in place), and return the offers + today so the caller
+ *  can also badge the primary services (Cross-Sell). */
+async function hydratePromoOffers(
+  sb: Parameters<typeof loadTenantPromoOffers>[0],
+  tenantId: string,
+  serviceAddons: Map<string, AddOnLite[]>,
+): Promise<{ offers: Awaited<ReturnType<typeof loadTenantPromoOffers>>; today: string }> {
+  const offers = await loadTenantPromoOffers(sb, tenantId);
+  const today = new Date().toISOString().slice(0, 10);
+  if (offers.length > 0) {
+    for (const arr of serviceAddons.values()) {
+      for (const ao of arr) {
+        const offer = bestActiveOfferForName(offers, ao.name, today);
+        if (offer) ao.activeOffer = offer;
+      }
+    }
+  }
+  return { offers, today };
+}
+
+/** Best active offer for a service name (undefined when none), for inline
+ *  badging of the primary service in the schedule payloads. */
+function serviceOffer(
+  offers: Awaited<ReturnType<typeof loadTenantPromoOffers>>,
+  today: string,
+  name: string,
+): AddOnOffer | undefined {
+  if (offers.length === 0) return undefined;
+  return bestActiveOfferForName(offers, name, today) ?? undefined;
+}
+
 // ── getDayScheduleFn ─────────────────────────────────────────────────────────
 
 const dayInput = z.object({
@@ -366,6 +407,12 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
       };
     }
 
+    const { offers: dayOffers, today: dayToday } = await hydratePromoOffers(
+      sb,
+      tenantId,
+      serviceAddons,
+    );
+
     return {
       tenantId,
       timezone,
@@ -381,6 +428,7 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
         category: s.category,
         sortOrder: s.sort_order,
         addOns: serviceAddons.get(s.id) ?? [],
+        activeOffer: serviceOffer(dayOffers, dayToday, s.name),
       })),
       providerUnoffered: await loadProviderUnoffered(sb, idFilter),
     };
@@ -496,6 +544,12 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
       });
     }
 
+    const { offers: rangeOffers, today: rangeToday } = await hydratePromoOffers(
+      sb,
+      tenantId,
+      serviceAddons,
+    );
+
     return {
       tenantId,
       timezone,
@@ -510,6 +564,7 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
         category: s.category,
         sortOrder: s.sort_order,
         addOns: serviceAddons.get(s.id) ?? [],
+        activeOffer: serviceOffer(rangeOffers, rangeToday, s.name),
       })),
       providerUnoffered: await loadProviderUnoffered(sb, idFilter),
     };
@@ -563,7 +618,7 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
 
     const { data: svc } = await sb
       .from("services")
-      .select("id, duration_min, tenant_id, required_resource_type")
+      .select("id, name, duration_min, tenant_id, required_resource_type")
       .eq("id", data.serviceId)
       .maybeSingle();
     if (!svc || svc.tenant_id !== tenantId) {
@@ -664,16 +719,39 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
 
     // Confirmation email when the owner supplied a patient email (best-effort).
     if (data.patientEmail) {
-      const [{ data: t }, { data: st }] = await Promise.all([
+      const [{ data: t }, { data: st }, { data: prov }] = await Promise.all([
         sb.from("tenants").select("name").eq("id", tenantId).maybeSingle(),
         sb.from("scheduling_settings").select("timezone").eq("tenant_id", tenantId).maybeSingle(),
+        sb.from("scheduling_providers").select("name").eq("id", providerId).maybeSingle(),
       ]);
       await sendBookingConfirmation({
         to: data.patientEmail,
         spaName: t?.name ?? "Your appointment",
         startIso: data.startIso,
         timezone: st?.timezone ?? "America/Los_Angeles",
+        serviceName: svc.name,
+        providerName: prov?.name ?? null,
+        durationMin: effectiveDuration,
+        addOns: chosenAddons.map((a) => ({ name: a.name, durationMin: a.durationMin })),
       });
+    }
+
+    // Cross-Sell: if the booked service/add-on carried an active promo and the
+    // patient resolves in the graph, record a $5 cross_sell win (best-effort —
+    // never block the booking on attribution).
+    try {
+      await recordCrossSellWin({
+        sb,
+        userId: effectiveUserId,
+        tenantId,
+        appointmentId: created.id,
+        serviceName: svc.name,
+        addOnNames: chosenAddons.map((a) => a.name),
+        email: data.patientEmail ?? null,
+        phone: data.patientPhone ?? null,
+      });
+    } catch (e) {
+      console.error("[cross-sell] win record failed:", e);
     }
 
     return { ok: true, id: created.id };

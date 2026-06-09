@@ -1282,13 +1282,13 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
           ? source
           : null;
 
-      // v1.43.0 — Light Mode writeback branch. When the appointment
-      // came in via Light Mode email parse (source matches /^lite-/),
+      // v1.43.0 — Lite Mode writeback branch. When the appointment
+      // came in via Lite Mode email parse (source matches /^lite-/),
       // we don't have vendor API access. Compose + send the owner an
       // email with a deeplink to the vendor portal + copy-paste payload
       // so they can do the booking in 30 seconds. The vendor's own
       // confirmation email triggered by that manual book closes the
-      // loop via the next Light Mode parse.
+      // loop via the next Lite Mode parse.
       const isLightModeSource =
         typeof source === "string" && source.startsWith("lite-");
 

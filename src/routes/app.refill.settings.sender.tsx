@@ -183,12 +183,12 @@ function SenderSettingsPage() {
   return (
     <div className="min-h-screen bg-background">
       <PageHeader
-        eyebrow={`${brandHeader} · Settings`}
+        eyebrow={`${brandHeader} · Account`}
         title="Email sender"
         description={`The From address ${brandName} uses when sending campaigns. By default messages send from the platform domain — connect your own domain so messages land as you.`}
         breadcrumbs={[
           { label: brandHeader, to: "/app/refill" },
-          { label: "Settings" },
+          { label: "Account" },
           { label: "Email sender" },
         ]}
       />

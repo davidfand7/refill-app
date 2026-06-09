@@ -221,7 +221,7 @@ function ClaimYourBusinessPage() {
         className="border-t py-6 text-center text-xs"
         style={{ borderColor: "#e6e2d6", color: "#8a9098" }}
       >
-        © {new Date().getFullYear()} Refill · No-show recovery for spas
+        © {new Date().getFullYear()} SmartSpa · The patient-profitability OS for spas
       </footer>
     </div>
   );
@@ -265,12 +265,12 @@ function ClaimHeader({
             style={{ background: "#056048", color: "#fbfaf7" }}
             aria-hidden
           >
-            R
+            S
           </div>
           <div className="leading-tight">
-            <div style={{ color: "#1c2024" }}>Refill</div>
+            <div style={{ color: "#1c2024" }}>SmartSpa</div>
             <div className="text-[10px] -mt-0.5" style={{ color: "#8a9098" }}>
-              / no-show recovery
+              / the patient-profitability OS
             </div>
           </div>
         </Link>
@@ -392,7 +392,7 @@ function ValueProps() {
     {
       icon: ShieldCheck,
       title: "You only pay on what comes back",
-      body: "Free to start. We take a small percent of recovered revenue when a patient actually books the rescued slot. If nothing recovers, you pay nothing.",
+      body: "Free to start. We charge $5 when a patient actually books a rescued slot. If nothing books, you pay nothing.",
     },
     {
       icon: Sparkles,
@@ -1073,7 +1073,7 @@ function SignUpAndClaim({
         className="text-[11px] text-center"
         style={{ color: "#8a9098" }}
       >
-        Free to claim · No credit card · You only pay on recovered revenue
+        Free to claim · No credit card · $5 per booking we create
       </p>
     </div>
   );

@@ -31,6 +31,7 @@ import { Route as ApiRefillPortalRouteImport } from './routes/api.refill-portal'
 import { Route as ApiRefillCheckoutRouteImport } from './routes/api.refill-checkout'
 import { Route as AppRepIndexRouteImport } from './routes/app.rep.index'
 import { Route as AppRefillIndexRouteImport } from './routes/app.refill.index'
+import { Route as AppBillingIndexRouteImport } from './routes/app.billing.index'
 import { Route as AppAdminIndexRouteImport } from './routes/app.admin.index'
 import { Route as WaitlistOptinTokenRouteImport } from './routes/waitlist.optin.$token'
 import { Route as RescueClaimTokenRouteImport } from './routes/rescue.claim.$token'
@@ -51,8 +52,10 @@ import { Route as AppRefillPatientsRouteImport } from './routes/app.refill.patie
 import { Route as AppRefillInboxRouteImport } from './routes/app.refill.inbox'
 import { Route as AppRefillHealthRouteImport } from './routes/app.refill.health'
 import { Route as AppRefillCampaignsRouteImport } from './routes/app.refill.campaigns'
+import { Route as AppRefillCalendarRouteImport } from './routes/app.refill.calendar'
 import { Route as AppRefillBillingRouteImport } from './routes/app.refill.billing'
 import { Route as AppRefillAppointmentsRouteImport } from './routes/app.refill.appointments'
+import { Route as AppBillingAttributionRouteImport } from './routes/app.billing.attribution'
 import { Route as AppAdminWishlistRouteImport } from './routes/app.admin.wishlist'
 import { Route as AppAdminUsersRouteImport } from './routes/app.admin.users'
 import { Route as AppAdminReportsRouteImport } from './routes/app.admin.reports'
@@ -65,6 +68,7 @@ import { Route as AppAdminAuditRouteImport } from './routes/app.admin.audit'
 import { Route as AppAdminAgentsRouteImport } from './routes/app.admin.agents'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api.webhooks.stripe'
 import { Route as ApiTwilioInboundRouteImport } from './routes/api.twilio.inbound'
+import { Route as ApiResendInboundRewardsRouteImport } from './routes/api.resend.inbound-rewards'
 import { Route as ApiResendInboundLiteRouteImport } from './routes/api.resend.inbound-lite'
 import { Route as ApiCronSchedulingRemindersRouteImport } from './routes/api.cron.scheduling-reminders'
 import { Route as ApiCronRefillTrialDripRouteImport } from './routes/api.cron.refill-trial-drip'
@@ -77,8 +81,10 @@ import { Route as ApiCronEmmaReconcileRouteImport } from './routes/api.cron.emma
 import { Route as ApiCronEmmaRecommendationsRouteImport } from './routes/api.cron.emma-recommendations'
 import { Route as ApiCronEmmaPreshowSweepRouteImport } from './routes/api.cron.emma-preshow-sweep'
 import { Route as ApiCronEmmaInvoiceRouteImport } from './routes/api.cron.emma-invoice'
+import { Route as AppRefillRecoveryIndexRouteImport } from './routes/app.refill.recovery.index'
 import { Route as AppRefillPatientsIndexRouteImport } from './routes/app.refill.patients.index'
 import { Route as AppRefillCampaignsIndexRouteImport } from './routes/app.refill.campaigns.index'
+import { Route as AppRefillCalendarIndexRouteImport } from './routes/app.refill.calendar.index'
 import { Route as AppRefillWaitlistSeedRouteImport } from './routes/app.refill.waitlist.seed'
 import { Route as AppRefillWaitlistInviteRouteImport } from './routes/app.refill.waitlist.invite'
 import { Route as AppRefillWaitlistBulkRouteImport } from './routes/app.refill.waitlist.bulk'
@@ -93,9 +99,14 @@ import { Route as AppRefillSettingsBoulevardInstallRouteImport } from './routes/
 import { Route as AppRefillSettingsBookingRouteImport } from './routes/app.refill.settings.booking'
 import { Route as AppRefillSettingsBookerInstallRouteImport } from './routes/app.refill.settings.booker-install'
 import { Route as AppRefillSettingsAccountRouteImport } from './routes/app.refill.settings.account'
+import { Route as AppRefillRecoveryRescueRouteImport } from './routes/app.refill.recovery.rescue'
+import { Route as AppRefillRecoveryPreshowRouteImport } from './routes/app.refill.recovery.preshow'
 import { Route as AppRefillRecognitionRewardsRouteImport } from './routes/app.refill.recognition.rewards'
+import { Route as AppRefillRecognitionRecallRouteImport } from './routes/app.refill.recognition.recall'
 import { Route as AppRefillRecognitionManufacturersRouteImport } from './routes/app.refill.recognition.manufacturers'
 import { Route as AppRefillRecognitionInventoryRouteImport } from './routes/app.refill.recognition.inventory'
+import { Route as AppRefillRecognitionBrandPromosRouteImport } from './routes/app.refill.recognition.brand-promos'
+import { Route as AppRefillRecognitionAllocationRouteImport } from './routes/app.refill.recognition.allocation'
 import { Route as AppRefillPatientsImportRouteImport } from './routes/app.refill.patients.import'
 import { Route as AppRefillPatientsContactsRouteImport } from './routes/app.refill.patients.contacts'
 import { Route as AppRefillPatientsAListRulesRouteImport } from './routes/app.refill.patients.a-list-rules'
@@ -105,6 +116,15 @@ import { Route as AppRefillCatalogProductsRouteImport } from './routes/app.refil
 import { Route as AppRefillCatalogImportRouteImport } from './routes/app.refill.catalog.import'
 import { Route as AppRefillCampaignsNewRouteImport } from './routes/app.refill.campaigns.new'
 import { Route as AppRefillCampaignsCampaignIdRouteImport } from './routes/app.refill.campaigns.$campaignId'
+import { Route as AppRefillCalendarZenotiInstallRouteImport } from './routes/app.refill.calendar.zenoti-install'
+import { Route as AppRefillCalendarVagaroInstallRouteImport } from './routes/app.refill.calendar.vagaro-install'
+import { Route as AppRefillCalendarScheduleRouteImport } from './routes/app.refill.calendar.schedule'
+import { Route as AppRefillCalendarOffersRouteImport } from './routes/app.refill.calendar.offers'
+import { Route as AppRefillCalendarConnectionsRouteImport } from './routes/app.refill.calendar.connections'
+import { Route as AppRefillCalendarBoulevardInstallRouteImport } from './routes/app.refill.calendar.boulevard-install'
+import { Route as AppRefillCalendarBookingRouteImport } from './routes/app.refill.calendar.booking'
+import { Route as AppRefillCalendarBookerInstallRouteImport } from './routes/app.refill.calendar.booker-install'
+import { Route as AppRefillCalendarAppointmentsRouteImport } from './routes/app.refill.calendar.appointments'
 import { Route as AppRefillAgentsRescueRouteImport } from './routes/app.refill.agents.rescue'
 import { Route as AppRefillAgentsRecognitionRouteImport } from './routes/app.refill.agents.recognition'
 import { Route as AppRefillAgentsPreshowRouteImport } from './routes/app.refill.agents.preshow'
@@ -241,6 +261,11 @@ const AppRefillIndexRoute = AppRefillIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRefillRoute,
 } as any)
+const AppBillingIndexRoute = AppBillingIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppBillingRoute,
+} as any)
 const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
   id: '/admin/',
   path: '/admin/',
@@ -341,6 +366,11 @@ const AppRefillCampaignsRoute = AppRefillCampaignsRouteImport.update({
   path: '/campaigns',
   getParentRoute: () => AppRefillRoute,
 } as any)
+const AppRefillCalendarRoute = AppRefillCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => AppRefillRoute,
+} as any)
 const AppRefillBillingRoute = AppRefillBillingRouteImport.update({
   id: '/billing',
   path: '/billing',
@@ -350,6 +380,11 @@ const AppRefillAppointmentsRoute = AppRefillAppointmentsRouteImport.update({
   id: '/appointments',
   path: '/appointments',
   getParentRoute: () => AppRefillRoute,
+} as any)
+const AppBillingAttributionRoute = AppBillingAttributionRouteImport.update({
+  id: '/attribution',
+  path: '/attribution',
+  getParentRoute: () => AppBillingRoute,
 } as any)
 const AppAdminWishlistRoute = AppAdminWishlistRouteImport.update({
   id: '/admin/wishlist',
@@ -409,6 +444,11 @@ const ApiWebhooksStripeRoute = ApiWebhooksStripeRouteImport.update({
 const ApiTwilioInboundRoute = ApiTwilioInboundRouteImport.update({
   id: '/api/twilio/inbound',
   path: '/api/twilio/inbound',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiResendInboundRewardsRoute = ApiResendInboundRewardsRouteImport.update({
+  id: '/api/resend/inbound-rewards',
+  path: '/api/resend/inbound-rewards',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiResendInboundLiteRoute = ApiResendInboundLiteRouteImport.update({
@@ -474,6 +514,11 @@ const ApiCronEmmaInvoiceRoute = ApiCronEmmaInvoiceRouteImport.update({
   path: '/api/cron/emma-invoice',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppRefillRecoveryIndexRoute = AppRefillRecoveryIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRefillRecoveryRoute,
+} as any)
 const AppRefillPatientsIndexRoute = AppRefillPatientsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -483,6 +528,11 @@ const AppRefillCampaignsIndexRoute = AppRefillCampaignsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => AppRefillCampaignsRoute,
+} as any)
+const AppRefillCalendarIndexRoute = AppRefillCalendarIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRefillCalendarRoute,
 } as any)
 const AppRefillWaitlistSeedRoute = AppRefillWaitlistSeedRouteImport.update({
   id: '/waitlist/seed',
@@ -563,10 +613,27 @@ const AppRefillSettingsAccountRoute =
     path: '/settings/account',
     getParentRoute: () => AppRefillRoute,
   } as any)
+const AppRefillRecoveryRescueRoute = AppRefillRecoveryRescueRouteImport.update({
+  id: '/rescue',
+  path: '/rescue',
+  getParentRoute: () => AppRefillRecoveryRoute,
+} as any)
+const AppRefillRecoveryPreshowRoute =
+  AppRefillRecoveryPreshowRouteImport.update({
+    id: '/preshow',
+    path: '/preshow',
+    getParentRoute: () => AppRefillRecoveryRoute,
+  } as any)
 const AppRefillRecognitionRewardsRoute =
   AppRefillRecognitionRewardsRouteImport.update({
     id: '/recognition/rewards',
     path: '/recognition/rewards',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
+const AppRefillRecognitionRecallRoute =
+  AppRefillRecognitionRecallRouteImport.update({
+    id: '/recognition/recall',
+    path: '/recognition/recall',
     getParentRoute: () => AppRefillRoute,
   } as any)
 const AppRefillRecognitionManufacturersRoute =
@@ -579,6 +646,18 @@ const AppRefillRecognitionInventoryRoute =
   AppRefillRecognitionInventoryRouteImport.update({
     id: '/recognition/inventory',
     path: '/recognition/inventory',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
+const AppRefillRecognitionBrandPromosRoute =
+  AppRefillRecognitionBrandPromosRouteImport.update({
+    id: '/recognition/brand-promos',
+    path: '/recognition/brand-promos',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
+const AppRefillRecognitionAllocationRoute =
+  AppRefillRecognitionAllocationRouteImport.update({
+    id: '/recognition/allocation',
+    path: '/recognition/allocation',
     getParentRoute: () => AppRefillRoute,
   } as any)
 const AppRefillPatientsImportRoute = AppRefillPatientsImportRouteImport.update({
@@ -631,6 +710,59 @@ const AppRefillCampaignsCampaignIdRoute =
     id: '/$campaignId',
     path: '/$campaignId',
     getParentRoute: () => AppRefillCampaignsRoute,
+  } as any)
+const AppRefillCalendarZenotiInstallRoute =
+  AppRefillCalendarZenotiInstallRouteImport.update({
+    id: '/zenoti-install',
+    path: '/zenoti-install',
+    getParentRoute: () => AppRefillCalendarRoute,
+  } as any)
+const AppRefillCalendarVagaroInstallRoute =
+  AppRefillCalendarVagaroInstallRouteImport.update({
+    id: '/vagaro-install',
+    path: '/vagaro-install',
+    getParentRoute: () => AppRefillCalendarRoute,
+  } as any)
+const AppRefillCalendarScheduleRoute =
+  AppRefillCalendarScheduleRouteImport.update({
+    id: '/schedule',
+    path: '/schedule',
+    getParentRoute: () => AppRefillCalendarRoute,
+  } as any)
+const AppRefillCalendarOffersRoute = AppRefillCalendarOffersRouteImport.update({
+  id: '/offers',
+  path: '/offers',
+  getParentRoute: () => AppRefillCalendarRoute,
+} as any)
+const AppRefillCalendarConnectionsRoute =
+  AppRefillCalendarConnectionsRouteImport.update({
+    id: '/connections',
+    path: '/connections',
+    getParentRoute: () => AppRefillCalendarRoute,
+  } as any)
+const AppRefillCalendarBoulevardInstallRoute =
+  AppRefillCalendarBoulevardInstallRouteImport.update({
+    id: '/boulevard-install',
+    path: '/boulevard-install',
+    getParentRoute: () => AppRefillCalendarRoute,
+  } as any)
+const AppRefillCalendarBookingRoute =
+  AppRefillCalendarBookingRouteImport.update({
+    id: '/booking',
+    path: '/booking',
+    getParentRoute: () => AppRefillCalendarRoute,
+  } as any)
+const AppRefillCalendarBookerInstallRoute =
+  AppRefillCalendarBookerInstallRouteImport.update({
+    id: '/booker-install',
+    path: '/booker-install',
+    getParentRoute: () => AppRefillCalendarRoute,
+  } as any)
+const AppRefillCalendarAppointmentsRoute =
+  AppRefillCalendarAppointmentsRouteImport.update({
+    id: '/appointments',
+    path: '/appointments',
+    getParentRoute: () => AppRefillCalendarRoute,
   } as any)
 const AppRefillAgentsRescueRoute = AppRefillAgentsRescueRouteImport.update({
   id: '/agents/rescue',
@@ -796,7 +928,7 @@ export interface FileRoutesByFullPath {
   '/unsubscribe': typeof UnsubscribeRoute
   '/api/refill-checkout': typeof ApiRefillCheckoutRoute
   '/api/refill-portal': typeof ApiRefillPortalRoute
-  '/app/billing': typeof AppBillingRoute
+  '/app/billing': typeof AppBillingRouteWithChildren
   '/app/refill': typeof AppRefillRouteWithChildren
   '/app/rep': typeof AppRepRouteWithChildren
   '/r/$slug': typeof RSlugRoute
@@ -814,6 +946,7 @@ export interface FileRoutesByFullPath {
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/cron/scheduling-reminders': typeof ApiCronSchedulingRemindersRoute
   '/api/resend/inbound-lite': typeof ApiResendInboundLiteRoute
+  '/api/resend/inbound-rewards': typeof ApiResendInboundRewardsRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/admin/agents': typeof AppAdminAgentsRoute
@@ -826,14 +959,16 @@ export interface FileRoutesByFullPath {
   '/app/admin/reports': typeof AppAdminReportsRoute
   '/app/admin/users': typeof AppAdminUsersRoute
   '/app/admin/wishlist': typeof AppAdminWishlistRoute
+  '/app/billing/attribution': typeof AppBillingAttributionRoute
   '/app/refill/appointments': typeof AppRefillAppointmentsRoute
   '/app/refill/billing': typeof AppRefillBillingRoute
+  '/app/refill/calendar': typeof AppRefillCalendarRouteWithChildren
   '/app/refill/campaigns': typeof AppRefillCampaignsRouteWithChildren
   '/app/refill/health': typeof AppRefillHealthRoute
   '/app/refill/inbox': typeof AppRefillInboxRoute
   '/app/refill/patients': typeof AppRefillPatientsRouteWithChildren
   '/app/refill/promos': typeof AppRefillPromosRoute
-  '/app/refill/recovery': typeof AppRefillRecoveryRoute
+  '/app/refill/recovery': typeof AppRefillRecoveryRouteWithChildren
   '/app/refill/reports': typeof AppRefillReportsRoute
   '/app/refill/rescue': typeof AppRefillRescueRoute
   '/app/refill/schedule': typeof AppRefillScheduleRoute
@@ -848,6 +983,7 @@ export interface FileRoutesByFullPath {
   '/rescue/claim/$token': typeof RescueClaimTokenRoute
   '/waitlist/optin/$token': typeof WaitlistOptinTokenRoute
   '/app/admin/': typeof AppAdminIndexRoute
+  '/app/billing/': typeof AppBillingIndexRoute
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
@@ -868,6 +1004,15 @@ export interface FileRoutesByFullPath {
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
   '/app/refill/agents/recognition': typeof AppRefillAgentsRecognitionRoute
   '/app/refill/agents/rescue': typeof AppRefillAgentsRescueRoute
+  '/app/refill/calendar/appointments': typeof AppRefillCalendarAppointmentsRoute
+  '/app/refill/calendar/booker-install': typeof AppRefillCalendarBookerInstallRoute
+  '/app/refill/calendar/booking': typeof AppRefillCalendarBookingRoute
+  '/app/refill/calendar/boulevard-install': typeof AppRefillCalendarBoulevardInstallRoute
+  '/app/refill/calendar/connections': typeof AppRefillCalendarConnectionsRoute
+  '/app/refill/calendar/offers': typeof AppRefillCalendarOffersRoute
+  '/app/refill/calendar/schedule': typeof AppRefillCalendarScheduleRoute
+  '/app/refill/calendar/vagaro-install': typeof AppRefillCalendarVagaroInstallRoute
+  '/app/refill/calendar/zenoti-install': typeof AppRefillCalendarZenotiInstallRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
   '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
@@ -877,9 +1022,14 @@ export interface FileRoutesByFullPath {
   '/app/refill/patients/a-list-rules': typeof AppRefillPatientsAListRulesRoute
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
   '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
+  '/app/refill/recognition/allocation': typeof AppRefillRecognitionAllocationRoute
+  '/app/refill/recognition/brand-promos': typeof AppRefillRecognitionBrandPromosRoute
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
   '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
+  '/app/refill/recognition/recall': typeof AppRefillRecognitionRecallRoute
   '/app/refill/recognition/rewards': typeof AppRefillRecognitionRewardsRoute
+  '/app/refill/recovery/preshow': typeof AppRefillRecoveryPreshowRoute
+  '/app/refill/recovery/rescue': typeof AppRefillRecoveryRescueRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
   '/app/refill/settings/booking': typeof AppRefillSettingsBookingRoute
@@ -894,8 +1044,10 @@ export interface FileRoutesByFullPath {
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
   '/app/refill/waitlist/invite': typeof AppRefillWaitlistInviteRoute
   '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
+  '/app/refill/calendar/': typeof AppRefillCalendarIndexRoute
   '/app/refill/campaigns/': typeof AppRefillCampaignsIndexRoute
   '/app/refill/patients/': typeof AppRefillPatientsIndexRoute
+  '/app/refill/recovery/': typeof AppRefillRecoveryIndexRoute
   '/api/webhooks/scheduler/acuity/$secret': typeof ApiWebhooksSchedulerAcuitySecretRoute
   '/api/webhooks/scheduler/booker/$secret': typeof ApiWebhooksSchedulerBookerSecretRoute
   '/api/webhooks/scheduler/mindbody/$secret': typeof ApiWebhooksSchedulerMindbodySecretRoute
@@ -919,7 +1071,6 @@ export interface FileRoutesByTo {
   '/unsubscribe': typeof UnsubscribeRoute
   '/api/refill-checkout': typeof ApiRefillCheckoutRoute
   '/api/refill-portal': typeof ApiRefillPortalRoute
-  '/app/billing': typeof AppBillingRoute
   '/r/$slug': typeof RSlugRoute
   '/report/$token': typeof ReportTokenRoute
   '/s/$slug': typeof SSlugRoute
@@ -935,6 +1086,7 @@ export interface FileRoutesByTo {
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/cron/scheduling-reminders': typeof ApiCronSchedulingRemindersRoute
   '/api/resend/inbound-lite': typeof ApiResendInboundLiteRoute
+  '/api/resend/inbound-rewards': typeof ApiResendInboundRewardsRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/admin/agents': typeof AppAdminAgentsRoute
@@ -947,12 +1099,12 @@ export interface FileRoutesByTo {
   '/app/admin/reports': typeof AppAdminReportsRoute
   '/app/admin/users': typeof AppAdminUsersRoute
   '/app/admin/wishlist': typeof AppAdminWishlistRoute
+  '/app/billing/attribution': typeof AppBillingAttributionRoute
   '/app/refill/appointments': typeof AppRefillAppointmentsRoute
   '/app/refill/billing': typeof AppRefillBillingRoute
   '/app/refill/health': typeof AppRefillHealthRoute
   '/app/refill/inbox': typeof AppRefillInboxRoute
   '/app/refill/promos': typeof AppRefillPromosRoute
-  '/app/refill/recovery': typeof AppRefillRecoveryRoute
   '/app/refill/reports': typeof AppRefillReportsRoute
   '/app/refill/rescue': typeof AppRefillRescueRoute
   '/app/refill/schedule': typeof AppRefillScheduleRoute
@@ -967,6 +1119,7 @@ export interface FileRoutesByTo {
   '/rescue/claim/$token': typeof RescueClaimTokenRoute
   '/waitlist/optin/$token': typeof WaitlistOptinTokenRoute
   '/app/admin': typeof AppAdminIndexRoute
+  '/app/billing': typeof AppBillingIndexRoute
   '/app/refill': typeof AppRefillIndexRoute
   '/app/rep': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
@@ -987,6 +1140,15 @@ export interface FileRoutesByTo {
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
   '/app/refill/agents/recognition': typeof AppRefillAgentsRecognitionRoute
   '/app/refill/agents/rescue': typeof AppRefillAgentsRescueRoute
+  '/app/refill/calendar/appointments': typeof AppRefillCalendarAppointmentsRoute
+  '/app/refill/calendar/booker-install': typeof AppRefillCalendarBookerInstallRoute
+  '/app/refill/calendar/booking': typeof AppRefillCalendarBookingRoute
+  '/app/refill/calendar/boulevard-install': typeof AppRefillCalendarBoulevardInstallRoute
+  '/app/refill/calendar/connections': typeof AppRefillCalendarConnectionsRoute
+  '/app/refill/calendar/offers': typeof AppRefillCalendarOffersRoute
+  '/app/refill/calendar/schedule': typeof AppRefillCalendarScheduleRoute
+  '/app/refill/calendar/vagaro-install': typeof AppRefillCalendarVagaroInstallRoute
+  '/app/refill/calendar/zenoti-install': typeof AppRefillCalendarZenotiInstallRoute
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
   '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
   '/app/refill/catalog/products': typeof AppRefillCatalogProductsRoute
@@ -995,9 +1157,14 @@ export interface FileRoutesByTo {
   '/app/refill/patients/a-list-rules': typeof AppRefillPatientsAListRulesRoute
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
   '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
+  '/app/refill/recognition/allocation': typeof AppRefillRecognitionAllocationRoute
+  '/app/refill/recognition/brand-promos': typeof AppRefillRecognitionBrandPromosRoute
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
   '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
+  '/app/refill/recognition/recall': typeof AppRefillRecognitionRecallRoute
   '/app/refill/recognition/rewards': typeof AppRefillRecognitionRewardsRoute
+  '/app/refill/recovery/preshow': typeof AppRefillRecoveryPreshowRoute
+  '/app/refill/recovery/rescue': typeof AppRefillRecoveryRescueRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
   '/app/refill/settings/booking': typeof AppRefillSettingsBookingRoute
@@ -1012,8 +1179,10 @@ export interface FileRoutesByTo {
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
   '/app/refill/waitlist/invite': typeof AppRefillWaitlistInviteRoute
   '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
+  '/app/refill/calendar': typeof AppRefillCalendarIndexRoute
   '/app/refill/campaigns': typeof AppRefillCampaignsIndexRoute
   '/app/refill/patients': typeof AppRefillPatientsIndexRoute
+  '/app/refill/recovery': typeof AppRefillRecoveryIndexRoute
   '/api/webhooks/scheduler/acuity/$secret': typeof ApiWebhooksSchedulerAcuitySecretRoute
   '/api/webhooks/scheduler/booker/$secret': typeof ApiWebhooksSchedulerBookerSecretRoute
   '/api/webhooks/scheduler/mindbody/$secret': typeof ApiWebhooksSchedulerMindbodySecretRoute
@@ -1038,7 +1207,7 @@ export interface FileRoutesById {
   '/unsubscribe': typeof UnsubscribeRoute
   '/api/refill-checkout': typeof ApiRefillCheckoutRoute
   '/api/refill-portal': typeof ApiRefillPortalRoute
-  '/app/billing': typeof AppBillingRoute
+  '/app/billing': typeof AppBillingRouteWithChildren
   '/app/refill': typeof AppRefillRouteWithChildren
   '/app/rep': typeof AppRepRouteWithChildren
   '/r/$slug': typeof RSlugRoute
@@ -1056,6 +1225,7 @@ export interface FileRoutesById {
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/cron/scheduling-reminders': typeof ApiCronSchedulingRemindersRoute
   '/api/resend/inbound-lite': typeof ApiResendInboundLiteRoute
+  '/api/resend/inbound-rewards': typeof ApiResendInboundRewardsRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/admin/agents': typeof AppAdminAgentsRoute
@@ -1068,14 +1238,16 @@ export interface FileRoutesById {
   '/app/admin/reports': typeof AppAdminReportsRoute
   '/app/admin/users': typeof AppAdminUsersRoute
   '/app/admin/wishlist': typeof AppAdminWishlistRoute
+  '/app/billing/attribution': typeof AppBillingAttributionRoute
   '/app/refill/appointments': typeof AppRefillAppointmentsRoute
   '/app/refill/billing': typeof AppRefillBillingRoute
+  '/app/refill/calendar': typeof AppRefillCalendarRouteWithChildren
   '/app/refill/campaigns': typeof AppRefillCampaignsRouteWithChildren
   '/app/refill/health': typeof AppRefillHealthRoute
   '/app/refill/inbox': typeof AppRefillInboxRoute
   '/app/refill/patients': typeof AppRefillPatientsRouteWithChildren
   '/app/refill/promos': typeof AppRefillPromosRoute
-  '/app/refill/recovery': typeof AppRefillRecoveryRoute
+  '/app/refill/recovery': typeof AppRefillRecoveryRouteWithChildren
   '/app/refill/reports': typeof AppRefillReportsRoute
   '/app/refill/rescue': typeof AppRefillRescueRoute
   '/app/refill/schedule': typeof AppRefillScheduleRoute
@@ -1090,6 +1262,7 @@ export interface FileRoutesById {
   '/rescue/claim/$token': typeof RescueClaimTokenRoute
   '/waitlist/optin/$token': typeof WaitlistOptinTokenRoute
   '/app/admin/': typeof AppAdminIndexRoute
+  '/app/billing/': typeof AppBillingIndexRoute
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
@@ -1110,6 +1283,15 @@ export interface FileRoutesById {
   '/app/refill/agents/preshow': typeof AppRefillAgentsPreshowRoute
   '/app/refill/agents/recognition': typeof AppRefillAgentsRecognitionRoute
   '/app/refill/agents/rescue': typeof AppRefillAgentsRescueRoute
+  '/app/refill/calendar/appointments': typeof AppRefillCalendarAppointmentsRoute
+  '/app/refill/calendar/booker-install': typeof AppRefillCalendarBookerInstallRoute
+  '/app/refill/calendar/booking': typeof AppRefillCalendarBookingRoute
+  '/app/refill/calendar/boulevard-install': typeof AppRefillCalendarBoulevardInstallRoute
+  '/app/refill/calendar/connections': typeof AppRefillCalendarConnectionsRoute
+  '/app/refill/calendar/offers': typeof AppRefillCalendarOffersRoute
+  '/app/refill/calendar/schedule': typeof AppRefillCalendarScheduleRoute
+  '/app/refill/calendar/vagaro-install': typeof AppRefillCalendarVagaroInstallRoute
+  '/app/refill/calendar/zenoti-install': typeof AppRefillCalendarZenotiInstallRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
   '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
@@ -1119,9 +1301,14 @@ export interface FileRoutesById {
   '/app/refill/patients/a-list-rules': typeof AppRefillPatientsAListRulesRoute
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
   '/app/refill/patients/import': typeof AppRefillPatientsImportRoute
+  '/app/refill/recognition/allocation': typeof AppRefillRecognitionAllocationRoute
+  '/app/refill/recognition/brand-promos': typeof AppRefillRecognitionBrandPromosRoute
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
   '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
+  '/app/refill/recognition/recall': typeof AppRefillRecognitionRecallRoute
   '/app/refill/recognition/rewards': typeof AppRefillRecognitionRewardsRoute
+  '/app/refill/recovery/preshow': typeof AppRefillRecoveryPreshowRoute
+  '/app/refill/recovery/rescue': typeof AppRefillRecoveryRescueRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
   '/app/refill/settings/booking': typeof AppRefillSettingsBookingRoute
@@ -1136,8 +1323,10 @@ export interface FileRoutesById {
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
   '/app/refill/waitlist/invite': typeof AppRefillWaitlistInviteRoute
   '/app/refill/waitlist/seed': typeof AppRefillWaitlistSeedRoute
+  '/app/refill/calendar/': typeof AppRefillCalendarIndexRoute
   '/app/refill/campaigns/': typeof AppRefillCampaignsIndexRoute
   '/app/refill/patients/': typeof AppRefillPatientsIndexRoute
+  '/app/refill/recovery/': typeof AppRefillRecoveryIndexRoute
   '/api/webhooks/scheduler/acuity/$secret': typeof ApiWebhooksSchedulerAcuitySecretRoute
   '/api/webhooks/scheduler/booker/$secret': typeof ApiWebhooksSchedulerBookerSecretRoute
   '/api/webhooks/scheduler/mindbody/$secret': typeof ApiWebhooksSchedulerMindbodySecretRoute
@@ -1181,6 +1370,7 @@ export interface FileRouteTypes {
     | '/api/cron/refill-trial-drip'
     | '/api/cron/scheduling-reminders'
     | '/api/resend/inbound-lite'
+    | '/api/resend/inbound-rewards'
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
     | '/app/admin/agents'
@@ -1193,8 +1383,10 @@ export interface FileRouteTypes {
     | '/app/admin/reports'
     | '/app/admin/users'
     | '/app/admin/wishlist'
+    | '/app/billing/attribution'
     | '/app/refill/appointments'
     | '/app/refill/billing'
+    | '/app/refill/calendar'
     | '/app/refill/campaigns'
     | '/app/refill/health'
     | '/app/refill/inbox'
@@ -1215,6 +1407,7 @@ export interface FileRouteTypes {
     | '/rescue/claim/$token'
     | '/waitlist/optin/$token'
     | '/app/admin/'
+    | '/app/billing/'
     | '/app/refill/'
     | '/app/rep/'
     | '/api/integrations/acuity/oauth-callback'
@@ -1235,6 +1428,15 @@ export interface FileRouteTypes {
     | '/app/refill/agents/preshow'
     | '/app/refill/agents/recognition'
     | '/app/refill/agents/rescue'
+    | '/app/refill/calendar/appointments'
+    | '/app/refill/calendar/booker-install'
+    | '/app/refill/calendar/booking'
+    | '/app/refill/calendar/boulevard-install'
+    | '/app/refill/calendar/connections'
+    | '/app/refill/calendar/offers'
+    | '/app/refill/calendar/schedule'
+    | '/app/refill/calendar/vagaro-install'
+    | '/app/refill/calendar/zenoti-install'
     | '/app/refill/campaigns/$campaignId'
     | '/app/refill/campaigns/new'
     | '/app/refill/catalog/import'
@@ -1244,9 +1446,14 @@ export interface FileRouteTypes {
     | '/app/refill/patients/a-list-rules'
     | '/app/refill/patients/contacts'
     | '/app/refill/patients/import'
+    | '/app/refill/recognition/allocation'
+    | '/app/refill/recognition/brand-promos'
     | '/app/refill/recognition/inventory'
     | '/app/refill/recognition/manufacturers'
+    | '/app/refill/recognition/recall'
     | '/app/refill/recognition/rewards'
+    | '/app/refill/recovery/preshow'
+    | '/app/refill/recovery/rescue'
     | '/app/refill/settings/account'
     | '/app/refill/settings/booker-install'
     | '/app/refill/settings/booking'
@@ -1261,8 +1468,10 @@ export interface FileRouteTypes {
     | '/app/refill/waitlist/bulk'
     | '/app/refill/waitlist/invite'
     | '/app/refill/waitlist/seed'
+    | '/app/refill/calendar/'
     | '/app/refill/campaigns/'
     | '/app/refill/patients/'
+    | '/app/refill/recovery/'
     | '/api/webhooks/scheduler/acuity/$secret'
     | '/api/webhooks/scheduler/booker/$secret'
     | '/api/webhooks/scheduler/mindbody/$secret'
@@ -1286,7 +1495,6 @@ export interface FileRouteTypes {
     | '/unsubscribe'
     | '/api/refill-checkout'
     | '/api/refill-portal'
-    | '/app/billing'
     | '/r/$slug'
     | '/report/$token'
     | '/s/$slug'
@@ -1302,6 +1510,7 @@ export interface FileRouteTypes {
     | '/api/cron/refill-trial-drip'
     | '/api/cron/scheduling-reminders'
     | '/api/resend/inbound-lite'
+    | '/api/resend/inbound-rewards'
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
     | '/app/admin/agents'
@@ -1314,12 +1523,12 @@ export interface FileRouteTypes {
     | '/app/admin/reports'
     | '/app/admin/users'
     | '/app/admin/wishlist'
+    | '/app/billing/attribution'
     | '/app/refill/appointments'
     | '/app/refill/billing'
     | '/app/refill/health'
     | '/app/refill/inbox'
     | '/app/refill/promos'
-    | '/app/refill/recovery'
     | '/app/refill/reports'
     | '/app/refill/rescue'
     | '/app/refill/schedule'
@@ -1334,6 +1543,7 @@ export interface FileRouteTypes {
     | '/rescue/claim/$token'
     | '/waitlist/optin/$token'
     | '/app/admin'
+    | '/app/billing'
     | '/app/refill'
     | '/app/rep'
     | '/api/integrations/acuity/oauth-callback'
@@ -1354,6 +1564,15 @@ export interface FileRouteTypes {
     | '/app/refill/agents/preshow'
     | '/app/refill/agents/recognition'
     | '/app/refill/agents/rescue'
+    | '/app/refill/calendar/appointments'
+    | '/app/refill/calendar/booker-install'
+    | '/app/refill/calendar/booking'
+    | '/app/refill/calendar/boulevard-install'
+    | '/app/refill/calendar/connections'
+    | '/app/refill/calendar/offers'
+    | '/app/refill/calendar/schedule'
+    | '/app/refill/calendar/vagaro-install'
+    | '/app/refill/calendar/zenoti-install'
     | '/app/refill/campaigns/new'
     | '/app/refill/catalog/import'
     | '/app/refill/catalog/products'
@@ -1362,9 +1581,14 @@ export interface FileRouteTypes {
     | '/app/refill/patients/a-list-rules'
     | '/app/refill/patients/contacts'
     | '/app/refill/patients/import'
+    | '/app/refill/recognition/allocation'
+    | '/app/refill/recognition/brand-promos'
     | '/app/refill/recognition/inventory'
     | '/app/refill/recognition/manufacturers'
+    | '/app/refill/recognition/recall'
     | '/app/refill/recognition/rewards'
+    | '/app/refill/recovery/preshow'
+    | '/app/refill/recovery/rescue'
     | '/app/refill/settings/account'
     | '/app/refill/settings/booker-install'
     | '/app/refill/settings/booking'
@@ -1379,8 +1603,10 @@ export interface FileRouteTypes {
     | '/app/refill/waitlist/bulk'
     | '/app/refill/waitlist/invite'
     | '/app/refill/waitlist/seed'
+    | '/app/refill/calendar'
     | '/app/refill/campaigns'
     | '/app/refill/patients'
+    | '/app/refill/recovery'
     | '/api/webhooks/scheduler/acuity/$secret'
     | '/api/webhooks/scheduler/booker/$secret'
     | '/api/webhooks/scheduler/mindbody/$secret'
@@ -1422,6 +1648,7 @@ export interface FileRouteTypes {
     | '/api/cron/refill-trial-drip'
     | '/api/cron/scheduling-reminders'
     | '/api/resend/inbound-lite'
+    | '/api/resend/inbound-rewards'
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
     | '/app/admin/agents'
@@ -1434,8 +1661,10 @@ export interface FileRouteTypes {
     | '/app/admin/reports'
     | '/app/admin/users'
     | '/app/admin/wishlist'
+    | '/app/billing/attribution'
     | '/app/refill/appointments'
     | '/app/refill/billing'
+    | '/app/refill/calendar'
     | '/app/refill/campaigns'
     | '/app/refill/health'
     | '/app/refill/inbox'
@@ -1456,6 +1685,7 @@ export interface FileRouteTypes {
     | '/rescue/claim/$token'
     | '/waitlist/optin/$token'
     | '/app/admin/'
+    | '/app/billing/'
     | '/app/refill/'
     | '/app/rep/'
     | '/api/integrations/acuity/oauth-callback'
@@ -1476,6 +1706,15 @@ export interface FileRouteTypes {
     | '/app/refill/agents/preshow'
     | '/app/refill/agents/recognition'
     | '/app/refill/agents/rescue'
+    | '/app/refill/calendar/appointments'
+    | '/app/refill/calendar/booker-install'
+    | '/app/refill/calendar/booking'
+    | '/app/refill/calendar/boulevard-install'
+    | '/app/refill/calendar/connections'
+    | '/app/refill/calendar/offers'
+    | '/app/refill/calendar/schedule'
+    | '/app/refill/calendar/vagaro-install'
+    | '/app/refill/calendar/zenoti-install'
     | '/app/refill/campaigns/$campaignId'
     | '/app/refill/campaigns/new'
     | '/app/refill/catalog/import'
@@ -1485,9 +1724,14 @@ export interface FileRouteTypes {
     | '/app/refill/patients/a-list-rules'
     | '/app/refill/patients/contacts'
     | '/app/refill/patients/import'
+    | '/app/refill/recognition/allocation'
+    | '/app/refill/recognition/brand-promos'
     | '/app/refill/recognition/inventory'
     | '/app/refill/recognition/manufacturers'
+    | '/app/refill/recognition/recall'
     | '/app/refill/recognition/rewards'
+    | '/app/refill/recovery/preshow'
+    | '/app/refill/recovery/rescue'
     | '/app/refill/settings/account'
     | '/app/refill/settings/booker-install'
     | '/app/refill/settings/booking'
@@ -1502,8 +1746,10 @@ export interface FileRouteTypes {
     | '/app/refill/waitlist/bulk'
     | '/app/refill/waitlist/invite'
     | '/app/refill/waitlist/seed'
+    | '/app/refill/calendar/'
     | '/app/refill/campaigns/'
     | '/app/refill/patients/'
+    | '/app/refill/recovery/'
     | '/api/webhooks/scheduler/acuity/$secret'
     | '/api/webhooks/scheduler/booker/$secret'
     | '/api/webhooks/scheduler/mindbody/$secret'
@@ -1543,6 +1789,7 @@ export interface RootRouteChildren {
   ApiCronRefillTrialDripRoute: typeof ApiCronRefillTrialDripRoute
   ApiCronSchedulingRemindersRoute: typeof ApiCronSchedulingRemindersRoute
   ApiResendInboundLiteRoute: typeof ApiResendInboundLiteRoute
+  ApiResendInboundRewardsRoute: typeof ApiResendInboundRewardsRoute
   ApiTwilioInboundRoute: typeof ApiTwilioInboundRoute
   ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
   RescueClaimTokenRoute: typeof RescueClaimTokenRoute
@@ -1724,6 +1971,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillIndexRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/billing/': {
+      id: '/app/billing/'
+      path: '/'
+      fullPath: '/app/billing/'
+      preLoaderRoute: typeof AppBillingIndexRouteImport
+      parentRoute: typeof AppBillingRoute
+    }
     '/app/admin/': {
       id: '/app/admin/'
       path: '/admin'
@@ -1864,6 +2118,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillCampaignsRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/refill/calendar': {
+      id: '/app/refill/calendar'
+      path: '/calendar'
+      fullPath: '/app/refill/calendar'
+      preLoaderRoute: typeof AppRefillCalendarRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/billing': {
       id: '/app/refill/billing'
       path: '/billing'
@@ -1877,6 +2138,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/refill/appointments'
       preLoaderRoute: typeof AppRefillAppointmentsRouteImport
       parentRoute: typeof AppRefillRoute
+    }
+    '/app/billing/attribution': {
+      id: '/app/billing/attribution'
+      path: '/attribution'
+      fullPath: '/app/billing/attribution'
+      preLoaderRoute: typeof AppBillingAttributionRouteImport
+      parentRoute: typeof AppBillingRoute
     }
     '/app/admin/wishlist': {
       id: '/app/admin/wishlist'
@@ -1960,6 +2228,13 @@ declare module '@tanstack/react-router' {
       path: '/api/twilio/inbound'
       fullPath: '/api/twilio/inbound'
       preLoaderRoute: typeof ApiTwilioInboundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/resend/inbound-rewards': {
+      id: '/api/resend/inbound-rewards'
+      path: '/api/resend/inbound-rewards'
+      fullPath: '/api/resend/inbound-rewards'
+      preLoaderRoute: typeof ApiResendInboundRewardsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/resend/inbound-lite': {
@@ -2046,6 +2321,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiCronEmmaInvoiceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/refill/recovery/': {
+      id: '/app/refill/recovery/'
+      path: '/'
+      fullPath: '/app/refill/recovery/'
+      preLoaderRoute: typeof AppRefillRecoveryIndexRouteImport
+      parentRoute: typeof AppRefillRecoveryRoute
+    }
     '/app/refill/patients/': {
       id: '/app/refill/patients/'
       path: '/'
@@ -2059,6 +2341,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/refill/campaigns/'
       preLoaderRoute: typeof AppRefillCampaignsIndexRouteImport
       parentRoute: typeof AppRefillCampaignsRoute
+    }
+    '/app/refill/calendar/': {
+      id: '/app/refill/calendar/'
+      path: '/'
+      fullPath: '/app/refill/calendar/'
+      preLoaderRoute: typeof AppRefillCalendarIndexRouteImport
+      parentRoute: typeof AppRefillCalendarRoute
     }
     '/app/refill/waitlist/seed': {
       id: '/app/refill/waitlist/seed'
@@ -2158,11 +2447,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillSettingsAccountRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/refill/recovery/rescue': {
+      id: '/app/refill/recovery/rescue'
+      path: '/rescue'
+      fullPath: '/app/refill/recovery/rescue'
+      preLoaderRoute: typeof AppRefillRecoveryRescueRouteImport
+      parentRoute: typeof AppRefillRecoveryRoute
+    }
+    '/app/refill/recovery/preshow': {
+      id: '/app/refill/recovery/preshow'
+      path: '/preshow'
+      fullPath: '/app/refill/recovery/preshow'
+      preLoaderRoute: typeof AppRefillRecoveryPreshowRouteImport
+      parentRoute: typeof AppRefillRecoveryRoute
+    }
     '/app/refill/recognition/rewards': {
       id: '/app/refill/recognition/rewards'
       path: '/recognition/rewards'
       fullPath: '/app/refill/recognition/rewards'
       preLoaderRoute: typeof AppRefillRecognitionRewardsRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/recognition/recall': {
+      id: '/app/refill/recognition/recall'
+      path: '/recognition/recall'
+      fullPath: '/app/refill/recognition/recall'
+      preLoaderRoute: typeof AppRefillRecognitionRecallRouteImport
       parentRoute: typeof AppRefillRoute
     }
     '/app/refill/recognition/manufacturers': {
@@ -2177,6 +2487,20 @@ declare module '@tanstack/react-router' {
       path: '/recognition/inventory'
       fullPath: '/app/refill/recognition/inventory'
       preLoaderRoute: typeof AppRefillRecognitionInventoryRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/recognition/brand-promos': {
+      id: '/app/refill/recognition/brand-promos'
+      path: '/recognition/brand-promos'
+      fullPath: '/app/refill/recognition/brand-promos'
+      preLoaderRoute: typeof AppRefillRecognitionBrandPromosRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/recognition/allocation': {
+      id: '/app/refill/recognition/allocation'
+      path: '/recognition/allocation'
+      fullPath: '/app/refill/recognition/allocation'
+      preLoaderRoute: typeof AppRefillRecognitionAllocationRouteImport
       parentRoute: typeof AppRefillRoute
     }
     '/app/refill/patients/import': {
@@ -2241,6 +2565,69 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/refill/campaigns/$campaignId'
       preLoaderRoute: typeof AppRefillCampaignsCampaignIdRouteImport
       parentRoute: typeof AppRefillCampaignsRoute
+    }
+    '/app/refill/calendar/zenoti-install': {
+      id: '/app/refill/calendar/zenoti-install'
+      path: '/zenoti-install'
+      fullPath: '/app/refill/calendar/zenoti-install'
+      preLoaderRoute: typeof AppRefillCalendarZenotiInstallRouteImport
+      parentRoute: typeof AppRefillCalendarRoute
+    }
+    '/app/refill/calendar/vagaro-install': {
+      id: '/app/refill/calendar/vagaro-install'
+      path: '/vagaro-install'
+      fullPath: '/app/refill/calendar/vagaro-install'
+      preLoaderRoute: typeof AppRefillCalendarVagaroInstallRouteImport
+      parentRoute: typeof AppRefillCalendarRoute
+    }
+    '/app/refill/calendar/schedule': {
+      id: '/app/refill/calendar/schedule'
+      path: '/schedule'
+      fullPath: '/app/refill/calendar/schedule'
+      preLoaderRoute: typeof AppRefillCalendarScheduleRouteImport
+      parentRoute: typeof AppRefillCalendarRoute
+    }
+    '/app/refill/calendar/offers': {
+      id: '/app/refill/calendar/offers'
+      path: '/offers'
+      fullPath: '/app/refill/calendar/offers'
+      preLoaderRoute: typeof AppRefillCalendarOffersRouteImport
+      parentRoute: typeof AppRefillCalendarRoute
+    }
+    '/app/refill/calendar/connections': {
+      id: '/app/refill/calendar/connections'
+      path: '/connections'
+      fullPath: '/app/refill/calendar/connections'
+      preLoaderRoute: typeof AppRefillCalendarConnectionsRouteImport
+      parentRoute: typeof AppRefillCalendarRoute
+    }
+    '/app/refill/calendar/boulevard-install': {
+      id: '/app/refill/calendar/boulevard-install'
+      path: '/boulevard-install'
+      fullPath: '/app/refill/calendar/boulevard-install'
+      preLoaderRoute: typeof AppRefillCalendarBoulevardInstallRouteImport
+      parentRoute: typeof AppRefillCalendarRoute
+    }
+    '/app/refill/calendar/booking': {
+      id: '/app/refill/calendar/booking'
+      path: '/booking'
+      fullPath: '/app/refill/calendar/booking'
+      preLoaderRoute: typeof AppRefillCalendarBookingRouteImport
+      parentRoute: typeof AppRefillCalendarRoute
+    }
+    '/app/refill/calendar/booker-install': {
+      id: '/app/refill/calendar/booker-install'
+      path: '/booker-install'
+      fullPath: '/app/refill/calendar/booker-install'
+      preLoaderRoute: typeof AppRefillCalendarBookerInstallRouteImport
+      parentRoute: typeof AppRefillCalendarRoute
+    }
+    '/app/refill/calendar/appointments': {
+      id: '/app/refill/calendar/appointments'
+      path: '/appointments'
+      fullPath: '/app/refill/calendar/appointments'
+      preLoaderRoute: typeof AppRefillCalendarAppointmentsRouteImport
+      parentRoute: typeof AppRefillCalendarRoute
     }
     '/app/refill/agents/rescue': {
       id: '/app/refill/agents/rescue'
@@ -2420,6 +2807,50 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppBillingRouteChildren {
+  AppBillingAttributionRoute: typeof AppBillingAttributionRoute
+  AppBillingIndexRoute: typeof AppBillingIndexRoute
+}
+
+const AppBillingRouteChildren: AppBillingRouteChildren = {
+  AppBillingAttributionRoute: AppBillingAttributionRoute,
+  AppBillingIndexRoute: AppBillingIndexRoute,
+}
+
+const AppBillingRouteWithChildren = AppBillingRoute._addFileChildren(
+  AppBillingRouteChildren,
+)
+
+interface AppRefillCalendarRouteChildren {
+  AppRefillCalendarAppointmentsRoute: typeof AppRefillCalendarAppointmentsRoute
+  AppRefillCalendarBookerInstallRoute: typeof AppRefillCalendarBookerInstallRoute
+  AppRefillCalendarBookingRoute: typeof AppRefillCalendarBookingRoute
+  AppRefillCalendarBoulevardInstallRoute: typeof AppRefillCalendarBoulevardInstallRoute
+  AppRefillCalendarConnectionsRoute: typeof AppRefillCalendarConnectionsRoute
+  AppRefillCalendarOffersRoute: typeof AppRefillCalendarOffersRoute
+  AppRefillCalendarScheduleRoute: typeof AppRefillCalendarScheduleRoute
+  AppRefillCalendarVagaroInstallRoute: typeof AppRefillCalendarVagaroInstallRoute
+  AppRefillCalendarZenotiInstallRoute: typeof AppRefillCalendarZenotiInstallRoute
+  AppRefillCalendarIndexRoute: typeof AppRefillCalendarIndexRoute
+}
+
+const AppRefillCalendarRouteChildren: AppRefillCalendarRouteChildren = {
+  AppRefillCalendarAppointmentsRoute: AppRefillCalendarAppointmentsRoute,
+  AppRefillCalendarBookerInstallRoute: AppRefillCalendarBookerInstallRoute,
+  AppRefillCalendarBookingRoute: AppRefillCalendarBookingRoute,
+  AppRefillCalendarBoulevardInstallRoute:
+    AppRefillCalendarBoulevardInstallRoute,
+  AppRefillCalendarConnectionsRoute: AppRefillCalendarConnectionsRoute,
+  AppRefillCalendarOffersRoute: AppRefillCalendarOffersRoute,
+  AppRefillCalendarScheduleRoute: AppRefillCalendarScheduleRoute,
+  AppRefillCalendarVagaroInstallRoute: AppRefillCalendarVagaroInstallRoute,
+  AppRefillCalendarZenotiInstallRoute: AppRefillCalendarZenotiInstallRoute,
+  AppRefillCalendarIndexRoute: AppRefillCalendarIndexRoute,
+}
+
+const AppRefillCalendarRouteWithChildren =
+  AppRefillCalendarRoute._addFileChildren(AppRefillCalendarRouteChildren)
+
 interface AppRefillCampaignsCampaignIdRouteChildren {
   AppRefillCampaignsCampaignIdBlastRoute: typeof AppRefillCampaignsCampaignIdBlastRoute
   AppRefillCampaignsCampaignIdIndexRoute: typeof AppRefillCampaignsCampaignIdIndexRoute
@@ -2473,15 +2904,31 @@ const AppRefillPatientsRouteChildren: AppRefillPatientsRouteChildren = {
 const AppRefillPatientsRouteWithChildren =
   AppRefillPatientsRoute._addFileChildren(AppRefillPatientsRouteChildren)
 
+interface AppRefillRecoveryRouteChildren {
+  AppRefillRecoveryPreshowRoute: typeof AppRefillRecoveryPreshowRoute
+  AppRefillRecoveryRescueRoute: typeof AppRefillRecoveryRescueRoute
+  AppRefillRecoveryIndexRoute: typeof AppRefillRecoveryIndexRoute
+}
+
+const AppRefillRecoveryRouteChildren: AppRefillRecoveryRouteChildren = {
+  AppRefillRecoveryPreshowRoute: AppRefillRecoveryPreshowRoute,
+  AppRefillRecoveryRescueRoute: AppRefillRecoveryRescueRoute,
+  AppRefillRecoveryIndexRoute: AppRefillRecoveryIndexRoute,
+}
+
+const AppRefillRecoveryRouteWithChildren =
+  AppRefillRecoveryRoute._addFileChildren(AppRefillRecoveryRouteChildren)
+
 interface AppRefillRouteChildren {
   AppRefillAppointmentsRoute: typeof AppRefillAppointmentsRoute
   AppRefillBillingRoute: typeof AppRefillBillingRoute
+  AppRefillCalendarRoute: typeof AppRefillCalendarRouteWithChildren
   AppRefillCampaignsRoute: typeof AppRefillCampaignsRouteWithChildren
   AppRefillHealthRoute: typeof AppRefillHealthRoute
   AppRefillInboxRoute: typeof AppRefillInboxRoute
   AppRefillPatientsRoute: typeof AppRefillPatientsRouteWithChildren
   AppRefillPromosRoute: typeof AppRefillPromosRoute
-  AppRefillRecoveryRoute: typeof AppRefillRecoveryRoute
+  AppRefillRecoveryRoute: typeof AppRefillRecoveryRouteWithChildren
   AppRefillReportsRoute: typeof AppRefillReportsRoute
   AppRefillRescueRoute: typeof AppRefillRescueRoute
   AppRefillScheduleRoute: typeof AppRefillScheduleRoute
@@ -2494,8 +2941,11 @@ interface AppRefillRouteChildren {
   AppRefillCatalogImportRoute: typeof AppRefillCatalogImportRoute
   AppRefillCatalogProductsRoute: typeof AppRefillCatalogProductsRoute
   AppRefillCatalogServicesRoute: typeof AppRefillCatalogServicesRoute
+  AppRefillRecognitionAllocationRoute: typeof AppRefillRecognitionAllocationRoute
+  AppRefillRecognitionBrandPromosRoute: typeof AppRefillRecognitionBrandPromosRoute
   AppRefillRecognitionInventoryRoute: typeof AppRefillRecognitionInventoryRoute
   AppRefillRecognitionManufacturersRoute: typeof AppRefillRecognitionManufacturersRoute
+  AppRefillRecognitionRecallRoute: typeof AppRefillRecognitionRecallRoute
   AppRefillRecognitionRewardsRoute: typeof AppRefillRecognitionRewardsRoute
   AppRefillSettingsAccountRoute: typeof AppRefillSettingsAccountRoute
   AppRefillSettingsBookerInstallRoute: typeof AppRefillSettingsBookerInstallRoute
@@ -2516,12 +2966,13 @@ interface AppRefillRouteChildren {
 const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillAppointmentsRoute: AppRefillAppointmentsRoute,
   AppRefillBillingRoute: AppRefillBillingRoute,
+  AppRefillCalendarRoute: AppRefillCalendarRouteWithChildren,
   AppRefillCampaignsRoute: AppRefillCampaignsRouteWithChildren,
   AppRefillHealthRoute: AppRefillHealthRoute,
   AppRefillInboxRoute: AppRefillInboxRoute,
   AppRefillPatientsRoute: AppRefillPatientsRouteWithChildren,
   AppRefillPromosRoute: AppRefillPromosRoute,
-  AppRefillRecoveryRoute: AppRefillRecoveryRoute,
+  AppRefillRecoveryRoute: AppRefillRecoveryRouteWithChildren,
   AppRefillReportsRoute: AppRefillReportsRoute,
   AppRefillRescueRoute: AppRefillRescueRoute,
   AppRefillScheduleRoute: AppRefillScheduleRoute,
@@ -2534,9 +2985,12 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillCatalogImportRoute: AppRefillCatalogImportRoute,
   AppRefillCatalogProductsRoute: AppRefillCatalogProductsRoute,
   AppRefillCatalogServicesRoute: AppRefillCatalogServicesRoute,
+  AppRefillRecognitionAllocationRoute: AppRefillRecognitionAllocationRoute,
+  AppRefillRecognitionBrandPromosRoute: AppRefillRecognitionBrandPromosRoute,
   AppRefillRecognitionInventoryRoute: AppRefillRecognitionInventoryRoute,
   AppRefillRecognitionManufacturersRoute:
     AppRefillRecognitionManufacturersRoute,
+  AppRefillRecognitionRecallRoute: AppRefillRecognitionRecallRoute,
   AppRefillRecognitionRewardsRoute: AppRefillRecognitionRewardsRoute,
   AppRefillSettingsAccountRoute: AppRefillSettingsAccountRoute,
   AppRefillSettingsBookerInstallRoute: AppRefillSettingsBookerInstallRoute,
@@ -2585,7 +3039,7 @@ const AppRepRouteWithChildren =
   AppRepRoute._addFileChildren(AppRepRouteChildren)
 
 interface AppRouteChildren {
-  AppBillingRoute: typeof AppBillingRoute
+  AppBillingRoute: typeof AppBillingRouteWithChildren
   AppRefillRoute: typeof AppRefillRouteWithChildren
   AppRepRoute: typeof AppRepRouteWithChildren
   AppAdminAgentsRoute: typeof AppAdminAgentsRoute
@@ -2602,7 +3056,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
-  AppBillingRoute: AppBillingRoute,
+  AppBillingRoute: AppBillingRouteWithChildren,
   AppRefillRoute: AppRefillRouteWithChildren,
   AppRepRoute: AppRepRouteWithChildren,
   AppAdminAgentsRoute: AppAdminAgentsRoute,
@@ -2650,6 +3104,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronRefillTrialDripRoute: ApiCronRefillTrialDripRoute,
   ApiCronSchedulingRemindersRoute: ApiCronSchedulingRemindersRoute,
   ApiResendInboundLiteRoute: ApiResendInboundLiteRoute,
+  ApiResendInboundRewardsRoute: ApiResendInboundRewardsRoute,
   ApiTwilioInboundRoute: ApiTwilioInboundRoute,
   ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
   RescueClaimTokenRoute: RescueClaimTokenRoute,

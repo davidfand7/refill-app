@@ -336,20 +336,244 @@ export const EVOLUS_MAPPER: ManufacturerMapper = {
   },
 };
 
+/** Plain integer/float cell ("400.0", "1,250", "-") → number | null. */
+function parseCount(v: string | undefined | null): number | null {
+  const t = cleanCell(v);
+  if (!t) return null;
+  const n = Number(t.replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Mapper-level "is this expiring?" threshold. The vendor files carry a
+ * pre-computed days-until-expiry (as of the export date), so we don't need
+ * `today` here — but status_norm freezes at ingest. A patient whose reward
+ * lapses inside this window is surfaced in Recall's "Expiring" bucket.
+ * (Follow-up: have listRecallTargets recompute expiring by expiration_date
+ * vs today so the bucket can't go stale between exports.)
+ */
+const REWARD_EXPIRING_WINDOW_DAYS = 90;
+
+// ─── Allergan (Allē) mapper — validated vs real "Patient360" export ────────
+//
+// Patient360 is the comprehensive per-patient record. It subsumes the
+// Member_Expiring_Points + UnusedGiftCards detail files for recall purposes:
+// it carries Available Points (value + expiration + days-to-expire), gift
+// card value, and assigned promotions. We emit up to three entries per
+// patient — points / gift card / promotion — each its own brand_product so
+// they don't collapse onto each other in the upsert.
+//
+// Allē policy (rolling, account-wide): standard points expire 12 months from
+// LAST ACTIVITY and extend +1yr on any clinic visit — so an expiring-points
+// patient is really a lapsed/at-risk proxy whose visit *resets* the clock.
+// Dollar values are real (Allē pre-converts points → $ in "Available Points
+// Value").
+export const ALLERGAN_PATIENT360_MAPPER: ManufacturerMapper = {
+  manufacturer: "allergan",
+  displayName: "Allergan (Allē) — Patient360",
+  defaultProgram: "Allē Rewards",
+  detect: (headers) =>
+    headerHas(headers, "Available Points Value") ||
+    headerHas(headers, "Alle member tier"),
+  mapRow: (row, sourceRow) => {
+    const first = cleanCell(row["First name"]);
+    const last = cleanCell(row["Last name"]);
+    const name = [first, last].filter(Boolean).join(" ") || null;
+    const shared = {
+      manufacturer: "allergan",
+      program: "Allē Rewards",
+      contactName: name,
+      contactPhone: cleanCell(row["Phone number"]),
+      contactEmail: cleanCell(row["Email"]),
+      zip: null,
+      lastVisit: parseUsDate(row["Last treated on"]),
+      memberSince: parseUsDate(row["Alle member since"]),
+      totalCheckins: null,
+      sourceRow,
+    };
+    const out: RewardEntry[] = [];
+
+    // Points — value in $, expiration + days-to-expire when Allē flags it.
+    const pointsValue = parseMoney(row["Available Points Value"]);
+    const points = parseCount(row["Available Points"]);
+    const pointsExp = parseUsDate(row["Available Points Expiration Date"]);
+    const daysToExpire = parseCount(row["Number of days to expire"]);
+    if ((pointsValue && pointsValue > 0) || (points && points > 0)) {
+      const expiring =
+        daysToExpire != null && daysToExpire <= REWARD_EXPIRING_WINDOW_DAYS;
+      out.push({
+        ...shared,
+        brandProduct: "Allē Points",
+        productKind: null,
+        statusRaw: points != null ? `${points} pts` : "points",
+        statusNorm: expiring ? "expiring_soon" : "eligible",
+        eligibleDate: null,
+        expirationDate: pointsExp,
+        rewardAmountUsd: pointsValue,
+      });
+    }
+
+    // Gift cards — prepaid money sitting unredeemed (no expiration in file).
+    const giftValue = parseMoney(row["Total gift card value"]);
+    if (giftValue && giftValue > 0) {
+      out.push({
+        ...shared,
+        brandProduct: "Allē Gift Card",
+        productKind: null,
+        statusRaw: "gift card",
+        statusNorm: "eligible",
+        eligibleDate: null,
+        expirationDate: null,
+        rewardAmountUsd: giftValue,
+      });
+    }
+
+    // Assigned promotions — dated patient offers (e.g. "$75 off JUVÉDERM").
+    const promoValue = parseMoney(row["Total promotions value"]);
+    const promoExp = parseUsDate(row["Promotions (expiration date)"]);
+    if (promoValue && promoValue > 0) {
+      out.push({
+        ...shared,
+        brandProduct: "Allē Promotion",
+        productKind: null,
+        statusRaw: "promotion",
+        statusNorm: promoExp ? "expiring_soon" : "eligible",
+        eligibleDate: null,
+        expirationDate: promoExp,
+        rewardAmountUsd: promoValue,
+      });
+    }
+
+    return out;
+  },
+};
+
+// ─── Galderma (ASPIRE) mapper — validated vs real "all_patients" export ────
+//
+// ASPIRE points are COUNTS, not dollars — the file carries no $ conversion,
+// so per Grasshopper we ship points as counts (reward_amount = null; the
+// count lives in status_raw). Cadence comes from "Date (of last treatment)".
+// Policy: points expire 9 months from earned (fixed per-batch).
+export const GALDERMA_PATIENTS_MAPPER: ManufacturerMapper = {
+  manufacturer: "galderma",
+  displayName: "Galderma (ASPIRE) — All patients",
+  defaultProgram: "ASPIRE Rewards",
+  detect: (headers) =>
+    headerHas(headers, "Total Point Balance") ||
+    headerHas(headers, "Nearest Point Expiration Date"),
+  mapRow: (row, sourceRow) => {
+    const balance = parseCount(row["Total Point Balance"]);
+    if (!balance || balance <= 0) return []; // no points → not recall fuel
+    const expiring30 = parseCount(row["Points expiring (within 30 days)"]);
+    const nearestExp = parseUsDate(row["Nearest Point Expiration Date"]);
+    const isExpiring = expiring30 != null && expiring30 > 0;
+    return [
+      {
+        manufacturer: "galderma",
+        program: "ASPIRE Rewards",
+        brandProduct: "ASPIRE Points",
+        productKind: null,
+        statusRaw: isExpiring
+          ? `${balance} pts (${expiring30} expiring)`
+          : `${balance} pts`,
+        statusNorm: isExpiring ? "expiring_soon" : "eligible",
+        eligibleDate: null,
+        expirationDate: nearestExp,
+        rewardAmountUsd: null, // counts-for-now: no points→$ rate on file
+        contactName: cleanCell(row["Name"]),
+        contactPhone: cleanCell(row["Phone Number"]),
+        contactEmail: cleanCell(row["Email"]),
+        zip: null,
+        lastVisit: parseUsDate(row["Date (of last treatment)"]),
+        memberSince: null,
+        totalCheckins: null,
+        sourceRow,
+      },
+    ];
+  },
+};
+
+// ─── Galderma (ASPIRE) certificates — validated vs "Patient_Savings" ───────
+//
+// Reward certificates (coupons) DO carry a dollar amount + expiration — the
+// one Galderma $ source. Policy: certs expire 60 days from generated.
+export const GALDERMA_SAVINGS_MAPPER: ManufacturerMapper = {
+  manufacturer: "galderma",
+  displayName: "Galderma (ASPIRE) — Savings certificates",
+  defaultProgram: "ASPIRE Rewards",
+  detect: (headers) =>
+    headerHas(headers, "Certificate Short Description") ||
+    headerHas(headers, "Certificate Amount"),
+  mapRow: (row, sourceRow) => {
+    const amount = parseMoney(row["Certificate Amount"]);
+    if (!amount || amount <= 0) return [];
+    const exp = parseUsDate(row["Certificate Expiration Date"]);
+    const desc = cleanCell(row["Certificate Short Description"]);
+    return [
+      {
+        manufacturer: "galderma",
+        program: "ASPIRE Rewards",
+        brandProduct: desc ? `ASPIRE Certificate: ${desc}` : "ASPIRE Certificate",
+        productKind: null,
+        statusRaw: "certificate",
+        statusNorm: exp ? "expiring_soon" : "eligible",
+        eligibleDate: null,
+        expirationDate: exp,
+        rewardAmountUsd: amount,
+        contactName: cleanCell(row["Name"]),
+        contactPhone: cleanCell(row["Phone Number"]),
+        contactEmail: cleanCell(row["Email Address"]),
+        zip: null,
+        lastVisit: null,
+        memberSince: null,
+        totalCheckins: null,
+        sourceRow,
+      },
+    ];
+  },
+};
+
 // ─── Registry + top-level parse ────────────────────────────────────────────
 
 export const MANUFACTURER_MAPPERS: Record<string, ManufacturerMapper> = {
   evolus: EVOLUS_MAPPER,
+  "allergan-patient360": ALLERGAN_PATIENT360_MAPPER,
+  "galderma-all-patients": GALDERMA_PATIENTS_MAPPER,
+  "galderma-savings": GALDERMA_SAVINGS_MAPPER,
 };
 
 export function listSupportedManufacturers(): Array<{
   manufacturer: string;
   displayName: string;
 }> {
-  return Object.values(MANUFACTURER_MAPPERS).map((m) => ({
-    manufacturer: m.manufacturer,
+  // `manufacturer` here is the REGISTRY KEY (the report source the UI sends
+  // back to ingest) — not the entry's brand. Several reports share a brand
+  // (e.g. two Galderma sources), so the key is what disambiguates the mapper.
+  return Object.entries(MANUFACTURER_MAPPERS).map(([key, m]) => ({
+    manufacturer: key,
     displayName: m.displayName,
   }));
+}
+
+/**
+ * Auto-route a CSV to its mapper by header heuristics — the keystone for
+ * hands-free intake (email-drop / portal-MCP). Returns the registry key
+ * (e.g. "allergan-patient360") of the first mapper whose detect() claims
+ * these headers, or null if none do. The mappers' detect() signatures are
+ * mutually exclusive (distinct vendor columns), so first-match is safe.
+ */
+export function detectMapper(headers: string[]): string | null {
+  for (const [key, m] of Object.entries(MANUFACTURER_MAPPERS)) {
+    if (m.detect(headers)) return key;
+  }
+  return null;
+}
+
+/** detectMapper but from raw CSV text — reads the header row. */
+export function detectMapperFromCsv(text: string): string | null {
+  const rows = parseCsvRows(text);
+  if (rows.length === 0) return null;
+  return detectMapper(rows[0].map((h) => h.trim()));
 }
 
 /**

@@ -48,7 +48,7 @@ export const Route = createFileRoute("/api/integrations/zenoti/install-callback"
           stateRaw = form.get("state");
         }
 
-        let errReturnPath = "/app/refill/settings/scheduler";
+        let errReturnPath = "/app/refill/calendar/connections";
         const errReturn = (reason: string) => buildCallbackRedirect(url.origin, errReturnPath, { scheduler_error: reason });
         if (!centerId || !stateRaw) return errReturn("missing_params");
 

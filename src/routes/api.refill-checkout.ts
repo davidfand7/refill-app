@@ -2,24 +2,20 @@
  * POST /api/refill-checkout
  *
  * Creates a Stripe Checkout Session for the Refill product. Mirrors
- * api.subscription.ts but tenant-scoped (not user-scoped) and uses two
- * different modes depending on the plan:
+ * api.subscription.ts but tenant-scoped (not user-scoped).
  *
- *   starter — mode:"setup". The free plan only needs a payment method on
- *             file; the 12% revenue share is billed monthly via Stripe
- *             Invoices created by the v391.2 cron (no recurring $0
- *             subscription, which would be ergonomically weird in
- *             Stripe's UI and runs into a historical $0.50 minimum).
+ * ONE plan: free + $5 per booking we create. mode:"setup" — we only need a
+ * payment method on file; the per-booking fee is billed monthly via Stripe
+ * Invoices created by the v391.2 cron (no recurring $0 subscription, which
+ * would be ergonomically weird in Stripe's UI and runs into a historical
+ * $0.50 minimum). v2.3.3 retired the tiered $99 Hybrid / $299 Predictable
+ * subscription plans (the billing engine already only charges $5/win since
+ * v1.93.0); the `plan` input is accepted for back-compat but always resolves
+ * to the single performance model.
  *
- *   pro     — mode:"subscription". $99/mo recurring base. The 8% revenue
- *             share gets layered on top via monthly Stripe Invoices the
- *             same way starter does (the recurring sub handles the flat
- *             portion; the cron handles the variable portion).
- *
- * Both flows attach metadata { product:"refill", tenant_id, plan } to the
- * Checkout session AND (for pro) to subscription_data, so the v391 webhook
- * router fires on both checkout.session.completed and the downstream
- * customer.subscription.* events with the metadata propagated.
+ * The Checkout session carries metadata { product:"refill", tenant_id, plan }
+ * so the v391 webhook router (handleRefillEvent) fires on
+ * checkout.session.completed with the spa resolvable.
  *
  * Customer identity is sourced from tenants.stripe_customer_id_{test|live}
  * (mode-aware per v391.2) when the spa has been here before in this mode;
@@ -32,7 +28,7 @@
  * { error: message, code? } with the Stripe statusCode (default 502) so
  * client toasts show the real upstream message instead of "HTTPError".
  *
- * Input: { plan: "starter" | "pro" }
+ * Input: { plan?: string }  — ignored; always the single performance plan
  * Output: { url }  — redirect the browser to this URL
  * Auth: Authorization: Bearer <supabase-session-token>
  */
@@ -48,35 +44,12 @@ import {
   tenantStripeCustomerColumn,
 } from "@/lib/stripe-mode";
 
-type RefillPlan = "starter" | "predictable" | "pro";
-
-const PLAN_CONFIG: Record<
-  RefillPlan,
-  {
-    label: string;
-    description: string;
-    mode: "setup" | "subscription";
-    monthly_amount_cents: number; // 0 for setup mode
-  }
-> = {
-  starter: {
-    label: "Refill Performance",
-    description: "Free base — 12% of recovered revenue billed monthly.",
-    mode: "setup",
-    monthly_amount_cents: 0,
-  },
-  predictable: {
-    label: "Refill Predictable",
-    description: "$299/mo flat — no revenue share, everything included.",
-    mode: "subscription",
-    monthly_amount_cents: 29900,
-  },
-  pro: {
-    label: "Refill Hybrid",
-    description: "$99/mo base — 8% of recovered revenue billed monthly.",
-    mode: "subscription",
-    monthly_amount_cents: 9900,
-  },
+// One plan only: free + $5 per booking we create (setup mode — no recurring
+// charge; the per-win fee is invoiced monthly by the cron).
+const PERFORMANCE_PLAN = {
+  key: "starter" as const,
+  label: "Refill Performance",
+  description: "Free base — $5 per booking we create, billed monthly.",
 };
 
 function json(status: number, body: unknown) {
@@ -115,20 +88,14 @@ export const Route = createFileRoute("/api/refill-checkout")({
         const { data: { user }, error: authErr } = await admin.auth.getUser(token);
         if (authErr || !user) return json(401, { error: "Invalid session" });
 
-        let body: { plan?: string } = {};
+        // The `plan` input is accepted for back-compat but ignored — there is
+        // a single performance plan now (free + $5/booking).
         try {
-          body = await request.json();
+          await request.json();
         } catch {
           /* empty */
         }
-
-        const planKey = body.plan as RefillPlan;
-        if (!PLAN_CONFIG[planKey]) {
-          return json(400, {
-            error: "plan must be 'starter', 'predictable', or 'pro'",
-          });
-        }
-        const planCfg = PLAN_CONFIG[planKey];
+        const planKey = PERFORMANCE_PLAN.key;
 
         // Resolve tenant via membership. v391 enforces 1 user → 1 tenant in
         // the wizard, but the DB allows multiple; pick the oldest deterministically.
@@ -207,45 +174,18 @@ export const Route = createFileRoute("/api/refill-checkout")({
             plan: planKey,
           };
 
-          if (planCfg.mode === "setup") {
-            const session = await stripe.checkout.sessions.create({
-              mode: "setup",
-              customer: customerId,
-              payment_method_types: ["card"],
-              metadata: sharedMetadata,
-              setup_intent_data: { metadata: sharedMetadata },
-              success_url: successUrl,
-              cancel_url: cancelUrl,
-            });
-            return json(200, { url: session.url });
-          }
-
-          // pro: recurring $99/mo. price_data inline so no Stripe Dashboard
-          // price setup is required — Stripe creates the price on the fly.
+          // Single plan = setup mode: collect a payment method on file. The
+          // $5-per-booking fee is invoiced monthly by the cron — no recurring
+          // subscription line item.
           const session = await stripe.checkout.sessions.create({
-            mode: "subscription",
+            mode: "setup",
             customer: customerId,
-            line_items: [
-              {
-                price_data: {
-                  currency: "usd",
-                  unit_amount: planCfg.monthly_amount_cents,
-                  recurring: { interval: "month" },
-                  product_data: {
-                    name: planCfg.label,
-                    description: planCfg.description,
-                  },
-                },
-                quantity: 1,
-              },
-            ],
+            payment_method_types: ["card"],
             metadata: sharedMetadata,
-            subscription_data: { metadata: sharedMetadata },
+            setup_intent_data: { metadata: sharedMetadata },
             success_url: successUrl,
             cancel_url: cancelUrl,
-            allow_promotion_codes: true,
           });
-
           return json(200, { url: session.url });
         } catch (err) {
           if (err instanceof Stripe.errors.StripeError) {

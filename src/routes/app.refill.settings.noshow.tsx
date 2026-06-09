@@ -20,5 +20,5 @@ export const Route = createFileRoute("/app/refill/settings/noshow")({
 });
 
 function NoShowRedirect() {
-  return <Navigate to="/app/refill/agents/preshow" replace />;
+  return <Navigate to="/app/refill/recovery/preshow" replace />;
 }

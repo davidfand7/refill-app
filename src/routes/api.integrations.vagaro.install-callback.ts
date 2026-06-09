@@ -73,7 +73,7 @@ export const Route = createFileRoute(
           }
         }
 
-        let errReturnPath = "/app/refill/settings/scheduler";
+        let errReturnPath = "/app/refill/calendar/connections";
         const errReturn = (reason: string) =>
           buildCallbackRedirect(url.origin, errReturnPath, {
             scheduler_error: reason,

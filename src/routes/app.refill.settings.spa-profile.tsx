@@ -156,7 +156,7 @@ function SpaProfilePage() {
       />
       <SettingsTabStrip active="spa-profile" />
 
-      <div className="px-6 lg:px-10 py-6 max-w-2xl space-y-6">
+      <div className="px-6 lg:px-10 py-6 max-w-2xl w-full mx-auto space-y-6">
         <form onSubmit={onSave} className="space-y-5">
           <ProfileField
             icon={<Store className="h-4 w-4 text-emerald" />}

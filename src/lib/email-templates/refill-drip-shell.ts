@@ -43,7 +43,7 @@ export interface DripEmailRendered {
   html: string;
 }
 
-const BRAND_TAGLINE = "refill your schedule, recover your revenue";
+const BRAND_TAGLINE = "the patient-profitability OS";
 
 export function wrapDripEmail(content: DripEmailContent): DripEmailRendered {
   const signoff = content.signoff ?? "— Karen";
@@ -67,7 +67,7 @@ export function wrapDripEmail(content: DripEmailContent): DripEmailRendered {
     textBody,
     "",
     signoff,
-    "Refill / " + BRAND_TAGLINE,
+    "SmartSpa / " + BRAND_TAGLINE,
     "https://getrefill.app",
   ].join("\n");
 
@@ -107,9 +107,9 @@ export function wrapDripEmail(content: DripEmailContent): DripEmailRendered {
         <tr><td style="padding:0 0 24px 0;">
           <table role="presentation" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="background:#056048;width:36px;height:36px;border-radius:8px;text-align:center;vertical-align:middle;color:#fbfaf7;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:600;line-height:36px;">R</td>
+              <td style="background:#056048;width:36px;height:36px;border-radius:8px;text-align:center;vertical-align:middle;color:#fbfaf7;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:600;line-height:36px;">S</td>
               <td style="padding-left:12px;vertical-align:middle;">
-                <div style="color:#056048;font-family:Georgia,'Times New Roman',serif;font-size:15px;font-weight:600;letter-spacing:-0.01em;">Refill</div>
+                <div style="color:#056048;font-family:Georgia,'Times New Roman',serif;font-size:15px;font-weight:600;letter-spacing:-0.01em;">SmartSpa</div>
                 <div style="color:#8a9098;font-size:11px;">/ ${BRAND_TAGLINE}</div>
               </td>
             </tr>

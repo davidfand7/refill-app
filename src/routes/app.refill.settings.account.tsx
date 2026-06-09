@@ -153,7 +153,7 @@ function AccountSettingsPage() {
       />
       <SettingsTabStrip active="account" />
 
-      <div className="px-6 lg:px-10 py-6 max-w-2xl space-y-6">
+      <div className="px-6 lg:px-10 py-6 max-w-2xl w-full mx-auto space-y-6">
         {/* Email section (editable + pending state) */}
         <section className="rounded-xl border border-rule bg-white px-5 py-4">
           <div className="flex items-start gap-3">

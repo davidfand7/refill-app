@@ -36,7 +36,6 @@ import {
   Megaphone,
   Plug,
   Share2,
-  Sparkles,
   UserPlus,
   Users,
   type LucideIcon,
@@ -74,35 +73,28 @@ const ACTIONS: QuickAction[] = [
   },
   {
     key: "appointments",
-    to: "/app/refill/appointments",
+    to: "/app/refill/calendar/appointments",
     label: "Appointments",
     subtitle: "Calendar source of truth + CSV import",
     icon: Calendar,
   },
   {
     key: "catalog",
-    to: "/app/refill/catalog/products",
+    to: "/app/refill/catalog/services",
     label: "Catalog",
     subtitle: "Services and products you offer",
     icon: BookOpen,
   },
   {
-    key: "promos",
-    to: "/app/refill/promos",
-    label: "Promos",
-    subtitle: "Manufacturer offers matched to your catalog",
-    icon: Sparkles,
-  },
-  {
     key: "recognition",
     to: "/app/refill/recognition/inventory",
-    label: "Recognition",
-    subtitle: "Rebate inventory to deploy to your best patients",
+    label: "Promos",
+    subtitle: "Rewards, recall, allocation & manufacturer brand offers",
     icon: Award,
   },
   {
     key: "agents",
-    to: "/app/refill/agents/preshow",
+    to: "/app/refill/recovery/preshow",
     label: "Agents",
     subtitle: "Preshow reminders + cadence profiles",
     icon: Bell,
@@ -176,7 +168,7 @@ const ACTIONS: QuickAction[] = [
   },
   {
     key: "settings",
-    to: "/app/refill/settings/scheduler",
+    to: "/app/refill/calendar/connections",
     label: "Settings",
     subtitle: "Scheduler, sender, and rules",
     icon: Plug,
@@ -283,7 +275,7 @@ function Hero({ name }: { name: string }) {
         style={{ color: "#5a6068" }}
       >
         Refill is watching your calendar for cancellations and turning them
-        into recovered revenue. You only pay on the dollars that come back.
+        into recovered revenue. You only pay $5 for each booking we create.
       </p>
     </div>
   );

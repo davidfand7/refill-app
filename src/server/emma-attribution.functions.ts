@@ -44,7 +44,7 @@ import { loadAttributionSettings } from "@/server/refill-attribution-agent.funct
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
-export type RecoveryAgent = "rescue" | "post_recovery" | "preshow";
+export type RecoveryAgent = "rescue" | "post_recovery" | "preshow" | "recall" | "cross_sell";
 export type VerificationSource = "qbo" | "stripe" | "square" | "manual";
 
 export type RecoveryEvent = {
@@ -108,6 +108,12 @@ export async function recordRecoveryEvent(args: {
   appointmentId: string;
   patientNodeId: string;
   recoveryAgent: RecoveryAgent;
+  /**
+   * Billing metric this win settles as. DB default is 'slot_fill', so a
+   * non-slot win (e.g. a Recall booking) MUST pass it explicitly or it
+   * mis-bills as a slot_fill. Priced by the v1.93.0 fee-rules.
+   */
+  metricKey?: string;
   attributionMethod?: string;
   notes?: string;
 }): Promise<{ id: string; created: boolean }> {
@@ -130,6 +136,7 @@ export async function recordRecoveryEvent(args: {
       appointment_id: appointmentId,
       patient_node_id: patientNodeId,
       recovery_agent: recoveryAgent,
+      metric_key: args.metricKey ?? "slot_fill",
       attribution_method: args.attributionMethod ?? "direct",
       notes: args.notes ?? null,
     })

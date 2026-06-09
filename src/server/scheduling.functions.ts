@@ -45,6 +45,12 @@ import {
 } from "@/lib/scheduling-slots";
 import { sendBookingConfirmation } from "@/server/scheduling-email";
 import {
+  loadTenantPromoOffers,
+  recordCrossSellWin,
+} from "@/server/refill-promo-calendar.functions";
+import { getTenantOwnerUserId } from "@/server/scheduling-settings.functions";
+import { bestActiveOfferForName, type AddOnOffer } from "@/lib/promo-calendar";
+import {
   asResourceType,
   assignFreeResource,
   loadResourcePool,
@@ -75,6 +81,7 @@ interface BaseContext {
   holdMinutes: number;
   service: {
     id: string;
+    name: string;
     durationMin: number;
     bufferMin: number;
     price: number;
@@ -93,7 +100,7 @@ async function loadBaseContext(
     sb
       .from("services")
       .select(
-        "id, duration_min, buffer_min, service_price, online_bookable, required_resource_type, tenant_id, hidden_at",
+        "id, name, duration_min, buffer_min, service_price, online_bookable, required_resource_type, tenant_id, hidden_at",
       )
       .eq("id", serviceId)
       .maybeSingle(),
@@ -121,6 +128,7 @@ async function loadBaseContext(
       holdMinutes: settingsRow.hold_minutes,
       service: {
         id: svc.id,
+        name: svc.name,
         durationMin: svc.duration_min,
         bufferMin: svc.buffer_min,
         price: svc.service_price,
@@ -315,6 +323,8 @@ export interface PublicServiceOption {
   addOns: PublicAddOn[];
   /** Active providers who offer this service (v1: all active), with effective price/duration. */
   providers: PublicProviderOption[];
+  /** Active manufacturer promo on this service, if any (Cross-Sell badge). */
+  activeOffer?: AddOnOffer | null;
 }
 
 /** An add-on offered with a service (its own price + duration). */
@@ -324,6 +334,8 @@ export interface PublicAddOn {
   price: number;
   durationMin: number;
   isFree: boolean;
+  /** Active manufacturer promo on this add-on, if any (Cross-Sell badge). */
+  activeOffer?: AddOnOffer | null;
 }
 
 export type PublicBookingContext =
@@ -476,6 +488,21 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
       // hide any still at $0 UNLESS it's intentionally free (so nothing goes
       // live mispriced, but free services still show).
       .filter((s) => s.providers.length > 0 && (!showPrices || s.fromPrice > 0 || s.isFree));
+
+    // Cross-Sell: badge each add-on with the best currently-active manufacturer
+    // promo (matched by product keyword in the add-on name).
+    const promoOffers = await loadTenantPromoOffers(sb, tenant.id);
+    if (promoOffers.length > 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      for (const so of serviceOptions) {
+        const svcOffer = bestActiveOfferForName(promoOffers, so.name, today);
+        if (svcOffer) so.activeOffer = svcOffer;
+        for (const ao of so.addOns) {
+          const offer = bestActiveOfferForName(promoOffers, ao.name, today);
+          if (offer) ao.activeOffer = offer;
+        }
+      }
+    }
 
     return {
       ok: true,
@@ -641,12 +668,18 @@ export const holdSlot = createServerFn({ method: "POST" })
     // Validate the target provider belongs to the tenant and is active.
     const activeProviders = await loadActiveProviders(sb, data.tenantId);
     const provider = activeProviders.find((p) => p.id === data.providerId);
-    if (!provider) return { ok: false, reason: "That provider isn't available.", code: "invalid" };
+    if (!provider) {
+      return { ok: false, reason: "That provider isn't available.", code: "invalid" };
+    }
     // Native bookings stamp emma_appointments.user_id with the TENANT OWNER's
     // auth user (the account that owns the calendar). A provider needn't have
     // their own login — provider_id identifies the person; user_id is the tenant
-    // linkage. Fall back to the owner when this provider has no user_id.
-    const ownerUserId = provider.userId ?? activeProviders.find((p) => p.userId)?.userId ?? null;
+    // linkage. Prefer a provider's own user_id, else fall back to the tenant
+    // owner (providers are often created without a linked auth user).
+    const ownerUserId =
+      provider.userId ??
+      activeProviders.find((p) => p.userId)?.userId ??
+      (await getTenantOwnerUserId(sb, data.tenantId));
     if (!ownerUserId) {
       return { ok: false, reason: "This practice isn't set up to take bookings yet.", code: "invalid" };
     }
@@ -761,6 +794,10 @@ export const holdSlot = createServerFn({ method: "POST" })
         source: "native-online",
         slot_held_until: heldUntilIso,
         booking_token: token,
+        // Snapshot the booked service so confirmBooking (which only has the
+        // token) can resolve the cross-sell win + so attribution/waitlist
+        // reads see what was booked. Native bookings left this null before.
+        treatment_type: base.service.name,
       })
       .select("id")
       .single();
@@ -821,7 +858,7 @@ export const confirmBooking = createServerFn({ method: "POST" })
       .eq("booking_token", data.token)
       .eq("status", "held")
       .gt("slot_held_until", nowIso)
-      .select("id, scheduled_at, provider_id")
+      .select("id, scheduled_at, provider_id, user_id, treatment_type, duration_min")
       .maybeSingle();
 
     if (error) return { ok: false, reason: `Confirm failed: ${error.message}`, code: "error" };
@@ -845,13 +882,17 @@ export const confirmBooking = createServerFn({ method: "POST" })
     // spa display name + timezone from the appointment's provider → tenant.
     let spaName = "Your appointment";
     let timezone = "America/Los_Angeles";
+    let tenantId: string | null = null;
+    let providerName: string | null = null;
     if (updated.provider_id) {
       const { data: prov } = await sb
         .from("scheduling_providers")
-        .select("tenant_id")
+        .select("tenant_id, name")
         .eq("id", updated.provider_id)
         .maybeSingle();
       if (prov) {
+        tenantId = prov.tenant_id;
+        providerName = prov.name ?? null;
         const [{ data: t }, { data: st }] = await Promise.all([
           sb.from("tenants").select("name").eq("id", prov.tenant_id).maybeSingle(),
           sb.from("scheduling_settings").select("timezone").eq("tenant_id", prov.tenant_id).maybeSingle(),
@@ -860,17 +901,50 @@ export const confirmBooking = createServerFn({ method: "POST" })
         if (st?.timezone) timezone = st.timezone;
       }
     }
+    // Load the snapshotted add-ons once — shared by the confirmation email
+    // (itemization) and the cross-sell win below.
+    const { data: apptAddonRows } = await sb
+      .from("appointment_addons")
+      .select("name, duration_min")
+      .eq("appointment_id", updated.id);
+    const apptAddons = (apptAddonRows ?? []).map((a) => ({
+      name: a.name,
+      durationMin: a.duration_min ?? 0,
+    }));
+
     // Awaited, not fire-and-forget: the Worker isolate dies at response.
     await sendBookingConfirmation({
       to: data.email,
       spaName,
       startIso: updated.scheduled_at,
       timezone,
+      serviceName: updated.treatment_type ?? undefined,
+      providerName,
+      durationMin: updated.duration_min ?? undefined,
+      addOns: apptAddons,
     });
 
-    // TODO(next ship — $5/$5 billing meter): classify the booking → write a
-    // scheduling_billable_events row (slot_fill if a rescue token was consumed,
-    // campaign_booking if a campaign token was present, else free).
+    // Cross-Sell: if the booked service (or a chosen add-on) carried an active
+    // promo and this patient resolves in the graph, record a $5 cross_sell win.
+    // Mirrors the owner path — best-effort, never blocks the booking. The
+    // service name was snapshotted onto treatment_type at hold time; add-on
+    // names live on appointment_addons.
+    if (tenantId && updated.user_id) {
+      try {
+        await recordCrossSellWin({
+          sb,
+          userId: updated.user_id,
+          tenantId,
+          appointmentId: updated.id,
+          serviceName: updated.treatment_type ?? "",
+          addOnNames: apptAddons.map((a) => a.name).filter(Boolean) as string[],
+          email: data.email,
+          phone: data.phone || null,
+        });
+      } catch (e) {
+        console.error("[cross-sell] public self-book win failed:", e);
+      }
+    }
 
     return { ok: true, appointmentId: updated.id, startIso: updated.scheduled_at };
   });

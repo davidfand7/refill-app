@@ -13,30 +13,50 @@
  * Manufacturers / Rewards.
  */
 
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   CalendarClock,
   CheckCircle2,
-  Layers,
+  Check,
+  Copy,
   Loader2,
-  Sparkles,
+  Mail,
+  Plus,
+  Tag,
+  Trash2,
   Upload,
   Gift,
+  Sparkles,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
+import { SpaOffersCard } from "@/components/refill/SpaOffersCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { listSupportedManufacturers } from "@/lib/manufacturer-reward-csv";
 import {
   ingestManufacturerRewardCsv,
   listRewardSignal,
+  getOrCreateRewardIngestToken,
   type RewardSignalView,
   type RewardImportReceipt,
   type RewardEntryRow,
 } from "@/server/manufacturer-reward-ingest.functions";
+import {
+  ingestPromoCalendar,
+  listPromoOffers,
+  createSpaOffer,
+  deleteSpaOffer,
+} from "@/server/refill-promo-calendar.functions";
+import {
+  ingestManufacturerTransactionCsv,
+  type LastTxnImportReceipt,
+} from "@/server/manufacturer-transaction-ingest.functions";
+import { listServicesFn, type Service } from "@/server/refill-catalog";
+import type { PromoOffer } from "@/lib/promo-calendar";
 
 export const Route = createFileRoute("/app/refill/recognition/rewards")({
   component: RewardsPage,
@@ -116,11 +136,11 @@ function RewardsPage() {
     <div className="flex flex-col min-h-screen bg-white">
       <PageHeader
         title="Reward signals"
-        eyebrow="Recognition"
+        eyebrow="Promos"
         description="Upload a manufacturer's patient-insights export. Refill matches each patient to your book and surfaces who's eligible now and whose reward is expiring — the money their 0-click email never moves."
         breadcrumbs={[
           { label: "Refill", to: "/app/refill" },
-          { label: "Recognition", to: "/app/refill/recognition/inventory" },
+          { label: "Promos", to: "/app/refill/recognition/inventory" },
           { label: "Rewards" },
         ]}
       />
@@ -178,7 +198,8 @@ function RewardsPage() {
                   }}
                 />
                 <p className="text-[11px] text-ink-faint">
-                  Evolus → Patient Insights export · Allergan &amp; Galderma coming next.
+                  Evolus · Allergan (Allē) · Galderma (ASPIRE) — pick the matching
+                  report above, then upload its export.
                 </p>
               </div>
 
@@ -200,6 +221,18 @@ function RewardsPage() {
                 </div>
               )}
             </div>
+
+            <AutoImportCard accessToken={accessToken} viewAsUserId={viewAsUserId} />
+
+            <LastTransactionCard
+              accessToken={accessToken}
+              viewAsUserId={viewAsUserId}
+              onImported={load}
+            />
+
+            <PromoCalendarCard accessToken={accessToken} viewAsUserId={viewAsUserId} />
+
+            <SpaOffersCard accessToken={accessToken} viewAsUserId={viewAsUserId} />
 
             {loading ? (
               <div className="flex items-center justify-center text-sm text-ink-soft py-16">
@@ -332,32 +365,313 @@ function RewardsPage() {
   );
 }
 
-function RecognitionTabs({ active }: { active: "inventory" | "manufacturers" | "rewards" }) {
-  const tab = (
-    to: string,
-    key: string,
-    label: string,
-    Icon: typeof Layers,
-  ) => (
-    <Link
-      to={to}
-      className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium border-b-2 -mb-px transition"
-      style={{
-        borderColor: active === key ? "#056048" : "transparent",
-        color: active === key ? "#056048" : "#5a6068",
-      }}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {label}
-    </Link>
-  );
+function AutoImportCard({
+  accessToken,
+  viewAsUserId,
+}: {
+  accessToken: string | null;
+  viewAsUserId?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [address, setAddress] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  async function toggle() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    if (address || !accessToken) return;
+    setBusy(true);
+    try {
+      const r = await getOrCreateRewardIngestToken({
+        data: { accessToken, viewAsUserId },
+      });
+      setAddress(r.address);
+    } catch {
+      toast.error("Couldn't load your auto-import address.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copy() {
+    if (!address) return;
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked — the address is visible to select manually */
+    }
+  }
+
   return (
-    <div className="border-b border-rule bg-paper/50">
-      <div className="max-w-[960px] mx-auto px-4 lg:px-10 flex items-center gap-1">
-        {tab("/app/refill/recognition/inventory", "inventory", "Inventory", Layers)}
-        {tab("/app/refill/recognition/manufacturers", "manufacturers", "Manufacturers", Sparkles)}
-        {tab("/app/refill/recognition/rewards", "rewards", "Rewards", Gift)}
+    <div className="rounded-2xl border border-rule bg-paper/30 p-5">
+      <button
+        type="button"
+        onClick={toggle}
+        className="flex w-full items-center gap-2 text-sm font-semibold text-ink"
+      >
+        <Mail className="h-4 w-4 text-emerald" />
+        Hands-free auto-import — never upload a CSV again
+        <span className="ml-auto text-[11px] font-normal text-ink-faint">
+          {open ? "hide" : "set up"}
+        </span>
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-3 text-[13px] text-ink-soft">
+          {busy ? (
+            <div className="flex items-center gap-2 text-ink-faint">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading your private address…
+            </div>
+          ) : address ? (
+            <>
+              <p>
+                Point any manufacturer report at your private inbox — a
+                scheduled portal export, or a one-time auto-forward rule. Refill
+                figures out which manufacturer it is and imports it
+                automatically. No dropdown, no upload.
+              </p>
+              <div className="flex items-center gap-2 rounded-lg border border-rule bg-white px-3 py-2 font-mono text-[12.5px]">
+                <span className="truncate">{address}</span>
+                <button
+                  type="button"
+                  onClick={copy}
+                  className="ml-auto inline-flex items-center gap-1 text-emerald hover:opacity-80"
+                >
+                  {copied ? (
+                    <Check className="h-3.5 w-3.5" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                  {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <ul className="list-disc pl-5 space-y-1 text-[12px] text-ink-faint">
+                <li>
+                  <b>Allergan (Allē):</b> in Allē Business → Reports, schedule
+                  the Patient360 export to this address.
+                </li>
+                <li>
+                  <b>Galderma (ASPIRE):</b> schedule the all-patients / savings
+                  export, or set a Gmail filter to auto-forward it here.
+                </li>
+                <li>
+                  <b>Evolus:</b> forward (or auto-forward) the Patient Insights
+                  export here.
+                </li>
+              </ul>
+              <p className="text-[11px] text-ink-faint">
+                Imports appear in the history below, just like a manual upload —
+                only nobody had to do anything.
+              </p>
+            </>
+          ) : (
+            <p className="text-ink-faint">Sign in to load your address.</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Lane 2 — manufacturer last-treatment dates → sharper lapsed detection.
+ * Auto-detects the Allergan report from the file (no dropdown). Writes $0
+ * recency markers into patient_transactions that the overdue/lapsed engine
+ * opts in by source — never revenue. See manufacturer-transaction-csv.ts.
+ */
+function LastTransactionCard({
+  accessToken,
+  viewAsUserId,
+  onImported,
+}: {
+  accessToken: string | null;
+  viewAsUserId?: string;
+  onImported: () => Promise<void> | void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [receipt, setReceipt] = useState<LastTxnImportReceipt | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  async function handleFile(file: File) {
+    if (!accessToken) return;
+    setBusy(true);
+    setReceipt(null);
+    try {
+      const csv = await file.text();
+      const r = await ingestManufacturerTransactionCsv({
+        data: { accessToken, viewAsUserId, csv, sourceFilename: file.name },
+      });
+      setReceipt(r);
+      toast.success(
+        `${r.cadenceRows.toLocaleString()} treatment dates added · ${r.matchedPatients.toLocaleString()} patients — lapsed detection sharpened`,
+      );
+      await onImported();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import failed.");
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-rule bg-paper/30 p-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+          <CalendarClock className="h-4 w-4 text-emerald" />
+          Treatment history — sharpen lapsed detection
+        </div>
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-emerald/40 px-3 py-1.5 text-[12px] font-semibold text-emerald hover:bg-emerald-soft transition disabled:opacity-50"
+        >
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Upload className="h-3.5 w-3.5" />
+          )}
+          Upload last-transaction report
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".csv,text/csv"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void handleFile(f);
+          }}
+        />
       </div>
+      <p className="mt-2 text-[11px] text-ink-faint">
+        Upload Allergan's "Last Botox/Juvéderm Transaction", the device/retail
+        report, or the full "TransactionsReport" history — Refill detects which
+        automatically. It records each patient's treatment dates, so a patient
+        who's quiet in your books but recently treated is read correctly, and
+        one who's truly overdue surfaces sooner. These are dates only — never
+        counted as revenue or a visit (Allergan reports carry no treatment
+        price; revenue stays sourced from QuickBooks).
+      </p>
+
+      {receipt && (
+        <div className="mt-3 rounded-xl border border-emerald/30 bg-emerald-soft/40 px-4 py-3 text-[12px] text-emerald-ink">
+          <div className="flex items-center gap-1.5 font-semibold">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {receipt.displayName}
+          </div>
+          <p className="mt-1 text-ink-soft">
+            {receipt.dataRows.toLocaleString()} patients in file ·{" "}
+            {receipt.matchedPatients.toLocaleString()} matched to your book ·{" "}
+            {receipt.rowsInserted.toLocaleString()} treatment dates added
+            {receipt.rowsSkipped > 0 &&
+              ` · ${receipt.rowsSkipped.toLocaleString()} already on file`}
+            {receipt.cadenceRows > 0 &&
+              ` · ${receipt.cadenceRows.toLocaleString()} feed Botox/filler cadence`}
+            {receipt.skippedLoyaltyRows > 0 &&
+              ` · ${receipt.skippedLoyaltyRows.toLocaleString()} loyalty rows skipped (not treatments)`}
+            {receipt.unmatchedWithContact > 0 &&
+              ` · ${receipt.unmatchedWithContact.toLocaleString()} not in your book`}
+            .
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PromoCalendarCard({
+  accessToken,
+  viewAsUserId,
+}: {
+  accessToken: string | null;
+  viewAsUserId?: string;
+}) {
+  const [offerCount, setOfferCount] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const load = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const offers = await listPromoOffers({ data: { accessToken, viewAsUserId } });
+      setOfferCount(offers.length);
+    } catch {
+      /* leave count hidden on error */
+    }
+  }, [accessToken, viewAsUserId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function handleFile(file: File) {
+    if (!accessToken) return;
+    setBusy(true);
+    try {
+      const csv = await file.text();
+      const r = await ingestPromoCalendar({ data: { accessToken, viewAsUserId, csv } });
+      toast.success(
+        `${r.offers} promo offer${r.offers === 1 ? "" : "s"} imported${r.skipped ? ` · ${r.skipped} skipped` : ""}`,
+      );
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Import failed.");
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-rule bg-paper/30 p-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+          <Tag className="h-4 w-4 text-amber" />
+          Promo calendar — at-booking offers
+        </div>
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-amber/40 px-3 py-1.5 text-[12px] font-semibold text-amber hover:bg-amber-soft transition disabled:opacity-50"
+        >
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Upload className="h-3.5 w-3.5" />
+          )}
+          Upload calendar CSV
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".csv,text/csv"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void handleFile(f);
+          }}
+        />
+        {offerCount != null && (
+          <span className="ml-auto text-[11px] text-ink-faint">
+            {offerCount} offer{offerCount === 1 ? "" : "s"} loaded
+          </span>
+        )}
+      </div>
+      <p className="mt-2 text-[11px] text-ink-faint">
+        Upload your manufacturer's promotions calendar (Allergan "Dollars Off"
+        offers). Active offers badge the matching add-on at booking — "add
+        filler, $75 off through Jun 30."
+      </p>
     </div>
   );
 }

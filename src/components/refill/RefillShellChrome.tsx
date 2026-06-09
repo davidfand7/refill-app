@@ -24,16 +24,31 @@ import { WishlistWidget } from "@/components/WishlistWidget";
 import { type MyTenant } from "@/server/refill-tenants";
 
 function deriveActiveKey(pathname: string): RefillNavKey | undefined {
-  if (pathname.startsWith("/app/refill/schedule")) return "schedule";
+  // Calendar Solution absorbs the old Appointments + Schedule routes.
+  if (
+    pathname.startsWith("/app/refill/calendar") ||
+    pathname.startsWith("/app/refill/schedule") ||
+    pathname.startsWith("/app/refill/appointments")
+  )
+    return "calendar";
   if (pathname.startsWith("/app/refill/patients")) return "patients";
   if (pathname.startsWith("/app/refill/catalog")) return "catalog";
-  if (pathname.startsWith("/app/refill/promos")) return "promos";
+  // "Promos" Solution (recognition namespace; old /promos redirects in).
   if (pathname.startsWith("/app/refill/recognition")) return "recognition";
-  if (pathname.startsWith("/app/refill/agents")) return "agents";
-  if (pathname.startsWith("/app/refill/recovery")) return "recovery";
-  if (pathname.startsWith("/app/refill/inbox")) return "inbox";
-  if (pathname.startsWith("/app/refill/settings")) return "settings";
-  if (pathname.startsWith("/app/billing") || pathname.startsWith("/app/refill/billing")) return "billing";
+  // Refill Solution = recovery + dissolved preshow/rescue agents + Inbox tab.
+  if (
+    pathname.startsWith("/app/refill/recovery") ||
+    pathname.startsWith("/app/refill/inbox")
+  )
+    return "recovery";
+  // "Account" Solution (chip key stays "settings") absorbs Reports + Billing.
+  if (
+    pathname.startsWith("/app/refill/reports") ||
+    pathname.startsWith("/app/refill/settings") ||
+    pathname.startsWith("/app/billing") ||
+    pathname.startsWith("/app/refill/billing")
+  )
+    return "settings";
   return undefined;
 }
 

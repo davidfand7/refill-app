@@ -126,6 +126,8 @@ export function useBookingSettings({
   // Per-provider date-specific availability overrides (add form, for selProvider).
   const [addingOverride, setAddingOverride] = useState(false);
   const [ovDate, setOvDate] = useState("");
+  const [ovRange, setOvRange] = useState(false); // false = single day (default); true = From→To range
+  const [ovEndDate, setOvEndDate] = useState("");
   const [ovClosed, setOvClosed] = useState(false);
   const [ovOpen, setOvOpen] = useState("09:00");
   const [ovClose, setOvClose] = useState("17:00");
@@ -164,6 +166,30 @@ export function useBookingSettings({
     () => !!draft && !!server && JSON.stringify(draft) !== JSON.stringify(server),
     [draft, server],
   );
+  // Per-zone dirtiness so each STAGED section can light up its own "Save changes"
+  // chip right at the edit. Instant ops (providers, rooms, date overrides, add/
+  // delete service, reorder, rename) write to both draft+server, so they never
+  // trip these. Settings = master toggle + timezone + booking rules; hours =
+  // weekly grid; services = per-service bookable/duration/buffer.
+  const settingsDirty = useMemo(
+    () => !!draft && !!server && JSON.stringify(draft.settings) !== JSON.stringify(server.settings),
+    [draft, server],
+  );
+  const hoursDirty = useMemo(
+    () =>
+      !!draft && !!server &&
+      JSON.stringify(draft.hoursByProvider) !== JSON.stringify(server.hoursByProvider),
+    [draft, server],
+  );
+  const servicesDirty = useMemo(
+    () => !!draft && !!server && JSON.stringify(draft.services) !== JSON.stringify(server.services),
+    [draft, server],
+  );
+  /** Discard all staged (Save-pending) edits, reverting the draft to the last
+   *  saved snapshot. Instant ops already persisted, so they're unaffected. */
+  function onDiscard() {
+    setDraft(server);
+  }
 
   const activeProviders = useMemo(() => draft?.providers.filter((p) => p.isActive) ?? [], [draft]);
   // Distinct active resource types (room/chair/device) a service can require.
@@ -292,13 +318,15 @@ export function useBookingSettings({
           )
         : d,
     );
-    toast.success(`Applied ${bulkOpen}–${bulkClose} to ${selDays.size} day${selDays.size === 1 ? "" : "s"}.`);
+    toast(`Set ${bulkOpen}–${bulkClose} on ${selDays.size} day${selDays.size === 1 ? "" : "s"} — Save changes to confirm.`);
   }
   function setSelectedClosed() {
     if (selDays.size === 0) return;
     setDraft((d) =>
       d ? mapSelectedHours(d, (h) => (selDays.has(h.dayOfWeek) ? { ...h, isClosed: true } : h)) : d,
     );
+    // Days just set off/closed shouldn't stay selected for the next bulk apply.
+    setSelDays(new Set());
   }
 
   // ── Provider management (immediate persist) ──────────────────────────────
@@ -597,34 +625,59 @@ export function useBookingSettings({
   }
 
   // ── Date-specific availability overrides (immediate persist) ──────────────
-  /** Add/replace a whole-day override for the selected provider on a date. */
+  /** Inclusive list of YYYY-MM-DD between start and end (UTC, no tz drift). */
+  function enumerateDates(start: string, end: string): string[] {
+    const out: string[] = [];
+    const s = new Date(`${start}T00:00:00Z`);
+    const e = new Date(`${end}T00:00:00Z`);
+    for (let d = s; d <= e && out.length < 366; d = new Date(d.getTime() + 86_400_000)) {
+      out.push(d.toISOString().slice(0, 10));
+    }
+    return out;
+  }
+  /** Add/replace a whole-day override for the selected provider on a single date,
+   *  or — when range mode is on — across every date from ovDate through ovEndDate
+   *  (expanded into one single-date override per day, so the slot engine, the list,
+   *  and per-date delete all work unchanged; no schema for ranges needed). */
   async function onAddDateOverride() {
     if (!selProviderId || !ovDate) return;
     if (!ovClosed && ovOpen >= ovClose) {
       toast.error("Open time must be before close time.");
       return;
     }
+    const endDate = ovRange && ovEndDate ? ovEndDate : ovDate;
+    if (endDate < ovDate) {
+      toast.error("End date must be on or after the start date.");
+      return;
+    }
+    const dates = enumerateDates(ovDate, endDate);
+    if (dates.length === 0) return;
     setOvBusy(true);
     try {
-      const res = await withToken((token) =>
-        upsertDateOverrideFn({
-          data: {
-            accessToken: token,
-            viewAsUserId,
-            providerId: selProviderId,
-            date: ovDate,
-            isClosed: ovClosed,
-            openTime: ovClosed ? null : ovOpen,
-            closeTime: ovClosed ? null : ovClose,
-          },
-        }),
-      );
-      if (!res) return;
+      const overrides: DateOverrideDraft[] = [];
+      for (const date of dates) {
+        const res = await withToken((token) =>
+          upsertDateOverrideFn({
+            data: {
+              accessToken: token,
+              viewAsUserId,
+              providerId: selProviderId,
+              date,
+              isClosed: ovClosed,
+              openTime: ovClosed ? null : ovOpen,
+              closeTime: ovClosed ? null : ovClose,
+            },
+          }),
+        );
+        if (res) overrides.push(res.override);
+      }
+      if (overrides.length === 0) return;
+      const savedDates = new Set(overrides.map((o) => o.date));
       const merge = (b: SchedulingSetupBundle): SchedulingSetupBundle => {
         const existing = (b.dateOverridesByProvider[selProviderId] ?? []).filter(
-          (o) => o.date !== res.override.date,
+          (o) => !savedDates.has(o.date),
         );
-        const next = [...existing, res.override].sort((a, c) => a.date.localeCompare(c.date));
+        const next = [...existing, ...overrides].sort((a, c) => a.date.localeCompare(c.date));
         return {
           ...b,
           dateOverridesByProvider: { ...b.dateOverridesByProvider, [selProviderId]: next },
@@ -632,9 +685,13 @@ export function useBookingSettings({
       };
       applyToBoth(merge);
       setOvDate("");
+      setOvEndDate("");
+      setOvRange(false);
       setOvClosed(false);
       setAddingOverride(false);
-      toast.success("Date override saved.");
+      toast.success(
+        overrides.length === 1 ? "Date override saved." : `Saved override for ${overrides.length} dates.`,
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't save override.");
     } finally {
@@ -782,6 +839,7 @@ export function useBookingSettings({
   }
   // Create / delete services (immediate persist — separate from the batched Save).
   async function onAddService() {
+    if (svcBusy) return; // guard double-fire (Enter key + click, or rapid double-Enter)
     const name = newSvcName.trim();
     if (!name) return;
     const price = Math.max(0, Math.round((parseFloat(newSvcPrice) || 0) * 100) / 100);
@@ -793,16 +851,23 @@ export function useBookingSettings({
         }),
       );
       if (!res) return;
+      // Upsert by id: when the server reused an existing catalog service (dedup),
+      // that row is already in b.services — replace it in place rather than
+      // appending a duplicate to local state.
       const add = (b: SchedulingSetupBundle): SchedulingSetupBundle => ({
         ...b,
-        services: [...b.services, res.service],
+        services: b.services.some((x) => x.id === res.service.id)
+          ? b.services.map((x) => (x.id === res.service.id ? res.service : x))
+          : [...b.services, res.service],
       });
       applyToBoth(add);
       setNewSvcName("");
       setNewSvcPrice("");
       setNewSvcCategory("other");
       setAddingSvc(false);
-      toast.success(`Added ${res.service.name}.`);
+      toast.success(
+        res.reused ? `“${res.service.name}” was already in your catalog — made it bookable.` : `Added ${res.service.name}.`,
+      );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't add service.");
     } finally {
@@ -891,6 +956,7 @@ export function useBookingSettings({
     newResourceType, setNewResourceType, resourceBusy, setResourceBusy,
     resourceNameDrafts, setResourceNameDrafts,
     addingOverride, setAddingOverride, ovDate, setOvDate, ovClosed, setOvClosed,
+    ovRange, setOvRange, ovEndDate, setOvEndDate,
     ovOpen, setOvOpen, ovClose, setOvClose, ovBusy,
     selDateOverrides, onAddDateOverride, onRemoveDateOverride,
     draggedSvcRef, draggedCatRef, categoryOrder, onReorderCategory, startAutoScroll, stopAutoScroll,
@@ -904,6 +970,7 @@ export function useBookingSettings({
     overrideFor, syncOverride, psFieldValue, offersService, persistPS, commitOverride, toggleOffered,
     syncResourceAdd, syncResourceUpdate, onAddResource, commitResourceRename, updateResource,
     patchService, commitCategoryRename, onAddService, onDeleteService, onReorderService, onSave,
+    settingsDirty, hoursDirty, servicesDirty, onDiscard,
   };
 }
 

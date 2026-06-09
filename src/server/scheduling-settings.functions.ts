@@ -50,6 +50,23 @@ export async function getTenantIdForUser(sb: Sb, userId: string): Promise<string
   return data.tenant_id;
 }
 
+/**
+ * The auth user that owns a tenant — its earliest membership (the founder).
+ * Native bookings stamp emma_appointments.user_id with this, so the public
+ * booking path can resolve it even when no scheduling_provider carries a
+ * user_id of its own. Returns null only if the tenant has no membership.
+ */
+export async function getTenantOwnerUserId(sb: Sb, tenantId: string): Promise<string | null> {
+  const { data } = await sb
+    .from("tenant_memberships")
+    .select("user_id, created_at")
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return (data?.user_id as string | undefined) ?? null;
+}
+
 // ── Shared shapes ────────────────────────────────────────────────────────────
 
 export interface SchedulingHoursDraft {
@@ -1210,15 +1227,81 @@ const createBookableServiceInput = z.object({
   price: z.number().nonnegative().max(1_000_000),
 });
 
+const BOOKABLE_SERVICE_COLUMNS =
+  "id, name, category, duration_min, buffer_min, service_price, online_bookable, required_resource_type, sort_order, is_free";
+
+type BookableServiceRow = {
+  id: string;
+  name: string;
+  category: string;
+  duration_min: number;
+  buffer_min: number;
+  service_price: number;
+  online_bookable: boolean;
+  required_resource_type: string | null;
+  sort_order: number;
+  is_free: boolean | null;
+};
+
+function rowToBookableServiceDraft(row: BookableServiceRow): BookableServiceDraft {
+  return {
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    durationMin: row.duration_min,
+    bufferMin: row.buffer_min,
+    price: row.service_price,
+    onlineBookable: row.online_bookable,
+    requiredResourceType: normalizeResourceTypeOrNull(row.required_resource_type),
+    sortOrder: row.sort_order,
+    isFree: row.is_free ?? false,
+  };
+}
+
 export const createBookableServiceFn = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => createBookableServiceInput.parse(raw))
-  .handler(async ({ data }): Promise<{ service: BookableServiceDraft }> => {
+  .handler(async ({ data }): Promise<{ service: BookableServiceDraft; reused: boolean }> => {
     const { effectiveUserId } = await resolveEffectiveUserId({
       accessToken: data.accessToken,
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+
+    // Dedup: this "Add service" box lives inside the Bookable-services card,
+    // where non-bookable services are hidden by default. A user typing the name
+    // of a service that already exists in the catalog means "make this one
+    // bookable", NOT "create a second copy". So if a same-name service already
+    // exists for this tenant, flip it bookable and return it instead of inserting
+    // a duplicate. (The Catalog page's own create path stays a blind insert —
+    // there the full list is in view and the intent is a brand-new entry.)
+    const target = data.name.trim().toLowerCase();
+    const { data: existing, error: lookupError } = await sb
+      .from("services")
+      .select(BOOKABLE_SERVICE_COLUMNS)
+      .eq("tenant_id", tenantId)
+      .ilike("name", data.name);
+    if (lookupError) throw new Error(`Couldn't add service: ${lookupError.message}`);
+    const match = (existing as BookableServiceRow[] | null)?.find(
+      (r) => r.name.trim().toLowerCase() === target,
+    );
+    if (match) {
+      if (match.online_bookable) {
+        return { service: rowToBookableServiceDraft(match), reused: true };
+      }
+      const { data: updated, error: updateError } = await sb
+        .from("services")
+        .update({ online_bookable: true })
+        .eq("id", match.id)
+        .eq("tenant_id", tenantId)
+        .select(BOOKABLE_SERVICE_COLUMNS)
+        .single();
+      if (updateError || !updated) {
+        throw new Error(`Couldn't add service: ${updateError?.message ?? "unknown"}`);
+      }
+      return { service: rowToBookableServiceDraft(updated as BookableServiceRow), reused: true };
+    }
+
     const { data: row, error } = await sb
       .from("services")
       .insert({
@@ -1229,25 +1312,10 @@ export const createBookableServiceFn = createServerFn({ method: "POST" })
         online_bookable: true,
         cogs_source: "manual",
       })
-      .select(
-        "id, name, category, duration_min, buffer_min, service_price, online_bookable, required_resource_type, sort_order, is_free",
-      )
+      .select(BOOKABLE_SERVICE_COLUMNS)
       .single();
     if (error || !row) throw new Error(`Couldn't add service: ${error?.message ?? "unknown"}`);
-    return {
-      service: {
-        id: row.id,
-        name: row.name,
-        category: row.category,
-        durationMin: row.duration_min,
-        bufferMin: row.buffer_min,
-        price: row.service_price,
-        onlineBookable: row.online_bookable,
-        requiredResourceType: normalizeResourceTypeOrNull(row.required_resource_type),
-        sortOrder: row.sort_order,
-        isFree: row.is_free ?? false,
-      },
-    };
+    return { service: rowToBookableServiceDraft(row as BookableServiceRow), reused: false };
   });
 
 const deleteBookableServiceInput = z.object({

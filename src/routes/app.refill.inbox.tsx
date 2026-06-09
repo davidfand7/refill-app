@@ -25,6 +25,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { RefillSolutionTabs } from "@/components/refill/RefillSolutionTabs";
 import { supabase } from "@/integrations/supabase/client";
 import {
   getInboxThread,
@@ -180,6 +181,7 @@ function InboxPage() {
           </button>
         }
       />
+      <RefillSolutionTabs active="inbox" />
 
       <div className="flex-1 px-6 lg:px-10 py-6 space-y-5 max-w-[960px] w-full mx-auto">
         <div className="flex items-center gap-2 flex-wrap">

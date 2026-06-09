@@ -209,7 +209,7 @@ function composeDay28(tenant: TenantRow): DripEmailRendered {
       `Hi ${name} team,`,
       "Day 28. Your Refill trial wraps in 2 days.",
       "If you'd like to keep going past then, **hit reply** — David and I will walk you through the plan options personally. No checkout flow, no credit card form, just a conversation about what works for your spa.",
-      "Most spas pick our performance plan — free + 12% of what Refill actually recovers for you, no flat fee, you only pay if we put money back in your books. But there are alternatives if that doesn't fit your numbers.",
+      "Most spas stay on our performance plan — free + just $5 for each booking Refill creates for you, no flat fee, you only pay when we put money back in your books. But there are alternatives if that doesn't fit your numbers.",
       "Either way, even if you decide Refill isn't for you, we'd love a quick \"here's why\" on reply. Those notes shape the product more than anything else.",
     ],
   });

@@ -60,17 +60,18 @@ export type BrandConfig = {
 };
 
 export const REFILL_BRAND: BrandConfig = {
-  logoMark: "R",
-  name: "Refill",
-  tagline: "/ refill your schedule, recover your revenue",
-  emailFromName: "Refill",
+  logoMark: "S",
+  name: "SmartSpa",
+  tagline: "/ the patient-profitability OS",
+  emailFromName: "SmartSpa",
+  // Domain stays getrefill.app this pass (smartspa.app migration is later infra).
   emailFromMailbox: "hello@getrefill.app",
   ctaHref: "/onboard",
   loginHref: "/login",
   ctaOrigin: "https://getrefill.app",
-  ctaLabel: "Start Refill free",
+  ctaLabel: "Start SmartSpa free",
   footerLine:
-    "Built by Refill — no-show recovery that pays for itself out of recovered revenue.",
+    "Built by SmartSpa — scheduling, recovery & rewards that pay for themselves.",
   visual: {
     accent: "#056048",
     ink: "#1c2024",

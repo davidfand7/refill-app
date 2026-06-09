@@ -7,7 +7,7 @@
 
 import { CalendarClock, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { NumberField, SelectField } from "@/components/refill/booking/fields";
+import { NumberField, SectionSaveChip, SelectField } from "@/components/refill/booking/fields";
 import type { SchedulingSettingsDraft } from "@/server/scheduling-settings.functions";
 import { useSectionCollapse } from "@/components/refill/booking/useSectionCollapse";
 
@@ -16,18 +16,27 @@ const GRANULARITY_OPTIONS = [10, 15, 20, 30, 60];
 export function BookingRulesSection({
   settings,
   patchSettings,
+  settingsDirty,
+  saving,
+  onSave,
 }: {
   settings: SchedulingSettingsDraft;
   patchSettings: (patch: Partial<SchedulingSettingsDraft>) => void;
+  settingsDirty: boolean;
+  saving: boolean;
+  onSave: () => void;
 }) {
   const { open, toggle } = useSectionCollapse("rules");
   return (
     <section className="rounded-xl border border-rule bg-white px-5 py-4">
-      <button type="button" onClick={toggle} className="flex w-full items-center gap-2 mb-3 text-left">
-        <ChevronDown className={cn("h-4 w-4 text-ink-faint transition-transform shrink-0", open ? "" : "-rotate-90")} />
-        <CalendarClock className="h-4 w-4 text-emerald shrink-0" />
-        <h3 className="text-[14px] font-semibold text-ink">Booking rules</h3>
-      </button>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <button type="button" onClick={toggle} className="flex items-center gap-2 text-left min-w-0">
+          <ChevronDown className={cn("h-4 w-4 text-ink-faint transition-transform shrink-0", open ? "" : "-rotate-90")} />
+          <CalendarClock className="h-4 w-4 text-emerald shrink-0" />
+          <h3 className="text-[14px] font-semibold text-ink">Booking rules</h3>
+        </button>
+        <SectionSaveChip dirty={settingsDirty} saving={saving} onSave={onSave} />
+      </div>
       {open && (
       <div className="grid sm:grid-cols-2 gap-x-5 gap-y-4">
         <NumberField

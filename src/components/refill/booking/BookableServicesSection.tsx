@@ -9,7 +9,7 @@ import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, DoorOpen, ExternalLink, Globe, GripVertical, Link2, Loader2, Pencil, Plus, Search, Sparkles, Trash2, Users, X } from "lucide-react";
 import { CategoryCombobox } from "@/components/refill/CategoryCombobox";
-import { BufferSelect, DurationField, Toggle, TriCheckbox } from "@/components/refill/booking/fields";
+import { BufferSelect, DurationField, SectionSaveChip, Toggle, TriCheckbox } from "@/components/refill/booking/fields";
 import { categoryLabel, categoryRank } from "@/lib/service-categories";
 import type { BookableServiceDraft, ResourceType } from "@/server/scheduling-settings.functions";
 import type { BookingSettings } from "@/components/refill/booking/useBookingSettings";
@@ -34,6 +34,7 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
     overrideFor, psFieldValue, offersService, commitOverride, toggleOffered,
     patchService, commitCategoryRename, onAddService, onDeleteService, onReorderService,
     draggedCatRef, onReorderCategory,
+    servicesDirty, saving, onSave,
   } = bk;
   if (!draft) return null;
   const { open, toggle } = useSectionCollapse("services");
@@ -45,6 +46,8 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
                   <Sparkles className="h-4 w-4 text-emerald shrink-0" />
                   <h3 className="text-[14px] font-semibold text-ink">Bookable services</h3>
                 </button>
+                <div className="flex items-center gap-2 shrink-0">
+                <SectionSaveChip dirty={servicesDirty} saving={saving} onSave={onSave} />
                 <div className="inline-flex rounded-md border border-rule overflow-hidden text-[12px]">
                   <button
                     type="button"
@@ -66,6 +69,7 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
                   >
                     90 min
                   </button>
+                </div>
                 </div>
               </div>
               {open && (<>

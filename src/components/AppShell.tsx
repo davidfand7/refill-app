@@ -39,6 +39,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useAuth } from "@/lib/auth";
+import { brand } from "@/lib/brand";
 import { CHANGELOG, currentVersion } from "@/lib/changelog";
 import { applyTheme, getStoredTheme, type Theme } from "@/lib/theme";
 
@@ -82,14 +83,14 @@ export function AppShell({
               style={{ background: "#056048", color: "#fbfaf7" }}
               aria-hidden
             >
-              R
+              {brand.logoMark}
             </div>
             <div className="hidden sm:block leading-tight">
               <div
                 className="text-sm font-semibold tracking-tight"
                 style={{ color: "#1c2024" }}
               >
-                Refill
+                {brand.name}
               </div>
               {subtitle && (
                 <div className="text-[11px] -mt-0.5" style={{ color: "#8a9098" }}>

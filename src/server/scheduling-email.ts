@@ -86,6 +86,35 @@ export interface BookingEmailArgs {
   spaName: string;
   startIso: string;
   timezone: string;
+  /** Booked service name (snapshot). When absent, the email falls back to
+   *  the generic single-line copy (back-compatible with older callers). */
+  serviceName?: string;
+  /** Provider display name, if the booking is tied to one. */
+  providerName?: string | null;
+  /** Combined visit duration in minutes (base + chosen add-ons). */
+  durationMin?: number;
+  /** Chosen add-ons, snapshotted at booking. Prices intentionally omitted. */
+  addOns?: { name: string; durationMin: number }[];
+}
+
+/**
+ * Itemized detail paragraphs (service · provider · total duration, then a
+ * comma-joined add-ons line). Returns [] when no serviceName is supplied so
+ * callers cleanly degrade to the generic copy. No prices by product decision.
+ */
+function appointmentDetailParagraphs(args: BookingEmailArgs): string[] {
+  if (!args.serviceName) return [];
+  const out: string[] = [];
+  const withProv = args.providerName ? ` with ${args.providerName}` : "";
+  const dur = args.durationMin ? ` · ${args.durationMin} min total` : "";
+  out.push(`**${args.serviceName}**${withProv}${dur}`);
+  if (args.addOns && args.addOns.length) {
+    const list = args.addOns
+      .map((a) => `${a.name}${a.durationMin ? ` (+${a.durationMin} min)` : ""}`)
+      .join(", ");
+    out.push(`Add-ons: ${list}`);
+  }
+  return out;
 }
 
 /** Patient-facing booking confirmation. Best-effort. */
@@ -101,6 +130,7 @@ export async function sendBookingConfirmation(
         startIso,
         timezone,
       )}** at **${fmtTime(startIso, timezone)}**.`,
+      ...appointmentDetailParagraphs(args),
       "Need to make a change? Just reply to this email and we'll help.",
     ],
     signoff: `— ${spaName}`,
@@ -128,6 +158,7 @@ export async function sendBookingReminder(
         startIso,
         timezone,
       )}** at **${fmtTime(startIso, timezone)}**.`,
+      ...appointmentDetailParagraphs(args),
       "Need to reschedule? Just reply to this email.",
     ],
     signoff: `— ${spaName}`,

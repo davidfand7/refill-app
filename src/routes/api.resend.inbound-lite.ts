@@ -1,5 +1,5 @@
 /**
- * Resend Inbound Parse webhook — Light Mode receiver (v1.42.0).
+ * Resend Inbound Parse webhook — Lite Mode receiver (v1.42.0).
  *
  * Resend's Inbound Routing is configured (dashboard, separate from
  * existing reply-inbound at /api/resend/inbound) to deliver mail sent

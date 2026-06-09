@@ -1,9 +1,9 @@
 /**
- * /app/refill/settings/light-mode — Light Mode onboarding wizard (v1.42.0).
+ * /app/refill/settings/light-mode — Lite Mode onboarding wizard (v1.42.0).
  *
  * Sibling route (NOT nested under /app/refill/settings/scheduler) to
  * avoid feedback_tanstack_outlet_trap. The settings card on
- * scheduler.tsx links here when the spa taps "Connect Light Mode" on
+ * scheduler.tsx links here when the spa taps "Connect Lite Mode" on
  * any of the 5 gated-platform cards.
  *
  * Onboarding flow:
@@ -14,7 +14,7 @@
  *   3. Wizard walks owner through Gmail filter setup with deep link to
  *      Gmail filter creation page + pre-filled criteria per platform.
  *   4. Verification: when first email parses cleanly, status flips
- *      'pending' → 'active' and a "Light Mode active" banner renders.
+ *      'pending' → 'active' and a "Lite Mode active" banner renders.
  *
  * The wizard mirrors feedback_setup_wizards_auto_advance: every step a
  * customer-loss risk; we deep-link rather than instruct; we surface
@@ -133,7 +133,7 @@ function LightModeWizardPage() {
       setConnections(rows);
     } catch (e) {
       toast.error(
-        e instanceof Error ? e.message : "Couldn't load Light Mode state.",
+        e instanceof Error ? e.message : "Couldn't load Lite Mode state.",
       );
     } finally {
       setLoading(false);
@@ -164,13 +164,13 @@ function LightModeWizardPage() {
       });
       toast.success(
         result.reactivated
-          ? "Light Mode reactivated."
-          : "Light Mode address generated.",
+          ? "Lite Mode reactivated."
+          : "Lite Mode address generated.",
       );
       await refresh();
     } catch (e) {
       toast.error(
-        e instanceof Error ? e.message : "Couldn't enable Light Mode.",
+        e instanceof Error ? e.message : "Couldn't enable Lite Mode.",
       );
     } finally {
       setEnabling(false);
@@ -184,7 +184,7 @@ function LightModeWizardPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 pb-16">
-      <PageHeader title="Light Mode setup" subtitle="Email-forward connector" />
+      <PageHeader title="Lite Mode setup" subtitle="Email-forward connector" />
       <SettingsTabStrip active="light-mode" />
 
       <button
@@ -229,7 +229,7 @@ function PickerStep(props: { onPick: (p: LightModePlatform) => void }) {
     <div className="mt-8 space-y-4">
       <h2 className="text-lg font-semibold">Which platform's emails?</h2>
       <p className="text-sm text-ink-soft">
-        Light Mode parses the appointment-confirmation and cancellation
+        Lite Mode parses the appointment-confirmation and cancellation
         emails your scheduler already sends you. Pick the platform whose
         emails you want to forward.
       </p>
@@ -333,7 +333,7 @@ function WizardStep(props: {
       </div>
 
       {!props.connection ? (
-        <StepCard num={1} title="Generate your Light Mode address">
+        <StepCard num={1} title="Generate your Lite Mode address">
           <p className="text-sm text-ink-soft">
             We'll generate a unique inbound email address just for your spa.
             Every email Gmail forwards to that address gets parsed by Refill
@@ -354,7 +354,7 @@ function WizardStep(props: {
           </button>
         </StepCard>
       ) : (
-        <StepCard num={1} title="Your Light Mode inbound address">
+        <StepCard num={1} title="Your Lite Mode inbound address">
           <div className="rounded-md bg-ink/5 p-3 font-mono text-sm break-all">
             {inboundAddress}
           </div>
@@ -450,13 +450,13 @@ function WizardStep(props: {
           <StepCard num={3} title="Verify with a test booking">
             <p className="text-sm text-ink-soft">
               Book a fake appointment in your {props.platformLabel} portal —
-              the confirmation email triggers Light Mode to flip from
+              the confirmation email triggers Lite Mode to flip from
               "pending" to "active".
             </p>
             <div className="mt-3 flex items-center gap-2">
               {props.connection.status === "active" ? (
                 <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald/10 text-emerald px-2.5 py-1 text-xs font-medium">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> Light Mode active
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Lite Mode active
                   {props.connection.lastEventAt
                     ? ` · last event ${new Date(
                         props.connection.lastEventAt,

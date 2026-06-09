@@ -169,7 +169,7 @@ export function buildVagaroInstallUrl(args: {
   state: string;
 }): string {
   const params = new URLSearchParams({ state: args.state });
-  return `${args.origin}/app/refill/settings/vagaro-install?${params.toString()}`;
+  return `${args.origin}/app/refill/calendar/vagaro-install?${params.toString()}`;
 }
 
 /**

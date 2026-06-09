@@ -70,7 +70,7 @@ export const Route = createFileRoute("/api/cron/scheduling-reminders")({
         const horizonIso = new Date(now.getTime() + CANDIDATE_HORIZON_HOURS * 3600_000).toISOString();
         const { data: appts, error: apptErr } = await sb
           .from("emma_appointments")
-          .select("id, scheduled_at, booking_email, provider_id")
+          .select("id, scheduled_at, booking_email, provider_id, treatment_type, duration_min")
           .eq("status", "confirmed")
           .not("booking_email", "is", null)
           .not("provider_id", "is", null)
@@ -88,12 +88,30 @@ export const Route = createFileRoute("/api/cron/scheduling-reminders")({
           new Set(rows.map((r) => r.provider_id).filter((x): x is string => !!x)),
         );
         const provTenant = new Map<string, string>();
+        const provName = new Map<string, string>();
         if (provIds.length) {
           const { data: provs } = await sb
             .from("scheduling_providers")
-            .select("id, tenant_id")
+            .select("id, tenant_id, name")
             .in("id", provIds);
-          for (const p of provs ?? []) provTenant.set(p.id, p.tenant_id);
+          for (const p of provs ?? []) {
+            provTenant.set(p.id, p.tenant_id);
+            if (p.name) provName.set(p.id, p.name);
+          }
+        }
+
+        // Snapshotted add-ons for this batch (appointmentId → add-on lines).
+        const addonsByAppt = new Map<string, { name: string; durationMin: number }[]>();
+        if (rows.length) {
+          const { data: addonRows } = await sb
+            .from("appointment_addons")
+            .select("appointment_id, name, duration_min")
+            .in("appointment_id", rows.map((r) => r.id));
+          for (const ar of addonRows ?? []) {
+            const arr = addonsByAppt.get(ar.appointment_id) ?? [];
+            arr.push({ name: ar.name, durationMin: ar.duration_min ?? 0 });
+            addonsByAppt.set(ar.appointment_id, arr);
+          }
         }
         const tenantIds = Array.from(new Set([...provTenant.values()]));
         const settByTenant = new Map<string, { lead: number; timezone: string }>();
@@ -152,6 +170,10 @@ export const Route = createFileRoute("/api/cron/scheduling-reminders")({
             spaName: nameByTenant.get(tenantId) ?? "Your appointment",
             startIso: a.scheduled_at,
             timezone: sett?.timezone ?? "America/Los_Angeles",
+            serviceName: a.treatment_type ?? undefined,
+            providerName: provName.get(a.provider_id) ?? null,
+            durationMin: a.duration_min ?? undefined,
+            addOns: addonsByAppt.get(a.id) ?? [],
           });
           if (r.ok) dispatched++;
           else {

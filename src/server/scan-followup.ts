@@ -177,7 +177,7 @@ export function composeScanFollowUpEmail(
     "",
     "THE PRICING THAT PROBABLY SURPRISED YOU",
     "",
-    `${brand.name} is free. You only pay 12% of what we actually recover — and only after you've verified the math against your books. No card to start. Month-to-month. Cancel anytime. The incumbents charge $200–$500/mo flat with annual contracts; we don't.`,
+    `${brand.name} is free. You only pay $5 per booking we actually create — and only after you've verified the math against your books. No card to start. Month-to-month. Cancel anytime. The incumbents charge $200–$500/mo flat with annual contracts; we don't.`,
     "",
     "Two ways forward, your pick:",
     "",
@@ -244,7 +244,7 @@ export function composeScanFollowUpEmail(
 
   <div style="background:#0f172a;color:#ffffff;border-radius:16px;padding:24px;margin:32px 0;">
     <div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;margin-bottom:8px;">The pricing that probably surprised you</div>
-    <p style="font-size:16px;margin:0 0 12px;line-height:1.5;">${escapeHtml(brand.name)} is <strong>free</strong>. You only pay <strong>12% of what we actually recover</strong> — and only after you've verified the math against your books.</p>
+    <p style="font-size:16px;margin:0 0 12px;line-height:1.5;">${escapeHtml(brand.name)} is <strong>free</strong>. You only pay <strong>$5 per booking we actually create</strong> — and only after you've verified the math against your books.</p>
     <p style="font-size:14px;color:#cbd5e1;margin:0;">No card to start. Month-to-month. Cancel anytime. The incumbents charge $200–$500/mo flat with annual contracts; we don't.</p>
   </div>
 
@@ -733,7 +733,7 @@ function buildScanReportHtml(
   <!-- Pricing card -->
   <section style="background:#0f172a;color:#ffffff;border-radius:12px;padding:24px;margin-bottom:28px;">
     <div style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;">Pricing</div>
-    <div style="font-size:20px;font-weight:600;margin:4px 0 10px;">${esc(brand.name)} is free. You only pay 12% of what we actually recover.</div>
+    <div style="font-size:20px;font-weight:600;margin:4px 0 10px;">${esc(brand.name)} is free. You only pay $5 per booking we actually create.</div>
     <div style="color:#cbd5e1;font-size:14px;">No card to start. Month-to-month. Cancel anytime. Draft invoices generate from verified recovery events; you turn on Stripe only when you trust the math.</div>
     <div style="margin-top:18px;">
       <a href="${appUrl}" style="display:inline-block;background:#ffffff;color:#0f172a;text-decoration:none;font-weight:600;padding:10px 18px;border-radius:8px;font-size:14px;">Set up ${esc(brand.name)} for my spa →</a>

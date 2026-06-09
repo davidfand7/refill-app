@@ -270,8 +270,8 @@ function StartPage() {
         )}
 
         <p className="text-center text-xs text-ink-faint mt-8 max-w-md mx-auto">
-          {brand.name} is free until we actually recover revenue for you.
-          12% of recovered, then. No credit card, no setup fee, no
+          {brand.name} is free until we actually book a recovered slot for
+          you. $5 per booking, then. No credit card, no setup fee, no
           commitment. Cancel anytime.
         </p>
       </section>

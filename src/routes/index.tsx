@@ -15,8 +15,8 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Refill — refill your schedule, recover your revenue." },
-      { name: "description", content: "Refill catches the cancellations your front desk doesn't have time to chase, fills the slots automatically, and only bills when we recover real money for you." },
+      { title: "SmartSpa — the patient-profitability OS" },
+      { name: "description", content: "SmartSpa fills chairs, recovers no-shows, and turns manufacturer rewards into booked visits — and only bills when it creates real revenue for you." },
       // noindex stays during stealth — remove when ready for public launch
       { name: "robots", content: "noindex, nofollow" },
     ],
@@ -139,7 +139,7 @@ function RefillLanding() {
   useEffect(() => {
     if (typeof document !== "undefined") {
       const prevTitle = document.title;
-      document.title = "Refill — Refill your schedule, recover your revenue";
+      document.title = "SmartSpa — the patient-profitability OS";
       return () => {
         document.title = prevTitle;
       };
@@ -162,14 +162,14 @@ function RefillLanding() {
                 className="text-[20px] font-semibold leading-none"
                 style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
               >
-                R
+                S
               </span>
             </div>
             <span
               className="text-[15px] font-semibold tracking-tight"
               style={{ color: "#056048", fontFamily: "Georgia, 'Times New Roman', serif" }}
             >
-              Refill
+              SmartSpa
             </span>
           </Link>
           <nav className="flex items-center gap-5 text-[13px]" style={{ color: "#5a6068" }}>

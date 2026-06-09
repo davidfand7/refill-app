@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useRef } from "react";
+import { CheckCircle2, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /** Public self-book URL for a tenant slug. */
@@ -223,5 +224,46 @@ export function SelectField({
       </select>
       <p className="text-[12px] text-ink-soft mt-1 leading-relaxed">{caption}</p>
     </div>
+  );
+}
+
+/**
+ * Contextual "Save changes" chip for a STAGED section. Renders nothing until that
+ * section has unsaved edits, then appears + lights up emerald right in the section
+ * header — so Save shows up at the location/time of the edit, not just at the page
+ * bottom. Instant sections (providers, rooms, date overrides) don't use this.
+ */
+export function SectionSaveChip({
+  dirty,
+  saving,
+  onSave,
+}: {
+  dirty: boolean;
+  saving: boolean;
+  onSave: () => void;
+}) {
+  if (!dirty && !saving) return null;
+  return (
+    <button
+      type="button"
+      onClick={onSave}
+      disabled={saving}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-semibold shadow-sm transition shrink-0",
+        "bg-emerald text-paper hover:opacity-95 ring-2 ring-emerald/30 animate-in fade-in slide-in-from-right-1",
+        saving && "opacity-80 cursor-wait",
+      )}
+      title="You have unsaved changes in this section"
+    >
+      {saving ? (
+        <>
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…
+        </>
+      ) : (
+        <>
+          <span className="h-1.5 w-1.5 rounded-full bg-amber-300" /> Save changes
+        </>
+      )}
+    </button>
   );
 }

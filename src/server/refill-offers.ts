@@ -274,7 +274,7 @@ function composeIncentiveOfferEmail(
       headline = `${pct}% revenue share for ${months} months, ${name}.`;
       bodyParagraphs = [
         `Hi ${name} team,`,
-        `Karen here. We're offering ${name} a **discounted revenue share — ${pct}% instead of our standard 12% — for the first ${months} months** of your Refill subscription.`,
+        `Karen here. We're offering ${name} a **reduced share — ${pct}% for the first ${months} months** of your Refill subscription.`,
         "Same engine, same recovery, lower share back to us. Our way of thanking the spas who came in early.",
         validClause ? `${validClause} Hit reply and we'll set it up.` : "Hit reply and we'll set it up.",
         "— Karen",

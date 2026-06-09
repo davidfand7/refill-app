@@ -34,6 +34,7 @@ import {
   normEmail,
   normPhone,
   nameTokenKey,
+  detectMapperFromCsv,
   MANUFACTURER_MAPPERS,
   type RewardEntry,
   type RewardSignalSummary,
@@ -519,3 +520,96 @@ export const listRewardSignal = createServerFn({ method: "POST" })
 
     return { summary, entries, imports };
   });
+
+// ─── Email-drop auto-ingest: per-tenant token + token→detect→ingest ────────
+//
+// The spa points a manufacturer report (scheduled export / Gmail auto-forward)
+// at <token>@rewards.getrefill.app. The inbound endpoint
+// (api.resend.inbound-rewards) resolves the token here, auto-detects the
+// mapper from the CSV headers, and runs the SAME doIngestRewards core as the
+// manual upload — no dropdown, no manual touch. We trust the token, not the
+// From sender.
+
+export const REWARD_INGEST_DOMAIN = "rewards.getrefill.app";
+
+// reward_ingest_tokens isn't in the generated types yet; use a loose view
+// for its queries (mirrors the inbound-lite cast pattern). Localized any.
+function tokenTbl(sb: SupabaseAdmin) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (sb as unknown as { from(t: string): any }).from("reward_ingest_tokens");
+}
+
+function randomToken(): string {
+  // 32 hex chars — email-local-part safe, unguessable.
+  return globalThis.crypto.randomUUID().replace(/-/g, "");
+}
+
+/** Resolve an active reward-ingest token → user_id (service role). */
+export async function resolveRewardIngestToken(
+  sb: SupabaseAdmin,
+  token: string,
+): Promise<string | null> {
+  const { data } = await tokenTbl(sb)
+    .select("user_id")
+    .eq("token", token)
+    .is("revoked_at", null)
+    .maybeSingle();
+  return (data?.user_id as string | undefined) ?? null;
+}
+
+const tokenInput = z.object({
+  accessToken: z.string(),
+  viewAsUserId: z.string().optional(),
+});
+
+/** UI: get (or lazily mint) the spa's active reward-ingest address. */
+export const getOrCreateRewardIngestToken = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => tokenInput.parse(input))
+  .handler(async ({ data }): Promise<{ token: string; address: string }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const existing = await tokenTbl(sb)
+      .select("token")
+      .eq("user_id", effectiveUserId)
+      .is("revoked_at", null)
+      .maybeSingle();
+    let token = existing.data?.token as string | undefined;
+    if (!token) {
+      token = randomToken();
+      const { error } = await tokenTbl(sb).insert({
+        user_id: effectiveUserId,
+        token,
+      });
+      if (error) throw new Error("Couldn't create the auto-import address.");
+    }
+    return { token, address: `${token}@${REWARD_INGEST_DOMAIN}` };
+  });
+
+export type TokenIngestResult = {
+  ok: boolean;
+  detected: string | null;
+  receipt: RewardImportReceipt | null;
+  reason: string | null;
+};
+
+/** Core: token + one CSV → auto-detect mapper → doIngestRewards. */
+export async function ingestRewardCsvByToken(
+  sb: SupabaseAdmin,
+  token: string,
+  csv: string,
+  sourceFilename: string | null,
+): Promise<TokenIngestResult> {
+  const userId = await resolveRewardIngestToken(sb, token);
+  if (!userId) {
+    return { ok: false, detected: null, receipt: null, reason: "unknown_token" };
+  }
+  const key = detectMapperFromCsv(csv);
+  if (!key) {
+    return { ok: false, detected: null, receipt: null, reason: "unrecognized_csv" };
+  }
+  const receipt = await doIngestRewards(sb, userId, key, csv, sourceFilename);
+  return { ok: true, detected: key, receipt, reason: null };
+}

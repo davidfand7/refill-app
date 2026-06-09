@@ -348,6 +348,8 @@ export type Service = {
   feeCredit: boolean;
   /** Offerable as an add-on to other services. */
   isAddon: boolean;
+  /** Bookable on the public self-book page (/s/<slug>). */
+  onlineBookable: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -366,6 +368,7 @@ type ServiceRow = {
   is_free: boolean | null;
   fee_credit: boolean | null;
   is_addon: boolean | null;
+  online_bookable: boolean | null;
   created_at: string;
   updated_at: string;
 };
@@ -392,6 +395,7 @@ function rowToService(r: ServiceRow): Service {
     isFree: r.is_free ?? false,
     feeCredit: r.fee_credit ?? false,
     isAddon: r.is_addon ?? false,
+    onlineBookable: r.online_bookable ?? false,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

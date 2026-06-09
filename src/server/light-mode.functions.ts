@@ -1,7 +1,7 @@
 /**
- * Light Mode server functions — v1.42.0.
+ * Lite Mode server functions — v1.42.0.
  *
- * Per Refill-LightMode-Spec-v1.html: Light Mode is the email-forward
+ * Per Refill-LightMode-Spec-v1.html: Lite Mode is the email-forward
  * connector that activates Recovery + Recognition signals across all 5
  * gated scheduler platforms (Boulevard / Mindbody / Booker / Jane /
  * Zenoti) without touching their APIs. The spa owner forwards their
@@ -94,17 +94,15 @@ function createServiceClient() {
 // ─── Read fns ───────────────────────────────────────────────────────
 
 /**
- * List Light Mode connections for the current spa (one per platform).
- * Returns an empty array if Light Mode has not been enabled for any
+ * List Lite Mode connections for the current spa (one per platform).
+ * Returns an empty array if Lite Mode has not been enabled for any
  * platform yet.
  */
 const listLightModeConnectionsInput = z.object({ accessToken: z.string() });
 export const listLightModeConnections = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => listLightModeConnectionsInput.parse(raw))
   .handler(async ({ data }) => {
-    const { effectiveUserId } = await resolveEffectiveUserId({
-      data: { accessToken: data.accessToken },
-    });
+    const { effectiveUserId } = await resolveEffectiveUserId({ accessToken: data.accessToken });
     const sb = createServiceClient();
     const sbAny = sb as never as {
       from(t: string): {
@@ -127,7 +125,7 @@ export const listLightModeConnections = createServerFn({ method: "POST" })
       .order("platform", { ascending: true });
     if (error) {
       throw new Error(
-        `Failed to load Light Mode connections: ${
+        `Failed to load Lite Mode connections: ${
           error instanceof Error ? error.message : "unknown"
         }`,
       );
@@ -138,7 +136,7 @@ export const listLightModeConnections = createServerFn({ method: "POST" })
   });
 
 /**
- * Enable Light Mode for a given platform. Generates a per-spa inbound
+ * Enable Lite Mode for a given platform. Generates a per-spa inbound
  * slug if no connection exists yet for that platform; otherwise just
  * unpause an existing row.
  */
@@ -149,9 +147,7 @@ const enableLightModeInput = z.object({
 export const enableLightMode = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => enableLightModeInput.parse(raw))
   .handler(async ({ data }) => {
-    const { effectiveUserId } = await resolveEffectiveUserId({
-      data: { accessToken: data.accessToken },
-    });
+    const { effectiveUserId } = await resolveEffectiveUserId({ accessToken: data.accessToken });
     const sb = createServiceClient();
     const sbAny = sb as never as {
       from(t: string): {
@@ -219,7 +215,7 @@ export const enableLightMode = createServerFn({ method: "POST" })
       .single();
     if (error || !inserted) {
       throw new Error(
-        `Failed to enable Light Mode: ${
+        `Failed to enable Lite Mode: ${
           error instanceof Error ? error.message : "unknown insert error"
         }`,
       );
@@ -233,7 +229,7 @@ export const enableLightMode = createServerFn({ method: "POST" })
   });
 
 /**
- * Disable (pause) a Light Mode connection. We keep the row + slug so
+ * Disable (pause) a Lite Mode connection. We keep the row + slug so
  * a future re-enable hits the same inbound address; the owner's Gmail
  * filter keeps working when they re-enable.
  */
@@ -244,9 +240,7 @@ const disableLightModeInput = z.object({
 export const disableLightMode = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => disableLightModeInput.parse(raw))
   .handler(async ({ data }) => {
-    const { effectiveUserId } = await resolveEffectiveUserId({
-      data: { accessToken: data.accessToken },
-    });
+    const { effectiveUserId } = await resolveEffectiveUserId({ accessToken: data.accessToken });
     const sb = createServiceClient();
     const sbAny = sb as never as {
       from(t: string): {
@@ -267,7 +261,7 @@ export const disableLightMode = createServerFn({ method: "POST" })
       .eq("platform", data.platform);
     if (error) {
       throw new Error(
-        `Failed to pause Light Mode: ${
+        `Failed to pause Lite Mode: ${
           error instanceof Error ? error.message : "unknown"
         }`,
       );
@@ -277,7 +271,7 @@ export const disableLightMode = createServerFn({ method: "POST" })
 
 /**
  * List recent quarantine rows for this spa (parser couldn't classify).
- * Used by the Light Mode wizard + the admin review surface.
+ * Used by the Lite Mode wizard + the admin review surface.
  */
 const listLightModeQuarantineInput = z.object({
   accessToken: z.string(),
@@ -286,9 +280,7 @@ const listLightModeQuarantineInput = z.object({
 export const listLightModeQuarantine = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => listLightModeQuarantineInput.parse(raw))
   .handler(async ({ data }) => {
-    const { effectiveUserId } = await resolveEffectiveUserId({
-      data: { accessToken: data.accessToken },
-    });
+    const { effectiveUserId } = await resolveEffectiveUserId({ accessToken: data.accessToken });
     const sb = createServiceClient();
     const sbAny = sb as never as {
       from(t: string): {
@@ -343,9 +335,7 @@ const getPendingGmailVerificationInput = z.object({
 export const getPendingGmailVerification = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => getPendingGmailVerificationInput.parse(raw))
   .handler(async ({ data }) => {
-    const { effectiveUserId } = await resolveEffectiveUserId({
-      data: { accessToken: data.accessToken },
-    });
+    const { effectiveUserId } = await resolveEffectiveUserId({ accessToken: data.accessToken });
     const sb = createServiceClient();
     const sbAny = sb as never as {
       from(t: string): {
@@ -392,10 +382,10 @@ export const getPendingGmailVerification = createServerFn({ method: "POST" })
   });
 
 /**
- * Returns which scheduler extras (Light Mode, Plaid Mode) are surfaced
+ * Returns which scheduler extras (Lite Mode, Plaid Mode) are surfaced
  * for the current spa on their /app/refill/settings/scheduler page.
  *
- * Light Mode = always available (universally safe; ToS-clean).
+ * Lite Mode = always available (universally safe; ToS-clean).
  * Plaid Mode = gated by feature_flags.flag_key='plaid_mode_enabled'
  *   scope='tenant' scope_id=<tenant_id> enabled=true. Admin sets this
  *   per-spa via /app/admin/agents (existing UI), keeping the gray-zone
@@ -405,9 +395,7 @@ const getSchedulerExtrasInput = z.object({ accessToken: z.string() });
 export const getSchedulerExtras = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => getSchedulerExtrasInput.parse(raw))
   .handler(async ({ data }) => {
-    const { effectiveUserId } = await resolveEffectiveUserId({
-      data: { accessToken: data.accessToken },
-    });
+    const { effectiveUserId } = await resolveEffectiveUserId({ accessToken: data.accessToken });
     const sb = createServiceClient();
 
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);

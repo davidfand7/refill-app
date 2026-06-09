@@ -28,6 +28,7 @@ import {
   Users,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
 import { supabase } from "@/integrations/supabase/client";
 import {
   getEmmaReports,
@@ -75,14 +76,15 @@ function ReportsPage() {
   return (
     <div className="min-h-screen bg-background">
       <PageHeader wide
-        eyebrow="Emma(OS)"
+        eyebrow="Account"
         title="Reports"
         description="How your campaigns are converting — from message sent to revenue attributed."
         breadcrumbs={[
-          { label: "Emma(OS)", to: "/app/refill" },
+          { label: "Account", to: "/app/refill/reports" },
           { label: "Reports" },
         ]}
       />
+      <SettingsTabStrip active="reports" />
 
       <div className="px-6 lg:px-10 py-8 max-w-[1280px] w-full mx-auto space-y-8">
         {loadError && (

@@ -168,7 +168,7 @@ export function decodeOAuthState(raw: string): OAuthState | null {
 const initiateInput = z.object({
   accessToken: z.string().min(1),
   origin: z.string().min(1),
-  returnTo: z.string().default("/app/refill/settings/scheduler"),
+  returnTo: z.string().default("/app/refill/calendar/connections"),
 });
 
 // v415.2: returnTo allowlist. The OAuth state round-trip writes this
@@ -178,7 +178,8 @@ const initiateInput = z.object({
 // callback into redirecting users off-domain. Allowlist by path
 // prefix — internal paths only.
 const RETURN_TO_ALLOWLIST_PREFIXES = [
-  "/app/refill/settings/scheduler",
+  "/app/refill/calendar/connections", // canonical since v2.1.0 Calendar Solution reorg
+  "/app/refill/settings/scheduler", // legacy stub path — kept for in-flight OAuth state
   "/onboard",
 ] as const;
 
@@ -331,7 +332,7 @@ export const initiateZenotiConnect = createServerFn({ method: "POST" })
     });
 
     const params = new URLSearchParams({ state });
-    const redirectUrl = `${data.origin}/app/refill/settings/zenoti-install?${params.toString()}`;
+    const redirectUrl = `${data.origin}/app/refill/calendar/zenoti-install?${params.toString()}`;
     return { redirectUrl };
   });
 
@@ -477,7 +478,7 @@ export const initiateBookerConnect = createServerFn({ method: "POST" })
     });
 
     const params = new URLSearchParams({ state });
-    const redirectUrl = `${data.origin}/app/refill/settings/booker-install?${params.toString()}`;
+    const redirectUrl = `${data.origin}/app/refill/calendar/booker-install?${params.toString()}`;
     return { redirectUrl };
   });
 

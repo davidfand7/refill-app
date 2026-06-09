@@ -103,7 +103,7 @@ function LoginPage() {
                 className="text-[20px] font-semibold leading-none"
                 style={{ fontFamily: "Georgia, 'Times New Roman', serif" }}
               >
-                R
+                S
               </span>
             </div>
             <span
@@ -113,7 +113,7 @@ function LoginPage() {
                 fontFamily: "Georgia, 'Times New Roman', serif",
               }}
             >
-              Refill
+              SmartSpa
             </span>
           </Link>
           <Link
@@ -121,7 +121,7 @@ function LoginPage() {
             className="text-[13px] transition hover:opacity-80"
             style={{ color: "#5a6068" }}
           >
-            New to Refill? →
+            New to SmartSpa? →
           </Link>
         </div>
       </header>
@@ -145,7 +145,7 @@ function LoginPage() {
               className="text-[15px] leading-[1.55] mb-6"
               style={{ color: "#5a6068" }}
             >
-              Sign in to see what Refill recovered for you this week.
+              Sign in to see what SmartSpa recovered for you this week.
             </p>
 
             <form onSubmit={onSubmit} className="space-y-3">

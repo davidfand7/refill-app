@@ -151,7 +151,7 @@ async function handleInstallCallback(request: Request): Promise<Response> {
     url.searchParams.get("subscriptionId") ??
     url.searchParams.get("subscription_id");
 
-  let errReturnPath = "/app/refill/settings/scheduler";
+  let errReturnPath = "/app/refill/calendar/connections";
   const errReturn = (reason: string) =>
     buildCallbackRedirect(url.origin, errReturnPath, {
       scheduler_error: reason,

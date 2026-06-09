@@ -36,6 +36,7 @@ export function DateOverridesSection({ bk }: { bk: BookingSettings }) {
     draft, activeProviders, selProviderName,
     selDateOverrides, selProviderId,
     addingOverride, setAddingOverride, ovDate, setOvDate, ovClosed, setOvClosed,
+    ovRange, setOvRange, ovEndDate, setOvEndDate,
     ovOpen, setOvOpen, ovClose, setOvClose, ovBusy,
     onAddDateOverride, onRemoveDateOverride,
   } = bk;
@@ -54,9 +55,9 @@ export function DateOverridesSection({ bk }: { bk: BookingSettings }) {
       {open && (<>
       <p className="text-[12px] text-ink-soft mb-3 mt-1 leading-relaxed">
         Override {multi ? <strong>{selProviderName}</strong> : "your"}
-        {multi ? "’s" : ""} weekly hours for a single date — a holiday closure, or
-        different hours just that day. (Use <strong>Block</strong> on the Schedule for a
-        partial-day time-off.)
+        {multi ? "’s" : ""} weekly hours for a single date — or check <strong>Range</strong> for a
+        span (a holiday closure, a vacation week, or different hours those days). (Use{" "}
+        <strong>Block</strong> on the Schedule for a partial-day time-off.)
       </p>
 
       {selDateOverrides.length > 0 && (
@@ -90,7 +91,7 @@ export function DateOverridesSection({ bk }: { bk: BookingSettings }) {
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
-                Date
+                {ovRange ? "From" : "Date"}
               </label>
               <input
                 type="date"
@@ -100,6 +101,32 @@ export function DateOverridesSection({ bk }: { bk: BookingSettings }) {
                 className="rounded-md border border-rule bg-white px-2.5 py-1.5 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
               />
             </div>
+            {ovRange && (
+              <div>
+                <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                  To
+                </label>
+                <input
+                  type="date"
+                  value={ovEndDate}
+                  min={ovDate || today}
+                  onChange={(e) => setOvEndDate(e.target.value)}
+                  className="rounded-md border border-rule bg-white px-2.5 py-1.5 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                />
+              </div>
+            )}
+            <label className="flex items-center gap-1.5 text-[13px] text-ink cursor-pointer pb-1.5">
+              <input
+                type="checkbox"
+                checked={ovRange}
+                onChange={(e) => {
+                  setOvRange(e.target.checked);
+                  if (!e.target.checked) setOvEndDate("");
+                }}
+                className="h-3.5 w-3.5 rounded border-rule accent-emerald"
+              />
+              Range
+            </label>
             <label className="flex items-center gap-1.5 text-[13px] text-ink cursor-pointer pb-1.5">
               <input
                 type="checkbox"
@@ -138,7 +165,7 @@ export function DateOverridesSection({ bk }: { bk: BookingSettings }) {
             <button
               type="button"
               onClick={() => void onAddDateOverride()}
-              disabled={ovBusy || !ovDate}
+              disabled={ovBusy || !ovDate || (ovRange && !ovEndDate)}
               className="inline-flex items-center gap-1 rounded-md bg-emerald px-3 py-1.5 text-[13px] font-medium text-paper hover:opacity-95 transition disabled:opacity-50"
             >
               {ovBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />} Save
@@ -158,6 +185,8 @@ export function DateOverridesSection({ bk }: { bk: BookingSettings }) {
           onClick={() => {
             setAddingOverride(true);
             setOvClosed(false);
+            setOvRange(false);
+            setOvEndDate("");
           }}
           className="inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-1.5 text-[13px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition"
         >

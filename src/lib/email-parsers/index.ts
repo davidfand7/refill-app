@@ -1,10 +1,10 @@
 /**
- * Light Mode email-parser dispatch + shared types.
+ * Lite Mode email-parser dispatch + shared types.
  *
  * Each platform (zenoti.ts / jane.ts / boulevard.ts / mindbody.ts /
  * booker.ts) exports a single `parse<Platform>Email(input)` function
  * that returns a ParseResult. This module dispatches to the right
- * platform based on the Light Mode connection's `platform` field and
+ * platform based on the Lite Mode connection's `platform` field and
  * normalizes the result for the trigger graph (`emma-rescue` +
  * `emma-recognition`).
  *

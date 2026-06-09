@@ -21,7 +21,7 @@
  * parsing portal paste). v1.34.3 wires the allocation engine.
  */
 
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -290,28 +291,7 @@ function RecognitionInventoryPage() {
         description="The pool of manufacturer-rebate units you can deploy to recognize specific patients. Two kinds: documented (portal-issued) and promo/samples."
       />
 
-      <div className="border-b border-rule bg-paper/50">
-        <div className="max-w-[960px] mx-auto px-4 lg:px-10 flex items-center gap-1">
-          <Link
-            to="/app/refill/recognition/inventory"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium border-b-2 -mb-px border-emerald text-emerald-ink transition"
-          >
-            Inventory
-          </Link>
-          <Link
-            to="/app/refill/recognition/manufacturers"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium border-b-2 -mb-px border-transparent text-ink-soft hover:text-ink transition"
-          >
-            Manufacturers
-          </Link>
-          <Link
-            to="/app/refill/recognition/rewards"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium border-b-2 -mb-px border-transparent text-ink-soft hover:text-ink transition"
-          >
-            Rewards
-          </Link>
-        </div>
-      </div>
+      <RecognitionTabs active="inventory" />
 
       <div className="px-6 lg:px-10 py-6 space-y-6 max-w-[960px] mx-auto">
         {loadError && (

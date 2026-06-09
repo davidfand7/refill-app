@@ -8,6 +8,7 @@
 import { ChevronDown, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TimeSelect } from "@/components/refill/TimeSelect";
+import { SectionSaveChip } from "@/components/refill/booking/fields";
 import type { ProviderRow, SchedulingHoursDraft } from "@/server/scheduling-settings.functions";
 import { useSectionCollapse } from "@/components/refill/booking/useSectionCollapse";
 
@@ -38,6 +39,9 @@ export function BusinessHoursSection({
   setSelectedClosed,
   patchDay,
   toggleSelDay,
+  hoursDirty,
+  saving,
+  onSave,
 }: {
   activeProviders: ProviderRow[];
   selProviderId: string;
@@ -54,8 +58,17 @@ export function BusinessHoursSection({
   setSelectedClosed: () => void;
   patchDay: (dayOfWeek: number, patch: Partial<SchedulingHoursDraft>) => void;
   toggleSelDay: (dow: number) => void;
+  hoursDirty: boolean;
+  saving: boolean;
+  onSave: () => void;
 }) {
   const { open, toggle } = useSectionCollapse("hours");
+  const multi = activeProviders.length > 1;
+  // Context-aware: with one provider, their hours ARE the business hours → label
+  // it "Business hours" and a day is "Closed/off" (a business is closed). With
+  // multiple providers each is a person with their own week → "Provider hours"
+  // and "Off/Closed" (a person takes time off).
+  const closedLabel = multi ? "Off/Closed" : "Closed/off";
   return (
     <section id="provider-hours" className="scroll-mt-24 rounded-xl border border-rule bg-white px-5 py-4">
       <div className="flex items-center justify-between gap-3 mb-3">
@@ -63,22 +76,25 @@ export function BusinessHoursSection({
           <ChevronDown className={cn("h-4 w-4 text-ink-faint transition-transform shrink-0", open ? "" : "-rotate-90")} />
           <Clock className="h-4 w-4 text-emerald shrink-0" />
           <h3 className="text-[14px] font-semibold text-ink">
-            {activeProviders.length > 1 ? "Provider hours" : "Business hours"}
+            {multi ? "Provider hours" : "Business hours"}
           </h3>
         </button>
-        {activeProviders.length > 1 && (
-          <select
-            value={selProviderId}
-            onChange={(e) => setSelProviderId(e.target.value)}
-            className="rounded-md border border-rule bg-white px-3 py-1.5 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
-          >
-            {activeProviders.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          <SectionSaveChip dirty={hoursDirty} saving={saving} onSave={onSave} />
+          {activeProviders.length > 1 && (
+            <select
+              value={selProviderId}
+              onChange={(e) => setSelProviderId(e.target.value)}
+              className="rounded-md border border-rule bg-white px-3 py-1.5 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+            >
+              {activeProviders.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
       </div>
       {open && (<>
       {activeProviders.length > 1 && (
@@ -102,7 +118,7 @@ export function BusinessHoursSection({
             <TimeSelect value={bulkOpen} onChange={setBulkOpen} className="rounded-md border border-rule bg-white px-2 py-1 text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums" />
             <TimeSelect value={bulkClose} onChange={setBulkClose} className="rounded-md border border-rule bg-white px-2 py-1 text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30 tabular-nums" />
             <button type="button" onClick={applyHoursToSelected} className="rounded-md bg-emerald px-2.5 py-1 font-medium text-paper hover:opacity-95 transition">Apply</button>
-            <button type="button" onClick={setSelectedClosed} className="rounded-md border border-rule px-2.5 py-1 text-ink-soft hover:text-ink transition">Set closed</button>
+            <button type="button" onClick={setSelectedClosed} className="rounded-md border border-rule px-2.5 py-1 text-ink-soft hover:text-ink transition">Set {closedLabel.toLowerCase()}</button>
           </span>
         )}
       </div>
@@ -123,13 +139,18 @@ export function BusinessHoursSection({
                 <input
                   type="checkbox"
                   checked={selDays.has(dow)}
-                  onChange={() => toggleSelDay(dow)}
+                  onChange={() => {
+                    const willSelect = !selDays.has(dow);
+                    toggleSelDay(dow);
+                    // Selecting a day marks it a working day — clear any off/closed.
+                    if (willSelect && h.isClosed) patchDay(dow, { isClosed: false });
+                  }}
                   className="h-3.5 w-3.5 rounded border-rule accent-emerald"
                 />
                 {DAY_LABELS[dow]}
               </label>
               {h.isClosed ? (
-                <span className="text-[13px] text-ink-faint sm:col-span-2">Closed</span>
+                <span className="text-[13px] text-ink-faint sm:col-span-2">{closedLabel}</span>
               ) : (
                 <>
                   <TimeSelect
@@ -148,10 +169,15 @@ export function BusinessHoursSection({
                 <input
                   type="checkbox"
                   checked={h.isClosed}
-                  onChange={(e) => patchDay(dow, { isClosed: e.target.checked })}
+                  onChange={(e) => {
+                    const closed = e.target.checked;
+                    patchDay(dow, { isClosed: closed });
+                    // A day that's off/closed shouldn't stay in the bulk selection.
+                    if (closed && selDays.has(dow)) toggleSelDay(dow);
+                  }}
                   className="h-3.5 w-3.5 rounded border-rule accent-emerald"
                 />
-                Closed
+                {closedLabel}
               </label>
             </div>
           );

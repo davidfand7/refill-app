@@ -92,13 +92,13 @@ export const FLAG_CATALOG: FeatureFlagDefinition[] = [
   },
   {
     key: "light_mode_enabled",
-    label: "Light Mode (email-forward connector)",
+    label: "Lite Mode (email-forward connector)",
     description:
-      "When ON for a tenant, the spa's scheduler settings page surfaces a 'Connect Light Mode' option on each gated platform card (Boulevard / Mindbody / Booker / Jane / Zenoti). The spa forwards their platform's notification emails to a per-spa Refill inbound address; Refill parses cancellation + booking events without touching the vendor's API. Default OFF because most spas should start on full API mode where possible.",
+      "When ON for a tenant, the spa's scheduler settings page surfaces a 'Connect Lite Mode' option on each gated platform card (Boulevard / Mindbody / Booker / Jane / Zenoti). The spa forwards their platform's notification emails to a per-spa Refill inbound address; Refill parses cancellation + booking events without touching the vendor's API. Default OFF because most spas should start on full API mode where possible.",
     defaultEnabled: false,
     onMeaning:
-      "Spa sees Light Mode toggle on gated-platform cards + can enroll in 60 seconds.",
-    offMeaning: "Light Mode hidden; spa uses API mode only.",
+      "Spa sees Lite Mode toggle on gated-platform cards + can enroll in 60 seconds.",
+    offMeaning: "Lite Mode hidden; spa uses API mode only.",
   },
   {
     key: "plaid_mode_enabled",

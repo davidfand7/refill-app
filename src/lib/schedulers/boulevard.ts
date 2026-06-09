@@ -229,12 +229,10 @@ export function buildBoulevardInstallUrl(args: {
     application_id: args.applicationId,
     state: args.state,
   });
-  // Sibling path to /app/refill/settings/scheduler — NOT a nested child,
-  // because TanStack Router treats `scheduler.tsx` + a `scheduler.X.tsx`
-  // sibling as a parent-with-Outlet pattern requiring a `.index.tsx`
-  // split. Keeping this at /app/refill/settings/boulevard-install
-  // avoids the trap (feedback_tanstack_outlet_trap, bit 3x in v331/341.3/349).
-  return `${args.origin}/app/refill/settings/boulevard-install?${params.toString()}`;
+  // Lives under the Calendar Solution (v2.3.18 IA reorg). Calendar is already
+  // a pure <Outlet> shell with its own .index, so this dot-child is safe
+  // (feedback_tanstack_outlet_trap satisfied).
+  return `${args.origin}/app/refill/calendar/boulevard-install?${params.toString()}`;
 }
 
 /**

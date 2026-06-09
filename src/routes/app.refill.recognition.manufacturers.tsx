@@ -13,15 +13,13 @@
  * follow-on; raw-JSON edit is the v1.34.2.1 fallback.
  */
 
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   ArrowLeft,
   CheckCircle2,
   Edit3,
-  Gift,
-  Layers,
   Loader2,
   Plus,
   Sparkles,
@@ -31,6 +29,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -110,11 +109,11 @@ function ManufacturersPage() {
     <div className="flex flex-col min-h-screen bg-white">
       <PageHeader
         title="Manufacturer profiles"
-        eyebrow="Recognition"
+        eyebrow="Promos"
         description="Per-manufacturer loyalty program structure. Recognition allocation reads these to know which units a spa can earn back per tier."
         breadcrumbs={[
           { label: "Refill", to: "/app/refill" },
-          { label: "Recognition", to: "/app/refill/recognition/inventory" },
+          { label: "Promos", to: "/app/refill/recognition/inventory" },
           { label: "Manufacturers" },
         ]}
         actions={
@@ -129,31 +128,7 @@ function ManufacturersPage() {
         }
       />
 
-      <div className="border-b border-rule bg-paper/50">
-        <div className="max-w-[960px] mx-auto px-4 lg:px-10 flex items-center gap-1">
-          <Link
-            to="/app/refill/recognition/inventory"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium border-b-2 -mb-px border-transparent text-ink-soft hover:text-ink transition"
-          >
-            <Layers className="h-3.5 w-3.5" />
-            Inventory
-          </Link>
-          <Link
-            to="/app/refill/recognition/manufacturers"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium border-b-2 -mb-px border-emerald text-emerald-ink transition"
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            Manufacturers
-          </Link>
-          <Link
-            to="/app/refill/recognition/rewards"
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium border-b-2 -mb-px border-transparent text-ink-soft hover:text-ink transition"
-          >
-            <Gift className="h-3.5 w-3.5" />
-            Rewards
-          </Link>
-        </div>
-      </div>
+      <RecognitionTabs active="manufacturers" />
 
       <div className="flex-1 px-4 py-6 lg:px-10 max-w-[960px] w-full mx-auto space-y-5">
         {loadError ? (

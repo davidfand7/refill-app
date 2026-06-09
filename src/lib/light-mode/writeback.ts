@@ -1,15 +1,15 @@
 /**
- * Light Mode writeback deeplinks (v1.43.0).
+ * Lite Mode writeback deeplinks (v1.43.0).
  *
- * When a rescue claim lands on a Light Mode connection (emma_appointments
+ * When a rescue claim lands on a Lite Mode connection (emma_appointments
  * row with source like `lite-zenoti`), Refill can NOT call the vendor's
- * API to book the slot — that's the entire point of Light Mode. Instead,
+ * API to book the slot — that's the entire point of Lite Mode. Instead,
  * we send the spa owner an email with:
  *   1. A best-effort deeplink to the platform's relevant dashboard page
  *   2. A copy-paste payload with patient + slot details
  *
  * Owner taps deeplink → portal opens → owner manually books the
- * rescued-in patient. Refill's next Light Mode email parse (the new
+ * rescued-in patient. Refill's next Lite Mode email parse (the new
  * confirmation triggered by the manual book) closes the loop
  * automatically.
  *
@@ -104,7 +104,7 @@ export function buildClaimDeeplink(args: DeeplinkArgs): DeeplinkResult {
     case "zenoti": {
       // Zenoti per-spa subdomain pattern not publicly confirmed. Fall
       // back to the generic web app login. Future polish: capture the
-      // spa's subdomain at Light Mode wizard time + use here.
+      // spa's subdomain at Lite Mode wizard time + use here.
       return {
         url: "https://login.zenoti.com",
         supportsPrefill: false,
@@ -116,7 +116,7 @@ export function buildClaimDeeplink(args: DeeplinkArgs): DeeplinkResult {
 
     case "jane": {
       // Jane uses per-clinic subdomains: <clinic>.jane.app. We may not
-      // know it at the Light Mode level. Generic fallback is jane.app
+      // know it at the Lite Mode level. Generic fallback is jane.app
       // sign-in.
       const url = args.spaPlatformSlug
         ? `https://${encodeURIComponent(args.spaPlatformSlug)}.jane.app/admin`

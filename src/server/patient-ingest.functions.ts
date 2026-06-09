@@ -69,6 +69,7 @@ import {
   KIND_CADENCE,
   type OverdueStatus,
 } from "@/lib/patient-cadence";
+import { MFR_LAST_TXN_SOURCE } from "@/lib/manufacturer-transaction-csv";
 
 // ─── Public types exported to UI ───────────────────────────────────────────
 
@@ -597,7 +598,7 @@ async function refreshPatientSummary(
   const { data: rows, error } = await sb
     .from("patient_transactions")
     .select(
-      "transaction_date, invoice_num, product_name, product_manufacturer, product_kind, description, quantity, unit_price_usd, amount_usd, balance_usd",
+      "transaction_date, invoice_num, product_name, product_manufacturer, product_kind, description, quantity, unit_price_usd, amount_usd, balance_usd, source",
     )
     .eq("user_id", userId)
     .eq("patient_node_id", nodeId);
@@ -618,6 +619,10 @@ async function refreshPatientSummary(
     unitPriceUsd: r.unit_price_usd !== null ? Number(r.unit_price_usd) : null,
     amountUsd: Number(r.amount_usd),
     balanceUsd: r.balance_usd !== null ? Number(r.balance_usd) : null,
+    // Lane 2: manufacturer last-treatment markers are excluded from the
+    // re-rolled summary (see rollupPatientSummary). Keyed off source so a
+    // future QB re-upload doesn't pick them up as visits/revenue.
+    cadenceOnly: r.source === MFR_LAST_TXN_SOURCE,
   }));
   const summary = rollupPatientSummary(patient, lines, priorContact);
   const content = patientSummaryToContent(summary);
@@ -2066,7 +2071,7 @@ export const summarizeOverdueCohort = createServerFn({ method: "POST" })
     };
   });
 
-async function doListOverdue(
+export async function doListOverdue(
   sb: SupabaseAdmin,
   userId: string,
   limit: number,
@@ -2095,7 +2100,10 @@ async function doListOverdue(
       .select("patient_node_id, product_kind, product_manufacturer, transaction_date")
       .eq("user_id", userId)
       .in("product_kind", targetKinds)
-      .gt("amount_usd", 0) // only count real purchases, not redemption / refund / discount lines
+      // Real purchases (amount > 0) OR manufacturer last-treatment markers
+      // (Lane 2 — amount 0 but a genuine recency signal). Excludes redemption
+      // / refund / discount lines (amount <= 0, non-marker source).
+      .or(`amount_usd.gt.0,source.eq.${MFR_LAST_TXN_SOURCE}`)
       // v1.92.1: secondary unique key (id) stabilizes offset paging — keeps
       // "first-seen = most-recent" correct AND prevents a row straddling a
       // page boundary from being skipped.

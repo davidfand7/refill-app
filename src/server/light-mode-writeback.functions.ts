@@ -1,10 +1,10 @@
 /**
- * Light Mode writeback dispatcher (v1.43.0).
+ * Lite Mode writeback dispatcher (v1.43.0).
  *
  * When `claimRescueSlot` resolves a winning offer that traces back to a
- * Light Mode connection (`emma_appointments.source` matches /^lite-/),
+ * Lite Mode connection (`emma_appointments.source` matches /^lite-/),
  * the connector substrate can NOT call the vendor API to book the slot.
- * That's the entire point of Light Mode — we don't have API access.
+ * That's the entire point of Lite Mode — we don't have API access.
  *
  * This module composes + sends the owner an email with:
  *   - Subject naming the patient + slot time
@@ -12,7 +12,7 @@
  *   - Plain-text copy-paste payload (patient + slot details)
  *
  * Owner taps deeplink → portal opens → owner manually books the
- * rescued-in patient. The next Light Mode email parse (the vendor's
+ * rescued-in patient. The next Lite Mode email parse (the vendor's
  * own confirmation email triggered by the manual book) closes the
  * loop automatically.
  *
@@ -258,7 +258,7 @@ export async function dispatchLightModeWriteback(
     copyPayload,
     ``,
     `—`,
-    `Refill (Light Mode — ${platformLabel})`,
+    `Refill (Lite Mode — ${platformLabel})`,
     `You're all set once ${platformLabel} shows the booking. Refill will detect the new appointment via your email forwarding and close the loop automatically.`,
   ]
     .filter((l): l is string => l !== null)
@@ -284,7 +284,7 @@ export async function dispatchLightModeWriteback(
   </p>
   <div style="background: #f6f4ec; border-left: 3px solid #2e5e8f; padding: 12px 16px; font-family: 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; white-space: pre-wrap; margin: 0 0 18px;">${escapeHtml(copyPayload)}</div>
   <p style="font-size: 12px; color: #6c6a62; margin: 20px 0 0; border-top: 1px solid #d6d3c7; padding-top: 12px;">
-    Refill — Light Mode (${escapeHtml(platformLabel)}). You're all set once ${escapeHtml(platformLabel)} shows the booking. Refill will detect the new appointment via your email forwarding and close the loop automatically.
+    Refill — Lite Mode (${escapeHtml(platformLabel)}). You're all set once ${escapeHtml(platformLabel)} shows the booking. Refill will detect the new appointment via your email forwarding and close the loop automatically.
   </p>
 </div>
   `.trim();

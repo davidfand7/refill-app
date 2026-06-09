@@ -329,8 +329,11 @@ function PublicBookingPage() {
         },
       });
       if (!r.ok) {
+        // Only "time's gone" cases need a fresh list. Reload first, THEN set the
+        // banner — loadSlots() clears it, so setting after keeps the reason on
+        // screen (otherwise a hold failure silently flashes and vanishes).
+        if (r.code === "taken" || r.code === "stale") await loadSlots();
         setBanner(r.reason);
-        await loadSlots(); // refresh — someone may have just taken it
         return;
       }
       setHeld({ token: r.token, slot });
@@ -445,6 +448,11 @@ function PublicBookingPage() {
                           >
                             <span className="min-w-0 flex-1">
                               <span className="block text-[15px] font-medium text-stone-900 truncate">{s.name}</span>
+                              {s.activeOffer && (
+                                <span className="inline-block mt-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-semibold px-2 py-0.5">
+                                  {s.activeOffer.label}
+                                </span>
+                              )}
                               {s.notes && s.notes.trim().toLowerCase() !== s.name.trim().toLowerCase() && (
                                 <span className="block text-[13px] text-stone-500 mt-0.5 leading-snug whitespace-pre-line">
                                   {s.notes}
@@ -592,7 +600,14 @@ function PublicBookingPage() {
                               >
                                 {checked && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
                               </span>
-                              <span className="block text-[15px] font-medium text-stone-900 truncate">{a.name}</span>
+                              <span className="min-w-0">
+                                <span className="block text-[15px] font-medium text-stone-900 truncate">{a.name}</span>
+                                {a.activeOffer && (
+                                  <span className="inline-block mt-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-semibold px-2 py-0.5">
+                                    {a.activeOffer.label}
+                                  </span>
+                                )}
+                              </span>
                             </span>
                             <span className="shrink-0 text-[13px] text-stone-500 tabular-nums whitespace-nowrap">
                               +{a.durationMin} min
@@ -654,14 +669,41 @@ function PublicBookingPage() {
                       </div>
 
                       {scheduleMode === "day" && (
-                        <input
-                          type="date"
-                          value={pickedDay}
-                          min={todayKey}
-                          max={maxKey}
-                          onChange={(e) => setPickedDay(e.target.value)}
-                          className="w-full rounded-lg border border-stone-300 px-3 py-2 text-[14px] text-stone-900 outline-none focus:border-stone-900"
-                        />
+                        <div className="space-y-3">
+                          <input
+                            type="date"
+                            value={pickedDay}
+                            min={todayKey}
+                            max={maxKey}
+                            onChange={(e) => setPickedDay(e.target.value)}
+                            className="w-full rounded-lg border border-stone-300 px-3 py-2 text-[14px] text-stone-900 outline-none focus:border-stone-900"
+                          />
+                          {pickedDay && (
+                            <div className="flex items-center justify-between gap-2">
+                              <button
+                                type="button"
+                                aria-label="Previous day"
+                                disabled={pickedDay <= todayKey}
+                                onClick={() => setPickedDay(addDays(pickedDay, -1))}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 transition-colors hover:border-stone-900 disabled:opacity-30 disabled:hover:border-stone-200"
+                              >
+                                <ChevronLeft className="w-5 h-5" />
+                              </button>
+                              <span className="text-[15px] font-semibold text-stone-900">
+                                {dayLabelFromKey(pickedDay)}
+                              </span>
+                              <button
+                                type="button"
+                                aria-label="Next day"
+                                disabled={pickedDay >= maxKey}
+                                onClick={() => setPickedDay(addDays(pickedDay, 1))}
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-700 transition-colors hover:border-stone-900 disabled:opacity-30 disabled:hover:border-stone-200"
+                              >
+                                <ChevronRight className="w-5 h-5" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       )}
 
                       {banner && (
@@ -681,7 +723,22 @@ function PublicBookingPage() {
                               ? "No openings that day — try another date."
                               : `No open times in the next ${RANGE_DAYS} days. Please check back soon.`}
                           </p>
+                        ) : scheduleMode === "day" ? (
+                          // One chosen day — fan the times across the full width, no scroll.
+                          <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-8 gap-2">
+                            {(visibleDayGroups[0]?.slots ?? []).map((s) => (
+                              <button
+                                key={`${s.startIso}-${s.providerId}`}
+                                type="button"
+                                onClick={() => onPickSlot(s)}
+                                className="rounded-lg border border-stone-200 bg-white px-2 py-2 text-center text-[14px] text-stone-800 transition-colors hover:border-stone-900 hover:bg-stone-50 tabular-nums"
+                              >
+                                {fmtTime(s.startIso, tz)}
+                              </button>
+                            ))}
+                          </div>
                         ) : (
+                          // Soonest — one column per upcoming day.
                           <div className="flex flex-col sm:flex-row gap-y-5 sm:gap-x-4 max-h-[60vh] overflow-y-auto sm:overflow-y-hidden sm:overflow-x-auto pr-1 sm:pb-2">
                             {visibleDayGroups.map((g) => (
                               <div key={g.key} className="sm:shrink-0 sm:w-36 sm:max-h-[56vh] sm:overflow-y-auto">
@@ -971,6 +1028,26 @@ function dayKey(iso: string, tz: string): string {
   }).format(new Date(iso));
 }
 
+/** Step a "YYYY-MM-DD" day key by ±n calendar days (UTC math, no tz drift). */
+function addDays(key: string, n: number): string {
+  const [y, m, d] = key.split("-").map((x) => parseInt(x, 10));
+  if (!y || !m || !d) return key;
+  const dt = new Date(Date.UTC(y, m - 1, d + n));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+}
+
+/** "2026-06-17" → "Wednesday, Jun 17" (parsed as a plain calendar date). */
+function dayLabelFromKey(key: string): string {
+  const [y, m, d] = key.split("-").map((x) => parseInt(x, 10));
+  if (!y || !m || !d) return key;
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
+    timeZone: "UTC",
+    weekday: "long",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 /** Escape a value for an ICS text field. */
 function icsEscape(s: string): string {
   return s.replace(/[\\,;]/g, (m) => "\\" + m).replace(/\n/g, "\\n");
@@ -986,10 +1063,15 @@ function buildCalendarLinks(opts: {
   location: string;
 }): { google: string; icsHref: string } {
   const startMs = new Date(opts.startIso).getTime();
+  // Canonicalize BOTH ends through toISOString() → always UTC "…Z". The DB
+  // hands back scheduled_at as "2026-06-18T20:00:00+00:00" (no Z); stamping
+  // that raw left a tz-less "20260618T200000+0000", which calendars read as
+  // FLOATING local time (a +6h shift in MDT). Derive from the epoch instead.
+  const startIsoUtc = new Date(startMs).toISOString();
   const endIso = new Date(startMs + opts.durationMin * 60_000).toISOString();
   // Calendar timestamps: UTC basic format, e.g. 20260624T170000Z.
   const stamp = (iso: string) => iso.replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-  const start = stamp(opts.startIso);
+  const start = stamp(startIsoUtc);
   const end = stamp(endIso);
   const google =
     "https://calendar.google.com/calendar/render?action=TEMPLATE" +
@@ -1000,7 +1082,7 @@ function buildCalendarLinks(opts: {
   const ics = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Refill//Booking//EN",
+    "PRODID:-//SmartSpa//Booking//EN",
     "CALSCALE:GREGORIAN",
     "BEGIN:VEVENT",
     `UID:${start}-${startMs}@getrefill.app`,
