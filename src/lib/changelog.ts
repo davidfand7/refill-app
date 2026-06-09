@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.22",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.22 &mdash; A confirmation-email hiccup can no longer fail a booking that actually worked.</strong> Both booking paths (public self-book and owner-created) awaited the confirmation email <em>after</em> the appointment was already saved, but without a guard &mdash; so if the send threw (e.g. a mis-set timezone hitting <code>Intl</code>), the handler crashed and the patient/owner saw an error for a booking that had in fact succeeded. The send is now best-effort on both paths: it&rsquo;s wrapped so a failure is logged but never blocks the confirmed booking. Companion to v2.3.21&rsquo;s reminder-cron fix. <strong>Touched</strong>: <code>scheduling.functions.ts</code>, <code>scheduling-owner.functions.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.21",
     date: "June 2026",
     items: [

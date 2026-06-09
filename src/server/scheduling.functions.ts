@@ -912,17 +912,23 @@ export const confirmBooking = createServerFn({ method: "POST" })
       durationMin: a.duration_min ?? 0,
     }));
 
-    // Awaited, not fire-and-forget: the Worker isolate dies at response.
-    await sendBookingConfirmation({
-      to: data.email,
-      spaName,
-      startIso: updated.scheduled_at,
-      timezone,
-      serviceName: updated.treatment_type ?? undefined,
-      providerName,
-      durationMin: updated.duration_min ?? undefined,
-      addOns: apptAddons,
-    });
+    // Awaited (the Worker isolate dies at response) but best-effort: the
+    // booking is already committed, so a send failure must NOT crash the
+    // handler and show the patient an error for a booking that succeeded.
+    try {
+      await sendBookingConfirmation({
+        to: data.email,
+        spaName,
+        startIso: updated.scheduled_at,
+        timezone,
+        serviceName: updated.treatment_type ?? undefined,
+        providerName,
+        durationMin: updated.duration_min ?? undefined,
+        addOns: apptAddons,
+      });
+    } catch (e) {
+      console.error("[scheduling-email] confirmation send failed:", e);
+    }
 
     // Cross-Sell: if the booked service (or a chosen add-on) carried an active
     // promo and this patient resolves in the graph, record a $5 cross_sell win.

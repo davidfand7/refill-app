@@ -724,16 +724,20 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
         sb.from("scheduling_settings").select("timezone").eq("tenant_id", tenantId).maybeSingle(),
         sb.from("scheduling_providers").select("name").eq("id", providerId).maybeSingle(),
       ]);
-      await sendBookingConfirmation({
-        to: data.patientEmail,
-        spaName: t?.name ?? "Your appointment",
-        startIso: data.startIso,
-        timezone: st?.timezone ?? "America/Los_Angeles",
-        serviceName: svc.name,
-        providerName: prov?.name ?? null,
-        durationMin: effectiveDuration,
-        addOns: chosenAddons.map((a) => ({ name: a.name, durationMin: a.durationMin })),
-      });
+      try {
+        await sendBookingConfirmation({
+          to: data.patientEmail,
+          spaName: t?.name ?? "Your appointment",
+          startIso: data.startIso,
+          timezone: st?.timezone ?? "America/Los_Angeles",
+          serviceName: svc.name,
+          providerName: prov?.name ?? null,
+          durationMin: effectiveDuration,
+          addOns: chosenAddons.map((a) => ({ name: a.name, durationMin: a.durationMin })),
+        });
+      } catch (e) {
+        console.error("[scheduling-email] owner-booking confirmation send failed:", e);
+      }
     }
 
     // Cross-Sell: if the booked service/add-on carried an active promo and the
