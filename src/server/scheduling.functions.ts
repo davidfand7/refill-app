@@ -34,6 +34,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
+import { fetchAllRows } from "@/server/paginate";
 import {
   availableSlots,
   type BlockInterval,
@@ -221,7 +222,7 @@ async function loadEngineInputs(
   // Widen the date-override window by a day each side so tz-edge dates are covered.
   const fromDate = new Date(new Date(fromIso).getTime() - 24 * 60 * 60_000).toISOString().slice(0, 10);
   const toDate = new Date(new Date(toIso).getTime() + 24 * 60 * 60_000).toISOString().slice(0, 10);
-  const [{ data: hoursRows }, { data: overrideRows }, { data: blockRows }, { data: busyRows }] =
+  const [{ data: hoursRows }, { data: overrideRows }, blockRows, { data: busyRows }] =
     await Promise.all([
       sb.from("scheduling_hours").select("*").eq("provider_id", providerId),
       sb
@@ -231,10 +232,18 @@ async function loadEngineInputs(
         .gte("the_date", fromDate)
         .lte("the_date", toDate),
       // Whole-practice blocks (provider_id null) OR this provider's blocks.
-      sb
-        .from("scheduling_blocks")
-        .select("during, provider_id")
-        .or(`provider_id.is.null,provider_id.eq.${providerId}`),
+      // Paginated: a long-lived spa accrues >1,000 block rows (a daily lunch
+      // block alone is ~365/yr); an unpaginated read silently caps at 1,000 →
+      // older blocks drop out → the slot engine offers BOOKABLE slots over
+      // blocked time. The per-day overlap filter still happens in JS downstream.
+      fetchAllRows<{ during: string | null; provider_id: string | null }>((from, to) =>
+        sb
+          .from("scheduling_blocks")
+          .select("during, provider_id")
+          .or(`provider_id.is.null,provider_id.eq.${providerId}`)
+          .order("id")
+          .range(from, to),
+      ),
       sb
         .from("emma_appointments")
         .select("scheduled_at, duration_min, status, slot_held_until")

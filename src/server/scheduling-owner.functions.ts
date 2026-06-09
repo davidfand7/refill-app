@@ -20,6 +20,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import { fetchAllRows } from "@/server/paginate";
 import { ensureSetup, getTenantIdForUser } from "@/server/scheduling-settings.functions";
 import {
   loadTenantPromoOffers,
@@ -344,7 +345,7 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
 
     const { startUtc, endUtc, weekday } = localDayBounds(data.dateIso, timezone);
 
-    const [{ data: apptRows }, { data: hoursRows }, { data: blockRows }, { data: serviceRows }] =
+    const [{ data: apptRows }, { data: hoursRows }, blockRows, { data: serviceRows }] =
       await Promise.all([
         sb
           .from("emma_appointments")
@@ -361,10 +362,19 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
           .select("provider_id, open_time, close_time, is_closed")
           .in("provider_id", idFilter)
           .eq("day_of_week", weekday),
-        sb
-          .from("scheduling_blocks")
-          .select("id, during, reason, provider_id")
-          .eq("tenant_id", tenantId),
+        // Paginated: a long-lived spa accrues >1,000 block rows (a daily lunch
+        // block alone is ~365/yr); an unpaginated read silently caps at 1,000 →
+        // older blocks drop out → blocked time renders as FREE on the calendar.
+        // The per-day overlap filter still happens in JS downstream.
+        fetchAllRows<{ id: string; during: string | null; reason: string | null; provider_id: string | null }>(
+          (from, to) =>
+            sb
+              .from("scheduling_blocks")
+              .select("id, during, reason, provider_id")
+              .eq("tenant_id", tenantId)
+              .order("id")
+              .range(from, to),
+        ),
         sb
           .from("services")
           .select("id, name, duration_min, hidden_at, online_bookable, category, sort_order")
@@ -488,7 +498,7 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
     const startUtc = localDayBounds(data.fromDate, timezone).startUtc;
     const endUtc = localDayBounds(data.toDateExclusive, timezone).startUtc;
 
-    const [{ data: apptRows }, { data: hoursRows }, { data: blockRows }, { data: serviceRows }] =
+    const [{ data: apptRows }, { data: hoursRows }, blockRows, { data: serviceRows }] =
       await Promise.all([
         sb
           .from("emma_appointments")
@@ -504,10 +514,19 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
           .from("scheduling_hours")
           .select("provider_id, day_of_week, open_time, close_time, is_closed")
           .in("provider_id", idFilter),
-        sb
-          .from("scheduling_blocks")
-          .select("id, during, reason, provider_id")
-          .eq("tenant_id", tenantId),
+        // Paginated: a long-lived spa accrues >1,000 block rows (a daily lunch
+        // block alone is ~365/yr); an unpaginated read silently caps at 1,000 →
+        // older blocks drop out → blocked time renders as FREE on the calendar.
+        // The per-day overlap filter still happens in JS downstream.
+        fetchAllRows<{ id: string; during: string | null; reason: string | null; provider_id: string | null }>(
+          (from, to) =>
+            sb
+              .from("scheduling_blocks")
+              .select("id, during, reason, provider_id")
+              .eq("tenant_id", tenantId)
+              .order("id")
+              .range(from, to),
+        ),
         sb
           .from("services")
           .select("id, name, duration_min, hidden_at, online_bookable, category, sort_order")

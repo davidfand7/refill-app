@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.31",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.31 &mdash; Blocked time can&rsquo;t silently &ldquo;disappear&rdquo; from a busy calendar.</strong> The owner calendar (day &amp; week/month views) and the public booking slot engine each read your time-blocks (lunches, vacations, meetings) with an unpaginated query &mdash; so once a spa accrued more than 1,000 blocks (a single daily lunch block is ~365/year), the database silently returned only the first 1,000 and dropped the rest. The visible symptom: older blocked time would render as <strong>free</strong> on the calendar, and worse, the booking page could offer patients a <strong>bookable slot over blocked time</strong>. All three reads now page through the full set, so blocks stay complete at any age. <strong>Touched</strong>: <code>scheduling-owner.functions.ts</code>, <code>scheduling.functions.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.30",
     date: "June 2026",
     items: [
