@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.29",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.29 &mdash; Catalog import + lists no longer cap at 1,000 rows.</strong> The services/products CSV import matched existing rows with an unpaginated read &mdash; so on a catalog with more than 1,000 services or products, a re-import didn&rsquo;t recognize the overflow and <strong>re-created them as duplicates</strong> (the same bug just fixed for patient import). The service and product list reads had the same silent cap. All four now page through the full set, so re-imports stay idempotent and the lists stay complete at any size &mdash; important as the Service Library balloons the catalog. <strong>Touched</strong>: <code>refill-catalog.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.28",
     date: "June 2026",
     items: [

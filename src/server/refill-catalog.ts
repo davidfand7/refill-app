@@ -24,6 +24,7 @@ import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { parseServiceListCsv } from "@/lib/catalog-csv";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import { fetchAllRows } from "@/server/paginate";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -200,18 +201,15 @@ export const listProductsFn = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
-    let query = sb
-      .from("products")
-      .select("*")
-      .eq("tenant_id", tenantId);
-    if (!data.includeHidden) {
-      query = query.is("hidden_at", null);
-    }
-    const { data: rows, error } = await query
-      .order("category", { ascending: true })
-      .order("brand", { ascending: true });
-    if (error) throw new Error(`Couldn't list products: ${error.message}`);
-    return (rows ?? []).map((r) => rowToProduct(r as ProductRow));
+    const rows = await fetchAllRows<ProductRow>((from, to) => {
+      let query = sb.from("products").select("*").eq("tenant_id", tenantId);
+      if (!data.includeHidden) query = query.is("hidden_at", null);
+      return query
+        .order("category", { ascending: true })
+        .order("brand", { ascending: true })
+        .range(from, to);
+    });
+    return rows.map((r) => rowToProduct(r as ProductRow));
   });
 
 // ─── setProductHiddenFn (v1.34.9.1) ───────────────────────────────────────
@@ -441,18 +439,15 @@ export const listServicesFn = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
-    let query = sb
-      .from("services")
-      .select("*")
-      .eq("tenant_id", tenantId);
-    if (!data.includeHidden) {
-      query = query.is("hidden_at", null);
-    }
-    const { data: rows, error } = await query
-      .order("category", { ascending: true })
-      .order("name", { ascending: true });
-    if (error) throw new Error(`Couldn't list services: ${error.message}`);
-    return (rows ?? []).map((r) => rowToService(r as ServiceRow));
+    const rows = await fetchAllRows<ServiceRow>((from, to) => {
+      let query = sb.from("services").select("*").eq("tenant_id", tenantId);
+      if (!data.includeHidden) query = query.is("hidden_at", null);
+      return query
+        .order("category", { ascending: true })
+        .order("name", { ascending: true })
+        .range(from, to);
+    });
+    return rows.map((r) => rowToService(r as ServiceRow));
   });
 
 // ─── setServiceHiddenFn (v1.34.9.1) ───────────────────────────────────────
@@ -1363,23 +1358,34 @@ export const ingestServicesCsvFn = createServerFn({ method: "POST" })
     // recategorize sweep on /catalog/services.
     const canonicalBrands = await loadAllCanonicalBrands(sb);
 
-    // Fetch existing services for upsert-by-name matching.
-    const { data: existingServices, error: existingServicesErr } = await sb
-      .from("services")
-      .select("id, name")
-      .eq("tenant_id", tenantId);
-    if (existingServicesErr) throw new Error(`Couldn't list existing services: ${existingServicesErr.message}`);
+    // Fetch existing services for upsert-by-name matching. Paged past the
+    // 1,000-row cap — an unpaged read on a >1,000-service catalog missed the
+    // overflow, so a re-import re-created those services as duplicates.
+    const existingServices = await fetchAllRows<{ id: string; name: string }>(
+      (from, to) =>
+        sb
+          .from("services")
+          .select("id, name")
+          .eq("tenant_id", tenantId)
+          .order("id", { ascending: true })
+          .range(from, to),
+    );
     const servicesByNameLower = new Map<string, string>();
     for (const s of existingServices ?? []) {
       servicesByNameLower.set((s.name as string).trim().toLowerCase(), s.id as string);
     }
 
-    // v1.30.1 — fetch existing products for upsert-by-brand matching.
-    const { data: existingProducts, error: existingProductsErr } = await sb
-      .from("products")
-      .select("id, brand")
-      .eq("tenant_id", tenantId);
-    if (existingProductsErr) throw new Error(`Couldn't list existing products: ${existingProductsErr.message}`);
+    // v1.30.1 — fetch existing products for upsert-by-brand matching (paged
+    // past the 1,000-row cap, same duplicate-on-re-import risk as services).
+    const existingProducts = await fetchAllRows<{ id: string; brand: string }>(
+      (from, to) =>
+        sb
+          .from("products")
+          .select("id, brand")
+          .eq("tenant_id", tenantId)
+          .order("id", { ascending: true })
+          .range(from, to),
+    );
     const productsByBrandLower = new Map<string, string>();
     for (const p of existingProducts ?? []) {
       productsByBrandLower.set((p.brand as string).trim().toLowerCase(), p.id as string);
