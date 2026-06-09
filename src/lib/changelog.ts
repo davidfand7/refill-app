@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.21",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.21 &mdash; Reminder emails no longer silently dropped on a transient failure.</strong> The reminder cron marked an appointment as &ldquo;reminded&rdquo; <em>before</em> the email actually sent &mdash; so if the send hiccuped (a Resend blip, a timeout, a bad-data throw), the appointment was flagged done and <strong>never retried</strong>, and the patient just never got their reminder. Now the send runs inside a guard and, on any failure, the &ldquo;reminded&rdquo; claim is <strong>released</strong> so the next run retries it. A throw on one appointment also no longer aborts the rest of the batch. Double-send protection is unchanged. New <code>retryQueued</code> count in the cron response surfaces how many were re-queued. <strong>Touched</strong>: <code>api.cron.scheduling-reminders.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.20",
     date: "June 2026",
     items: [

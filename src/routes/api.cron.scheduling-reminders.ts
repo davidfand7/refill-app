@@ -131,6 +131,7 @@ export const Route = createFileRoute("/api/cron/scheduling-reminders")({
 
         let dispatched = 0;
         let skipped = 0;
+        let retryQueued = 0; // sends that failed + had their claim released to retry next run
         for (const a of rows) {
           if (!a.provider_id || !a.booking_email) {
             skipped++;
@@ -155,7 +156,10 @@ export const Route = createFileRoute("/api/cron/scheduling-reminders")({
             continue;
           }
 
-          // Claim (race-safe via UNIQUE(appointment_id, kind)).
+          // Claim FIRST so two overlapping cron runs can't double-send
+          // (race-safe via UNIQUE(appointment_id, kind)). If the send then
+          // fails, we RELEASE the claim below so a later run retries — a
+          // failed send must never be mistaken for a delivered one.
           const { error: claimErr } = await sb
             .from("scheduling_reminder_sends")
             .insert({ appointment_id: a.id, kind: "lead" });
@@ -165,20 +169,38 @@ export const Route = createFileRoute("/api/cron/scheduling-reminders")({
             continue;
           }
 
-          const r = await sendBookingReminder({
-            to: a.booking_email,
-            spaName: nameByTenant.get(tenantId) ?? "Your appointment",
-            startIso: a.scheduled_at,
-            timezone: sett?.timezone ?? "America/Los_Angeles",
-            serviceName: a.treatment_type ?? undefined,
-            providerName: provName.get(a.provider_id) ?? null,
-            durationMin: a.duration_min ?? undefined,
-            addOns: addonsByAppt.get(a.id) ?? [],
-          });
-          if (r.ok) dispatched++;
-          else {
-            errors.push(`send ${a.id}: ${r.error ?? "unknown"}`);
-            skipped++;
+          // Per-iteration guard: a throw (e.g. a bad timezone hitting Intl)
+          // must not abort the rest of the batch.
+          let sent = false;
+          let sendErr: string | null = null;
+          try {
+            const r = await sendBookingReminder({
+              to: a.booking_email,
+              spaName: nameByTenant.get(tenantId) ?? "Your appointment",
+              startIso: a.scheduled_at,
+              timezone: sett?.timezone ?? "America/Los_Angeles",
+              serviceName: a.treatment_type ?? undefined,
+              providerName: provName.get(a.provider_id) ?? null,
+              durationMin: a.duration_min ?? undefined,
+              addOns: addonsByAppt.get(a.id) ?? [],
+            });
+            sent = r.ok;
+            if (!r.ok) sendErr = r.error ?? "unknown";
+          } catch (e) {
+            sendErr = e instanceof Error ? e.message : String(e);
+          }
+
+          if (sent) {
+            dispatched++;
+          } else {
+            // Release the claim so the next run retries this reminder.
+            await sb
+              .from("scheduling_reminder_sends")
+              .delete()
+              .eq("appointment_id", a.id)
+              .eq("kind", "lead");
+            errors.push(`send ${a.id}: ${sendErr ?? "unknown"}`);
+            retryQueued++;
           }
         }
 
@@ -188,6 +210,7 @@ export const Route = createFileRoute("/api/cron/scheduling-reminders")({
           candidates: rows.length,
           dispatched,
           skipped,
+          retryQueued,
           errors: errors.slice(0, 20),
         });
       },
