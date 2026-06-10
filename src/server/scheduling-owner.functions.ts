@@ -27,7 +27,7 @@ import {
   recordCrossSellWin,
 } from "@/server/refill-promo-calendar.functions";
 import { bestActiveOfferForName, type AddOnOffer } from "@/lib/promo-calendar";
-import { zonedWallClockToUtc, zonedDateParts } from "@/lib/scheduling-slots";
+import { zonedWallClockToUtc, zonedDateParts, todayIsoInTz } from "@/lib/scheduling-slots";
 import { sendBookingConfirmation } from "@/server/scheduling-email";
 import { asResourceType, assignFreeResource } from "@/server/scheduling-resources";
 
@@ -289,9 +289,12 @@ async function hydratePromoOffers(
   sb: Parameters<typeof loadTenantPromoOffers>[0],
   tenantId: string,
   serviceAddons: Map<string, AddOnLite[]>,
+  tz: string,
 ): Promise<{ offers: Awaited<ReturnType<typeof loadTenantPromoOffers>>; today: string }> {
   const offers = await loadTenantPromoOffers(sb, tenantId);
-  const today = new Date().toISOString().slice(0, 10);
+  // Spa-local date so promo boundaries don't fire hours early (UTC rolls over
+  // in the evening for US timezones).
+  const today = todayIsoInTz(tz);
   if (offers.length > 0) {
     for (const arr of serviceAddons.values()) {
       for (const ao of arr) {
@@ -421,6 +424,7 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
       sb,
       tenantId,
       serviceAddons,
+      timezone,
     );
 
     return {
@@ -567,6 +571,7 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
       sb,
       tenantId,
       serviceAddons,
+      timezone,
     );
 
     return {

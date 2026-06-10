@@ -26,6 +26,7 @@ import {
   normalizeForMatch,
   type PromoOffer,
 } from "@/lib/promo-calendar";
+import { todayIsoInTz } from "@/lib/scheduling-slots";
 
 function admin() {
   const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -317,7 +318,18 @@ export async function recordCrossSellWin(args: {
 }): Promise<{ recorded: boolean; reason?: string }> {
   const offers = await loadTenantPromoOffers(args.sb, args.tenantId);
   if (offers.length === 0) return { recorded: false, reason: "no_offers" };
-  const today = new Date().toISOString().slice(0, 10);
+  // Resolve "today" in the spa's own timezone — a UTC date rolls to tomorrow
+  // in the evening (US timezones), which on an offer's last/first day would
+  // mis-decide whether a $5 cross-sell win is active. Falls back to Pacific
+  // (the slot-engine default) when no timezone is configured.
+  const { data: tzRow } = await (
+    args.sb as unknown as { from(t: string): any }
+  )
+    .from("scheduling_settings")
+    .select("timezone")
+    .eq("tenant_id", args.tenantId)
+    .maybeSingle();
+  const today = todayIsoInTz(tzRow?.timezone ?? "America/Los_Angeles");
   let matched: string | null = null;
   for (const name of [args.serviceName, ...args.addOnNames]) {
     const offer = bestActiveOfferForName(offers, name, today);

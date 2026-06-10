@@ -203,6 +203,19 @@ export function zonedDateParts(
   };
 }
 
+/**
+ * Today's calendar date as "YYYY-MM-DD" IN a given IANA timezone.
+ *
+ * `new Date().toISOString().slice(0,10)` gives the UTC date — which rolls to
+ * "tomorrow" in the evening for any US timezone (after 6pm in UTC-6), so a
+ * date-only comparison like a promo's start/end boundary fires hours early.
+ * This resolves the wall-clock date in the spa's own timezone instead.
+ */
+export function todayIsoInTz(timeZone: string, instant: Date = new Date()): string {
+  const { year, month, day } = zonedDateParts(instant, timeZone);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 /** Parse "HH:MM" / "HH:MM:SS" wall clock to {hour, minute}. */
 function parseWallClock(t: string): { hour: number; minute: number } {
   const [h, mn] = t.split(":");

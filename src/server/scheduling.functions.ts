@@ -36,6 +36,7 @@ import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { fetchAllRows } from "@/server/paginate";
 import {
+  todayIsoInTz,
   availableSlots,
   type BlockInterval,
   type DateOverrideRow,
@@ -502,7 +503,9 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
     // promo (matched by product keyword in the add-on name).
     const promoOffers = await loadTenantPromoOffers(sb, tenant.id);
     if (promoOffers.length > 0) {
-      const today = new Date().toISOString().slice(0, 10);
+      // Spa-local date so promo start/end boundaries don't fire hours early
+      // (a UTC date rolls to "tomorrow" in the evening for US timezones).
+      const today = todayIsoInTz(settings.timezone);
       for (const so of serviceOptions) {
         const svcOffer = bestActiveOfferForName(promoOffers, so.name, today);
         if (svcOffer) so.activeOffer = svcOffer;

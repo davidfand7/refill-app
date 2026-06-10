@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.38",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.38 &mdash; Promo offers start and end on the right day in your timezone, not UTC&rsquo;s.</strong> Whether a cross-sell promo is &ldquo;active&rdquo; was decided against <strong>today&rsquo;s date in UTC</strong> &mdash; which flips to tomorrow in the evening for any US timezone (after 6pm Mountain, ~5pm Pacific). So on a promo&rsquo;s <strong>first or last day</strong>, the badge would appear (or disappear) several hours early, and &mdash; more consequentially &mdash; a booking made during those evening hours on the final day could be judged past the offer and <strong>skip its $5 cross-sell win</strong> (or record one a few hours before the offer truly opened). The active-offer check now resolves &ldquo;today&rdquo; in <strong>the spa&rsquo;s own timezone</strong> (the same timezone the scheduler already uses) everywhere it runs: public booking badges, the owner calendar, and the win-recording path. Added a shared <code>todayIsoInTz</code> helper alongside the slot engine&rsquo;s existing timezone math. <strong>Touched</strong>: <code>scheduling-slots.ts</code> (new helper), <code>scheduling.functions.ts</code>, <code>scheduling-owner.functions.ts</code>, <code>refill-promo-calendar.functions.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.37",
     date: "June 2026",
     items: [
