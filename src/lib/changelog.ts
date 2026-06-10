@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.47",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.47 &mdash; Scan demo: &ldquo;email me a link to run my own scan&rdquo; (Slice B).</strong> A visitor who loves the Rejuv example but doesn&rsquo;t have their export handy can now drop their email and get a link back to <code>/scan</code> &mdash; so we capture the lead instead of losing them to &ldquo;I&rsquo;ll do it later.&rdquo; The capture sits right under the uploader in the pre-loaded view; submitting records the lead (<code>csv_scanner_leads</code>, source <code>sample-return-link</code>) and sends a short, friendly &ldquo;run yours&rdquo; email via the existing Resend path (warm sender, link to the SmartSpa scan). Also tightened the hero subhead to three clean lines. <strong>SMS is the fast-follow</strong> (needs an outbound gateway). <strong>New</strong>: <code>sendScanReturnLink</code> fn + <code>sendScanReturnLinkEmail</code> composer. <strong>Touched</strong>: <code>scan.tsx</code>, <code>scan.functions.ts</code>, <code>scan-followup.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.46",
     date: "June 2026",
     items: [

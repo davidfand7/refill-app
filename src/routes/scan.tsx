@@ -68,6 +68,7 @@ import {
 import {
   mapHeadersPublic,
   captureScanLead,
+  sendScanReturnLink,
   type PublicMappingResult,
 } from "@/server/scan.functions";
 import { REFILL_BRAND } from "@/lib/brand";
@@ -111,6 +112,33 @@ function ScanPage() {
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailDone, setEmailDone] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
+
+  // Slice B: "email me a link to run my own scan" (sample mode)
+  const [returnEmail, setReturnEmail] = useState("");
+  const [returnBusy, setReturnBusy] = useState(false);
+  const [returnDone, setReturnDone] = useState(false);
+  const [returnError, setReturnError] = useState<string | null>(null);
+
+  const onSendReturnLink = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      const addr = returnEmail.trim();
+      if (!addr) return;
+      setReturnBusy(true);
+      setReturnError(null);
+      try {
+        await sendScanReturnLink({ data: { email: addr } });
+        setReturnDone(true);
+      } catch (err) {
+        setReturnError(
+          err instanceof Error ? err.message : "Couldn't send — try again.",
+        );
+      } finally {
+        setReturnBusy(false);
+      }
+    },
+    [returnEmail],
+  );
 
   const [copied, setCopied] = useState(false);
 
@@ -351,8 +379,11 @@ function ScanPage() {
           are really costing you.
         </h1>
         <p className="text-lg text-slate-600 mb-6 max-w-xl mx-auto">
-          Below are our own spa's real numbers &mdash; Rejuv. Drag &amp; drop
-          your CSV to see yours. Free, 30 seconds, no signup.
+          Below are our own spa's real numbers &mdash; Rejuv.
+          <br />
+          Drag &amp; drop your CSV to see yours.
+          <br />
+          Free, 30 seconds, no signup.
         </p>
         <div className="inline-flex items-center gap-2 text-xs text-slate-500 bg-white border border-slate-200 rounded-full px-3 py-1.5">
           <Lock className="h-3 w-3" />
@@ -775,6 +806,52 @@ function ScanPage() {
                 </div>
               </div>
               {dropZoneSection}
+
+              <div className="mt-2 text-center px-6">
+                {returnDone ? (
+                  <div className="inline-flex items-center gap-2 text-sm text-emerald-700 font-medium">
+                    <Mail className="h-4 w-4" />
+                    Sent! Check your inbox for your scan link.
+                  </div>
+                ) : (
+                  <div className="max-w-md mx-auto">
+                    <div className="text-sm text-slate-500 mb-3">
+                      No CSV handy right now? We'll email you a link to run your
+                      scan whenever you've got a minute.
+                    </div>
+                    <form
+                      onSubmit={onSendReturnLink}
+                      className="flex flex-col sm:flex-row gap-2"
+                    >
+                      <input
+                        type="email"
+                        required
+                        value={returnEmail}
+                        onChange={(e) => setReturnEmail(e.target.value)}
+                        placeholder="you@yourspa.com"
+                        className="flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-slate-400 focus:outline-none"
+                      />
+                      <button
+                        type="submit"
+                        disabled={returnBusy}
+                        className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 transition disabled:opacity-60"
+                      >
+                        {returnBusy ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Mail className="h-4 w-4" />
+                        )}
+                        Email me my link
+                      </button>
+                    </form>
+                    {returnError && (
+                      <div className="mt-2 text-xs text-amber-700">
+                        {returnError}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

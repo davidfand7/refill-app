@@ -34,7 +34,10 @@ import { z } from "zod";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { callGeminiOneShot } from "@/server/gemini-oneshot";
 import type { ColAliases } from "@/lib/appointment-csv";
-import { sendScanFollowUpEmail } from "@/server/scan-followup";
+import {
+  sendScanFollowUpEmail,
+  sendScanReturnLinkEmail,
+} from "@/server/scan-followup";
 
 // ─── Module-private supabase admin (service role) ─────────────────────────
 
@@ -408,4 +411,29 @@ export const captureScanLead = createServerFn({ method: "POST" })
     }
 
     return { ok: true, id: row.id };
+  });
+
+// ─── Slice B: "email me a link to run my own scan" ─────────────────────────
+//
+// For visitors who looked at the pre-loaded sample but don't have their export
+// handy. Captures the email as a lead (source = "sample-return-link") and
+// sends a friendly link back to /scan. No scan math involved — distinct from
+// captureScanLead, which sends the breakdown of a real upload.
+const returnLinkInput = z.object({ email: z.string().email() });
+
+export const sendScanReturnLink = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => returnLinkInput.parse(input))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const sb = admin();
+    const email = data.email.trim().toLowerCase();
+    const { data: row, error } = await sb
+      .from("csv_scanner_leads")
+      .insert({ email, source: "sample-return-link" })
+      .select("id")
+      .single();
+    if (error) {
+      throw new Error(`Couldn't save your email: ${error.message}`);
+    }
+    await sendScanReturnLinkEmail(sb, row.id, email);
+    return { ok: true };
   });

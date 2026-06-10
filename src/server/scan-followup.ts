@@ -465,6 +465,89 @@ export async function sendScanFollowUpEmail(
   }
 }
 
+/**
+ * Lean "come back and run your scan" email — for visitors who looked at the
+ * pre-loaded sample on /scan but don't have their own export handy yet. There's
+ * no data to report, so this is NOT sendScanFollowUpEmail (which refuses to
+ * send without leak math) — just a friendly link back. Reuses the same Resend
+ * send + warm from-address.
+ */
+export async function sendScanReturnLinkEmail(
+  sb: SbClient,
+  leadId: string,
+  email: string,
+): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.warn("[scan-return] RESEND_API_KEY not set — skipping send", leadId);
+    await sb
+      .from("csv_scanner_leads")
+      .update({ followup_error: "RESEND_API_KEY not configured" })
+      .eq("id", leadId);
+    return;
+  }
+  const brand = REFILL_BRAND;
+  const fromAddress = `${brand.emailFromName} <${fromMailboxForBrand(brand.emailFromMailbox)}>`;
+  const scanUrl = "https://smartspa.app/scan";
+  const subject = "Your SmartSpa scan link";
+  const text = [
+    "You just looked at SmartSpa's no-show + cancellation scan — those were our own spa's real numbers.",
+    "",
+    `Whenever you've got 30 seconds, drop your scheduler's CSV here to see YOUR numbers: ${scanUrl}`,
+    "",
+    "Free, no signup, and your data never leaves your browser — only the column structure touches our servers.",
+    "",
+    "— The SmartSpa team",
+  ].join("\n");
+  const html = `<!doctype html><html><body style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0f172a;line-height:1.6;font-size:15px;max-width:520px;margin:0 auto;padding:24px;">
+<p style="margin:0 0 16px;">You just looked at SmartSpa's no-show + cancellation scan &mdash; those were <strong>our own spa's real numbers</strong>.</p>
+<p style="margin:0 0 20px;">Whenever you've got 30 seconds, run yours:</p>
+<p style="margin:0 0 24px;"><a href="${scanUrl}" style="display:inline-block;background:#059669;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:600;">See your own numbers &rarr;</a></p>
+<p style="margin:0 0 8px;color:#475569;font-size:13px;">Free, no signup. Your data never leaves your browser &mdash; only the column structure touches our servers.</p>
+<p style="margin:16px 0 0;color:#94a3b8;font-size:13px;">&mdash; The SmartSpa team</p>
+</body></html>`;
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: fromAddress,
+        to: [email],
+        reply_to: REPLY_TO_EMAIL,
+        subject,
+        text,
+        html,
+        tags: [{ name: "type", value: "scan-return-link" }],
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(`Resend ${res.status}: ${body.slice(0, 300)}`);
+    }
+    const json = (await res.json().catch(() => ({}))) as { id?: string };
+    await sb
+      .from("csv_scanner_leads")
+      .update({
+        followup_sent_at: new Date().toISOString(),
+        followup_message_id: json.id ?? null,
+        followup_error: null,
+      })
+      .eq("id", leadId);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn("[scan-return] send failed", leadId, message);
+    await sb
+      .from("csv_scanner_leads")
+      .update({ followup_error: message.slice(0, 500) })
+      .eq("id", leadId);
+  }
+}
+
 // ─── v371: HTML report generator + token mint ─────────────────────────────
 
 /**
