@@ -246,6 +246,77 @@ function ScanPage() {
     }
   }
 
+  const dropZoneSection = (
+    <section className="max-w-3xl mx-auto px-6 pb-12">
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+        className={[
+          "relative rounded-3xl border-2 border-dashed transition-all bg-white shadow-sm",
+          dragOver
+            ? "border-emerald-500 bg-emerald-50/50 scale-[1.01]"
+            : "border-slate-300 hover:border-slate-400",
+          "px-8 py-16 text-center cursor-pointer",
+        ].join(" ")}
+        onClick={() => fileInputRef.current?.click()}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".csv,text/csv"
+          className="hidden"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (f) void handleFile(f);
+          }}
+        />
+        {busy ? (
+          <div className="flex flex-col items-center gap-3 text-slate-600">
+            <Loader2 className="h-10 w-10 animate-spin" />
+            <span className="text-sm">Reading your schedule…</span>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-4 text-slate-700">
+            <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center">
+              <Upload className="h-8 w-8 text-slate-500" />
+            </div>
+            <div>
+              <div className="text-lg font-medium text-slate-900 mb-1">
+                Drag &amp; drop your CSV to see YOUR numbers
+              </div>
+              <div className="text-sm text-slate-500">
+                or click to browse · we accept exports from any scheduler
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                fileInputRef.current?.click();
+              }}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 transition"
+            >
+              <FileUp className="h-4 w-4" />
+              Choose a CSV
+            </button>
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+          {error}
+        </div>
+      )}
+
+      <ExportGuidePanel />
+    </section>
+  );
+
   return (
     <div className="min-h-screen bg-[#f8f6f1] text-slate-900">
       {/* Top strip */}
@@ -290,78 +361,11 @@ function ScanPage() {
         </div>
       </section>
 
-      {/* Drop zone */}
-      {(!state || state.isSample) && (
-        <section className="max-w-3xl mx-auto px-6 pb-12">
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={onDrop}
-            className={[
-              "relative rounded-3xl border-2 border-dashed transition-all bg-white shadow-sm",
-              dragOver
-                ? "border-emerald-500 bg-emerald-50/50 scale-[1.01]"
-                : "border-slate-300 hover:border-slate-400",
-              "px-8 py-16 text-center cursor-pointer",
-            ].join(" ")}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void handleFile(f);
-              }}
-            />
-            {busy ? (
-              <div className="flex flex-col items-center gap-3 text-slate-600">
-                <Loader2 className="h-10 w-10 animate-spin" />
-                <span className="text-sm">Reading your schedule…</span>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-4 text-slate-700">
-                <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center">
-                  <Upload className="h-8 w-8 text-slate-500" />
-                </div>
-                <div>
-                  <div className="text-lg font-medium text-slate-900 mb-1">
-                    Drag &amp; drop your CSV to see YOUR numbers
-                  </div>
-                  <div className="text-sm text-slate-500">
-                    or click to browse · we accept exports from any
-                    scheduler
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    fileInputRef.current?.click();
-                  }}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 transition"
-                >
-                  <FileUp className="h-4 w-4" />
-                  Choose a CSV
-                </button>
-              </div>
-            )}
-          </div>
-
-          {error && (
-            <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
-              {error}
-            </div>
-          )}
-
-          <ExportGuidePanel />
-        </section>
-      )}
+      {/* Drop zone — top slot, shown only after a reset (no active scan).
+          In sample mode the same dropzone renders BELOW the receipt instead,
+          so the visitor sees Rejuv's real numbers first (wow), then drops
+          theirs. */}
+      {!state && dropZoneSection}
 
       {/* Receipt */}
       {state && (
@@ -375,7 +379,7 @@ function ScanPage() {
                 </strong>{" "}
                 We run SmartSpa on ourselves.{" "}
                 <span className="text-slate-300">
-                  Drag &amp; drop your CSV above to see yours.
+                  Drag &amp; drop your CSV below to see yours.
                 </span>
               </div>
             </div>
@@ -756,24 +760,21 @@ function ScanPage() {
               </div>
             )}
 
-          {/* Sample mode: prompt the visitor to run their own scan */}
+          {/* Sample mode: Rejuv's numbers are above (the wow) — now the
+              visitor drops their own. Same dropzone, rendered here so the
+              real results come first. */}
           {state.isSample && (
-            <div className="mt-6 bg-emerald-600 rounded-3xl px-6 py-8 text-center text-white">
-              <div className="text-2xl font-semibold mb-1">
-                Now see YOUR real numbers.
+            <div className="mt-10">
+              <div className="text-center mb-5">
+                <div className="text-2xl font-semibold text-slate-900 mb-1">
+                  Now see YOUR real numbers.
+                </div>
+                <div className="text-sm text-slate-500">
+                  Free, about 30 seconds, no signup. Your export never leaves
+                  your browser.
+                </div>
               </div>
-              <div className="text-sm text-emerald-50 mb-5 max-w-md mx-auto">
-                Free, about 30 seconds, no signup. Your export never leaves
-                your browser — only the column structure touches our servers.
-              </div>
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-emerald-700 text-sm font-semibold hover:bg-emerald-50 transition"
-              >
-                <FileUp className="h-4 w-4" />
-                Drop your export
-              </button>
+              {dropZoneSection}
             </div>
           )}
 

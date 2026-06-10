@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.46",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.46 &mdash; Scan page leads with the wow: Rejuv&rsquo;s real numbers first, &ldquo;drop yours&rdquo; below.</strong> The pre-loaded example now renders <strong>above</strong> the uploader, not below it &mdash; so the instant a visitor lands they see real results (5,754 appointments, $6,592/mo saved, money on the table), <em>then</em> a &ldquo;Now see YOUR real numbers&rdquo; prompt with the drag-and-drop zone directly beneath. The immediate proof does the selling; the ask comes second. (The same dropzone still appears on its own after a reset.) <strong>Touched</strong>: <code>scan.tsx</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.45",
     date: "June 2026",
     items: [
