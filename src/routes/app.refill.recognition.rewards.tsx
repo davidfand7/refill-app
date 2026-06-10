@@ -32,6 +32,7 @@ import {
   KeyRound,
   RotateCw,
   MonitorDown,
+  Download,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -496,10 +497,27 @@ function AutoImportCard({
                   Option B — SmartSpa Agent (one-click desktop app)
                 </div>
                 <p className="text-[12px] text-ink-faint">
-                  Install SmartSpa Agent and paste this token when it asks. It
-                  logs into your reward portals on your own Mac and pulls each
-                  report daily — for portals that can&apos;t email a scheduled
-                  export.
+                  Install SmartSpa Agent on your Mac, then paste this token when
+                  it asks. It logs into your reward portals right on your own
+                  computer and pulls each report daily — for portals that
+                  can&apos;t email a scheduled export.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <a
+                    href="https://pub-96898fc89e38437290dfa09adc0d4234.r2.dev/SmartSpa-Agent.mcpb"
+                    download
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald px-3 py-1.5 text-[12px] font-semibold text-paper hover:opacity-90"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download SmartSpa Agent
+                  </a>
+                  <span className="text-[11px] text-ink-faint">
+                    macOS · Apple Silicon · 564 MB
+                  </span>
+                </div>
+                <p className="text-[11px] text-ink-faint">
+                  Then open it (double-click) and paste this token in the setup
+                  window:
                 </p>
                 <div className="flex items-center gap-2 rounded-lg border border-rule bg-white px-3 py-2 font-mono text-[12.5px]">
                   <KeyRound className="h-3.5 w-3.5 shrink-0 text-ink-faint" />

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.53",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.53 &mdash; One-click SmartSpa Agent download, live from the Rewards card.</strong> Option B of the <em>Hands-free auto-import</em> card now has a real <strong>Download SmartSpa Agent</strong> button (macOS · Apple Silicon · 564&nbsp;MB) next to the token &mdash; so a spa can grab the desktop installer and paste their token in two clicks, no concierge hand-off of the file. The bundle (the signed <code>.mcpb</code> Desktop Extension that logs into reward portals on the spa&rsquo;s own Mac and pulls each report into SmartSpa) is hosted on Cloudflare R2 (public bucket <code>smartspa-agent</code>, zero-egress) and served with <code>Content-Disposition: attachment</code>. <strong>Touched</strong>: <code>app.refill.recognition.rewards.tsx</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.52",
     date: "June 2026",
     items: [
