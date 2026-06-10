@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.52",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.52 &mdash; Hands-free auto-import card now hands you the SmartSpa Agent token, with self-serve rotation.</strong> The <em>Hands-free auto-import</em> card on Recognition &rarr; Rewards used to surface only the email-drop address. It now presents <strong>two delivery options side by side</strong>: <em>Option A</em> &mdash; forward a report to your private <code>&lt;token&gt;@rewards.smartspa.app</code> address (unchanged), and <em>Option B</em> &mdash; install <strong>SmartSpa Agent</strong> (the one-click desktop app) and paste the same token, shown with its own <strong>Copy</strong> button. Same underlying per-tenant token, now copy-pasteable into the installer so it never has to live in an onboarding email. Added a self-serve <strong>Rotate token</strong> action (revokes the active token &mdash; old address + any installed Agent stop working &mdash; and mints a fresh one) behind a confirm, for &ldquo;it leaked / start clean.&rdquo; New server fn <code>rotateRewardIngestToken</code> (revoke-active-then-insert, respects the partial-unique index; no migration &mdash; <code>revoked_at</code> already existed). <strong>Touched</strong>: <code>app.refill.recognition.rewards.tsx</code>, <code>manufacturer-reward-ingest.functions.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.51",
     date: "June 2026",
     items: [

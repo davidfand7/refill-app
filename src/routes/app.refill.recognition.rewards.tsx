@@ -29,6 +29,9 @@ import {
   Upload,
   Gift,
   Sparkles,
+  KeyRound,
+  RotateCw,
+  MonitorDown,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -41,6 +44,7 @@ import {
   ingestManufacturerRewardCsv,
   listRewardSignal,
   getOrCreateRewardIngestToken,
+  rotateRewardIngestToken,
   type RewardSignalView,
   type RewardImportReceipt,
   type RewardEntryRow,
@@ -374,8 +378,11 @@ function AutoImportCard({
 }) {
   const [open, setOpen] = useState(false);
   const [address, setAddress] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copiedField, setCopiedField] = useState<"address" | "token" | null>(null);
+  const [confirmRotate, setConfirmRotate] = useState(false);
+  const [rotating, setRotating] = useState(false);
 
   async function toggle() {
     if (open) {
@@ -383,28 +390,46 @@ function AutoImportCard({
       return;
     }
     setOpen(true);
-    if (address || !accessToken) return;
+    if (token || !accessToken) return;
     setBusy(true);
     try {
       const r = await getOrCreateRewardIngestToken({
         data: { accessToken, viewAsUserId },
       });
       setAddress(r.address);
+      setToken(r.token);
     } catch {
-      toast.error("Couldn't load your auto-import address.");
+      toast.error("Couldn't load your auto-import token.");
     } finally {
       setBusy(false);
     }
   }
 
-  async function copy() {
-    if (!address) return;
+  async function copyField(field: "address" | "token", value: string) {
     try {
-      await navigator.clipboard.writeText(address);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      await navigator.clipboard.writeText(value);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 1500);
     } catch {
-      /* clipboard blocked — the address is visible to select manually */
+      /* clipboard blocked — the value is visible to select manually */
+    }
+  }
+
+  async function rotate() {
+    if (!accessToken) return;
+    setRotating(true);
+    try {
+      const r = await rotateRewardIngestToken({
+        data: { accessToken, viewAsUserId },
+      });
+      setAddress(r.address);
+      setToken(r.token);
+      setConfirmRotate(false);
+      toast.success("New token issued. Update your installs to keep auto-import running.");
+    } catch {
+      toast.error("Couldn't rotate your token. Try again.");
+    } finally {
+      setRotating(false);
     }
   }
 
@@ -415,7 +440,7 @@ function AutoImportCard({
         onClick={toggle}
         className="flex w-full items-center gap-2 text-sm font-semibold text-ink"
       >
-        <Mail className="h-4 w-4 text-emerald" />
+        <Sparkles className="h-4 w-4 text-emerald" />
         Hands-free auto-import — never upload a CSV again
         <span className="ml-auto text-[11px] font-normal text-ink-faint">
           {open ? "hide" : "set up"}
@@ -423,39 +448,82 @@ function AutoImportCard({
       </button>
 
       {open && (
-        <div className="mt-3 space-y-3 text-[13px] text-ink-soft">
+        <div className="mt-3 space-y-4 text-[13px] text-ink-soft">
           {busy ? (
             <div className="flex items-center gap-2 text-ink-faint">
               <Loader2 className="h-4 w-4 animate-spin" />
-              Loading your private address…
+              Loading your private token…
             </div>
-          ) : address ? (
+          ) : token && address ? (
             <>
               <p>
-                Point any manufacturer report at your private inbox — a
-                scheduled portal export, or a one-time auto-forward rule. Refill
-                figures out which manufacturer it is and imports it
-                automatically. No dropdown, no upload.
+                Two ways to get every manufacturer report in automatically — pick
+                either, or use both. SmartSpa figures out which manufacturer it
+                is and imports it for you. No dropdown, no upload, ever again.
               </p>
-              <div className="flex items-center gap-2 rounded-lg border border-rule bg-white px-3 py-2 font-mono text-[12.5px]">
-                <span className="truncate">{address}</span>
-                <button
-                  type="button"
-                  onClick={copy}
-                  className="ml-auto inline-flex items-center gap-1 text-emerald hover:opacity-80"
-                >
-                  {copied ? (
-                    <Check className="h-3.5 w-3.5" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" />
-                  )}
-                  {copied ? "Copied" : "Copy"}
-                </button>
+
+              {/* Option A — forward by email */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink">
+                  <Mail className="h-3.5 w-3.5 text-emerald" />
+                  Option A — forward the report by email
+                </div>
+                <p className="text-[12px] text-ink-faint">
+                  Point a scheduled portal export (or a one-time auto-forward
+                  rule) at your private inbox:
+                </p>
+                <div className="flex items-center gap-2 rounded-lg border border-rule bg-white px-3 py-2 font-mono text-[12.5px]">
+                  <span className="truncate">{address}</span>
+                  <button
+                    type="button"
+                    onClick={() => copyField("address", address)}
+                    className="ml-auto inline-flex shrink-0 items-center gap-1 text-emerald hover:opacity-80"
+                  >
+                    {copiedField === "address" ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                    {copiedField === "address" ? "Copied" : "Copy"}
+                  </button>
+                </div>
               </div>
+
+              {/* Option B — SmartSpa Agent desktop installer */}
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink">
+                  <MonitorDown className="h-3.5 w-3.5 text-emerald" />
+                  Option B — SmartSpa Agent (one-click desktop app)
+                </div>
+                <p className="text-[12px] text-ink-faint">
+                  Install SmartSpa Agent and paste this token when it asks. It
+                  logs into your reward portals on your own Mac and pulls each
+                  report daily — for portals that can&apos;t email a scheduled
+                  export.
+                </p>
+                <div className="flex items-center gap-2 rounded-lg border border-rule bg-white px-3 py-2 font-mono text-[12.5px]">
+                  <KeyRound className="h-3.5 w-3.5 shrink-0 text-ink-faint" />
+                  <span className="truncate">{token}</span>
+                  <button
+                    type="button"
+                    onClick={() => copyField("token", token)}
+                    className="ml-auto inline-flex shrink-0 items-center gap-1 text-emerald hover:opacity-80"
+                  >
+                    {copiedField === "token" ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                    {copiedField === "token" ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              </div>
+
               <ul className="list-disc pl-5 space-y-1 text-[12px] text-ink-faint">
                 <li>
                   <b>Allergan (Allē):</b> in Allē Business → Reports, schedule
-                  the Patient360 export to this address.
+                  the Patient360 export to your email address above — or let
+                  SmartSpa Agent pull it for you.
                 </li>
                 <li>
                   <b>Galderma (ASPIRE):</b> schedule the all-patients / savings
@@ -466,13 +534,57 @@ function AutoImportCard({
                   export here.
                 </li>
               </ul>
+
               <p className="text-[11px] text-ink-faint">
                 Imports appear in the history below, just like a manual upload —
                 only nobody had to do anything.
               </p>
+
+              {/* Rotate — self-serve, destructive, confirm first */}
+              <div className="border-t border-rule pt-3">
+                {confirmRotate ? (
+                  <div className="flex flex-wrap items-center gap-2 text-[12px]">
+                    <span className="text-ink-soft">
+                      Issue a new token? Your current email address and any
+                      installed SmartSpa Agent will stop working until you update
+                      them.
+                    </span>
+                    <button
+                      type="button"
+                      disabled={rotating}
+                      onClick={rotate}
+                      className="inline-flex items-center gap-1 rounded-md bg-ink px-2.5 py-1 font-medium text-paper hover:opacity-90 disabled:opacity-50"
+                    >
+                      {rotating ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RotateCw className="h-3.5 w-3.5" />
+                      )}
+                      Yes, rotate
+                    </button>
+                    <button
+                      type="button"
+                      disabled={rotating}
+                      onClick={() => setConfirmRotate(false)}
+                      className="text-ink-faint hover:text-ink"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmRotate(true)}
+                    className="inline-flex items-center gap-1.5 text-[12px] text-ink-faint hover:text-ink"
+                  >
+                    <RotateCw className="h-3.5 w-3.5" />
+                    Rotate token (if it leaked or you want a clean start)
+                  </button>
+                )}
+              </div>
             </>
           ) : (
-            <p className="text-ink-faint">Sign in to load your address.</p>
+            <p className="text-ink-faint">Sign in to load your token.</p>
           )}
         </div>
       )}

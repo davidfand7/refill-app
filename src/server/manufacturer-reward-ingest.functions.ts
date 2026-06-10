@@ -591,6 +591,36 @@ export const getOrCreateRewardIngestToken = createServerFn({ method: "POST" })
     return { token, address: `${token}@${REWARD_INGEST_DOMAIN}` };
   });
 
+/**
+ * UI: rotate the spa's reward-ingest token. Revokes the current active token
+ * (so the old email address AND any installed SmartSpa Agent stop working) and
+ * mints a fresh one. Self-serve "I think my token leaked / start clean" button.
+ * Revoke-then-insert order respects the partial-unique-active-per-user index.
+ */
+export const rotateRewardIngestToken = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => tokenInput.parse(input))
+  .handler(async ({ data }): Promise<{ token: string; address: string }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    // 1) Revoke every currently-active token for this spa.
+    const { error: revokeErr } = await tokenTbl(sb)
+      .update({ revoked_at: new Date().toISOString() })
+      .eq("user_id", effectiveUserId)
+      .is("revoked_at", null);
+    if (revokeErr) throw new Error("Couldn't rotate your token. Try again.");
+    // 2) Mint a fresh one.
+    const token = randomToken();
+    const { error: insertErr } = await tokenTbl(sb).insert({
+      user_id: effectiveUserId,
+      token,
+    });
+    if (insertErr) throw new Error("Couldn't create a new token. Try again.");
+    return { token, address: `${token}@${REWARD_INGEST_DOMAIN}` };
+  });
+
 export type TokenIngestResult = {
   ok: boolean;
   detected: string | null;
