@@ -49,9 +49,11 @@ export const SAMPLE_RECEIPT: ScanReceipt = {
     { label: "Sat", cancelledCount: 35, refilledCount: 28, emptyCount: 7, emptyLeakUsd: 1750 },
   ],
   byProvider: [
-    { label: "Rejuv Skin Spa", cancelledCount: 892, refilledCount: 757, emptyCount: 135, emptyLeakUsd: 33750 },
-    { label: "Rejuv — Michelle", cancelledCount: 91, refilledCount: 7, emptyCount: 84, emptyLeakUsd: 21000 },
-    { label: "Lisa", cancelledCount: 32, refilledCount: 6, emptyCount: 26, emptyLeakUsd: 6500 },
+    // Karen kept authentic (she's the only provider listed on the public site,
+    // so the numbers are verifiable); other staff genericized for privacy.
+    { label: "Karen", cancelledCount: 892, refilledCount: 757, emptyCount: 135, emptyLeakUsd: 33750 },
+    { label: "Provider 2", cancelledCount: 91, refilledCount: 7, emptyCount: 84, emptyLeakUsd: 21000 },
+    { label: "Provider 3", cancelledCount: 32, refilledCount: 6, emptyCount: 26, emptyLeakUsd: 6500 },
   ],
   byService: [
     { label: "Tox w/ Karen", cancelledCount: 651, refilledCount: 565, emptyCount: 86, emptyLeakUsd: 21500 },

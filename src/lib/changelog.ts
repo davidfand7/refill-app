@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.44",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.44 &mdash; Sample scan: genericized staff names (kept Karen, who&rsquo;s verifiable).</strong> The pre-loaded example&rsquo;s provider breakdown showed real staff first names. <strong>Karen</strong> stays &mdash; she&rsquo;s the only provider listed on the public site, so the numbers stay verifiable &mdash; while the other two providers now show as <strong>Provider 2 / Provider 3</strong>. Same numbers, less exposure. <strong>Touched</strong>: <code>scan-sample.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.43",
     date: "June 2026",
     items: [
