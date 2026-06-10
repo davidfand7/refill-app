@@ -31,6 +31,7 @@ import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
+import { fetchAllRows } from "@/server/paginate";
 import { validateReferralToken } from "@/server/referral-tokens";
 
 // ─── reserved slugs ──────────────────────────────────────────────────────
@@ -642,16 +643,27 @@ export const getMyTenantRecoveryFeed = createServerFn({ method: "POST" })
         return { tenantUserIds: [], totals: { ...empty }, recent: [] };
       }
 
-      const { data: rows, error } = await sb
-        .from("emma_recovery_events")
-        .select(
-          "id, created_at, recovery_agent, attributed_revenue_usd, verified_at",
-        )
-        .in("user_id", tenantUserIds)
-        .order("created_at", { ascending: false });
-      if (error) {
-        throw new Error(`Couldn't load recovery feed: ${error.message}`);
-      }
+      // Page past PostgREST's 1,000-row cap: lifetimeUsd / eventCountLifetime
+      // sum over the FULL set, so a capped read would silently undercount a
+      // tenant's headline recovered-revenue total once they cross 1,000
+      // events (rows are DESC, so the cap drops the OLDEST events first).
+      type RecoveryEventRow = {
+        id: string;
+        created_at: string;
+        recovery_agent: string | null;
+        attributed_revenue_usd: number | string | null;
+        verified_at: string | null;
+      };
+      const rows = await fetchAllRows<RecoveryEventRow>((from, to) =>
+        sb
+          .from("emma_recovery_events")
+          .select(
+            "id, created_at, recovery_agent, attributed_revenue_usd, verified_at",
+          )
+          .in("user_id", tenantUserIds)
+          .order("created_at", { ascending: false })
+          .range(from, to),
+      );
 
       const now = Date.now();
       const dayMs = 24 * 60 * 60 * 1000;
@@ -661,7 +673,7 @@ export const getMyTenantRecoveryFeed = createServerFn({ method: "POST" })
 
       const totals: TenantRecoveryTotals = { ...empty };
       const recent: TenantRecoveryEvent[] = [];
-      for (const r of rows ?? []) {
+      for (const r of rows) {
         const usd =
           r.attributed_revenue_usd == null
             ? 0

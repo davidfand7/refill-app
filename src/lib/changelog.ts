@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.34",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.34 &mdash; Your lifetime recovered-revenue total now counts every win, not just the latest 1,000.</strong> The live recovery feed on your home screen reads all of your recovery events to sum the headline <strong>&ldquo;recovered revenue&rdquo;</strong> figure (lifetime + today / 7-day / 30-day) &mdash; but that read was unpaginated, so past the database&rsquo;s 1,000-row ceiling it silently returned only your <strong>most recent</strong> 1,000 events. Because the events come back newest-first, the recent windows stayed correct, but the <strong>lifetime total and event count would quietly stop growing</strong> &mdash; understating the very number that proves Refill&rsquo;s worth, and dropping your oldest wins first. The read now pages through the full set, so the lifetime total reflects every recovered booking at any scale. <strong>Touched</strong>: <code>refill-tenants.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.33",
     date: "June 2026",
     items: [
