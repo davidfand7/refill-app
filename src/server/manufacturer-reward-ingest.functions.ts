@@ -524,13 +524,16 @@ export const listRewardSignal = createServerFn({ method: "POST" })
 // ─── Email-drop auto-ingest: per-tenant token + token→detect→ingest ────────
 //
 // The spa points a manufacturer report (scheduled export / Gmail auto-forward)
-// at <token>@rewards.getrefill.app. The inbound endpoint
+// at <token>@rewards.smartspa.app. The inbound endpoint
 // (api.resend.inbound-rewards) resolves the token here, auto-detects the
 // mapper from the CSV headers, and runs the SAME doIngestRewards core as the
 // manual upload — no dropdown, no manual touch. We trust the token, not the
 // From sender.
+//
+// Hosted on the SmartSpa domain (not the deprecating getrefill.app): the one
+// smartspa.app Resend domain now does both send and receive.
 
-export const REWARD_INGEST_DOMAIN = "rewards.getrefill.app";
+export const REWARD_INGEST_DOMAIN = "rewards.smartspa.app";
 
 // reward_ingest_tokens isn't in the generated types yet; use a loose view
 // for its queries (mirrors the inbound-lite cast pattern). Localized any.

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.39",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.39 &mdash; Hands-free auto-import moves to the SmartSpa domain.</strong> The email-drop address for auto-ingesting manufacturer reports is now <code>&lt;token&gt;@rewards.smartspa.app</code> (was <code>rewards.getrefill.app</code>) &mdash; so the one verified <strong>smartspa.app</strong> Resend domain now does both directions: it <em>sends</em> patient mail and <em>receives</em> the spa&rsquo;s forwarded reward/treatment exports. Consolidating onto SmartSpa (and off the deprecating getrefill domain) keeps everything under one brand. The displayed address on <strong>Recognition &rarr; Rewards &rarr; Hands-free auto-import</strong> updates automatically (it&rsquo;s built from the ingest-domain constant), and the unguessable per-spa token is unchanged. This was never live before (no inbound MX existed), so there&rsquo;s nothing to migrate. <strong>Go-live needs</strong> a one-time MX on <code>rewards.smartspa.app</code> + a Resend Inbound route to the receiver endpoint. <strong>Touched</strong>: <code>manufacturer-reward-ingest.functions.ts</code> (ingest-domain constant), <code>api.resend.inbound-rewards.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.38",
     date: "June 2026",
     items: [

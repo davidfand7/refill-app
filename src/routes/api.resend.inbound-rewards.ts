@@ -2,7 +2,7 @@
  * Resend Inbound — manufacturer-data email-drop receiver (v1.97.0; both
  * lanes since v2.3.1).
  *
- * Resend Inbound Routing delivers mail sent to <token>@rewards.getrefill.app
+ * Resend Inbound Routing delivers mail sent to <token>@rewards.smartspa.app
  * to this endpoint as JSON. The handler:
  *   1. Extracts the token from the `to` address local-part.
  *   2. Pulls CSV attachment(s) from the payload.
@@ -17,7 +17,7 @@
  * (so a forwarded report from any staff inbox works). Token is unguessable +
  * revocable (reward_ingest_tokens).
  *
- * GO-LIVE (infra, one-time): add an MX record for rewards.getrefill.app and a
+ * GO-LIVE (infra, one-time): add an MX record for rewards.smartspa.app and a
  * Resend Inbound route for that domain → this URL. Until then the endpoint is
  * testable by POSTing a sample payload directly.
  */
@@ -44,7 +44,7 @@ function jsonResp(status: number, body: unknown) {
 }
 
 /** Extract the local-part token from a `to` value that may be
- *  "Name <token@rewards.getrefill.app>" or a bare address. */
+ *  "Name <token@rewards.smartspa.app>" or a bare address. */
 function extractToken(toRaw: string | string[] | undefined): string | null {
   const first = Array.isArray(toRaw) ? (toRaw[0] ?? "") : (toRaw ?? "");
   const m = first.match(/<([^>]+)>/);
