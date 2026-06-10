@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.48",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.48 &mdash; The &ldquo;run your scan&rdquo; email now drops you right at the uploader.</strong> Someone clicking the link-back email <em>already</em> saw the demo &mdash; that&rsquo;s why they asked for the link &mdash; so landing them at the top to re-scroll Rejuv&rsquo;s numbers is friction. The email link now deep-links below the fold (<code>/scan#drop</code>) and the page smooth-scrolls straight to the &ldquo;Now see YOUR real numbers&rdquo; drop zone on arrival. Small thing; it&rsquo;s the difference between &ldquo;oh, here it is&rdquo; and &ldquo;where do I&hellip;&rdquo; <strong>Touched</strong>: <code>scan.tsx</code>, <code>scan-followup.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.47",
     date: "June 2026",
     items: [

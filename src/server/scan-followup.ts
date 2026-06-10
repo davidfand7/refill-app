@@ -488,7 +488,9 @@ export async function sendScanReturnLinkEmail(
   }
   const brand = REFILL_BRAND;
   const fromAddress = `${brand.emailFromName} <${fromMailboxForBrand(brand.emailFromMailbox)}>`;
-  const scanUrl = "https://smartspa.app/scan";
+  // Deep-link below the fold: the recipient already saw the demo, so land
+  // them on the drop zone, not the top of the page.
+  const scanUrl = "https://smartspa.app/scan#drop";
   const subject = "Your SmartSpa scan link";
   const text = [
     "You just looked at SmartSpa's no-show + cancellation scan — those were our own spa's real numbers.",

@@ -25,7 +25,7 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -141,6 +141,19 @@ function ScanPage() {
   );
 
   const [copied, setCopied] = useState(false);
+
+  // Arriving from the "email me a link" message (smartspa.app/scan#drop): the
+  // visitor already saw the demo, so scroll them straight to the drop zone.
+  useEffect(() => {
+    if (typeof window === "undefined" || window.location.hash !== "#drop")
+      return;
+    const t = setTimeout(() => {
+      document
+        .getElementById("drop")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 120);
+    return () => clearTimeout(t);
+  }, []);
 
   const reset = useCallback(() => {
     setState(null);
@@ -795,7 +808,7 @@ function ScanPage() {
               visitor drops their own. Same dropzone, rendered here so the
               real results come first. */}
           {state.isSample && (
-            <div className="mt-10">
+            <div id="drop" className="mt-10 scroll-mt-6">
               <div className="text-center mb-5">
                 <div className="text-2xl font-semibold text-slate-900 mb-1">
                   Now see YOUR real numbers.
