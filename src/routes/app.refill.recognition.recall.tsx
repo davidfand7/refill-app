@@ -213,7 +213,7 @@ function RecallPage() {
       <PageHeader
         title="Recall"
         eyebrow="Promos"
-        description="Lapsed patients and expiring rewards, surfaced as money on the table. Each name is a patient the manufacturer would otherwise leak to “a provider near you” — book them into your own chair instead."
+        description="Lapsed patients and expiring rewards, surfaced as money on the table. Each name is a patient the manufacturer would otherwise send to “a provider near you” — book them into your own chair instead."
         breadcrumbs={[
           { label: "Refill", to: "/app/refill" },
           { label: "Promos", to: "/app/refill/recognition/inventory" },

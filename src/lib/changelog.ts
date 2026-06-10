@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.40",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.40 &mdash; Copy that sounds like a spa owner, not a strategy deck.</strong> Swept the word <em>&ldquo;leak&rdquo;</em> out of everything a customer reads &mdash; nobody at a front desk says &ldquo;leak.&rdquo; On the <strong>Our Story</strong> page: &ldquo;Pure leak&rdquo; &rarr; &ldquo;Just gone,&rdquo; &ldquo;watching the leak&rdquo; &rarr; &ldquo;watching that money walk out the door,&rdquo; &ldquo;it&rsquo;s not a leak&rdquo; &rarr; &ldquo;it&rsquo;s not lost,&rdquo; &ldquo;empty-slot leak&rdquo; &rarr; &ldquo;empty slots,&rdquo; and &ldquo;every Monday morning&rdquo; &rarr; &ldquo;every morning&rdquo; (it&rsquo;s not just Mondays). In <strong>Recall</strong> and <strong>Rewards</strong>, the manufacturer no longer &ldquo;leaks&rdquo; your patient to &ldquo;a provider near you&rdquo; &mdash; it <em>sends</em> them (keeping the damning real quote, dropping the jargon). And the public <strong>scan</strong> footer now reads &ldquo;% of lost revenue&rdquo; instead of &ldquo;% of leak.&rdquo; <strong>Touched</strong>: <code>story.tsx</code>, <code>app.refill.recognition.recall.tsx</code>, <code>app.refill.recognition.rewards.tsx</code>, <code>scan.tsx</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.39",
     date: "June 2026",
     items: [

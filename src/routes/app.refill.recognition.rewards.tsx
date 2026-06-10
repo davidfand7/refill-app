@@ -771,7 +771,7 @@ function EmptyState() {
       <p className="text-sm text-ink-soft max-w-md mx-auto">
         Upload your Evolus Patient Insights export above. Refill matches every
         patient to your book and shows you who's eligible now and whose reward
-        is about to expire — so you can book them before the manufacturer leaks
+        is about to expire — so you can book them before the manufacturer sends
         them to "a provider near you."
       </p>
     </div>

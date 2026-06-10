@@ -103,10 +103,10 @@ function StoryPage() {
           or the patient who would have happily taken it.
         </p>
         <p className="text-base text-ink-soft leading-relaxed">
-          For 20+ years we endured it. Every front desk on every Monday
-          morning shuffling, calling, texting, refilling — manually catching
+          For 20+ years we endured it. Every front desk, every morning,
+          shuffling, calling, texting, refilling — manually catching
           most of them, but not all. And the ones that slipped through?
-          Pure leak. Revenue that never comes back.
+          Just gone. Revenue that never comes back.
         </p>
       </section>
 
@@ -117,7 +117,8 @@ function StoryPage() {
         </h2>
         <p className="text-base text-ink-soft mb-4 leading-relaxed">
           My husband has 35+ years in software business development. After
-          two decades of watching the leak from the spa side, he finally
+          two decades of watching that money walk out the door from the
+          spa side, he finally
           did something about it. There's no silver bullet — we're not
           promising one, and we don't believe anyone honest does. What we
           built is a step in the right direction that gets better the
@@ -143,11 +144,11 @@ function StoryPage() {
           Most pitches in this space inflate the number. They count every
           cancellation as a loss — but real spas know their front desk
           refills most of those slots manually. That revenue is already in
-          your books. It's not a leak.
+          your books. It's not lost.
         </p>
         <p className="text-base text-ink-soft leading-relaxed">
           {brand.name}'s math computes the{" "}
-          <strong className="text-ink">empty-slot leak only</strong> —
+          <strong className="text-ink">empty slots only</strong> —
           cancelled slots that stayed empty, where no rebooking or refill
           happened. That's typically 15–35% of cancellations on real
           med-spa data. Smaller number than the inflated version,
