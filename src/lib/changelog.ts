@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.42",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.42 &mdash; The scan funnel now quotes the real price: free + $5 per booking.</strong> The public <strong>scan</strong> page&rsquo;s call-to-action still read &ldquo;only pay <em>12% of what we recover</em>&rdquo; in two spots &mdash; the <strong>retired</strong> revenue-share model that the pricing sweep missed on this page. Every prospect who ran a scan saw the wrong price. Both now read &ldquo;<strong>only $5 per booking we recover</strong>,&rdquo; matching the one canonical plan everywhere else. Removed the now-unused take-rate import. (The rep-commission economics page legitimately still uses the take-rate &mdash; that&rsquo;s the separate rep-pay system, not customer pricing.) <strong>Touched</strong>: <code>scan.tsx</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.41",
     date: "June 2026",
     items: [

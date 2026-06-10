@@ -71,7 +71,6 @@ import {
   type PublicMappingResult,
 } from "@/server/scan.functions";
 import { REFILL_BRAND } from "@/lib/brand";
-import { formatRate, TOTAL_TAKE_RATE } from "@/lib/rep-economics";
 
 export const Route = createFileRoute("/scan")({
   component: ScanPage,
@@ -761,8 +760,7 @@ function ScanPage() {
                         <span className="text-white">
                           {brand.ctaLabel.toLowerCase()}
                         </span>
-                        , only pay {formatRate(TOTAL_TAKE_RATE)} of what we
-                        recover.
+                        {" "}&mdash; only $5 per booking we recover.
                       </div>
                     </>
                   ) : (
@@ -771,8 +769,7 @@ function ScanPage() {
                         Ready to actually recover this revenue?
                       </div>
                       <div className="text-2xl font-semibold mb-1">
-                        {brand.ctaLabel}. Only pay{" "}
-                        {formatRate(TOTAL_TAKE_RATE)} of what we recover.
+                        {brand.ctaLabel}. Only $5 per booking we recover.
                       </div>
                       <div className="text-sm text-slate-300 mb-5 max-w-xl">
                         Month-to-month, cancel anytime. No card to start. We
