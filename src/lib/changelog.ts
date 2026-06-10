@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.43",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.43 &mdash; The scan page now shows real numbers the instant you land &mdash; no upload required.</strong> Asking a cold visitor to find and drop their CSV <em>before</em> they&rsquo;ve seen any value is where funnels lose people. So <code>/scan</code> now opens with a <strong>live example already filled in</strong> &mdash; and we own it: it&rsquo;s <strong>Rejuv Skin Spa, our own med-spa</strong> (&ldquo;we run SmartSpa on ourselves&rdquo;). The visitor immediately sees the full receipt &mdash; 5,754 appointments, $6,592/mo their team already saves, $944&ndash;$1,154/mo more on the table &mdash; with the uploader right above it (&ldquo;drop your export to see your own numbers&rdquo;) and a bottom prompt to run theirs. The example is <strong>pipeline-true</strong>: Rejuv&rsquo;s real Acuity export run through the exact same code path a customer&rsquo;s file hits, baked as aggregate numbers only (zero patient data ships). Drop your own file and it instantly replaces the sample with your real scan + the email/connect actions. <strong>New</strong>: <code>scan-sample.ts</code> (the baked receipt). <strong>Touched</strong>: <code>scan.tsx</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.42",
     date: "June 2026",
     items: [

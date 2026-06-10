@@ -71,6 +71,11 @@ import {
   type PublicMappingResult,
 } from "@/server/scan.functions";
 import { REFILL_BRAND } from "@/lib/brand";
+import {
+  SAMPLE_RECEIPT,
+  SAMPLE_PARSED,
+  SAMPLE_FILE_LABEL,
+} from "@/lib/scan-sample";
 
 export const Route = createFileRoute("/scan")({
   component: ScanPage,
@@ -81,6 +86,17 @@ type ScanState = {
   receipt: ScanReceipt;
   aiMapping: PublicMappingResult | null;
   fileName: string;
+  isSample?: boolean;
+};
+
+// Pre-loaded "live example" — Rejuv's real scan, shown until the visitor
+// drops their own export. We own it: dogfooding is the most honest demo.
+const SAMPLE_SCAN_STATE: ScanState = {
+  parsed: SAMPLE_PARSED,
+  receipt: SAMPLE_RECEIPT,
+  aiMapping: null,
+  fileName: SAMPLE_FILE_LABEL,
+  isSample: true,
 };
 
 function ScanPage() {
@@ -89,7 +105,7 @@ function ScanPage() {
   const [dragOver, setDragOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [state, setState] = useState<ScanState | null>(null);
+  const [state, setState] = useState<ScanState | null>(SAMPLE_SCAN_STATE);
 
   const [email, setEmail] = useState("");
   const [emailBusy, setEmailBusy] = useState(false);
@@ -275,7 +291,7 @@ function ScanPage() {
       </section>
 
       {/* Drop zone */}
-      {!state && (
+      {(!state || state.isSample) && (
         <section className="max-w-3xl mx-auto px-6 pb-12">
           <div
             onDragOver={(e) => {
@@ -350,6 +366,20 @@ function ScanPage() {
       {/* Receipt */}
       {state && (
         <section className="max-w-4xl mx-auto px-6 pb-16">
+          {state.isSample && (
+            <div className="mb-5 rounded-2xl bg-slate-900 text-white px-5 py-4 flex items-start gap-3">
+              <Sparkles className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+              <div className="text-sm leading-relaxed">
+                <strong className="font-semibold">
+                  This is a live example — Rejuv Skin Spa, our own med-spa.
+                </strong>{" "}
+                We run SmartSpa on ourselves.{" "}
+                <span className="text-slate-300">
+                  Drop your export above to see your own numbers.
+                </span>
+              </div>
+            </div>
+          )}
           {/* Receipt header */}
           <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
             <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
@@ -376,12 +406,14 @@ function ScanPage() {
                   · {state.fileName}
                 </span>
               </div>
-              <button
-                onClick={reset}
-                className="text-xs text-slate-500 hover:text-slate-900"
-              >
-                Scan another file
-              </button>
+              {!state.isSample && (
+                <button
+                  onClick={reset}
+                  className="text-xs text-slate-500 hover:text-slate-900"
+                >
+                  Scan another file
+                </button>
+              )}
             </div>
 
             {/* Stat strip */}
@@ -664,7 +696,8 @@ function ScanPage() {
           </div>
 
           {/* Email capture */}
-          {state.receipt.hasUsableStatusData &&
+          {!state.isSample &&
+            state.receipt.hasUsableStatusData &&
             state.receipt.monthlyLeakUsd !== null && (
               <div className="mt-6 bg-white rounded-3xl shadow-sm border border-slate-200 px-6 py-7">
                 <div className="flex items-start gap-3 mb-4">
@@ -723,12 +756,34 @@ function ScanPage() {
               </div>
             )}
 
+          {/* Sample mode: prompt the visitor to run their own scan */}
+          {state.isSample && (
+            <div className="mt-6 bg-emerald-600 rounded-3xl px-6 py-8 text-center text-white">
+              <div className="text-2xl font-semibold mb-1">
+                Want to see your own numbers?
+              </div>
+              <div className="text-sm text-emerald-50 mb-5 max-w-md mx-auto">
+                Free, about 30 seconds, no signup. Your export never leaves
+                your browser — only the column structure touches our servers.
+              </div>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-emerald-700 text-sm font-semibold hover:bg-emerald-50 transition"
+              >
+                <FileUp className="h-4 w-4" />
+                Drop your export
+              </button>
+            </div>
+          )}
+
           {/* CTA — Acuity users see the live-mode upgrade framing; everyone
               else sees the standard signup framing with a heads-up that
               live-mode for their platform is on the roadmap. Detection
               checks both deterministic dialect and AI-mapped platform name
               so v371 AI-mapped Acuity CSVs also flip the variant. */}
-          {state.receipt.hasUsableStatusData &&
+          {!state.isSample &&
+            state.receipt.hasUsableStatusData &&
             state.receipt.monthlyLeakUsd !== null &&
             (() => {
               const isAcuity =
