@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.45",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.45 &mdash; Scan CTAs reframed: &ldquo;see <em>our</em> real numbers&rdquo; &rarr; &ldquo;drop yours to see <em>yours</em>.&rdquo;</strong> Now that the page opens on Rejuv&rsquo;s real scan, the copy leans into it: the subhead reads &ldquo;these are our own spa&rsquo;s real numbers &mdash; Rejuv; drag &amp; drop your CSV to see yours,&rdquo; the uploader says &ldquo;Drag &amp; drop your CSV to see YOUR numbers,&rdquo; the example banner says &ldquo;these are Rejuv&rsquo;s real numbers &mdash; drag &amp; drop above to see yours,&rdquo; and the closing prompt reads &ldquo;Now see YOUR real numbers.&rdquo; The OURS&rarr;YOURS pairing makes the value obvious before any effort. <strong>Touched</strong>: <code>scan.tsx</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.44",
     date: "June 2026",
     items: [

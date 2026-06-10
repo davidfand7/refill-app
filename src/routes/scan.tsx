@@ -280,8 +280,8 @@ function ScanPage() {
           are really costing you.
         </h1>
         <p className="text-lg text-slate-600 mb-6 max-w-xl mx-auto">
-          Drop your scheduler's CSV. We'll show you the math in 30 seconds.
-          Free. No signup.
+          Below are our own spa's real numbers &mdash; Rejuv. Drag &amp; drop
+          your CSV to see yours. Free, 30 seconds, no signup.
         </p>
         <div className="inline-flex items-center gap-2 text-xs text-slate-500 bg-white border border-slate-200 rounded-full px-3 py-1.5">
           <Lock className="h-3 w-3" />
@@ -331,7 +331,7 @@ function ScanPage() {
                 </div>
                 <div>
                   <div className="text-lg font-medium text-slate-900 mb-1">
-                    Drop your CSV here
+                    Drag &amp; drop your CSV to see YOUR numbers
                   </div>
                   <div className="text-sm text-slate-500">
                     or click to browse · we accept exports from any
@@ -371,11 +371,11 @@ function ScanPage() {
               <Sparkles className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
               <div className="text-sm leading-relaxed">
                 <strong className="font-semibold">
-                  This is a live example — Rejuv Skin Spa, our own med-spa.
+                  These are Rejuv's real numbers — our own med-spa.
                 </strong>{" "}
                 We run SmartSpa on ourselves.{" "}
                 <span className="text-slate-300">
-                  Drop your export above to see your own numbers.
+                  Drag &amp; drop your CSV above to see yours.
                 </span>
               </div>
             </div>
@@ -760,7 +760,7 @@ function ScanPage() {
           {state.isSample && (
             <div className="mt-6 bg-emerald-600 rounded-3xl px-6 py-8 text-center text-white">
               <div className="text-2xl font-semibold mb-1">
-                Want to see your own numbers?
+                Now see YOUR real numbers.
               </div>
               <div className="text-sm text-emerald-50 mb-5 max-w-md mx-auto">
                 Free, about 30 seconds, no signup. Your export never leaves
