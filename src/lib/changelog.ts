@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.37",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.37 &mdash; Allocation queue stats stay accurate past 500 suggestions.</strong> The Recognition allocation screen loads your suggestion history to show the <strong>pending</strong> and <strong>confirmed</strong> counts and the queue list &mdash; but that read was capped at the most recent 500 rows, so a practice that accrued more than 500 suggestions over time would see those counts computed from a partial set (and the &ldquo;showing latest 100 of N&rdquo; label would understate N). The read now pages through the full set, so the headline counts reconcile at any volume. Low-frequency in practice (allocation runs are manual and inventory-bounded), but it&rsquo;s the same load-bearing-list class as the rest of this sweep. <strong>Touched</strong>: <code>refill-recognition-allocation.functions.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.36",
     date: "June 2026",
     items: [

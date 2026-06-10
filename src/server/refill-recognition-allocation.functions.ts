@@ -250,15 +250,27 @@ export const listAllocationSuggestions = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const { data: rows, error } = await sb
-      .from("knowledge_nodes")
-      .select("id, attachments, created_at, updated_at")
-      .eq("user_id", effectiveUserId)
-      .eq("node_type", "allocation_suggestion")
-      .order("created_at", { ascending: false })
-      .limit(500);
-    if (error) throw new Error(`Couldn't load suggestions: ${error.message}`);
-    return (rows ?? []).map((r) => {
+    // Page past PostgREST's 1,000-row cap. The client derives pending/confirmed
+    // counts (and a dispatch filter) from this set, so a capped load would
+    // undercount those stats once a practice accrues 500+ suggestion rows.
+    // created_at desc + id as a unique tiebreaker keeps offset paging stable.
+    type SuggestionNodeRow = {
+      id: string;
+      attachments: Json | null;
+      created_at: string;
+      updated_at: string;
+    };
+    const rows = await fetchAllRows<SuggestionNodeRow>((from, to) =>
+      sb
+        .from("knowledge_nodes")
+        .select("id, attachments, created_at, updated_at")
+        .eq("user_id", effectiveUserId)
+        .eq("node_type", "allocation_suggestion")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
+    return rows.map((r) => {
       const a = (r.attachments ?? {}) as SuggestionAttachments;
       return {
         id: r.id,
