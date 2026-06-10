@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.35",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.35 &mdash; Confirming a rebate allocation now updates the deployed-units counter atomically &mdash; no lost updates, no double-counts.</strong> When you confirm an allocation suggestion, Refill marks those rebate units as <strong>deployed</strong> against the manufacturer pool. That counter was updated with a read-then-write (read the current deployed count, add this suggestion&rsquo;s units, write it back) &mdash; which has two failure modes: <strong>(1)</strong> if two suggestions drawing from the <em>same</em> rebate pool were confirmed at nearly the same moment, both read the same starting number and the second write clobbered the first, so a unit deployment was <strong>silently lost</strong> and the pool looked more available than it really was (risking over-allocation); and <strong>(2)</strong> re-confirming an already-confirmed suggestion (a double-click or retry) <strong>added the units a second time</strong>. The increment is now a single atomic database operation (clamped so it can never exceed the pool total), and the deploy only fires on a genuine pending&rarr;confirmed transition, so re-confirms are no-ops. The mutation is also now tenant-scoped at the database layer, not just the preceding read. <strong>Touched</strong>: new <code>refill_increment_units_deployed</code> RPC (migration), <code>refill-recognition-allocation.functions.ts</code>, <code>types.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.34",
     date: "June 2026",
     items: [

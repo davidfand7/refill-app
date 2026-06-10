@@ -4554,6 +4554,10 @@ export type Database = {
         Args: { p_add_ids: string[]; p_remove_ids: string[]; p_user_id: string }
         Returns: number
       }
+      refill_increment_units_deployed: {
+        Args: { p_delta: number; p_id: string; p_user_id: string }
+        Returns: number
+      }
       refill_recompute_reliability_counts: {
         Args: { p_user_id: string }
         Returns: number

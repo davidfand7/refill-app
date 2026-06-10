@@ -294,7 +294,31 @@ async function patchStatus(
     .maybeSingle();
   if (readErr) throw new Error(`Couldn't load suggestion: ${readErr.message}`);
   if (!row) throw new Error("Suggestion not found.");
-  const a = { ...((row.attachments ?? {}) as SuggestionAttachments), status };
+  const prev = (row.attachments ?? {}) as SuggestionAttachments;
+  const prevStatus = prev.status;
+
+  // On a real transition INTO confirmed, deploy this suggestion's units
+  // against its rebate pool FIRST — before flipping the suggestion's status.
+  // Ordering matters: a failed increment then leaves the suggestion
+  // un-confirmed, so a retry re-runs cleanly, rather than stranding a
+  // confirmed-but-undeployed suggestion (which the new transition guard
+  // would never re-deploy → under-counted deployment → over-allocation).
+  // The increment is an atomic, clamped UPDATE under a row lock
+  // (refill_increment_units_deployed), so concurrent confirms drawing from
+  // the same pool can't lose an update; the status guard makes re-confirms
+  // (double-click / retry) idempotent — no double-count.
+  if (status === "confirmed" && prevStatus !== "confirmed") {
+    const { error: incErr } = await sb.rpc("refill_increment_units_deployed", {
+      p_id: prev.rebateInventoryId,
+      p_user_id: userId,
+      p_delta: prev.units,
+    });
+    if (incErr) {
+      throw new Error(`Couldn't update deployed units: ${incErr.message}`);
+    }
+  }
+
+  const a = { ...prev, status };
   const nowIso = new Date().toISOString();
   const { error: updErr } = await sb
     .from("knowledge_nodes")
@@ -304,26 +328,6 @@ async function patchStatus(
     })
     .eq("id", id);
   if (updErr) throw new Error(`Couldn't update suggestion: ${updErr.message}`);
-
-  // If confirming, increment rebate_inventory_units.units_deployed by units.
-  if (status === "confirmed") {
-    const { data: existing } = await sb
-      .from("rebate_inventory_units")
-      .select("units_deployed, units_total")
-      .eq("id", a.rebateInventoryId)
-      .eq("user_id", userId)
-      .maybeSingle();
-    if (existing) {
-      const next = Math.min(
-        existing.units_deployed + a.units,
-        existing.units_total,
-      );
-      await sb
-        .from("rebate_inventory_units")
-        .update({ units_deployed: next })
-        .eq("id", a.rebateInventoryId);
-    }
-  }
 
   return {
     id: row.id,
