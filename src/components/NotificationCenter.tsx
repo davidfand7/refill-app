@@ -244,7 +244,7 @@ export function NotificationCenter({
 
           <div className="border-t border-border px-4 py-2.5">
             <Link
-              to="/app/operations"
+              to="/app/refill"
               onClick={() => setOpen(false)}
               className="block text-center text-[11px] font-medium text-emerald hover:underline"
             >

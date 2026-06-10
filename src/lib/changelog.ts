@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.41",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.41 &mdash; Fixed a dead &ldquo;View all activity&rdquo; link in the notification center.</strong> The footer link in the notifications dropdown pointed at <code>/app/operations</code> &mdash; a route that doesn&rsquo;t exist (it was never built), so clicking it went nowhere. It now points at your <strong>Refill home</strong>, which surfaces the live activity feed. Caught by a type-check while shipping copy changes. <strong>Touched</strong>: <code>NotificationCenter.tsx</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.40",
     date: "June 2026",
     items: [
