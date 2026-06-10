@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.36",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.36 &mdash; The allocation engine&rsquo;s patient-load fix is now actually in the code (v2.3.33 shipped the note, not the change).</strong> v2.3.33 described paginating the rebate-allocation patient read past Postgres&rsquo;s 1,000-row cap &mdash; but that release committed only the changelog entry; the code edit never landed, so the <code>limit(5000)</code> (which doesn&rsquo;t lift the server&rsquo;s 1,000-row ceiling) was still live. For any practice over 1,000 patients that meant <strong>patients beyond row 1,000 were excluded from rebate allocation</strong>, and the spend-decile cutoff (the &ldquo;top 10% by spend&rdquo; cohort boundary) was computed from a truncated population &mdash; skewing who landed in each cohort. The read now genuinely pages through the full patient set (stable ordering so paging can&rsquo;t skip or double-count a patient), so allocation scores the whole practice. Caught on a fresh-walk re-audit by checking the commit, not just the changelog. <strong>Touched</strong>: <code>refill-recognition-allocation.functions.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.35",
     date: "June 2026",
     items: [

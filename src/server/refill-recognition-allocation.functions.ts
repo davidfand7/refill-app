@@ -30,6 +30,7 @@ import { z } from "zod";
 import type { Database, Json } from "@/integrations/supabase/types";
 import type { PatientSummary } from "@/lib/patient-csv";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import { fetchAllRows } from "@/server/paginate";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -506,18 +507,26 @@ export const runAllocation = createServerFn({ method: "POST" })
       }
       const totalAvailable = inventory.reduce((s, r) => s + r.available, 0);
 
-      // 2) Load patients.
-      const { data: ptRows, error: ptErr } = await sb
-        .from("knowledge_nodes")
-        .select("id, attachments")
-        .eq("user_id", effectiveUserId)
-        .eq("node_type", "patient")
-        .limit(5000);
-      if (ptErr) throw new Error(`Couldn't load patients: ${ptErr.message}`);
+      // 2) Load patients. Page past PostgREST's 1,000-row cap: a `.limit(5000)`
+      // does NOT lift the server ceiling, so past 1,000 patients the read
+      // silently truncated — patients 1,001+ were excluded from allocation AND
+      // the spend-decile cutoff was computed from the truncated population
+      // (skewing every cohort boundary). Stable `id` order so offset paging
+      // can't skip or duplicate a row.
+      type PatientNodeRow = { id: string; attachments: Json | null };
+      const ptRows = await fetchAllRows<PatientNodeRow>((from, to) =>
+        sb
+          .from("knowledge_nodes")
+          .select("id, attachments")
+          .eq("user_id", effectiveUserId)
+          .eq("node_type", "patient")
+          .order("id", { ascending: true })
+          .range(from, to),
+      );
 
       // 3) Determine spend-decile cutoff (10th-percentile from the top).
       const spendValues: number[] = [];
-      for (const r of ptRows ?? []) {
+      for (const r of ptRows) {
         const s = (r.attachments as unknown as PatientSummary | null)?.netSpendUsd;
         if (typeof s === "number" && s > 0) spendValues.push(s);
       }
@@ -532,7 +541,7 @@ export const runAllocation = createServerFn({ method: "POST" })
       // Same for banned + opted_out (already-existing compliance filters).
       const now = Date.now();
       const scored: PatientScored[] = [];
-      for (const row of ptRows ?? []) {
+      for (const row of ptRows) {
         const summary = row.attachments as unknown as PatientSummary | null;
         if (!summary) continue;
         if (summary.hidden) continue;
