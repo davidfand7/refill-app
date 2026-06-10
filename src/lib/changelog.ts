@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.50",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.50 &mdash; Inbound reward email-drop is LIVE &mdash; plus observability so we can see what landed.</strong> First real manufacturer forward to <code>&lt;token&gt;@rewards.smartspa.app</code> ingested end-to-end (Resend MX &rarr; webhook &rarr; <code>data</code>-envelope read &rarr; Attachments-API fetch &rarr; reward lane &rarr; <code>processed:1</code>). Added structured server logs to <code>/api/resend/inbound-rewards</code> at every decision point (<code>no_reward_token</code>, <code>no_csv_attachment</code> with meta/email-id/api-key presence, and a per-file <code>processed</code> summary with lane/ok/detected/reason + whether content came <code>inline</code> or via <code>api</code>) &mdash; so future ingests are visible in <code>wrangler tail</code> without round-tripping through Resend&rsquo;s dashboard. No PII logged (token prefix + filenames only). <strong>Touched</strong>: <code>api.resend.inbound-rewards.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.49",
     date: "June 2026",
     items: [

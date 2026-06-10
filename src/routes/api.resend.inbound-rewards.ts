@@ -183,8 +183,15 @@ export const Route = createFileRoute("/api/resend/inbound-rewards")({
           (payload.data as Record<string, unknown> | undefined) ??
           (payload.email as Record<string, unknown> | undefined) ??
           payload;
+        const toForLog = Array.isArray(env.to)
+          ? (env.to as string[])[0]
+          : (env.to as string | undefined);
         const token = extractToken(env.to as string | string[] | undefined);
         if (!token) {
+          console.log("[inbound-rewards] no_reward_token", {
+            hasData: Boolean(payload.data),
+            to: toForLog ?? null,
+          });
           return jsonResp(200, { ignored: "no_reward_token" });
         }
 
@@ -196,6 +203,9 @@ export const Route = createFileRoute("/api/resend/inbound-rewards")({
           (payload.attachments as RawAttachment[] | undefined) ??
           [];
         let attachments = extractInlineCsvAttachments(metaAttachments);
+        let source: "inline" | "api" | "none" = attachments.length
+          ? "inline"
+          : "none";
         if (attachments.length === 0) {
           const emailId =
             (env.email_id as string | undefined) ??
@@ -204,9 +214,16 @@ export const Route = createFileRoute("/api/resend/inbound-rewards")({
           const apiKey = process.env.RESEND_API_KEY;
           if (emailId && apiKey) {
             attachments = await fetchCsvAttachmentsViaApi(emailId, apiKey);
+            if (attachments.length) source = "api";
           }
         }
         if (attachments.length === 0) {
+          console.log("[inbound-rewards] no_csv_attachment", {
+            tokenPrefix: token.slice(0, 6),
+            metaCount: Array.isArray(metaAttachments) ? metaAttachments.length : 0,
+            hasEmailId: Boolean(env.email_id ?? env.id),
+            hasApiKey: Boolean(process.env.RESEND_API_KEY),
+          });
           return jsonResp(200, { ignored: "no_csv_attachment" });
         }
 
@@ -269,6 +286,19 @@ export const Route = createFileRoute("/api/resend/inbound-rewards")({
             });
           }
         }
+
+        console.log("[inbound-rewards] processed", {
+          tokenPrefix: token.slice(0, 6),
+          source,
+          count: results.length,
+          results: results.map((r) => ({
+            file: r.file,
+            lane: r.lane,
+            ok: r.ok,
+            detected: r.detected,
+            reason: r.reason,
+          })),
+        });
 
         return jsonResp(200, { processed: results.length, results });
       },
