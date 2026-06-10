@@ -26,15 +26,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/integrations/supabase/types";
-import {
-  ingestRewardCsvByToken,
-  resolveRewardIngestToken,
-  REWARD_INGEST_DOMAIN,
-} from "@/server/manufacturer-reward-ingest.functions";
-import {
-  isLastTransactionCsv,
-  ingestLastTxnCsvForUser,
-} from "@/server/manufacturer-transaction-ingest.functions";
+import { REWARD_INGEST_DOMAIN } from "@/server/manufacturer-reward-ingest.functions";
+import { ingestCsvByTokenRouted } from "@/server/manufacturer-ingest-router";
 
 function jsonResp(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -231,30 +224,14 @@ export const Route = createFileRoute("/api/resend/inbound-rewards")({
           auth: { persistSession: false, autoRefreshToken: false },
         });
 
-        // Resolve the token once — the transaction lane is keyed by user_id.
-        // (The reward lane re-resolves internally; one extra cheap read.)
-        const userId = await resolveRewardIngestToken(sb, token);
-
+        // Each CSV flows through the shared lane-router (same path as the
+        // direct Portal-MCP endpoint /api/ingest/rewards) — it auto-detects
+        // transaction vs. reward and runs the matching ingest core.
         const results: Array<Record<string, unknown>> = [];
         for (const att of attachments) {
           try {
-            if (isLastTransactionCsv(att.text)) {
-              // Lane 2 — manufacturer treatment history / last-transaction.
-              if (!userId) {
-                results.push({
-                  file: att.filename,
-                  lane: "transaction",
-                  ok: false,
-                  reason: "unknown_token",
-                });
-                continue;
-              }
-              const r = await ingestLastTxnCsvForUser(
-                sb,
-                userId,
-                att.text,
-                att.filename,
-              );
+            const r = await ingestCsvByTokenRouted(sb, token, att.text, att.filename);
+            if (r.lane === "transaction") {
               results.push({
                 file: att.filename,
                 lane: "transaction",
@@ -266,8 +243,6 @@ export const Route = createFileRoute("/api/resend/inbound-rewards")({
                 rowsInserted: r.receipt?.rowsInserted ?? null,
               });
             } else {
-              // Lane 1 — reward snapshot.
-              const r = await ingestRewardCsvByToken(sb, token, att.text, att.filename);
               results.push({
                 file: att.filename,
                 lane: "reward",

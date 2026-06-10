@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.51",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.51 &mdash; Portal-MCP M1: the second faucet&rsquo;s server side.</strong> New <code>POST /api/ingest/rewards</code> &mdash; the direct CSV drop the local <code>refill-portal</code> MCP (coming next) will POST into after Playwright pulls a report from Allē/ASPIRE/Evolus on the spa&rsquo;s own Mac. Body <code>{token, filename, csv}</code>, the reward-ingest token <em>is</em> the credential (portal logins never touch our servers). Extracted the transaction-vs-reward <strong>lane routing</strong> into one shared helper (<code>ingestCsvByTokenRouted</code>) so the email-drop receiver and this direct endpoint share a single path into <code>detect()</code> &rarr; ingest &rarr; Recall &mdash; and refactored <code>/api/resend/inbound-rewards</code> to use it (no more duplicated lane logic). Critical correctness: Allē&rsquo;s Patient360 export routes to the <em>transaction</em> lane, so the endpoint had to be both-lane from day one, not reward-only. <strong>New</strong>: <code>manufacturer-ingest-router.ts</code>, <code>api.ingest.rewards.ts</code>. <strong>Touched</strong>: <code>api.resend.inbound-rewards.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.50",
     date: "June 2026",
     items: [
