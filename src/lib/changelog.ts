@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.3.49",
+    date: "June 2026",
+    items: [
+      "<strong>v2.3.49 &mdash; Hands-free reward auto-import is now wired for Resend&rsquo;s <em>real</em> inbound webhook.</strong> The email-drop receiver (<code>/api/resend/inbound-rewards</code>) was built expecting the forwarded CSV to arrive baked into the webhook as base64. Resend&rsquo;s actual <code>email.received</code> webhook ships attachment <strong>metadata only</strong> (filename + type, no bytes) and nests the whole envelope under <code>data</code> &mdash; so a real forward would have failed twice over: the per-spa token wouldn&rsquo;t resolve, and the attachment would read as empty. Fixed both: the receiver now reads the <code>data</code> envelope, and when no inline content is present it fetches the file through the Resend Attachments API (lists the received email&rsquo;s attachments &rarr; pulls the signed <code>download_url</code> &rarr; downloads the CSV) before routing it into the same reward / transaction ingest cores as a manual upload. Inline-base64 fixtures still work, so the smoke tests are untouched. <strong>Touched</strong>: <code>api.resend.inbound-rewards.ts</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.3.48",
     date: "June 2026",
     items: [

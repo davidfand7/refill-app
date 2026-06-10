@@ -55,7 +55,10 @@ function extractToken(toRaw: string | string[] | undefined): string | null {
   return local || null;
 }
 
+const RESEND_API = "https://api.resend.com";
+
 type RawAttachment = {
+  id?: string;
   filename?: string;
   name?: string;
   content?: string;
@@ -64,6 +67,7 @@ type RawAttachment = {
   data?: string;
   content_type?: string;
   contentType?: string;
+  download_url?: string;
 };
 
 function b64ToUtf8(b64: string): string {
@@ -74,31 +78,83 @@ function b64ToUtf8(b64: string): string {
   return new TextDecoder("utf-8").decode(bytes);
 }
 
-/** Pull CSV attachments out of whatever shape Resend hands us. */
-function extractCsvAttachments(
-  payload: Record<string, unknown>,
+/** Does an attachment's name/MIME look like a manufacturer CSV report? */
+function looksLikeCsv(filename: string, contentType: string): boolean {
+  const f = filename.toLowerCase();
+  const ct = contentType.toLowerCase();
+  if (f.endsWith(".csv")) return true;
+  return (
+    ct.includes("csv") ||
+    ct.includes("excel") ||
+    ct.includes("spreadsheet") ||
+    ct === "text/plain"
+  );
+}
+
+/**
+ * Pull CSV attachments that are delivered INLINE (base64 in the payload).
+ * This is the shape our smoke-test fixtures use and the shape some legacy /
+ * forwarded variants carry. Resend's real `email.received` webhook does NOT
+ * inline content (metadata only) — that path is handled by
+ * fetchCsvAttachmentsViaApi below.
+ */
+function extractInlineCsvAttachments(
+  attachments: RawAttachment[],
 ): Array<{ filename: string; text: string }> {
-  const env = (payload.email as Record<string, unknown> | undefined) ?? payload;
-  const raw =
-    (env.attachments as RawAttachment[] | undefined) ??
-    (payload.attachments as RawAttachment[] | undefined) ??
-    [];
   const out: Array<{ filename: string; text: string }> = [];
-  if (!Array.isArray(raw)) return out;
-  for (const a of raw) {
+  if (!Array.isArray(attachments)) return out;
+  for (const a of attachments) {
     const filename = (a.filename ?? a.name ?? "report.csv").toString();
-    const ct = (a.content_type ?? a.contentType ?? "").toString().toLowerCase();
-    const looksCsv =
-      filename.toLowerCase().endsWith(".csv") ||
-      ct.includes("csv") ||
-      ct.includes("excel") ||
-      ct === "text/plain";
+    const ct = (a.content_type ?? a.contentType ?? "").toString();
     const b64 = a.content ?? a.contentBase64 ?? a.content_base64 ?? a.data;
-    if (!looksCsv || !b64) continue;
+    if (!looksLikeCsv(filename, ct) || !b64) continue;
     try {
       out.push({ filename, text: b64ToUtf8(String(b64)) });
     } catch {
       // unreadable attachment — skip; reported in the result summary.
+    }
+  }
+  return out;
+}
+
+/**
+ * Resend's `email.received` webhook ships attachment METADATA only. To get the
+ * bytes we list the received email's attachments (which returns a signed,
+ * 1-hour `download_url` per attachment) and fetch the CSV ones directly.
+ * Docs: GET /emails/receiving/{email_id}/attachments → { data: [{ download_url }] }.
+ */
+async function fetchCsvAttachmentsViaApi(
+  emailId: string,
+  apiKey: string,
+): Promise<Array<{ filename: string; text: string }>> {
+  const out: Array<{ filename: string; text: string }> = [];
+  let listRes: Response;
+  try {
+    listRes = await fetch(
+      `${RESEND_API}/emails/receiving/${emailId}/attachments`,
+      { headers: { Authorization: `Bearer ${apiKey}` } },
+    );
+  } catch {
+    return out;
+  }
+  if (!listRes.ok) return out;
+  let body: { data?: RawAttachment[] } | null;
+  try {
+    body = (await listRes.json()) as { data?: RawAttachment[] };
+  } catch {
+    return out;
+  }
+  const list = Array.isArray(body?.data) ? body!.data! : [];
+  for (const a of list) {
+    const filename = (a.filename ?? "report.csv").toString();
+    const ct = (a.content_type ?? a.contentType ?? "").toString();
+    if (!looksLikeCsv(filename, ct) || !a.download_url) continue;
+    try {
+      const dl = await fetch(a.download_url);
+      if (!dl.ok) continue;
+      out.push({ filename, text: await dl.text() });
+    } catch {
+      // signed URL expired or fetch failed — skip; surfaced in summary.
     }
   }
   return out;
@@ -121,13 +177,35 @@ export const Route = createFileRoute("/api/resend/inbound-rewards")({
           return jsonResp(200, { ignored: "non_json_body" });
         }
 
-        const env = (payload.email as Record<string, unknown> | undefined) ?? payload;
+        // Resend's real `email.received` payload nests the envelope under
+        // `data`; older/nested variants used `email`; test fixtures POST flat.
+        const env =
+          (payload.data as Record<string, unknown> | undefined) ??
+          (payload.email as Record<string, unknown> | undefined) ??
+          payload;
         const token = extractToken(env.to as string | string[] | undefined);
         if (!token) {
           return jsonResp(200, { ignored: "no_reward_token" });
         }
 
-        const attachments = extractCsvAttachments(payload);
+        // Attachment content: inline base64 (fixtures/legacy) first; if none,
+        // fall back to the Resend Attachments API using the received email id
+        // (the real webhook carries metadata only).
+        const metaAttachments =
+          (env.attachments as RawAttachment[] | undefined) ??
+          (payload.attachments as RawAttachment[] | undefined) ??
+          [];
+        let attachments = extractInlineCsvAttachments(metaAttachments);
+        if (attachments.length === 0) {
+          const emailId =
+            (env.email_id as string | undefined) ??
+            (env.id as string | undefined) ??
+            null;
+          const apiKey = process.env.RESEND_API_KEY;
+          if (emailId && apiKey) {
+            attachments = await fetchCsvAttachmentsViaApi(emailId, apiKey);
+          }
+        }
         if (attachments.length === 0) {
           return jsonResp(200, { ignored: "no_csv_attachment" });
         }
