@@ -51,7 +51,7 @@ import {
   recordCrossSellWin,
 } from "@/server/refill-promo-calendar.functions";
 import { getTenantOwnerUserId } from "@/server/scheduling-settings.functions";
-import { bestActiveOfferForName, type AddOnOffer } from "@/lib/promo-calendar";
+import { bestActiveOfferForName, badgeableOffers, type AddOnOffer } from "@/lib/promo-calendar";
 import {
   asResourceType,
   assignFreeResource,
@@ -499,9 +499,11 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
       // live mispriced, but free services still show).
       .filter((s) => s.providers.length > 0 && (!showPrices || s.fromPrice > 0 || s.isFree));
 
-    // Cross-Sell: badge each add-on with the best currently-active manufacturer
-    // promo (matched by product keyword in the add-on name).
-    const promoOffers = await loadTenantPromoOffers(sb, tenant.id);
+    // Cross-Sell: badge each add-on with the best currently-active offer
+    // (matched by product keyword in the name). Cohort-targeted offers are
+    // filtered out here — they don't badge to anonymous booking visitors;
+    // they reach their patients via push (slice 4) and earn only in-cohort.
+    const promoOffers = badgeableOffers(await loadTenantPromoOffers(sb, tenant.id));
     if (promoOffers.length > 0) {
       // Spa-local date so promo start/end boundaries don't fire hours early
       // (a UTC date rolls to "tomorrow" in the evening for US timezones).

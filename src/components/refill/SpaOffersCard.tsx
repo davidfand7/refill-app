@@ -25,7 +25,7 @@ import {
   setSpaOfferActive,
 } from "@/server/refill-promo-calendar.functions";
 import { listServicesFn, type Service } from "@/server/refill-catalog";
-import type { PromoOffer, OfferType } from "@/lib/promo-calendar";
+import type { PromoOffer, OfferType, OfferCohort } from "@/lib/promo-calendar";
 import { cn } from "@/lib/utils";
 
 function Lbl({ children }: { children: React.ReactNode }) {
@@ -70,6 +70,19 @@ const TYPE_CHIP: Record<string, string> = {
   discount_addon: "Add-on $ off",
 };
 
+const COHORT_OPTIONS: Array<{ value: OfferCohort; label: string }> = [
+  { value: "all", label: "All patients" },
+  { value: "lapsed", label: "Lapsed" },
+  { value: "new", label: "New" },
+  { value: "expiring", label: "Expiring reward" },
+];
+
+const COHORT_CHIP: Record<string, string> = {
+  lapsed: "Lapsed",
+  new: "New",
+  expiring: "Expiring",
+};
+
 export function SpaOffersCard({
   accessToken,
   viewAsUserId,
@@ -81,6 +94,7 @@ export function SpaOffersCard({
   const [offers, setOffers] = useState<PromoOffer[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [offerType, setOfferType] = useState<OfferType>("dollars_off");
+  const [cohort, setCohort] = useState<OfferCohort>("all");
   const [serviceName, setServiceName] = useState("");
   const [discount, setDiscount] = useState("");
   const [pct, setPct] = useState("");
@@ -123,6 +137,7 @@ export function SpaOffersCard({
     setEndsOn("");
     setLabel("");
     setOfferType("dollars_off");
+    setCohort("all");
   }
 
   async function create() {
@@ -156,6 +171,7 @@ export function SpaOffersCard({
           viewAsUserId,
           serviceName,
           offerType,
+          targetCohort: cohort,
           discountUsd: needsDiscount ? d : null,
           valuePct: needsPct ? p : null,
           addonLabel: needsAddon ? addonLabel.trim() : null,
@@ -243,6 +259,35 @@ export function SpaOffersCard({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Who's this for? — cohort targeting */}
+          <div>
+            <Lbl>Who's this for?</Lbl>
+            <div className="flex flex-wrap gap-1.5">
+              {COHORT_OPTIONS.map((c) => (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() => setCohort(c.value)}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-[12px] font-semibold border transition",
+                    cohort === c.value
+                      ? "bg-amber text-paper border-amber"
+                      : "bg-white text-ink-soft border-rule hover:text-ink",
+                  )}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+            {cohort !== "all" && (
+              <p className="mt-1.5 text-[11px] text-ink-faint leading-relaxed">
+                A targeted offer won't show at public booking — it's delivered to
+                your matching patients (push coming in a later slice) and earns
+                the $5 only when an in-cohort patient books it.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -373,6 +418,11 @@ export function SpaOffersCard({
                 {o.offerType && o.offerType !== "dollars_off" && (
                   <span className="rounded-full bg-amber-soft px-1.5 py-0.5 text-[10px] font-semibold text-amber">
                     {TYPE_CHIP[o.offerType] ?? o.offerType}
+                  </span>
+                )}
+                {o.targetCohort && o.targetCohort !== "all" && (
+                  <span className="rounded-full bg-emerald-soft px-1.5 py-0.5 text-[10px] font-semibold text-emerald">
+                    {COHORT_CHIP[o.targetCohort] ?? o.targetCohort}
                   </span>
                 )}
                 {paused && (

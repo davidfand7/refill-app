@@ -22,11 +22,14 @@ import { getTenantIdForUser } from "@/server/scheduling-settings.functions";
 import { recordRecoveryEvent } from "@/server/emma-attribution.functions";
 import {
   parsePromoCalendar,
-  bestActiveOfferForName,
+  matchOfferForName,
   normalizeForMatch,
   type PromoOffer,
   type OfferType,
+  type OfferCohort,
 } from "@/lib/promo-calendar";
+import { daysSince, computeOverdue } from "@/lib/patient-cadence";
+import type { ProductKind } from "@/lib/product-manufacturer-map";
 import { todayIsoInTz } from "@/lib/scheduling-slots";
 
 function admin() {
@@ -65,12 +68,13 @@ type OfferDbRow = {
   addon_service_name: string | null;
   addon_label: string | null;
   is_active: boolean | null;
+  target_cohort: string | null;
 };
 
 // Single source of truth for the columns we read, so the loader + insert
-// selects never drift. New offer-engine columns land here (v2.4.2).
+// selects never drift. New offer-engine columns land here (v2.4.2+).
 const OFFER_COLS =
-  "id, source, manufacturer, product, title, discount_usd, starts_on, ends_on, landing_url, promotion_type, raw_title, offer_type, value_pct, addon_service_name, addon_label, is_active";
+  "id, source, manufacturer, product, title, discount_usd, starts_on, ends_on, landing_url, promotion_type, raw_title, offer_type, value_pct, addon_service_name, addon_label, is_active, target_cohort";
 
 function rowToOffer(r: OfferDbRow): PromoOffer {
   return {
@@ -90,6 +94,7 @@ function rowToOffer(r: OfferDbRow): PromoOffer {
     addonServiceName: r.addon_service_name,
     addonLabel: r.addon_label,
     isActive: r.is_active ?? true,
+    targetCohort: (r.target_cohort as OfferCohort | null) ?? "all",
   };
 }
 
@@ -235,6 +240,9 @@ const createSpaOfferInput = z.object({
   valuePct: z.number().positive().max(100).nullable().optional(),
   /** The add-on this offer rewards (free_addon / discount_addon). */
   addonLabel: z.string().max(160).nullable().optional(),
+  /** Who the offer is for; non-'all' offers don't badge publicly + only earn
+   *  for in-cohort patients. */
+  targetCohort: z.enum(["all", "lapsed", "new", "expiring"]).default("all"),
   /** yyyy-mm-dd; null/omitted = no bound (starts now / ongoing). */
   startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
@@ -299,6 +307,7 @@ export const createSpaOffer = createServerFn({ method: "POST" })
       addon_service_name: addonLabel ? normalizeForMatch(addonLabel) : null,
       addon_label: addonLabel,
       is_active: true,
+      target_cohort: data.targetCohort,
     };
     const { data: inserted, error } = await offersTbl(sb)
       .insert(row)
@@ -408,8 +417,75 @@ async function resolvePatientNodeByContact(
 }
 
 /**
+ * Which targeting cohorts a patient belongs to — reuses the Recall cadence
+ * engine so "lapsed/new/expiring" mean exactly what they mean in Recall:
+ *   • new      — first visit within the last 30 days (PatientSummary.firstVisit)
+ *   • lapsed   — latest treatment is past its kind's lapse threshold (computeOverdue)
+ *   • expiring — a manufacturer reward expires within the next 60 days
+ * Best-effort; returns the cohorts we can prove. 'all' is implicit (every
+ * patient qualifies) so it's not gated against this set.
+ */
+export async function resolvePatientCohorts(
+  sb: AnySb,
+  userId: string,
+  patientNodeId: string,
+): Promise<Set<OfferCohort>> {
+  const out = new Set<OfferCohort>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const any = sb as unknown as { from(t: string): any };
+
+  // NEW — first visit within 30 days (from the patient node's summary).
+  const { data: node } = await any
+    .from("knowledge_nodes")
+    .select("attachments")
+    .eq("id", patientNodeId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  const firstVisit = (node?.attachments as { firstVisit?: string | null } | null)?.firstVisit ?? null;
+  if (firstVisit) {
+    const d = daysSince(firstVisit);
+    if (d != null && d <= 30) out.add("new");
+  }
+
+  // LAPSED — latest treatment vs its product-kind cadence.
+  const { data: tx } = await any
+    .from("patient_transactions")
+    .select("transaction_date, product_kind")
+    .eq("patient_node_id", patientNodeId)
+    .order("transaction_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (tx?.transaction_date) {
+    const overdue = computeOverdue(
+      (tx.product_kind as ProductKind | null) ?? null,
+      daysSince(tx.transaction_date),
+    );
+    if (overdue?.isLapsed) out.add("lapsed");
+  }
+
+  // EXPIRING — any non-expired reward whose expiration is within 60 days.
+  const { data: rewards } = await any
+    .from("patient_reward_entries")
+    .select("expiration_date, status_norm")
+    .eq("patient_node_id", patientNodeId)
+    .eq("user_id", userId);
+  for (const r of (rewards ?? []) as { expiration_date: string | null; status_norm: string | null }[]) {
+    if (r.status_norm === "expired") continue;
+    const sinceExp = daysSince(r.expiration_date);
+    if (sinceExp == null) continue;
+    const daysUntil = -sinceExp; // future expiration → positive
+    if (daysUntil >= 0 && daysUntil <= 60) {
+      out.add("expiring");
+      break;
+    }
+  }
+  return out;
+}
+
+/**
  * Record a $5 cross_sell win IF a booked service or add-on carried an active
- * manufacturer promo AND we can attribute it to a patient in the graph.
+ * offer AND we can attribute it to a patient in the graph. Cohort-targeted
+ * offers additionally require the patient to be IN the cohort.
  * Best-effort: never throws into the booking flow (caller wraps in try/catch).
  */
 export async function recordCrossSellWin(args: {
@@ -436,15 +512,15 @@ export async function recordCrossSellWin(args: {
     .eq("tenant_id", args.tenantId)
     .maybeSingle();
   const today = todayIsoInTz(tzRow?.timezone ?? "America/Los_Angeles");
-  let matched: string | null = null;
+  let matchedOffer: PromoOffer | null = null;
   for (const name of [args.serviceName, ...args.addOnNames]) {
-    const offer = bestActiveOfferForName(offers, name, today);
-    if (offer) {
-      matched = offer.title;
+    const o = matchOfferForName(offers, name, today);
+    if (o) {
+      matchedOffer = o;
       break;
     }
   }
-  if (!matched) return { recorded: false, reason: "no_active_offer" };
+  if (!matchedOffer) return { recorded: false, reason: "no_active_offer" };
 
   const patientNodeId = await resolvePatientNodeByContact(
     args.sb,
@@ -454,6 +530,14 @@ export async function recordCrossSellWin(args: {
   );
   if (!patientNodeId) return { recorded: false, reason: "unmatched_patient" };
 
+  // Targeting integrity: a cohort-targeted offer only earns its $5 if this
+  // patient is actually in the cohort. 'all' offers skip the check.
+  const cohort = matchedOffer.targetCohort ?? "all";
+  if (cohort !== "all") {
+    const cohorts = await resolvePatientCohorts(args.sb, args.userId, patientNodeId);
+    if (!cohorts.has(cohort)) return { recorded: false, reason: "cohort_mismatch" };
+  }
+
   await recordRecoveryEvent({
     sb: args.sb as unknown as Parameters<typeof recordRecoveryEvent>[0]["sb"],
     userId: args.userId,
@@ -462,7 +546,7 @@ export async function recordCrossSellWin(args: {
     recoveryAgent: "cross_sell",
     metricKey: "cross_sell_addon",
     attributionMethod: "direct",
-    notes: `Cross-sell: ${matched}`,
+    notes: `Cross-sell: ${matchedOffer.title}`,
   });
   return { recorded: true };
 }

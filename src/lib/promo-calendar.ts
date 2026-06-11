@@ -32,6 +32,12 @@ export type OfferType =
   | "first_visit"
   | "spend_get";
 
+/** Who an offer is for. 'all' = anyone (badges publicly); the rest are
+ *  patient segments — they DON'T passively badge to anonymous visitors,
+ *  they're delivered to matching patients (push) + only earn for in-cohort
+ *  patients. */
+export type OfferCohort = "all" | "lapsed" | "new" | "expiring";
+
 /** A parsed promo-calendar offer (one row of the "Dollars Off" subset). */
 export type PromoOffer = {
   /** Present only when read back from the DB (not set by the parser). */
@@ -63,6 +69,8 @@ export type PromoOffer = {
   addonLabel?: string | null;
   /** Paused offers are skipped by the matcher. Defaults true when absent. */
   isActive?: boolean;
+  /** Who the offer targets. Defaults "all" when absent. */
+  targetCohort?: OfferCohort;
 };
 
 /** The badge shape attached to a service / add-on at booking. */
@@ -311,15 +319,16 @@ function computedLabel(o: PromoOffer): string {
 }
 
 /**
- * Best currently-active offer for a service / add-on, matched by product
- * keyword in its name. Paused offers are skipped; highest-value wins when
- * several are active.
+ * The best currently-active offer (full record) matching a service / add-on
+ * name. Paused offers are skipped; highest-value wins when several are active.
+ * Returns the PromoOffer so callers that need its cohort/id (e.g. the win
+ * gate) get them; bestActiveOfferForName wraps this into a badge shape.
  */
-export function bestActiveOfferForName(
+export function matchOfferForName(
   offers: PromoOffer[],
   addOnName: string,
   todayIso: string,
-): AddOnOffer | null {
+): PromoOffer | null {
   const name = normalizeForMatch(addOnName);
   let best: PromoOffer | null = null;
   for (const o of offers) {
@@ -328,6 +337,27 @@ export function bestActiveOfferForName(
     if (!isActive(o, todayIso)) continue;
     if (!best || offerRank(o) > offerRank(best)) best = o;
   }
+  return best;
+}
+
+/**
+ * Offers that may PASSIVELY badge at booking. Cohort-targeted offers are
+ * excluded — they're for matching patients (push), not every visitor, so
+ * surfacing them anonymously would both leak and mis-imply eligibility.
+ */
+export function badgeableOffers(offers: PromoOffer[]): PromoOffer[] {
+  return offers.filter((o) => (o.targetCohort ?? "all") === "all");
+}
+
+/**
+ * Best currently-active offer for a service / add-on as a badge shape.
+ */
+export function bestActiveOfferForName(
+  offers: PromoOffer[],
+  addOnName: string,
+  todayIso: string,
+): AddOnOffer | null {
+  const best = matchOfferForName(offers, addOnName, todayIso);
   if (!best) return null;
   return {
     // Spa-authored offers show the owner's OWN label ("Save $100 w/ Emma" or

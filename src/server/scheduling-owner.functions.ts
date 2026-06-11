@@ -26,7 +26,7 @@ import {
   loadTenantPromoOffers,
   recordCrossSellWin,
 } from "@/server/refill-promo-calendar.functions";
-import { bestActiveOfferForName, type AddOnOffer } from "@/lib/promo-calendar";
+import { bestActiveOfferForName, badgeableOffers, type AddOnOffer } from "@/lib/promo-calendar";
 import { zonedWallClockToUtc, zonedDateParts, todayIsoInTz } from "@/lib/scheduling-slots";
 import { sendBookingConfirmation } from "@/server/scheduling-email";
 import { asResourceType, assignFreeResource } from "@/server/scheduling-resources";
@@ -291,7 +291,9 @@ async function hydratePromoOffers(
   serviceAddons: Map<string, AddOnLite[]>,
   tz: string,
 ): Promise<{ offers: Awaited<ReturnType<typeof loadTenantPromoOffers>>; today: string }> {
-  const offers = await loadTenantPromoOffers(sb, tenantId);
+  // Cohort-targeted offers don't passively badge (the patient isn't known at
+  // dialog-open) — they're delivered via push. Only 'all' offers badge here.
+  const offers = badgeableOffers(await loadTenantPromoOffers(sb, tenantId));
   // Spa-local date so promo boundaries don't fire hours early (UTC rolls over
   // in the evening for US timezones).
   const today = todayIsoInTz(tz);

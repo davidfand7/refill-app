@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.4.3",
+    date: "June 2026",
+    items: [
+      "<strong>v2.4.3 &mdash; Spa offer engine, slice 3: cohort targeting (the offer gets smart).</strong> An offer can now target a patient segment &mdash; <strong>lapsed</strong>, <strong>new</strong>, or <strong>expiring-reward</strong> &mdash; not just &ldquo;all patients,&rdquo; reusing the exact same cadence engine that powers Recall (last-visit vs product-kind lapse window, first-visit recency, reward-expiration window). Two principles make targeting real rather than cosmetic: <strong>no-leak</strong> &mdash; a targeted offer does <em>not</em> badge to anonymous booking visitors (a &ldquo;lapsed-patient 20% off&rdquo; shown to everyone would defeat the point and mis-imply eligibility), so only <em>all</em>-patient offers badge publicly; and <strong>win integrity</strong> &mdash; when a booking resolves to a real patient, a targeted offer earns its $5 only if that patient is actually <em>in</em> the cohort. The authoring card gains a &ldquo;Who's this for?&rdquo; picker; targeted offers show a cohort chip. Delivery of targeted offers to the right patients (push) is the next slice &mdash; this slice builds the targeting model, the cohort resolver, and the integrity guards it rides on. <strong>No migration</strong> (the <code>target_cohort</code> column shipped with v2.4.2). <strong>Touched</strong>: <code>promo-calendar.ts</code> (cohort type + <code>matchOfferForName</code>/<code>badgeableOffers</code>), <code>refill-promo-calendar.functions.ts</code> (<code>resolvePatientCohorts</code> + win-gate + authoring), <code>scheduling.functions.ts</code> &amp; <code>scheduling-owner.functions.ts</code> (no-leak badge filter), <code>SpaOffersCard.tsx</code> (cohort picker).",
+    ],
+  },
+  {
     version: "v2.4.2",
     date: "June 2026",
     items: [
