@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.4.5",
+    date: "June 2026",
+    items: [
+      "<strong>v2.4.5 &mdash; Spa offer engine, slice 4b: push a targeted offer to its patients (draft-first, human-gated).</strong> A cohort-targeted offer (lapsed / new / expiring) now has a <strong>Push</strong> button on the authoring card. It composes one message per matching patient &mdash; reusing the exact same cadence engine the Deals page and Recall use to define the cohort &mdash; filters out anyone who's opted out, and emails the batch to your own iMessage proxy inbox for review. From there it's the proven branded-iMessage flow: paste into Claude Desktop, the iMessage MCP drafts each into Messages.app, you review and tap Send (blue bubble from your own number). <strong>Nothing is sent to a patient by the server</strong> &mdash; push is staged, not blasted, and opt-outs are honored before a draft is ever written. Patients with no phone are counted and skipped. <strong>No migration</strong> (<code>push_enabled</code>/cohort columns shipped with v2.4.2). <strong>New</strong>: <code>draftOfferPushFn</code> + <code>getOfferReachFn</code> + cohort target resolver (<code>listOfferCohortTargets</code>, opt-out-filtered) in <code>refill-promo-calendar.functions.ts</code>. <strong>Touched</strong>: <code>SpaOffersCard.tsx</code> (Push button). With this, the offer engine's four dimensions &mdash; types, recurrence, targeting, and now delivery (Deals page + push) &mdash; are all live.",
+    ],
+  },
+  {
     version: "v2.4.4",
     date: "June 2026",
     items: [

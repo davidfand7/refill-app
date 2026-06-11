@@ -32,6 +32,8 @@ import {
 } from "@/lib/promo-calendar";
 import { daysSince, computeOverdue } from "@/lib/patient-cadence";
 import type { ProductKind } from "@/lib/product-manufacturer-map";
+import { doListOverdue } from "@/server/patient-ingest.functions";
+import { resolveSpaName } from "@/server/emma-spa-profile";
 import { todayIsoInTz } from "@/lib/scheduling-slots";
 
 function admin() {
@@ -604,3 +606,315 @@ export async function recordCrossSellWin(args: {
   });
   return { recorded: true };
 }
+
+// ─── Offer push (v2.4.5 · slice 4b) ─────────────────────────────────────────
+//
+// Deliver a COHORT-targeted offer to its matching patients. Draft-first +
+// opt-out-filtered + human-gated, exactly like Recall: we compose one message
+// per matching patient and email the BATCH to the spa's OWN proxy inbox; the
+// human pastes it into Claude Desktop, the iMessage MCP drafts each into
+// Messages.app, and the human reviews + taps Send (blue-bubble from the spa's
+// own Apple ID). NOTHING is sent to a patient by the server.
+
+export type OfferPushTarget = {
+  patientNodeId: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+};
+
+const firstNameOf = (full: string): string =>
+  full.trim().split(/\s+/)[0] || "there";
+
+/**
+ * Patients in a cohort WITH contact, opt-out-filtered. Reuses the Recall
+ * cadence engine so cohorts mean the same everywhere.
+ */
+async function listOfferCohortTargets(
+  sb: AnySb,
+  userId: string,
+  cohort: OfferCohort,
+): Promise<OfferPushTarget[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const any = sb as unknown as { from(t: string): any };
+  let raw: OfferPushTarget[] = [];
+
+  if (cohort === "lapsed") {
+    const overdue = await doListOverdue(
+      sb as unknown as Parameters<typeof doListOverdue>[0],
+      userId,
+      2000,
+      null,
+    );
+    raw = overdue
+      .filter((o) => o.isLapsed)
+      .map((o) => ({
+        patientNodeId: o.patientId,
+        name: o.displayName,
+        phone: o.phone,
+        email: o.email,
+      }));
+  } else if (cohort === "expiring") {
+    const { data } = await any
+      .from("patient_reward_entries")
+      .select("patient_node_id, contact_name, contact_phone, contact_email, expiration_date, status_norm")
+      .eq("user_id", userId);
+    const byNode = new Map<string, OfferPushTarget>();
+    for (const r of (data ?? []) as Array<{
+      patient_node_id: string | null;
+      contact_name: string | null;
+      contact_phone: string | null;
+      contact_email: string | null;
+      expiration_date: string | null;
+      status_norm: string | null;
+    }>) {
+      if (!r.patient_node_id || r.status_norm === "expired") continue;
+      const since = daysSince(r.expiration_date);
+      if (since == null) continue;
+      const daysUntil = -since;
+      if (daysUntil < 0 || daysUntil > 60) continue;
+      if (!byNode.has(r.patient_node_id)) {
+        byNode.set(r.patient_node_id, {
+          patientNodeId: r.patient_node_id,
+          name: r.contact_name ?? "",
+          phone: r.contact_phone,
+          email: r.contact_email,
+        });
+      }
+    }
+    raw = [...byNode.values()];
+  } else if (cohort === "new") {
+    const { data } = await any
+      .from("knowledge_nodes")
+      .select("id, title, attachments")
+      .eq("user_id", userId)
+      .eq("node_type", "patient")
+      .limit(5000);
+    for (const n of (data ?? []) as Array<{
+      id: string;
+      title: string | null;
+      attachments: { firstVisit?: string | null; phone?: string | null; email?: string | null; displayName?: string | null } | null;
+    }>) {
+      const att = n.attachments ?? {};
+      const fv = att.firstVisit ?? null;
+      if (!fv) continue;
+      const d = daysSince(fv);
+      if (d == null || d < 0 || d > 30) continue;
+      raw.push({
+        patientNodeId: n.id,
+        name: n.title ?? att.displayName ?? "",
+        phone: att.phone ?? null,
+        email: att.email ?? null,
+      });
+    }
+  }
+
+  if (raw.length === 0) return raw;
+  // Opt-out filter — never message a patient who has opted out (any channel).
+  const ids = raw.map((r) => r.patientNodeId);
+  const { data: opted } = await any
+    .from("patient_outreach_state")
+    .select("patient_node_id")
+    .eq("user_id", userId)
+    .eq("state", "opted_out")
+    .in("patient_node_id", ids);
+  const optedSet = new Set(
+    ((opted ?? []) as Array<{ patient_node_id: string }>).map((r) => r.patient_node_id),
+  );
+  return raw.filter((r) => !optedSet.has(r.patientNodeId));
+}
+
+async function loadSpaOfferById(
+  sb: AnySb,
+  tenantId: string,
+  offerId: string,
+): Promise<PromoOffer | null> {
+  const { data } = await offersTbl(sb)
+    .select(OFFER_COLS)
+    .eq("id", offerId)
+    .eq("tenant_id", tenantId)
+    .eq("source", "spa")
+    .maybeSingle();
+  return data ? rowToOffer(data as OfferDbRow) : null;
+}
+
+const offerIdInput = z.object({
+  accessToken: z.string(),
+  viewAsUserId: z.string().optional(),
+  offerId: z.string().uuid(),
+});
+
+export type OfferReach = {
+  cohort: OfferCohort;
+  /** Patients in the cohort (null when the offer targets 'all' — use Deals). */
+  total: number | null;
+  /** Of those, how many have a phone we can iMessage. */
+  reachable: number;
+};
+
+/** How many patients a targeted offer would reach (for the authoring preview). */
+export const getOfferReachFn = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => offerIdInput.parse(input))
+  .handler(async ({ data }): Promise<OfferReach> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const offer = await loadSpaOfferById(sb, tenantId, data.offerId);
+    const cohort = offer?.targetCohort ?? "all";
+    if (cohort === "all") return { cohort: "all", total: null, reachable: 0 };
+    const targets = await listOfferCohortTargets(sb, effectiveUserId, cohort);
+    return {
+      cohort,
+      total: targets.length,
+      reachable: targets.filter((t) => (t.phone ?? "").trim()).length,
+    };
+  });
+
+export type OfferPushResult = {
+  drafted: number;
+  skippedNoPhone: number;
+  sentTo: string | null;
+  error: string | null;
+};
+
+function composeOfferPushBody(
+  firstName: string,
+  spaName: string,
+  offerTitle: string,
+  slug: string,
+): string {
+  const link = slug ? ` Book here: getrefill.app/s/${slug}` : "";
+  return `Hi ${firstName}! It's ${spaName} — ${offerTitle}.${link} Reply and I'll get you on the calendar. 💛`;
+}
+
+/**
+ * Draft an offer's cohort push: compose one message per matching patient and
+ * email the batch to the spa's proxy inbox for human review + send (iMessage
+ * MCP). Best-effort sends ONE email to the spa's own inbox; never messages a
+ * patient directly.
+ */
+export const draftOfferPushFn = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => offerIdInput.parse(input))
+  .handler(async ({ data }): Promise<OfferPushResult> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+
+    const offer = await loadSpaOfferById(sb, tenantId, data.offerId);
+    if (!offer) throw new Error("Offer not found.");
+    const cohort = offer.targetCohort ?? "all";
+    if (cohort === "all") {
+      throw new Error(
+        "This offer targets all patients — share its Deals page instead of pushing.",
+      );
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const any = sb as unknown as { from(t: string): any };
+    const { data: policy } = await any
+      .from("emma_noshow_policies")
+      .select("rescue_proxy_email")
+      .eq("user_id", effectiveUserId)
+      .maybeSingle();
+    const proxyEmail = (policy?.rescue_proxy_email as string | null)?.trim() || null;
+    if (!proxyEmail) {
+      throw new Error(
+        "Set your iMessage proxy email first (Refill → no-show settings) so drafts have somewhere to land.",
+      );
+    }
+
+    const spaName = await resolveSpaName(
+      sb as unknown as Parameters<typeof resolveSpaName>[0],
+      effectiveUserId,
+    );
+    const { data: tenantRow } = await sb
+      .from("tenants")
+      .select("slug")
+      .eq("id", tenantId)
+      .maybeSingle();
+    const slug = (tenantRow as { slug?: string } | null)?.slug ?? "";
+
+    const targets = await listOfferCohortTargets(sb, effectiveUserId, cohort);
+    const built: Array<{ name: string; phone: string; body: string }> = [];
+    let skippedNoPhone = 0;
+    for (const t of targets) {
+      const phone = (t.phone ?? "").trim();
+      if (!phone) {
+        skippedNoPhone += 1;
+        continue;
+      }
+      built.push({
+        name: t.name || "(unnamed)",
+        phone,
+        body: composeOfferPushBody(firstNameOf(t.name), spaName, offer.title, slug),
+      });
+    }
+    if (built.length === 0) {
+      return {
+        drafted: 0,
+        skippedNoPhone,
+        sentTo: null,
+        error: "No reachable patients in this cohort (none had a phone number).",
+      };
+    }
+
+    const subject = `${built.length} offer draft${built.length === 1 ? "" : "s"} — ${offer.title}`;
+    const rows = built
+      .map(
+        (b) =>
+          `<tr><td style="padding:6px 10px;border-bottom:1px solid #eee">${b.name}</td><td style="padding:6px 10px;border-bottom:1px solid #eee">${b.phone}</td><td style="padding:6px 10px;border-bottom:1px solid #eee">${b.body}</td></tr>`,
+      )
+      .join("");
+    const html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1c2024">
+<p>Paste this whole email into Claude Desktop with the iMessage MCP installed. Claude will call <code>draft_imessage(recipient_phone, body)</code> for each row — one Messages.app conversation per draft. Review each and tap Send.</p>
+<p><strong>Offer:</strong> ${offer.title} &middot; <strong>Cohort:</strong> ${cohort} &middot; <strong>${built.length}</strong> patient(s)${skippedNoPhone ? ` &middot; ${skippedNoPhone} skipped (no phone)` : ""}</p>
+<table style="border-collapse:collapse;font-size:13px"><thead><tr><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #ccc">Name</th><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #ccc">Phone</th><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #ccc">Message</th></tr></thead><tbody>${rows}</tbody></table>
+</div>`;
+    const text = built.map((b) => `${b.name}\t${b.phone}\t${b.body}`).join("\n");
+
+    const resendKey = process.env.RESEND_API_KEY;
+    if (!resendKey) throw new Error("Server is missing RESEND_API_KEY.");
+    try {
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${resendKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: process.env.REFILL_FROM_EMAIL ?? "offers@getrefill.app",
+          to: [proxyEmail],
+          subject,
+          text,
+          html,
+          tags: [
+            { name: "type", value: "refill-offer-push" },
+            { name: "tenant", value: effectiveUserId },
+          ],
+        }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!res.ok) {
+        return {
+          drafted: built.length,
+          skippedNoPhone,
+          sentTo: null,
+          error: `Resend ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`,
+        };
+      }
+    } catch (e) {
+      return {
+        drafted: built.length,
+        skippedNoPhone,
+        sentTo: null,
+        error: e instanceof Error ? e.message : String(e),
+      };
+    }
+    return { drafted: built.length, skippedNoPhone, sentTo: proxyEmail, error: null };
+  });

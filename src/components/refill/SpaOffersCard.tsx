@@ -17,12 +17,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Pause, Play, Plus, Sparkles, Tag, Trash2 } from "lucide-react";
+import { Loader2, Pause, Play, Plus, Send, Sparkles, Tag, Trash2 } from "lucide-react";
 import {
   listPromoOffers,
   createSpaOffer,
   deleteSpaOffer,
   setSpaOfferActive,
+  draftOfferPushFn,
 } from "@/server/refill-promo-calendar.functions";
 import { listServicesFn, type Service } from "@/server/refill-catalog";
 import type { PromoOffer, OfferType, OfferCohort } from "@/lib/promo-calendar";
@@ -103,6 +104,7 @@ export function SpaOffersCard({
   const [endsOn, setEndsOn] = useState("");
   const [label, setLabel] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pushingId, setPushingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!accessToken) return;
@@ -197,6 +199,29 @@ export function SpaOffersCard({
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't remove the offer.");
+    }
+  }
+
+  async function pushOffer(o: PromoOffer) {
+    if (!accessToken || !o.id) return;
+    setPushingId(o.id);
+    try {
+      const res = await draftOfferPushFn({
+        data: { accessToken, viewAsUserId, offerId: o.id },
+      });
+      if (res.error) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(
+        `Staged ${res.drafted} draft${res.drafted === 1 ? "" : "s"} to ${res.sentTo} — review & send in Messages.${
+          res.skippedNoPhone ? ` (${res.skippedNoPhone} had no phone)` : ""
+        }`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't draft the push.");
+    } finally {
+      setPushingId(null);
     }
   }
 
@@ -431,23 +456,41 @@ export function SpaOffersCard({
                   </span>
                 )}
                 <span className="text-ink-faint">{fmtWindow(o.startsOn, o.endsOn)}</span>
-                <button
-                  type="button"
-                  onClick={() => void toggleActive(o)}
-                  className="ml-auto text-ink-faint hover:text-ink transition"
-                  aria-label={paused ? "Resume offer" : "Pause offer"}
-                  title={paused ? "Resume" : "Pause"}
-                >
-                  {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void remove(o.id)}
-                  className="text-ink-faint hover:text-rose transition"
-                  aria-label="Remove offer"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <div className="ml-auto flex items-center gap-2">
+                  {o.targetCohort && o.targetCohort !== "all" && (
+                    <button
+                      type="button"
+                      onClick={() => void pushOffer(o)}
+                      disabled={pushingId === o.id || paused}
+                      className="inline-flex items-center gap-1 rounded-md border border-rule px-2 py-0.5 text-[11px] font-semibold text-emerald hover:bg-emerald-soft transition disabled:opacity-50"
+                      title={paused ? "Resume to push" : "Draft a push to matching patients"}
+                    >
+                      {pushingId === o.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Send className="h-3 w-3" />
+                      )}
+                      Push
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => void toggleActive(o)}
+                    className="text-ink-faint hover:text-ink transition"
+                    aria-label={paused ? "Resume offer" : "Pause offer"}
+                    title={paused ? "Resume" : "Pause"}
+                  >
+                    {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void remove(o.id)}
+                    className="text-ink-faint hover:text-rose transition"
+                    aria-label="Remove offer"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </li>
             );
           })}
