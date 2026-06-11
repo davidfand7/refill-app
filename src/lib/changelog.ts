@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.4.8",
+    date: "June 2026",
+    items: [
+      "<strong>v2.4.8 &mdash; Cross-sell meter is live.</strong> With the offer engine fully shipped (types · cohort targeting · Deals page · push · recurrence), the <strong>$5 cross-sell add-on</strong> metric is flipped on: it drops the &ldquo;Coming soon&rdquo; badge in Billing and is now a real earning meter alongside filled-slot. The billing math already included it (per-tenant rule, flat $5, enabled, charged on verified wins) &mdash; this flag was the display gate; cross-sell wins now read as billable, not pending. Same conservative model: free to run, $5 per booking we create, the spa keeps every dollar of the visit. <strong>Touched</strong>: <code>billing-metrics.ts</code> (<code>cross_sell_addon.live = true</code>).",
+    ],
+  },
+  {
     version: "v2.4.7",
     date: "June 2026",
     items: [

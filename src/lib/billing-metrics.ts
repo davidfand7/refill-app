@@ -57,7 +57,9 @@ export const BILLABLE_METRICS: BillableMetricDef[] = [
     label: "Cross-sell add-on",
     description: "An add-on taken from a surfaced promo step at booking (Cross-Sell).",
     defaultAmount: 5,
-    live: false,
+    // Live as of v2.4.8 — the Cross-Sell offer engine (manufacturer + spa
+    // offers, both booking paths, cohort targeting + push) is fully shipped.
+    live: true,
   },
   {
     key: "lead_conversion",
