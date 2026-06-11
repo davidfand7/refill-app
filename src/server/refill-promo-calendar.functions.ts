@@ -33,6 +33,7 @@ import {
 import { daysSince, computeOverdue } from "@/lib/patient-cadence";
 import type { ProductKind } from "@/lib/product-manufacturer-map";
 import { doListOverdue } from "@/server/patient-ingest.functions";
+import { fetchAllRows } from "@/server/paginate";
 import { resolveSpaName } from "@/server/emma-spa-profile";
 import { todayIsoInTz } from "@/lib/scheduling-slots";
 
@@ -686,19 +687,26 @@ async function listOfferCohortTargets(
         email: o.email,
       }));
   } else if (cohort === "expiring") {
-    const { data } = await any
-      .from("patient_reward_entries")
-      .select("patient_node_id, contact_name, contact_phone, contact_email, expiration_date, status_norm")
-      .eq("user_id", userId);
-    const byNode = new Map<string, OfferPushTarget>();
-    for (const r of (data ?? []) as Array<{
+    type RewardRow = {
       patient_node_id: string | null;
       contact_name: string | null;
       contact_phone: string | null;
       contact_email: string | null;
       expiration_date: string | null;
       status_norm: string | null;
-    }>) {
+    };
+    // Paginated — a large patient base has >1,000 reward entries; a fixed read
+    // would silently drop expiring patients past the cap.
+    const data = await fetchAllRows<RewardRow>((from, to) =>
+      any
+        .from("patient_reward_entries")
+        .select("patient_node_id, contact_name, contact_phone, contact_email, expiration_date, status_norm")
+        .eq("user_id", userId)
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
+    const byNode = new Map<string, OfferPushTarget>();
+    for (const r of data) {
       if (!r.patient_node_id || r.status_norm === "expired") continue;
       const since = daysSince(r.expiration_date);
       if (since == null) continue;
@@ -742,16 +750,25 @@ async function listOfferCohortTargets(
 
   if (raw.length === 0) return raw;
   // Opt-out filter — never message a patient who has opted out (any channel).
+  // Chunk the id list: a large cohort would otherwise blow the .in() URL limit
+  // and the query would FAIL SILENTLY (data null, error ignored) → opt-out
+  // filtering disabled → we'd draft to opted-out patients. Each ≤200-id batch
+  // also stays well under the 1,000-row read cap.
   const ids = raw.map((r) => r.patientNodeId);
-  const { data: opted } = await any
-    .from("patient_outreach_state")
-    .select("patient_node_id")
-    .eq("user_id", userId)
-    .eq("state", "opted_out")
-    .in("patient_node_id", ids);
-  const optedSet = new Set(
-    ((opted ?? []) as Array<{ patient_node_id: string }>).map((r) => r.patient_node_id),
-  );
+  const optedSet = new Set<string>();
+  const CHUNK = 200;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const slice = ids.slice(i, i + CHUNK);
+    const { data: opted } = await any
+      .from("patient_outreach_state")
+      .select("patient_node_id")
+      .eq("user_id", userId)
+      .eq("state", "opted_out")
+      .in("patient_node_id", slice);
+    for (const r of (opted ?? []) as Array<{ patient_node_id: string }>) {
+      optedSet.add(r.patient_node_id);
+    }
+  }
   return raw.filter((r) => !optedSet.has(r.patientNodeId));
 }
 

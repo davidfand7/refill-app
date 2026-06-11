@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.5.2",
+    date: "June 2026",
+    items: [
+      "<strong>v2.5.2 &mdash; Fresh-walk fix: offer push is safe + complete at scale.</strong> Two scale bugs in cohort push targeting: (1) the <em>expiring</em> cohort read wasn't paginated, so on a spa with 1,000+ reward entries it silently dropped patients past the cap; now it pages through all of them. (2) More important &mdash; the opt-out filter passed the whole cohort's patient IDs to a single <code>.in()</code> query, which on a large cohort could exceed the URL limit and <strong>fail silently, disabling opt-out filtering entirely</strong> (drafts could include opted-out patients). The id list is now chunked into ≤200-id batches, which also stays under the read cap. <strong>Touched</strong>: <code>refill-promo-calendar.functions.ts</code> (<code>listOfferCohortTargets</code>: <code>fetchAllRows</code> + chunked opt-out). Caught in the fresh-walk; the opt-out one is the priority fix &mdash; a patient who opts out must never be drafted.",
+    ],
+  },
+  {
     version: "v2.5.1",
     date: "June 2026",
     items: [
