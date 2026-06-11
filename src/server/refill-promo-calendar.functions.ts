@@ -646,6 +646,17 @@ export type OfferPushTarget = {
 const firstNameOf = (full: string): string =>
   full.trim().split(/\s+/)[0] || "there";
 
+/** Escape untrusted text before interpolating into the draft email HTML
+ *  (patient names / offer titles can contain &, <, > and would corrupt the
+ *  draft table or, in the spa's own inbox, render stray markup). */
+function escHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 /**
  * Patients in a cohort WITH contact, opt-out-filtered. Reuses the Recall
  * cadence engine so cohorts mean the same everywhere.
@@ -888,12 +899,12 @@ export const draftOfferPushFn = createServerFn({ method: "POST" })
     const rows = built
       .map(
         (b) =>
-          `<tr><td style="padding:6px 10px;border-bottom:1px solid #eee">${b.name}</td><td style="padding:6px 10px;border-bottom:1px solid #eee">${b.phone}</td><td style="padding:6px 10px;border-bottom:1px solid #eee">${b.body}</td></tr>`,
+          `<tr><td style="padding:6px 10px;border-bottom:1px solid #eee">${escHtml(b.name)}</td><td style="padding:6px 10px;border-bottom:1px solid #eee">${escHtml(b.phone)}</td><td style="padding:6px 10px;border-bottom:1px solid #eee">${escHtml(b.body)}</td></tr>`,
       )
       .join("");
     const html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1c2024">
 <p>Paste this whole email into Claude Desktop with the iMessage MCP installed. Claude will call <code>draft_imessage(recipient_phone, body)</code> for each row — one Messages.app conversation per draft. Review each and tap Send.</p>
-<p><strong>Offer:</strong> ${offer.title} &middot; <strong>Cohort:</strong> ${cohort} &middot; <strong>${built.length}</strong> patient(s)${skippedNoPhone ? ` &middot; ${skippedNoPhone} skipped (no phone)` : ""}</p>
+<p><strong>Offer:</strong> ${escHtml(offer.title)} &middot; <strong>Cohort:</strong> ${cohort} &middot; <strong>${built.length}</strong> patient(s)${skippedNoPhone ? ` &middot; ${skippedNoPhone} skipped (no phone)` : ""}</p>
 <table style="border-collapse:collapse;font-size:13px"><thead><tr><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #ccc">Name</th><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #ccc">Phone</th><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #ccc">Message</th></tr></thead><tbody>${rows}</tbody></table>
 </div>`;
     const text = built.map((b) => `${b.name}\t${b.phone}\t${b.body}`).join("\n");

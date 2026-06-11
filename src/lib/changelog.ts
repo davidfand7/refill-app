@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.5.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.5.1 &mdash; Fresh-walk fix: offer-push draft email is HTML-safe.</strong> The offer-push draft (the batch emailed to the spa's own inbox for iMessage review) interpolated patient names and the offer title straight into HTML. A patient named &ldquo;Tom &amp; Jerry&rdquo; or an offer title with a <code>&lt;</code> would corrupt the draft table (and, in the owner's inbox, render stray markup). Those values are now escaped. <strong>Touched</strong>: <code>refill-promo-calendar.functions.ts</code> (<code>escHtml</code> on name / phone / message / offer title). Caught in the same fresh-walk.",
+    ],
+  },
+  {
     version: "v2.5.0",
     date: "June 2026",
     items: [
