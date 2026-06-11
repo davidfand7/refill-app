@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.4.6",
+    date: "June 2026",
+    items: [
+      "<strong>v2.4.6 &mdash; Spa offer engine, slice 2: recurring + limited offers.</strong> An offer can now run on specific <strong>days of the week</strong> (&ldquo;Tox Tuesdays&rdquo; = pick Tue) and/or carry a <strong>redemption limit</strong> (&ldquo;first 20&rdquo;). The matcher honors both everywhere it already runs &mdash; the at-booking badge, the Deals page, and the cross-sell win all respect the weekday window and stop the moment the cap is hit; each win increments the offer's redemption count. Blank weekdays = every day (unchanged); no limit = unlimited (unchanged), so existing offers behave exactly as before. <strong>No migration</strong> (<code>active_weekdays</code>/<code>quantity_cap</code>/<code>redeemed_count</code> shipped with v2.4.2). <strong>Touched</strong>: <code>promo-calendar.ts</code> (weekday + cap gating in <code>isActive</code>), <code>refill-promo-calendar.functions.ts</code> (authoring + redemption increment), <code>SpaOffersCard.tsx</code> (day picker + limit field). All four offer-engine dimensions &mdash; types, recurrence, targeting, delivery &mdash; are now complete.",
+    ],
+  },
+  {
     version: "v2.4.5",
     date: "June 2026",
     items: [

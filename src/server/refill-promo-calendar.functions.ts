@@ -74,12 +74,15 @@ type OfferDbRow = {
   is_active: boolean | null;
   target_cohort: string | null;
   show_on_deals: boolean | null;
+  active_weekdays: number[] | null;
+  quantity_cap: number | string | null;
+  redeemed_count: number | string | null;
 };
 
 // Single source of truth for the columns we read, so the loader + insert
 // selects never drift. New offer-engine columns land here (v2.4.2+).
 const OFFER_COLS =
-  "id, source, manufacturer, product, title, discount_usd, starts_on, ends_on, landing_url, promotion_type, raw_title, offer_type, value_pct, addon_service_name, addon_label, is_active, target_cohort, show_on_deals";
+  "id, source, manufacturer, product, title, discount_usd, starts_on, ends_on, landing_url, promotion_type, raw_title, offer_type, value_pct, addon_service_name, addon_label, is_active, target_cohort, show_on_deals, active_weekdays, quantity_cap, redeemed_count";
 
 function rowToOffer(r: OfferDbRow): PromoOffer {
   return {
@@ -101,6 +104,9 @@ function rowToOffer(r: OfferDbRow): PromoOffer {
     isActive: r.is_active ?? true,
     targetCohort: (r.target_cohort as OfferCohort | null) ?? "all",
     showOnDeals: r.show_on_deals ?? true,
+    activeWeekdays: r.active_weekdays ?? null,
+    quantityCap: r.quantity_cap != null ? Number(r.quantity_cap) : null,
+    redeemedCount: r.redeemed_count != null ? Number(r.redeemed_count) : 0,
   };
 }
 
@@ -299,6 +305,10 @@ const createSpaOfferInput = z.object({
   /** Who the offer is for; non-'all' offers don't badge publicly + only earn
    *  for in-cohort patients. */
   targetCohort: z.enum(["all", "lapsed", "new", "expiring"]).default("all"),
+  /** Days of week the offer is live (0=Sun…6=Sat). Empty/omitted = any day. */
+  activeWeekdays: z.array(z.number().int().min(0).max(6)).max(7).nullable().optional(),
+  /** Max redemptions; null = unlimited. */
+  quantityCap: z.number().int().positive().max(100000).nullable().optional(),
   /** yyyy-mm-dd; null/omitted = no bound (starts now / ongoing). */
   startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
@@ -364,6 +374,9 @@ export const createSpaOffer = createServerFn({ method: "POST" })
       addon_label: addonLabel,
       is_active: true,
       target_cohort: data.targetCohort,
+      active_weekdays:
+        data.activeWeekdays && data.activeWeekdays.length > 0 ? data.activeWeekdays : null,
+      quantity_cap: data.quantityCap ?? null,
     };
     const { data: inserted, error } = await offersTbl(sb)
       .insert(row)
@@ -604,6 +617,13 @@ export async function recordCrossSellWin(args: {
     attributionMethod: "direct",
     notes: `Cross-sell: ${matchedOffer.title}`,
   });
+
+  // Recurrence: count the redemption against a capped offer (best-effort).
+  if (matchedOffer.quantityCap != null && matchedOffer.id) {
+    await offersTbl(args.sb)
+      .update({ redeemed_count: (matchedOffer.redeemedCount ?? 0) + 1 })
+      .eq("id", matchedOffer.id);
+  }
   return { recorded: true };
 }
 

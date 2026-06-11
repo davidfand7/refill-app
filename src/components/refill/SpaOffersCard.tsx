@@ -84,6 +84,8 @@ const COHORT_CHIP: Record<string, string> = {
   expiring: "Expiring",
 };
 
+const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
 export function SpaOffersCard({
   accessToken,
   viewAsUserId,
@@ -102,6 +104,8 @@ export function SpaOffersCard({
   const [addonLabel, setAddonLabel] = useState("");
   const [startsOn, setStartsOn] = useState("");
   const [endsOn, setEndsOn] = useState("");
+  const [weekdays, setWeekdays] = useState<Set<number>>(new Set());
+  const [cap, setCap] = useState("");
   const [label, setLabel] = useState("");
   const [busy, setBusy] = useState(false);
   const [pushingId, setPushingId] = useState<string | null>(null);
@@ -137,6 +141,8 @@ export function SpaOffersCard({
     setAddonLabel("");
     setStartsOn("");
     setEndsOn("");
+    setWeekdays(new Set());
+    setCap("");
     setLabel("");
     setOfferType("dollars_off");
     setCohort("all");
@@ -165,6 +171,11 @@ export function SpaOffersCard({
       toast.error("The end date is before the start date.");
       return;
     }
+    const capN = cap.trim() ? Number(cap.trim()) : null;
+    if (cap.trim() && (!Number.isInteger(capN) || (capN as number) <= 0)) {
+      toast.error("Limit must be a whole number.");
+      return;
+    }
     setBusy(true);
     try {
       await createSpaOffer({
@@ -177,6 +188,8 @@ export function SpaOffersCard({
           discountUsd: needsDiscount ? d : null,
           valuePct: needsPct ? p : null,
           addonLabel: needsAddon ? addonLabel.trim() : null,
+          activeWeekdays: weekdays.size ? [...weekdays].sort((a, b) => a - b) : null,
+          quantityCap: capN,
           startsOn: startsOn || null,
           endsOn: endsOn || null,
           title: label.trim() || undefined,
@@ -414,6 +427,59 @@ export function SpaOffersCard({
               />
             </div>
           </div>
+          {/* Recurrence: which days + how many */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Lbl>Days (optional)</Lbl>
+              <div className="flex flex-wrap gap-1">
+                {WEEKDAY_LABELS.map((wl, i) => {
+                  const on = weekdays.has(i);
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() =>
+                        setWeekdays((prev) => {
+                          const n = new Set(prev);
+                          if (n.has(i)) n.delete(i);
+                          else n.add(i);
+                          return n;
+                        })
+                      }
+                      className={cn(
+                        "h-7 w-8 rounded text-[11px] font-semibold border transition",
+                        on
+                          ? "bg-amber text-paper border-amber"
+                          : "bg-white text-ink-soft border-rule hover:text-ink",
+                      )}
+                    >
+                      {wl}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1 text-[10.5px] text-ink-faint">
+                Blank = every day. Pick Tue for &ldquo;Tox Tuesdays.&rdquo;
+              </p>
+            </div>
+            <div>
+              <Lbl>Limit (optional)</Lbl>
+              <input
+                type="number"
+                inputMode="numeric"
+                min="1"
+                step="1"
+                value={cap}
+                onChange={(e) => setCap(e.target.value)}
+                placeholder="e.g. 20"
+                className="w-full rounded border border-rule bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber/30"
+              />
+              <p className="mt-1 text-[10.5px] text-ink-faint">
+                Stops after this many redemptions.
+              </p>
+            </div>
+          </div>
+
           <button
             type="button"
             onClick={() => void create()}

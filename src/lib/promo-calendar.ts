@@ -73,6 +73,14 @@ export type PromoOffer = {
   targetCohort?: OfferCohort;
   /** Whether the offer is listed on the public Deals page. Defaults true. */
   showOnDeals?: boolean;
+  /** Days of week the offer is live (0=Sun…6=Sat). null/empty = any day
+   *  ("Tox Tuesdays" = [2]). */
+  activeWeekdays?: number[] | null;
+  /** Max redemptions; null = unlimited. Once redeemedCount hits it, the offer
+   *  stops badging/matching. */
+  quantityCap?: number | null;
+  /** Redemptions so far (incremented on each cross-sell win). */
+  redeemedCount?: number;
 };
 
 /** The badge shape attached to a service / add-on at booking. */
@@ -278,9 +286,25 @@ export function parsePromoCalendar(
 
 // ─── Offer ↔ add-on matching ───────────────────────────────────────────────
 
+/** Day of week (0=Sun…6=Sat) for an ISO yyyy-mm-dd, or null if unparseable. */
+function weekdayOf(iso: string): number | null {
+  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
+  if (!y || !m || !d) return null;
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
 function isActive(offer: PromoOffer, todayIso: string): boolean {
   if (offer.startsOn && todayIso < offer.startsOn) return false;
   if (offer.endsOn && todayIso > offer.endsOn) return false;
+  // Recurrence: only live on the configured weekdays (empty/null = any day).
+  if (offer.activeWeekdays && offer.activeWeekdays.length > 0) {
+    const dow = weekdayOf(todayIso);
+    if (dow == null || !offer.activeWeekdays.includes(dow)) return false;
+  }
+  // Quantity cap: exhausted once redemptions reach the cap.
+  if (offer.quantityCap != null && (offer.redeemedCount ?? 0) >= offer.quantityCap) {
+    return false;
+  }
   return true;
 }
 
