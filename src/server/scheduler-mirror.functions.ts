@@ -221,14 +221,29 @@ export const stageAcuityMirrorFn = createServerFn({ method: "POST" })
       listAcuityAppointmentTypes(token),
     ]);
 
-    // ── Mirror providers (calendars) ──
-    const { data: existingProviders } = await sb
+    // external_id/external_source are added by the v2.4.9 migration and aren't
+    // in the generated types yet → untyped accessor (same pattern as offers).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const anySb = sb as unknown as { from(t: string): any };
+
+    // ── Mirror providers (calendars) — anchored by Acuity calendar id, so a
+    //    rename updates the existing row instead of creating a duplicate. ──
+    const { data: existingProviders } = await anySb
       .from("scheduling_providers")
-      .select("id, name")
+      .select("id, name, external_id, external_source")
       .eq("tenant_id", tenantId);
-    const provByName = new Map<string, string>(); // norm(name) → id
-    for (const p of (existingProviders ?? []) as { id: string; name: string }[]) {
+    const provByExtId = new Map<string, { id: string; name: string }>();
+    const provByName = new Map<string, string>(); // norm(name) → id (legacy adoption)
+    for (const p of (existingProviders ?? []) as Array<{
+      id: string;
+      name: string;
+      external_id: string | null;
+      external_source: string | null;
+    }>) {
       provByName.set(norm(p.name), p.id);
+      if (p.external_source === "acuity" && p.external_id) {
+        provByExtId.set(p.external_id, { id: p.id, name: p.name });
+      }
     }
 
     const provReport = {
@@ -243,14 +258,40 @@ export const stageAcuityMirrorFn = createServerFn({ method: "POST" })
         provReport.unmappable.push(`Calendar #${cal.id} (no name)`);
         continue;
       }
+      const extId = String(cal.id);
       const key = norm(cal.name);
-      if (provByName.has(key)) {
+
+      const byExt = provByExtId.get(extId);
+      if (byExt) {
+        // Rename-safe: Acuity renamed this calendar → update our row's name.
+        if (byExt.name !== cal.name) {
+          await anySb.from("scheduling_providers").update({ name: cal.name }).eq("id", byExt.id);
+        }
+        provByName.set(key, byExt.id);
         provReport.matched += 1;
         continue;
       }
-      const { data: inserted, error } = await sb
+      const byName = provByName.get(key);
+      if (byName) {
+        // Adopt a pre-external-id mirrored row (or a same-named provider).
+        await anySb
+          .from("scheduling_providers")
+          .update({ external_source: "acuity", external_id: extId })
+          .eq("id", byName);
+        provByExtId.set(extId, { id: byName, name: cal.name });
+        provReport.matched += 1;
+        continue;
+      }
+      const { data: inserted, error } = await anySb
         .from("scheduling_providers")
-        .insert({ tenant_id: tenantId, name: cal.name, user_id: null, is_active: true })
+        .insert({
+          tenant_id: tenantId,
+          name: cal.name,
+          user_id: null,
+          is_active: true,
+          external_source: "acuity",
+          external_id: extId,
+        })
         .select("id")
         .single();
       if (error || !inserted) {
@@ -259,6 +300,7 @@ export const stageAcuityMirrorFn = createServerFn({ method: "POST" })
       }
       const newId = (inserted as { id: string }).id;
       provByName.set(key, newId);
+      provByExtId.set(extId, { id: newId, name: cal.name });
       createdProviderIds.push(newId);
       provReport.created += 1;
     }
@@ -268,14 +310,24 @@ export const stageAcuityMirrorFn = createServerFn({ method: "POST" })
       await seedDefaultHours(sb, pid);
     }
 
-    // ── Mirror services (appointment-types) ──
-    const { data: existingServices } = await sb
+    // ── Mirror services (appointment-types) — anchored by Acuity type id. ──
+    const { data: existingServices } = await anySb
       .from("services")
-      .select("name")
+      .select("id, name, external_id, external_source")
       .eq("tenant_id", tenantId);
-    const svcNames = new Set<string>(
-      ((existingServices ?? []) as { name: string }[]).map((s) => norm(s.name)),
-    );
+    const svcByExtId = new Map<string, { id: string; name: string }>();
+    const svcByName = new Map<string, string>(); // norm(name) → id
+    for (const s of (existingServices ?? []) as Array<{
+      id: string;
+      name: string;
+      external_id: string | null;
+      external_source: string | null;
+    }>) {
+      svcByName.set(norm(s.name), s.id);
+      if (s.external_source === "acuity" && s.external_id) {
+        svcByExtId.set(s.external_id, { id: s.id, name: s.name });
+      }
+    }
 
     const svcReport = {
       fromAcuity: types.length,
@@ -293,8 +345,24 @@ export const stageAcuityMirrorFn = createServerFn({ method: "POST" })
         svcReport.unmappable.push(`Type #${t.id} (no name)`);
         continue;
       }
+      const extId = String(t.id);
       const key = norm(t.name);
-      if (svcNames.has(key)) {
+
+      const byExt = svcByExtId.get(extId);
+      if (byExt) {
+        if (byExt.name !== t.name) {
+          await anySb.from("services").update({ name: t.name }).eq("id", byExt.id);
+        }
+        svcReport.matched += 1;
+        continue;
+      }
+      const byName = svcByName.get(key);
+      if (byName) {
+        await anySb
+          .from("services")
+          .update({ external_source: "acuity", external_id: extId })
+          .eq("id", byName);
+        svcByExtId.set(extId, { id: byName, name: t.name });
         svcReport.matched += 1;
         continue;
       }
@@ -302,21 +370,28 @@ export const stageAcuityMirrorFn = createServerFn({ method: "POST" })
       const price = Number.isFinite(priceNum) && priceNum >= 0 ? priceNum : 0;
       const duration = Math.max(5, Math.round(t.duration || 30));
       const category = t.category && t.category.trim() ? t.category.trim() : "other";
-      const { error } = await sb.from("services").insert({
-        tenant_id: tenantId,
-        name: t.name,
-        category,
-        service_price: price,
-        cogs_per_service: null,
-        cogs_source: "manual",
-        duration_min: duration,
-        online_bookable: true,
-      });
-      if (error) {
-        svcReport.unmappable.push(`${t.name} (${error.message})`);
+      const { data: insSvc, error } = await anySb
+        .from("services")
+        .insert({
+          tenant_id: tenantId,
+          name: t.name,
+          category,
+          service_price: price,
+          cogs_per_service: null,
+          cogs_source: "manual",
+          duration_min: duration,
+          online_bookable: true,
+          external_source: "acuity",
+          external_id: extId,
+        })
+        .select("id")
+        .single();
+      if (error || !insSvc) {
+        svcReport.unmappable.push(`${t.name} (${error?.message ?? "insert failed"})`);
         continue;
       }
-      svcNames.add(key);
+      svcByName.set(key, (insSvc as { id: string }).id);
+      svcByExtId.set(extId, { id: (insSvc as { id: string }).id, name: t.name });
       svcReport.created += 1;
     }
 

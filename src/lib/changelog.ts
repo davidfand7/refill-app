@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.4.9",
+    date: "June 2026",
+    items: [
+      "<strong>v2.4.9 &mdash; Acuity mirror is now rename-safe (external-id mapping).</strong> The staging mirror used to match providers and services by name, so renaming one (in SmartSpa or Acuity) made a re-mirror create a duplicate. Each mirrored provider/service is now anchored to its Acuity id (<code>external_source</code> + <code>external_id</code>): a re-mirror finds the row by id and just updates its name &mdash; never duplicating &mdash; and pre-existing name-mirrored rows are adopted on the next run. Native (non-mirrored) providers/services are untouched. <strong>Migration</strong>: <code>20260721000000_v2_4_9_mirror_external_id.sql</code> (additive nullable columns + a partial unique index per tenant/source/external-id). <strong>Touched</strong>: <code>scheduler-mirror.functions.ts</code> (match/adopt/insert by external id; rename detection).",
+    ],
+  },
+  {
     version: "v2.4.8",
     date: "June 2026",
     items: [
