@@ -15,6 +15,23 @@ import { parseCsvRows, parseMoney } from "@/lib/manufacturer-reward-csv";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
+/**
+ * The spa-authored offer engine's types. A `dollars_off` offer is the
+ * original (and every manufacturer-calendar offer); the rest are the
+ * richness the spa-loyal loyalty engine adds. Bundle/bogo/series/first_visit/
+ * spend_get are reserved (schema + enum land now, UI in later slices).
+ */
+export type OfferType =
+  | "dollars_off"
+  | "percent_off"
+  | "free_addon"
+  | "discount_addon"
+  | "bundle"
+  | "bogo"
+  | "series"
+  | "first_visit"
+  | "spend_get";
+
 /** A parsed promo-calendar offer (one row of the "Dollars Off" subset). */
 export type PromoOffer = {
   /** Present only when read back from the DB (not set by the parser). */
@@ -22,7 +39,9 @@ export type PromoOffer = {
   /** "manufacturer" (calendar) or "spa" (owner-authored). DB-only. */
   source?: "manufacturer" | "spa";
   manufacturer: string;
-  /** Normalized product keyword for service-name matching (e.g. "juvederm"). */
+  /** Normalized product keyword for service-name matching (e.g. "juvederm").
+   *  For spa offers this is the normalized name of the TRIGGER service the
+   *  offer applies to. */
   product: string;
   title: string;
   discountUsd: number | null;
@@ -32,12 +51,27 @@ export type PromoOffer = {
   landingUrl: string | null;
   promotionType: string | null;
   rawTitle: string;
+  // ── Offer-engine fields (DB-only; optional so the calendar parser, which
+  //    only ever emits dollars_off, stays valid). ──
+  /** Defaults to "dollars_off" when absent. */
+  offerType?: OfferType;
+  /** Percent value for percent_off (0–100). */
+  valuePct?: number | null;
+  /** Normalized name of the add-on this offer rewards (free/discount_addon). */
+  addonServiceName?: string | null;
+  /** Display name of the add-on / bundle item. */
+  addonLabel?: string | null;
+  /** Paused offers are skipped by the matcher. Defaults true when absent. */
+  isActive?: boolean;
 };
 
-/** The badge shape attached to an add-on at booking. */
+/** The badge shape attached to a service / add-on at booking. */
 export type AddOnOffer = {
-  /** e.g. "$75 off through Jun 30" or "$75 off". */
+  /** e.g. "$75 off through Jun 30", "20% off", "Free brow wax with this". */
   label: string;
+  /** What kind of offer this badge represents (drives nothing visual yet,
+   *  but lets callers style or branch later). */
+  offerType: OfferType;
   discountUsd: number | null;
   endsOn: string | null;
   landingUrl: string | null;
@@ -248,9 +282,38 @@ function fmtEnds(iso: string | null): string | null {
   return `${months[parseInt(m, 10) - 1] ?? m} ${parseInt(d, 10)}`;
 }
 
+/** A rough rank so "best" is deterministic when several offers are active on
+ *  one service. We can't convert % to $ without the price, so percent falls
+ *  back to its own magnitude — fine in practice (a service rarely carries
+ *  more than one spa offer). */
+function offerRank(o: PromoOffer): number {
+  return o.discountUsd ?? o.valuePct ?? 0;
+}
+
+/** Typed, computed badge label for an offer that has no owner-set title. */
+function computedLabel(o: PromoOffer): string {
+  const ends = fmtEnds(o.endsOn);
+  const through = ends ? ` through ${ends}` : "";
+  const type = o.offerType ?? "dollars_off";
+  switch (type) {
+    case "percent_off":
+      return o.valuePct != null ? `${o.valuePct}% off${through}` : `Discount${through}`;
+    case "free_addon":
+      return o.addonLabel ? `Free ${o.addonLabel} with this${through}` : `Free add-on${through}`;
+    case "discount_addon":
+      return o.discountUsd != null
+        ? `$${Math.round(o.discountUsd)} off ${o.addonLabel ?? "add-on"}${through}`
+        : `Add-on offer${through}`;
+    case "dollars_off":
+    default:
+      return o.discountUsd != null ? `$${Math.round(o.discountUsd)} off${through}` : `Offer${through}`;
+  }
+}
+
 /**
- * Best currently-active offer for an add-on, matched by product keyword in
- * the add-on's name. Highest discount wins when several are active.
+ * Best currently-active offer for a service / add-on, matched by product
+ * keyword in its name. Paused offers are skipped; highest-value wins when
+ * several are active.
  */
 export function bestActiveOfferForName(
   offers: PromoOffer[],
@@ -260,19 +323,19 @@ export function bestActiveOfferForName(
   const name = normalizeForMatch(addOnName);
   let best: PromoOffer | null = null;
   for (const o of offers) {
+    if (o.isActive === false) continue;
     if (!productMatchesName(o.product, name)) continue;
     if (!isActive(o, todayIso)) continue;
-    if (!best || (o.discountUsd ?? 0) > (best.discountUsd ?? 0)) best = o;
+    if (!best || offerRank(o) > offerRank(best)) best = o;
   }
   if (!best) return null;
-  const ends = fmtEnds(best.endsOn);
-  const amt = best.discountUsd != null ? `$${Math.round(best.discountUsd)} off` : "Offer";
-  const computed = ends ? `${amt} through ${ends}` : amt;
   return {
-    // Spa-authored offers show the owner's OWN label ("Save $100 w/ Emma");
-    // manufacturer offers show the clean computed "$X off through <date>"
+    // Spa-authored offers show the owner's OWN label ("Save $100 w/ Emma" or
+    // the type-aware auto-title built at creation, "20% off Botox"); a
+    // manufacturer offer shows the clean computed "$X off through <date>"
     // (their raw titles are verbose, e.g. "$65 off BOTOX® Cosmetic-…").
-    label: best.source === "spa" ? best.title : computed,
+    label: best.source === "spa" ? best.title : computedLabel(best),
+    offerType: best.offerType ?? "dollars_off",
     discountUsd: best.discountUsd,
     endsOn: best.endsOn,
     landingUrl: best.landingUrl,

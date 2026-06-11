@@ -1,20 +1,32 @@
 /**
  * Spa-authored offers — the owner writes their OWN cross-sell offers, a
- * first-class peer to manufacturer promos. Same table, same at-booking badge,
- * same $5 cross_sell_addon win pipeline. Match is by service name.
+ * first-class peer to manufacturer promos. Same unified offers table, same
+ * at-booking badge, same $5 cross_sell_addon win pipeline. Match is by the
+ * trigger service's name.
  *
- * Self-contained card (accessToken + viewAsUserId props only) so it can mount in
- * more than one Solution: it lives in Promos → Reward signals AND as a tab in the
- * Calendar Solution (the offers badge at booking, so Calendar is a natural home).
- * Both surfaces read/write the same offers — one room, two doors.
+ * v2.4.2 — the offer ENGINE: beyond a fixed $-off, the owner can author
+ *   • $ off a service       • % off a service
+ *   • a free add-on with a service ("book Botox, get a free brow wax")
+ *   • $ off an add-on with a service
+ * (bundle / BOGO / series / first-visit / spend-get are reserved for later
+ * slices — schema + matcher already carry them.)
+ *
+ * Self-contained card (accessToken + viewAsUserId props) so it mounts in more
+ * than one Solution — Promos → Reward signals AND the Calendar Solution.
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Plus, Sparkles, Tag, Trash2 } from "lucide-react";
-import { listPromoOffers, createSpaOffer, deleteSpaOffer } from "@/server/refill-promo-calendar.functions";
+import { Loader2, Pause, Play, Plus, Sparkles, Tag, Trash2 } from "lucide-react";
+import {
+  listPromoOffers,
+  createSpaOffer,
+  deleteSpaOffer,
+  setSpaOfferActive,
+} from "@/server/refill-promo-calendar.functions";
 import { listServicesFn, type Service } from "@/server/refill-catalog";
-import type { PromoOffer } from "@/lib/promo-calendar";
+import type { PromoOffer, OfferType } from "@/lib/promo-calendar";
+import { cn } from "@/lib/utils";
 
 function Lbl({ children }: { children: React.ReactNode }) {
   return (
@@ -43,6 +55,21 @@ function fmtWindow(startsOn: string | null, endsOn: string | null): string {
   return `· from ${fmtDate(startsOn!)}`;
 }
 
+// The four authorable offer types (slice 1).
+const TYPE_OPTIONS: Array<{ value: OfferType; label: string }> = [
+  { value: "dollars_off", label: "$ off" },
+  { value: "percent_off", label: "% off" },
+  { value: "free_addon", label: "Free add-on" },
+  { value: "discount_addon", label: "Add-on $ off" },
+];
+
+const TYPE_CHIP: Record<string, string> = {
+  dollars_off: "$ off",
+  percent_off: "% off",
+  free_addon: "Free add-on",
+  discount_addon: "Add-on $ off",
+};
+
 export function SpaOffersCard({
   accessToken,
   viewAsUserId,
@@ -53,8 +80,11 @@ export function SpaOffersCard({
   const [open, setOpen] = useState(false);
   const [offers, setOffers] = useState<PromoOffer[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [offerType, setOfferType] = useState<OfferType>("dollars_off");
   const [serviceName, setServiceName] = useState("");
   const [discount, setDiscount] = useState("");
+  const [pct, setPct] = useState("");
+  const [addonLabel, setAddonLabel] = useState("");
   const [startsOn, setStartsOn] = useState("");
   const [endsOn, setEndsOn] = useState("");
   const [label, setLabel] = useState("");
@@ -80,15 +110,38 @@ export function SpaOffersCard({
     void load();
   }, [load]);
 
+  const needsDiscount = offerType === "dollars_off" || offerType === "discount_addon";
+  const needsPct = offerType === "percent_off";
+  const needsAddon = offerType === "free_addon" || offerType === "discount_addon";
+
+  function resetForm() {
+    setServiceName("");
+    setDiscount("");
+    setPct("");
+    setAddonLabel("");
+    setStartsOn("");
+    setEndsOn("");
+    setLabel("");
+    setOfferType("dollars_off");
+  }
+
   async function create() {
     if (!accessToken || !serviceName) {
       toast.error("Pick a service for the offer.");
       return;
     }
-    const trimmed = discount.trim();
-    const d = trimmed ? Number(trimmed) : null;
-    if (trimmed && (!Number.isFinite(d) || (d as number) <= 0)) {
-      toast.error("Enter a dollar amount, or leave it blank.");
+    const d = discount.trim() ? Number(discount.trim()) : null;
+    const p = pct.trim() ? Number(pct.trim()) : null;
+    if (needsDiscount && (!Number.isFinite(d) || (d as number) <= 0)) {
+      toast.error("Enter a dollar amount.");
+      return;
+    }
+    if (needsPct && (!Number.isFinite(p) || (p as number) <= 0 || (p as number) > 100)) {
+      toast.error("Enter a percentage between 1 and 100.");
+      return;
+    }
+    if (needsAddon && !addonLabel.trim()) {
+      toast.error("Name the add-on this offer applies to.");
       return;
     }
     if (startsOn && endsOn && endsOn < startsOn) {
@@ -102,18 +155,17 @@ export function SpaOffersCard({
           accessToken,
           viewAsUserId,
           serviceName,
-          discountUsd: d,
+          offerType,
+          discountUsd: needsDiscount ? d : null,
+          valuePct: needsPct ? p : null,
+          addonLabel: needsAddon ? addonLabel.trim() : null,
           startsOn: startsOn || null,
           endsOn: endsOn || null,
           title: label.trim() || undefined,
         },
       });
       toast.success("Offer added — it badges that service at booking.");
-      setServiceName("");
-      setDiscount("");
-      setStartsOn("");
-      setEndsOn("");
-      setLabel("");
+      resetForm();
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't add the offer.");
@@ -129,6 +181,18 @@ export function SpaOffersCard({
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't remove the offer.");
+    }
+  }
+
+  async function toggleActive(o: PromoOffer) {
+    if (!accessToken || !o.id) return;
+    try {
+      await setSpaOfferActive({
+        data: { accessToken, viewAsUserId, offerId: o.id, isActive: o.isActive === false },
+      });
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't update the offer.");
     }
   }
 
@@ -152,16 +216,38 @@ export function SpaOffersCard({
       </button>
 
       <p className="mt-2 text-[11px] text-ink-faint">
-        Not from a manufacturer — your own upsell. Pick one of your services,
-        set the discount, and it badges that service at booking just like a
-        manufacturer promo — and earns the same $5 when a matched patient books it.
+        Your own loyalty program — not a manufacturer's. Dollar or percent off a
+        service, or a free / discounted add-on with it. It badges that service
+        at booking and earns the same $5 when a matched patient books it.
       </p>
 
       {open && (
         <div className="mt-4 space-y-3">
+          {/* Offer type selector */}
+          <div>
+            <Lbl>Offer type</Lbl>
+            <div className="flex flex-wrap gap-1.5">
+              {TYPE_OPTIONS.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => setOfferType(t.value)}
+                  className={cn(
+                    "rounded-full px-3 py-1 text-[12px] font-semibold border transition",
+                    offerType === t.value
+                      ? "bg-amber text-paper border-amber"
+                      : "bg-white text-ink-soft border-rule hover:text-ink",
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="sm:col-span-2">
-              <Lbl>Service</Lbl>
+              <Lbl>{needsAddon ? "Book this service…" : "Service"}</Lbl>
               <select
                 value={serviceName}
                 onChange={(e) => setServiceName(e.target.value)}
@@ -182,26 +268,60 @@ export function SpaOffersCard({
                 </p>
               )}
             </div>
-            <div>
-              <Lbl>Discount ($)</Lbl>
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="1"
-                value={discount}
-                onChange={(e) => setDiscount(e.target.value)}
-                placeholder="50"
-                className="w-full rounded border border-rule bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber/30"
-              />
-            </div>
+
+            {needsAddon && (
+              <div className="sm:col-span-2">
+                <Lbl>{offerType === "free_addon" ? "…get this free" : "…get $ off this add-on"}</Lbl>
+                <input
+                  type="text"
+                  value={addonLabel}
+                  onChange={(e) => setAddonLabel(e.target.value)}
+                  placeholder="brow wax"
+                  className="w-full rounded border border-rule bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber/30"
+                />
+              </div>
+            )}
+
+            {needsDiscount && (
+              <div>
+                <Lbl>Discount ($)</Lbl>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="1"
+                  value={discount}
+                  onChange={(e) => setDiscount(e.target.value)}
+                  placeholder="50"
+                  className="w-full rounded border border-rule bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber/30"
+                />
+              </div>
+            )}
+
+            {needsPct && (
+              <div>
+                <Lbl>Percent (%)</Lbl>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="1"
+                  max="100"
+                  step="1"
+                  value={pct}
+                  onChange={(e) => setPct(e.target.value)}
+                  placeholder="20"
+                  className="w-full rounded border border-rule bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber/30"
+                />
+              </div>
+            )}
+
             <div>
               <Lbl>Custom label (optional)</Lbl>
               <input
                 type="text"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
-                placeholder="auto: “$50 off …”"
+                placeholder="auto from the offer"
                 className="w-full rounded border border-rule bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber/30"
               />
             </div>
@@ -238,26 +358,49 @@ export function SpaOffersCard({
 
       {offers.length > 0 && (
         <ul className="mt-4 space-y-1.5">
-          {offers.map((o) => (
-            <li
-              key={o.id}
-              className="flex items-center gap-2 rounded-lg border border-rule bg-white px-3 py-2 text-[12.5px]"
-            >
-              <Tag className="h-3.5 w-3.5 text-amber shrink-0" />
-              <span className="font-medium text-ink">{o.title}</span>
-              <span className="text-ink-faint">
-                {fmtWindow(o.startsOn, o.endsOn)}
-              </span>
-              <button
-                type="button"
-                onClick={() => void remove(o.id)}
-                className="ml-auto text-ink-faint hover:text-rose transition"
-                aria-label="Remove offer"
+          {offers.map((o) => {
+            const paused = o.isActive === false;
+            return (
+              <li
+                key={o.id}
+                className={cn(
+                  "flex items-center gap-2 rounded-lg border border-rule bg-white px-3 py-2 text-[12.5px]",
+                  paused && "opacity-60",
+                )}
               >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </li>
-          ))}
+                <Tag className="h-3.5 w-3.5 text-amber shrink-0" />
+                <span className="font-medium text-ink">{o.title}</span>
+                {o.offerType && o.offerType !== "dollars_off" && (
+                  <span className="rounded-full bg-amber-soft px-1.5 py-0.5 text-[10px] font-semibold text-amber">
+                    {TYPE_CHIP[o.offerType] ?? o.offerType}
+                  </span>
+                )}
+                {paused && (
+                  <span className="rounded-full bg-rule px-1.5 py-0.5 text-[10px] font-semibold text-ink-faint">
+                    paused
+                  </span>
+                )}
+                <span className="text-ink-faint">{fmtWindow(o.startsOn, o.endsOn)}</span>
+                <button
+                  type="button"
+                  onClick={() => void toggleActive(o)}
+                  className="ml-auto text-ink-faint hover:text-ink transition"
+                  aria-label={paused ? "Resume offer" : "Pause offer"}
+                  title={paused ? "Resume" : "Pause"}
+                >
+                  {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void remove(o.id)}
+                  className="text-ink-faint hover:text-rose transition"
+                  aria-label="Remove offer"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

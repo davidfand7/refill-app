@@ -25,6 +25,7 @@ import {
   bestActiveOfferForName,
   normalizeForMatch,
   type PromoOffer,
+  type OfferType,
 } from "@/lib/promo-calendar";
 import { todayIsoInTz } from "@/lib/scheduling-slots";
 
@@ -59,7 +60,17 @@ type OfferDbRow = {
   landing_url: string | null;
   promotion_type: string | null;
   raw_title: string | null;
+  offer_type: string | null;
+  value_pct: number | string | null;
+  addon_service_name: string | null;
+  addon_label: string | null;
+  is_active: boolean | null;
 };
+
+// Single source of truth for the columns we read, so the loader + insert
+// selects never drift. New offer-engine columns land here (v2.4.2).
+const OFFER_COLS =
+  "id, source, manufacturer, product, title, discount_usd, starts_on, ends_on, landing_url, promotion_type, raw_title, offer_type, value_pct, addon_service_name, addon_label, is_active";
 
 function rowToOffer(r: OfferDbRow): PromoOffer {
   return {
@@ -74,6 +85,11 @@ function rowToOffer(r: OfferDbRow): PromoOffer {
     landingUrl: r.landing_url,
     promotionType: r.promotion_type,
     rawTitle: r.raw_title ?? r.title,
+    offerType: (r.offer_type as OfferType | null) ?? "dollars_off",
+    valuePct: r.value_pct != null ? Number(r.value_pct) : null,
+    addonServiceName: r.addon_service_name,
+    addonLabel: r.addon_label,
+    isActive: r.is_active ?? true,
   };
 }
 
@@ -82,11 +98,7 @@ export async function loadTenantPromoOffers(
   sb: AnySb,
   tenantId: string,
 ): Promise<PromoOffer[]> {
-  const { data } = await offersTbl(sb)
-    .select(
-      "id, source, manufacturer, product, title, discount_usd, starts_on, ends_on, landing_url, promotion_type, raw_title",
-    )
-    .eq("tenant_id", tenantId);
+  const { data } = await offersTbl(sb).select(OFFER_COLS).eq("tenant_id", tenantId);
   return ((data as OfferDbRow[] | null) ?? []).map(rowToOffer);
 }
 
@@ -177,16 +189,56 @@ export const listPromoOffers = createServerFn({ method: "POST" })
 // service name: we store the normalized name as `product`, which the matcher
 // substring-matches against the booked service's name.
 
+// Slice 1 authors these four types; the rest (bundle/bogo/series/first_visit/
+// spend_get) exist in the DB enum + matcher and get authoring UI in later slices.
+const AUTHORED_OFFER_TYPES = [
+  "dollars_off",
+  "percent_off",
+  "free_addon",
+  "discount_addon",
+] as const;
+
+/** Type-aware auto-title when the owner doesn't set a custom label. */
+function buildOfferTitle(args: {
+  offerType: OfferType;
+  serviceName: string;
+  discountUsd: number | null;
+  valuePct: number | null;
+  addonLabel: string | null;
+  custom?: string;
+}): string {
+  const c = args.custom?.trim();
+  if (c) return c;
+  const { serviceName: s, discountUsd: d, valuePct: p, addonLabel: a } = args;
+  switch (args.offerType) {
+    case "percent_off":
+      return p != null ? `${p}% off ${s}` : `Offer on ${s}`;
+    case "free_addon":
+      return a ? `Free ${a} with ${s}` : `Free add-on with ${s}`;
+    case "discount_addon":
+      return d != null ? `$${Math.round(d)} off ${a ?? "add-on"} with ${s}` : `Add-on offer with ${s}`;
+    case "dollars_off":
+    default:
+      return d != null ? `$${Math.round(d)} off ${s}` : `Offer on ${s}`;
+  }
+}
+
 const createSpaOfferInput = z.object({
   accessToken: z.string(),
   viewAsUserId: z.string().optional(),
   /** The owner's own service this offer applies to (drives matching + title). */
   serviceName: z.string().min(1).max(160),
+  offerType: z.enum(AUTHORED_OFFER_TYPES).default("dollars_off"),
+  /** $ value for dollars_off / discount_addon. */
   discountUsd: z.number().positive().max(100000).nullable().optional(),
+  /** % value for percent_off (0–100). */
+  valuePct: z.number().positive().max(100).nullable().optional(),
+  /** The add-on this offer rewards (free_addon / discount_addon). */
+  addonLabel: z.string().max(160).nullable().optional(),
   /** yyyy-mm-dd; null/omitted = no bound (starts now / ongoing). */
   startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
-  /** Optional custom label; defaults to "$X off {service}". */
+  /** Optional custom label; defaults to a type-aware auto-title. */
   title: z.string().max(200).optional(),
   landingUrl: z.string().max(500).optional(),
 });
@@ -203,11 +255,32 @@ export const createSpaOffer = createServerFn({ method: "POST" })
 
     const product = normalizeForMatch(data.serviceName);
     if (!product) throw new Error("Pick a service for this offer.");
-    const title =
-      data.title?.trim() ||
-      (data.discountUsd != null
-        ? `$${Math.round(data.discountUsd)} off ${data.serviceName}`
-        : `Offer on ${data.serviceName}`);
+
+    // Per-type required-value validation (friendly, not zod refinement noise).
+    const discountUsd = data.discountUsd ?? null;
+    const valuePct = data.valuePct ?? null;
+    const addonLabel = data.addonLabel?.trim() || null;
+    if (data.offerType === "percent_off" && valuePct == null)
+      throw new Error("Enter a percentage for a percent-off offer.");
+    if (
+      (data.offerType === "dollars_off" || data.offerType === "discount_addon") &&
+      discountUsd == null
+    )
+      throw new Error("Enter a dollar amount for this offer.");
+    if (
+      (data.offerType === "free_addon" || data.offerType === "discount_addon") &&
+      !addonLabel
+    )
+      throw new Error("Name the add-on this offer applies to.");
+
+    const title = buildOfferTitle({
+      offerType: data.offerType,
+      serviceName: data.serviceName,
+      discountUsd,
+      valuePct,
+      addonLabel,
+      custom: data.title,
+    });
 
     const row = {
       tenant_id: tenantId,
@@ -215,18 +288,21 @@ export const createSpaOffer = createServerFn({ method: "POST" })
       manufacturer: null,
       product,
       title,
-      discount_usd: data.discountUsd ?? null,
+      discount_usd: discountUsd,
       starts_on: data.startsOn ?? null,
       ends_on: data.endsOn ?? null,
       landing_url: data.landingUrl?.trim() || null,
       promotion_type: "Spa offer",
       raw_title: data.serviceName,
+      offer_type: data.offerType,
+      value_pct: valuePct,
+      addon_service_name: addonLabel ? normalizeForMatch(addonLabel) : null,
+      addon_label: addonLabel,
+      is_active: true,
     };
     const { data: inserted, error } = await offersTbl(sb)
       .insert(row)
-      .select(
-        "id, source, manufacturer, product, title, discount_usd, starts_on, ends_on, landing_url, promotion_type, raw_title",
-      )
+      .select(OFFER_COLS)
       .single();
     if (error || !inserted) {
       throw new Error(
@@ -234,6 +310,36 @@ export const createSpaOffer = createServerFn({ method: "POST" })
       );
     }
     return rowToOffer(inserted as OfferDbRow);
+  });
+
+// Pause / resume a spa offer without deleting it (is_active toggle).
+const setSpaOfferActiveInput = z.object({
+  accessToken: z.string(),
+  viewAsUserId: z.string().optional(),
+  offerId: z.string().uuid(),
+  isActive: z.boolean(),
+});
+
+export const setSpaOfferActive = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => setSpaOfferActiveInput.parse(input))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const { error } = await offersTbl(sb)
+      .update({ is_active: data.isActive })
+      .eq("id", data.offerId)
+      .eq("tenant_id", tenantId)
+      .eq("source", "spa");
+    if (error) {
+      throw new Error(
+        `Couldn't update offer: ${(error as { message?: string }).message ?? "update failed"}`,
+      );
+    }
+    return { ok: true };
   });
 
 const deleteSpaOfferInput = z.object({

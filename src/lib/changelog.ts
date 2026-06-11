@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.4.2",
+    date: "June 2026",
+    items: [
+      "<strong>v2.4.2 &mdash; Spa offer engine, slice 1: your own offers grow real types.</strong> Spa-authored offers are SmartSpa's anti-lock-in differentiator &mdash; a manufacturer's offer routes your patient to &ldquo;a provider near you,&rdquo; but your <em>own</em> offer is spa-loyal by construction and impossible for a manufacturer to copy. This slice promotes spa offers from &ldquo;a fixed dollar amount off a service&rdquo; into a real engine: author <strong>$ off</strong>, <strong>% off</strong>, a <strong>free add-on</strong> (&ldquo;book Botox, get a free brow wax&rdquo;), or <strong>$ off an add-on</strong> &mdash; each badges the trigger service at booking with a type-aware label and earns the same $5 cross-sell win. Offers can be <strong>paused</strong> without deleting. The unified offers table now carries columns for all four planned dimensions (types &middot; recurrence &middot; cohort targeting &middot; deals-page/push), so the next slices ship with <em>no</em> further migrations. <strong>Touched</strong>: <code>promo-calendar.ts</code> (typed offers + per-type badge labels), <code>refill-promo-calendar.functions.ts</code> (<code>createSpaOffer</code> types + <code>setSpaOfferActive</code>), <code>SpaOffersCard.tsx</code> (type picker + conditional fields + pause). <strong>Migration</strong>: <code>20260720000000_v2_4_2_spa_offer_engine.sql</code> (additive columns on <code>manufacturer_promo_offers</code>).",
+    ],
+  },
+  {
     version: "v2.4.1",
     date: "June 2026",
     items: [
