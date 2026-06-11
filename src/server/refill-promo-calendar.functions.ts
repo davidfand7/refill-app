@@ -619,11 +619,15 @@ export async function recordCrossSellWin(args: {
     notes: `Cross-sell: ${matchedOffer.title}`,
   });
 
-  // Recurrence: count the redemption against a capped offer (best-effort).
+  // Recurrence: count the redemption against a capped offer via an ATOMIC
+  // DB-side increment (a single UPDATE under a row lock) so concurrent bookings
+  // can't lose updates the way a read-modify-write would. Best-effort.
   if (matchedOffer.quantityCap != null && matchedOffer.id) {
-    await offersTbl(args.sb)
-      .update({ redeemed_count: (matchedOffer.redeemedCount ?? 0) + 1 })
-      .eq("id", matchedOffer.id);
+    await (
+      args.sb as unknown as {
+        rpc(fn: string, params: Record<string, unknown>): PromiseLike<unknown>;
+      }
+    ).rpc("increment_offer_redemption", { p_offer_id: matchedOffer.id });
   }
   return { recorded: true };
 }

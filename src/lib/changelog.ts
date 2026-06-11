@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.5.3",
+    date: "June 2026",
+    items: [
+      "<strong>v2.5.3 &mdash; Offer redemption count is now race-proof.</strong> A limited offer (&ldquo;first 20&rdquo;) counted each redemption with a read-modify-write, so two bookings landing at once could both read the same count and both write back the same +1 &mdash; losing one, drifting the cap. The increment is now a single atomic <code>UPDATE</code> behind a DB function (<code>increment_offer_redemption</code>), so concurrent bookings each count correctly. The cap stays a soft visibility limit (the offer just stops badging at the cap); the booking and the $5 win are unaffected &mdash; this only makes the count accurate. <strong>Migration</strong>: <code>20260722000000_v2_5_3_offer_redemption_increment.sql</code>. <strong>Touched</strong>: <code>refill-promo-calendar.functions.ts</code> (rpc instead of read-modify-write). The last open item from the fresh-walk, closed.",
+    ],
+  },
+  {
     version: "v2.5.2",
     date: "June 2026",
     items: [
