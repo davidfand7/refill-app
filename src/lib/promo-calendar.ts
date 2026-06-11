@@ -71,6 +71,8 @@ export type PromoOffer = {
   isActive?: boolean;
   /** Who the offer targets. Defaults "all" when absent. */
   targetCohort?: OfferCohort;
+  /** Whether the offer is listed on the public Deals page. Defaults true. */
+  showOnDeals?: boolean;
 };
 
 /** The badge shape attached to a service / add-on at booking. */
@@ -371,4 +373,30 @@ export function bestActiveOfferForName(
     landingUrl: best.landingUrl,
     title: best.title,
   };
+}
+
+// ─── Public Deals page ─────────────────────────────────────────────────────
+
+/** A clean, patient-facing headline for an offer on the Deals page. Spa
+ *  offers show the owner's own title; manufacturer offers get a tidy
+ *  "$X off <Product>" (their raw titles are verbose). */
+export function dealHeadline(offer: PromoOffer): string {
+  if (offer.source === "spa") return offer.title;
+  const product = offer.product
+    ? offer.product.charAt(0).toUpperCase() + offer.product.slice(1)
+    : "";
+  if (offer.discountUsd != null && product) return `$${Math.round(offer.discountUsd)} off ${product}`;
+  return offer.title;
+}
+
+/**
+ * Offers eligible for the public Deals page: publicly badgeable (cohort
+ * 'all'), not paused, currently in their date window, and not hidden from
+ * Deals. Cohort-targeted offers are intentionally excluded — they reach
+ * their patients via push, not a public list.
+ */
+export function publicDeals(offers: PromoOffer[], todayIso: string): PromoOffer[] {
+  return badgeableOffers(offers).filter(
+    (o) => o.isActive !== false && o.showOnDeals !== false && isActive(o, todayIso),
+  );
 }

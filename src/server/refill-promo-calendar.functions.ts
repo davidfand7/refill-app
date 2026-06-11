@@ -24,6 +24,8 @@ import {
   parsePromoCalendar,
   matchOfferForName,
   normalizeForMatch,
+  publicDeals,
+  dealHeadline,
   type PromoOffer,
   type OfferType,
   type OfferCohort,
@@ -69,12 +71,13 @@ type OfferDbRow = {
   addon_label: string | null;
   is_active: boolean | null;
   target_cohort: string | null;
+  show_on_deals: boolean | null;
 };
 
 // Single source of truth for the columns we read, so the loader + insert
 // selects never drift. New offer-engine columns land here (v2.4.2+).
 const OFFER_COLS =
-  "id, source, manufacturer, product, title, discount_usd, starts_on, ends_on, landing_url, promotion_type, raw_title, offer_type, value_pct, addon_service_name, addon_label, is_active, target_cohort";
+  "id, source, manufacturer, product, title, discount_usd, starts_on, ends_on, landing_url, promotion_type, raw_title, offer_type, value_pct, addon_service_name, addon_label, is_active, target_cohort, show_on_deals";
 
 function rowToOffer(r: OfferDbRow): PromoOffer {
   return {
@@ -95,6 +98,7 @@ function rowToOffer(r: OfferDbRow): PromoOffer {
     addonLabel: r.addon_label,
     isActive: r.is_active ?? true,
     targetCohort: (r.target_cohort as OfferCohort | null) ?? "all",
+    showOnDeals: r.show_on_deals ?? true,
   };
 }
 
@@ -183,6 +187,56 @@ export const listPromoOffers = createServerFn({ method: "POST" })
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
     return loadTenantPromoOffers(sb, tenantId);
+  });
+
+// ─── Public Deals page (v2.4.4) ────────────────────────────────────────────
+//
+// A no-auth, patient-facing list of a spa's currently-active public offers,
+// resolved by the same tenant slug the booking page uses. Cohort-targeted
+// offers are excluded (publicDeals filters to cohort 'all') — they reach their
+// patients via push, not a public list.
+
+export type PublicDeal = {
+  headline: string;
+  offerType: OfferType;
+  endsOn: string | null;
+  landingUrl: string | null;
+};
+
+export type PublicDealsResult =
+  | { ok: false; reason: string }
+  | { ok: true; spaName: string; slug: string; deals: PublicDeal[] };
+
+const publicDealsInput = z.object({ slug: z.string().min(1).max(120) });
+
+export const getPublicDealsFn = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => publicDealsInput.parse(input))
+  .handler(async ({ data }): Promise<PublicDealsResult> => {
+    const sb = admin();
+    const { data: tenant } = await sb
+      .from("tenants")
+      .select("id, name")
+      .ilike("slug", data.slug)
+      .maybeSingle();
+    if (!tenant) return { ok: false, reason: "We couldn't find that practice." };
+
+    const offers = await loadTenantPromoOffers(sb, tenant.id);
+    const { data: tzRow } = await sb
+      .from("scheduling_settings")
+      .select("timezone")
+      .eq("tenant_id", tenant.id)
+      .maybeSingle();
+    const today = todayIsoInTz(
+      (tzRow as { timezone?: string } | null)?.timezone ?? "America/Los_Angeles",
+    );
+
+    const deals: PublicDeal[] = publicDeals(offers, today).map((o) => ({
+      headline: dealHeadline(o),
+      offerType: o.offerType ?? "dollars_off",
+      endsOn: o.endsOn,
+      landingUrl: o.landingUrl,
+    }));
+    return { ok: true, spaName: tenant.name as string, slug: data.slug, deals };
   });
 
 // ─── Spa-authored offers (v2.0.0) ──────────────────────────────────────────

@@ -24,6 +24,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as ReportTokenRouteImport } from './routes/report.$token'
 import { Route as RSlugRouteImport } from './routes/r.$slug'
+import { Route as DealsSlugRouteImport } from './routes/deals.$slug'
 import { Route as AppRepRouteImport } from './routes/app.rep'
 import { Route as AppRefillRouteImport } from './routes/app.refill'
 import { Route as AppBillingRouteImport } from './routes/app.billing'
@@ -227,6 +228,11 @@ const ReportTokenRoute = ReportTokenRouteImport.update({
 const RSlugRoute = RSlugRouteImport.update({
   id: '/r/$slug',
   path: '/r/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DealsSlugRoute = DealsSlugRouteImport.update({
+  id: '/deals/$slug',
+  path: '/deals/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppRepRoute = AppRepRouteImport.update({
@@ -950,6 +956,7 @@ export interface FileRoutesByFullPath {
   '/app/billing': typeof AppBillingRouteWithChildren
   '/app/refill': typeof AppRefillRouteWithChildren
   '/app/rep': typeof AppRepRouteWithChildren
+  '/deals/$slug': typeof DealsSlugRoute
   '/r/$slug': typeof RSlugRoute
   '/report/$token': typeof ReportTokenRoute
   '/s/$slug': typeof SSlugRoute
@@ -1093,6 +1100,7 @@ export interface FileRoutesByTo {
   '/unsubscribe': typeof UnsubscribeRoute
   '/api/refill-checkout': typeof ApiRefillCheckoutRoute
   '/api/refill-portal': typeof ApiRefillPortalRoute
+  '/deals/$slug': typeof DealsSlugRoute
   '/r/$slug': typeof RSlugRoute
   '/report/$token': typeof ReportTokenRoute
   '/s/$slug': typeof SSlugRoute
@@ -1235,6 +1243,7 @@ export interface FileRoutesById {
   '/app/billing': typeof AppBillingRouteWithChildren
   '/app/refill': typeof AppRefillRouteWithChildren
   '/app/rep': typeof AppRepRouteWithChildren
+  '/deals/$slug': typeof DealsSlugRoute
   '/r/$slug': typeof RSlugRoute
   '/report/$token': typeof ReportTokenRoute
   '/s/$slug': typeof SSlugRoute
@@ -1383,6 +1392,7 @@ export interface FileRouteTypes {
     | '/app/billing'
     | '/app/refill'
     | '/app/rep'
+    | '/deals/$slug'
     | '/r/$slug'
     | '/report/$token'
     | '/s/$slug'
@@ -1526,6 +1536,7 @@ export interface FileRouteTypes {
     | '/unsubscribe'
     | '/api/refill-checkout'
     | '/api/refill-portal'
+    | '/deals/$slug'
     | '/r/$slug'
     | '/report/$token'
     | '/s/$slug'
@@ -1667,6 +1678,7 @@ export interface FileRouteTypes {
     | '/app/billing'
     | '/app/refill'
     | '/app/rep'
+    | '/deals/$slug'
     | '/r/$slug'
     | '/report/$token'
     | '/s/$slug'
@@ -1811,6 +1823,7 @@ export interface RootRouteChildren {
   UnsubscribeRoute: typeof UnsubscribeRoute
   ApiRefillCheckoutRoute: typeof ApiRefillCheckoutRoute
   ApiRefillPortalRoute: typeof ApiRefillPortalRoute
+  DealsSlugRoute: typeof DealsSlugRoute
   RSlugRoute: typeof RSlugRoute
   ReportTokenRoute: typeof ReportTokenRoute
   SSlugRoute: typeof SSlugRoute
@@ -1958,6 +1971,13 @@ declare module '@tanstack/react-router' {
       path: '/r/$slug'
       fullPath: '/r/$slug'
       preLoaderRoute: typeof RSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/deals/$slug': {
+      id: '/deals/$slug'
+      path: '/deals/$slug'
+      fullPath: '/deals/$slug'
+      preLoaderRoute: typeof DealsSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/rep': {
@@ -3152,6 +3172,7 @@ const rootRouteChildren: RootRouteChildren = {
   UnsubscribeRoute: UnsubscribeRoute,
   ApiRefillCheckoutRoute: ApiRefillCheckoutRoute,
   ApiRefillPortalRoute: ApiRefillPortalRoute,
+  DealsSlugRoute: DealsSlugRoute,
   RSlugRoute: RSlugRoute,
   ReportTokenRoute: ReportTokenRoute,
   SSlugRoute: SSlugRoute,

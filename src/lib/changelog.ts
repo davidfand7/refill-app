@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.4.4",
+    date: "June 2026",
+    items: [
+      "<strong>v2.4.4 &mdash; Spa offer engine, slice 4a: a public Deals page.</strong> Every spa now has a shareable, patient-facing offers page at <code>/deals/&lt;slug&gt;</code> &mdash; the same slug as their booking link, no login &mdash; listing all currently-active public offers with one tap to <strong>Book an appointment</strong>. It's the &ldquo;pull&rdquo; half of offer delivery: post it in a bio link, an email footer, a window sign. Cohort-targeted offers (lapsed / new / expiring) are intentionally <em>excluded</em> from the public list &mdash; those reach their patients via push (slice 4b), not a page anyone can read. Manufacturer promos and the spa's own offers both show, with a tidy headline and any end date. <strong>No migration</strong> (<code>show_on_deals</code> shipped with v2.4.2). <strong>New</strong>: <code>deals.$slug.tsx</code>, <code>getPublicDealsFn</code>. <strong>Touched</strong>: <code>promo-calendar.ts</code> (<code>publicDeals</code> + <code>dealHeadline</code>), <code>refill-promo-calendar.functions.ts</code>. Next (slice 4b): push targeted offers to matching patients via the outreach rails &mdash; draft-first + opt-out-filtered.",
+    ],
+  },
+  {
     version: "v2.4.3",
     date: "June 2026",
     items: [
