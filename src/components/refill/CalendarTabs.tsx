@@ -9,9 +9,15 @@
  */
 
 import { Link } from "@tanstack/react-router";
-import { CalendarDays, ListChecks, Globe, Plug, Tag } from "lucide-react";
+import { CalendarDays, ListChecks, Globe, Plug, Tag, Columns2 } from "lucide-react";
 
-export type CalendarTab = "schedule" | "appointments" | "booking" | "connections" | "offers";
+export type CalendarTab =
+  | "schedule"
+  | "appointments"
+  | "booking"
+  | "connections"
+  | "offers"
+  | "staging";
 
 const TABS: Array<{
   key: CalendarTab;
@@ -24,6 +30,7 @@ const TABS: Array<{
   { key: "booking", to: "/app/refill/calendar/booking", label: "Online booking", Icon: Globe },
   { key: "offers", to: "/app/refill/calendar/offers", label: "Cross-sell", Icon: Tag },
   { key: "connections", to: "/app/refill/calendar/connections", label: "Connections", Icon: Plug },
+  { key: "staging", to: "/app/refill/calendar/staging", label: "Staging", Icon: Columns2 },
 ];
 
 export function CalendarTabs({ active }: { active: CalendarTab }) {

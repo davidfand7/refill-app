@@ -79,6 +79,29 @@ export type AcuityClient = {
   notes: string | null;
 };
 
+// Structure types — used by the SmartSpa staging mirror (calendars →
+// scheduling_providers, appointment-types → services).
+export type AcuityCalendar = {
+  id: number;
+  name: string;
+  email: string | null;
+  timezone: string | null;
+};
+
+export type AcuityAppointmentType = {
+  id: number;
+  name: string;
+  active: boolean;
+  private: boolean;
+  category: string | null;
+  /** Minutes. */
+  duration: number;
+  /** Acuity returns price as a string. */
+  price: string;
+  /** Which calendars offer this type. */
+  calendarIDs: number[];
+};
+
 export type AcuityWebhookSubscription = {
   id: number;
   event: string;
@@ -178,6 +201,56 @@ async function acuityFetch<T>(
     throw new Error(`Acuity API ${path} ${resp.status}: ${text.slice(0, 500)}`);
   }
   return (await resp.json()) as T;
+}
+
+/** GET /calendars — the spa's calendars. Each Acuity calendar is the
+ *  provider/resource dimension (matches parseAcuity()'s "Calendar" column),
+ *  so these mirror into scheduling_providers. */
+export async function listAcuityCalendars(
+  accessToken: string,
+): Promise<AcuityCalendar[]> {
+  type Raw = {
+    id?: number | string;
+    name?: string;
+    email?: string;
+    timezone?: string;
+  };
+  const raw = await acuityFetch<Raw[]>(accessToken, "/calendars");
+  return (raw ?? []).map((c) => ({
+    id: typeof c.id === "string" ? Number(c.id) : (c.id ?? 0),
+    name: (c.name ?? "").trim(),
+    email: c.email ?? null,
+    timezone: c.timezone ?? null,
+  }));
+}
+
+/** GET /appointment-types — the services the spa offers. These mirror into
+ *  the services catalog (name, duration, price, online_bookable). */
+export async function listAcuityAppointmentTypes(
+  accessToken: string,
+): Promise<AcuityAppointmentType[]> {
+  type Raw = {
+    id?: number | string;
+    name?: string;
+    active?: boolean;
+    private?: boolean;
+    category?: string;
+    duration?: number | string;
+    price?: string | number;
+    calendarIDs?: number[];
+  };
+  const raw = await acuityFetch<Raw[]>(accessToken, "/appointment-types");
+  return (raw ?? []).map((t) => ({
+    id: typeof t.id === "string" ? Number(t.id) : (t.id ?? 0),
+    name: (t.name ?? "").trim(),
+    active: t.active ?? true,
+    private: t.private ?? false,
+    category: t.category && t.category.trim() ? t.category.trim() : null,
+    duration:
+      typeof t.duration === "string" ? Number(t.duration) : (t.duration ?? 30),
+    price: t.price != null ? String(t.price) : "0",
+    calendarIDs: Array.isArray(t.calendarIDs) ? t.calendarIDs : [],
+  }));
 }
 
 export async function getAcuityMe(accessToken: string): Promise<AcuityMe> {

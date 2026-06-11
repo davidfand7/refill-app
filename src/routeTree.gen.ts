@@ -96,6 +96,7 @@ import { Route as AppRefillSettingsSenderRouteImport } from './routes/app.refill
 import { Route as AppRefillSettingsSchedulerRouteImport } from './routes/app.refill.settings.scheduler'
 import { Route as AppRefillSettingsNoshowRouteImport } from './routes/app.refill.settings.noshow'
 import { Route as AppRefillSettingsLightModeRouteImport } from './routes/app.refill.settings.light-mode'
+import { Route as AppRefillSettingsHealthRouteImport } from './routes/app.refill.settings.health'
 import { Route as AppRefillSettingsBoulevardInstallRouteImport } from './routes/app.refill.settings.boulevard-install'
 import { Route as AppRefillSettingsBookingRouteImport } from './routes/app.refill.settings.booking'
 import { Route as AppRefillSettingsBookerInstallRouteImport } from './routes/app.refill.settings.booker-install'
@@ -119,6 +120,7 @@ import { Route as AppRefillCampaignsNewRouteImport } from './routes/app.refill.c
 import { Route as AppRefillCampaignsCampaignIdRouteImport } from './routes/app.refill.campaigns.$campaignId'
 import { Route as AppRefillCalendarZenotiInstallRouteImport } from './routes/app.refill.calendar.zenoti-install'
 import { Route as AppRefillCalendarVagaroInstallRouteImport } from './routes/app.refill.calendar.vagaro-install'
+import { Route as AppRefillCalendarStagingRouteImport } from './routes/app.refill.calendar.staging'
 import { Route as AppRefillCalendarScheduleRouteImport } from './routes/app.refill.calendar.schedule'
 import { Route as AppRefillCalendarOffersRouteImport } from './routes/app.refill.calendar.offers'
 import { Route as AppRefillCalendarConnectionsRouteImport } from './routes/app.refill.calendar.connections'
@@ -595,6 +597,11 @@ const AppRefillSettingsLightModeRoute =
     path: '/settings/light-mode',
     getParentRoute: () => AppRefillRoute,
   } as any)
+const AppRefillSettingsHealthRoute = AppRefillSettingsHealthRouteImport.update({
+  id: '/settings/health',
+  path: '/settings/health',
+  getParentRoute: () => AppRefillRoute,
+} as any)
 const AppRefillSettingsBoulevardInstallRoute =
   AppRefillSettingsBoulevardInstallRouteImport.update({
     id: '/settings/boulevard-install',
@@ -727,6 +734,12 @@ const AppRefillCalendarVagaroInstallRoute =
   AppRefillCalendarVagaroInstallRouteImport.update({
     id: '/vagaro-install',
     path: '/vagaro-install',
+    getParentRoute: () => AppRefillCalendarRoute,
+  } as any)
+const AppRefillCalendarStagingRoute =
+  AppRefillCalendarStagingRouteImport.update({
+    id: '/staging',
+    path: '/staging',
     getParentRoute: () => AppRefillCalendarRoute,
   } as any)
 const AppRefillCalendarScheduleRoute =
@@ -1018,6 +1031,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/calendar/connections': typeof AppRefillCalendarConnectionsRoute
   '/app/refill/calendar/offers': typeof AppRefillCalendarOffersRoute
   '/app/refill/calendar/schedule': typeof AppRefillCalendarScheduleRoute
+  '/app/refill/calendar/staging': typeof AppRefillCalendarStagingRoute
   '/app/refill/calendar/vagaro-install': typeof AppRefillCalendarVagaroInstallRoute
   '/app/refill/calendar/zenoti-install': typeof AppRefillCalendarZenotiInstallRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
@@ -1041,6 +1055,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
   '/app/refill/settings/booking': typeof AppRefillSettingsBookingRoute
   '/app/refill/settings/boulevard-install': typeof AppRefillSettingsBoulevardInstallRoute
+  '/app/refill/settings/health': typeof AppRefillSettingsHealthRoute
   '/app/refill/settings/light-mode': typeof AppRefillSettingsLightModeRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
@@ -1155,6 +1170,7 @@ export interface FileRoutesByTo {
   '/app/refill/calendar/connections': typeof AppRefillCalendarConnectionsRoute
   '/app/refill/calendar/offers': typeof AppRefillCalendarOffersRoute
   '/app/refill/calendar/schedule': typeof AppRefillCalendarScheduleRoute
+  '/app/refill/calendar/staging': typeof AppRefillCalendarStagingRoute
   '/app/refill/calendar/vagaro-install': typeof AppRefillCalendarVagaroInstallRoute
   '/app/refill/calendar/zenoti-install': typeof AppRefillCalendarZenotiInstallRoute
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
@@ -1177,6 +1193,7 @@ export interface FileRoutesByTo {
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
   '/app/refill/settings/booking': typeof AppRefillSettingsBookingRoute
   '/app/refill/settings/boulevard-install': typeof AppRefillSettingsBoulevardInstallRoute
+  '/app/refill/settings/health': typeof AppRefillSettingsHealthRoute
   '/app/refill/settings/light-mode': typeof AppRefillSettingsLightModeRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
@@ -1299,6 +1316,7 @@ export interface FileRoutesById {
   '/app/refill/calendar/connections': typeof AppRefillCalendarConnectionsRoute
   '/app/refill/calendar/offers': typeof AppRefillCalendarOffersRoute
   '/app/refill/calendar/schedule': typeof AppRefillCalendarScheduleRoute
+  '/app/refill/calendar/staging': typeof AppRefillCalendarStagingRoute
   '/app/refill/calendar/vagaro-install': typeof AppRefillCalendarVagaroInstallRoute
   '/app/refill/calendar/zenoti-install': typeof AppRefillCalendarZenotiInstallRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
@@ -1322,6 +1340,7 @@ export interface FileRoutesById {
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
   '/app/refill/settings/booking': typeof AppRefillSettingsBookingRoute
   '/app/refill/settings/boulevard-install': typeof AppRefillSettingsBoulevardInstallRoute
+  '/app/refill/settings/health': typeof AppRefillSettingsHealthRoute
   '/app/refill/settings/light-mode': typeof AppRefillSettingsLightModeRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
@@ -1445,6 +1464,7 @@ export interface FileRouteTypes {
     | '/app/refill/calendar/connections'
     | '/app/refill/calendar/offers'
     | '/app/refill/calendar/schedule'
+    | '/app/refill/calendar/staging'
     | '/app/refill/calendar/vagaro-install'
     | '/app/refill/calendar/zenoti-install'
     | '/app/refill/campaigns/$campaignId'
@@ -1468,6 +1488,7 @@ export interface FileRouteTypes {
     | '/app/refill/settings/booker-install'
     | '/app/refill/settings/booking'
     | '/app/refill/settings/boulevard-install'
+    | '/app/refill/settings/health'
     | '/app/refill/settings/light-mode'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
@@ -1582,6 +1603,7 @@ export interface FileRouteTypes {
     | '/app/refill/calendar/connections'
     | '/app/refill/calendar/offers'
     | '/app/refill/calendar/schedule'
+    | '/app/refill/calendar/staging'
     | '/app/refill/calendar/vagaro-install'
     | '/app/refill/calendar/zenoti-install'
     | '/app/refill/campaigns/new'
@@ -1604,6 +1626,7 @@ export interface FileRouteTypes {
     | '/app/refill/settings/booker-install'
     | '/app/refill/settings/booking'
     | '/app/refill/settings/boulevard-install'
+    | '/app/refill/settings/health'
     | '/app/refill/settings/light-mode'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
@@ -1725,6 +1748,7 @@ export interface FileRouteTypes {
     | '/app/refill/calendar/connections'
     | '/app/refill/calendar/offers'
     | '/app/refill/calendar/schedule'
+    | '/app/refill/calendar/staging'
     | '/app/refill/calendar/vagaro-install'
     | '/app/refill/calendar/zenoti-install'
     | '/app/refill/campaigns/$campaignId'
@@ -1748,6 +1772,7 @@ export interface FileRouteTypes {
     | '/app/refill/settings/booker-install'
     | '/app/refill/settings/booking'
     | '/app/refill/settings/boulevard-install'
+    | '/app/refill/settings/health'
     | '/app/refill/settings/light-mode'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
@@ -2439,6 +2464,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillSettingsLightModeRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/refill/settings/health': {
+      id: '/app/refill/settings/health'
+      path: '/settings/health'
+      fullPath: '/app/refill/settings/health'
+      preLoaderRoute: typeof AppRefillSettingsHealthRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/settings/boulevard-install': {
       id: '/app/refill/settings/boulevard-install'
       path: '/settings/boulevard-install'
@@ -2598,6 +2630,13 @@ declare module '@tanstack/react-router' {
       path: '/vagaro-install'
       fullPath: '/app/refill/calendar/vagaro-install'
       preLoaderRoute: typeof AppRefillCalendarVagaroInstallRouteImport
+      parentRoute: typeof AppRefillCalendarRoute
+    }
+    '/app/refill/calendar/staging': {
+      id: '/app/refill/calendar/staging'
+      path: '/staging'
+      fullPath: '/app/refill/calendar/staging'
+      preLoaderRoute: typeof AppRefillCalendarStagingRouteImport
       parentRoute: typeof AppRefillCalendarRoute
     }
     '/app/refill/calendar/schedule': {
@@ -2849,6 +2888,7 @@ interface AppRefillCalendarRouteChildren {
   AppRefillCalendarConnectionsRoute: typeof AppRefillCalendarConnectionsRoute
   AppRefillCalendarOffersRoute: typeof AppRefillCalendarOffersRoute
   AppRefillCalendarScheduleRoute: typeof AppRefillCalendarScheduleRoute
+  AppRefillCalendarStagingRoute: typeof AppRefillCalendarStagingRoute
   AppRefillCalendarVagaroInstallRoute: typeof AppRefillCalendarVagaroInstallRoute
   AppRefillCalendarZenotiInstallRoute: typeof AppRefillCalendarZenotiInstallRoute
   AppRefillCalendarIndexRoute: typeof AppRefillCalendarIndexRoute
@@ -2863,6 +2903,7 @@ const AppRefillCalendarRouteChildren: AppRefillCalendarRouteChildren = {
   AppRefillCalendarConnectionsRoute: AppRefillCalendarConnectionsRoute,
   AppRefillCalendarOffersRoute: AppRefillCalendarOffersRoute,
   AppRefillCalendarScheduleRoute: AppRefillCalendarScheduleRoute,
+  AppRefillCalendarStagingRoute: AppRefillCalendarStagingRoute,
   AppRefillCalendarVagaroInstallRoute: AppRefillCalendarVagaroInstallRoute,
   AppRefillCalendarZenotiInstallRoute: AppRefillCalendarZenotiInstallRoute,
   AppRefillCalendarIndexRoute: AppRefillCalendarIndexRoute,
@@ -2971,6 +3012,7 @@ interface AppRefillRouteChildren {
   AppRefillSettingsBookerInstallRoute: typeof AppRefillSettingsBookerInstallRoute
   AppRefillSettingsBookingRoute: typeof AppRefillSettingsBookingRoute
   AppRefillSettingsBoulevardInstallRoute: typeof AppRefillSettingsBoulevardInstallRoute
+  AppRefillSettingsHealthRoute: typeof AppRefillSettingsHealthRoute
   AppRefillSettingsLightModeRoute: typeof AppRefillSettingsLightModeRoute
   AppRefillSettingsNoshowRoute: typeof AppRefillSettingsNoshowRoute
   AppRefillSettingsSchedulerRoute: typeof AppRefillSettingsSchedulerRoute
@@ -3017,6 +3059,7 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillSettingsBookingRoute: AppRefillSettingsBookingRoute,
   AppRefillSettingsBoulevardInstallRoute:
     AppRefillSettingsBoulevardInstallRoute,
+  AppRefillSettingsHealthRoute: AppRefillSettingsHealthRoute,
   AppRefillSettingsLightModeRoute: AppRefillSettingsLightModeRoute,
   AppRefillSettingsNoshowRoute: AppRefillSettingsNoshowRoute,
   AppRefillSettingsSchedulerRoute: AppRefillSettingsSchedulerRoute,

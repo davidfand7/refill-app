@@ -14,6 +14,20 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.4.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.4.1 &mdash; Acuity staging mirror: stand up your SmartSpa calendar from Acuity, and compare them side-by-side before you cut over.</strong> A new <strong>Calendar &rarr; Staging</strong> tab (<code>/app/refill/calendar/staging</code>) that mirrors your Acuity <em>structure</em> &mdash; not just appointments &mdash; into SmartSpa so you can see your native calendar fully stood up next to your current one before committing. Until now the live Acuity link streamed appointments in, but pulled no calendars or services &mdash; so those appointments carried only a text label and never lined up under a provider, and there was nothing to make SmartSpa <em>look</em> like your Acuity. <strong>Mirror now</strong> pulls your Acuity calendars &rarr; providers, appointment-types &rarr; services (name, duration, price, bookable), and back-links every imported appointment to its mirrored provider. It's idempotent (safe to re-run &mdash; it matches what's already there, never duplicates), non-destructive (mirrored providers are visualization rows, not yet bookable until cutover, and <em>nothing</em> changes on Acuity's side), and honest: anything it can't map (a blank calendar, a private type) is <strong>flagged in the report</strong>, never silently dropped. The page shows a mirror report (what came across, what needs a look) beside your now-populated SmartSpa calendar &mdash; the trustworthy &ldquo;after&rdquo; to compare against your Acuity tab. <strong>New</strong>: <code>scheduler-mirror.functions.ts</code> (<code>stageAcuityMirrorFn</code> + <code>getMirrorStatusFn</code>), <code>app.refill.calendar.staging.tsx</code>. <strong>Touched</strong>: <code>schedulers/acuity.ts</code> (added <code>listAcuityCalendars</code> + <code>listAcuityAppointmentTypes</code>), <code>CalendarTabs.tsx</code>, <code>changelog.ts</code>. No migration &mdash; mirrors by name into existing columns.",
+    ],
+  },
+  {
+    version: "v2.4.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.4.0 &mdash; Connection Health: the trust layer that tells &ldquo;SmartSpa is down&rdquo; apart from &ldquo;your connection is down.&rdquo;</strong> A new <strong>Account &rarr; Health</strong> tab (<code>/app/refill/settings/health</code>) watches every external feed SmartSpa depends on &mdash; your live calendar sync <em>and</em> the daily reward-portal pulls (Allē / ASPIRE / Evolus) &mdash; in one place. The biggest risk in any integration isn&rsquo;t our code; it&rsquo;s that a connection we don&rsquo;t control fails (a token gets revoked, a webhook silently stops, a portal login expires) and it <em>looks</em> like SmartSpa stopped working. The worst version is <strong>silence</strong> &mdash; a feed that just stops reporting throws no error. Connection Health catches the silence with a <strong>freshness check</strong> tuned to each connection&rsquo;s access tier, and is honest about what each tier guarantees: <em>live</em> (webhooks, e.g. Acuity), <em>scheduled</em> (daily pulls), and <em>snapshot</em> (CSV imports that age) &mdash; a snapshot never masquerades as live. Every red or amber state says plainly that the connection is the issue, not SmartSpa, and ships the one button that fixes it (Reconnect / Check auto-import). One spine now guards both PMS connectors and the portal pulls. <strong>New</strong>: <code>connection-health.ts</code> (pure verdict engine), <code>connection-health.functions.ts</code> (unified read model), <code>app.refill.settings.health.tsx</code>. <strong>Touched</strong>: <code>SettingsTabStrip.tsx</code>, <code>changelog.ts</code>. No migration &mdash; every freshness timestamp it needs already existed.",
+    ],
+  },
+  {
     version: "v2.3.53",
     date: "June 2026",
     items: [

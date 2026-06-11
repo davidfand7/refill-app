@@ -9,7 +9,7 @@
  */
 
 import { Link } from "@tanstack/react-router";
-import { UserCog, AtSign, Building2, Mail, Receipt, GitMerge, BarChart3 } from "lucide-react";
+import { UserCog, AtSign, Building2, Mail, Receipt, GitMerge, BarChart3, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // The "Account" Solution (Spine back-office). Folded in over v2.1.0–v2.1.2:
@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 // Attribution moved in (v2.1.1); Reports moved in as the lead tab (v2.1.2).
 type SettingsTab =
   | "reports"
+  | "health"
   | "account"
   | "sender"
   | "spa-profile"
@@ -31,6 +32,7 @@ const TABS: Array<{
   icon: typeof UserCog;
 }> = [
   { key: "reports", to: "/app/refill/reports", label: "Reports", icon: BarChart3 },
+  { key: "health", to: "/app/refill/settings/health", label: "Health", icon: Activity },
   { key: "account", to: "/app/refill/settings/account", label: "Login", icon: UserCog },
   { key: "sender", to: "/app/refill/settings/sender", label: "Sender", icon: AtSign },
   { key: "spa-profile", to: "/app/refill/settings/spa-profile", label: "Spa profile", icon: Building2 },
