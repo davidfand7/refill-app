@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.4.7",
+    date: "June 2026",
+    items: [
+      "<strong>v2.4.7 &mdash; Acuity mirror hardening: staged calendar comes up with real hours.</strong> When the Acuity staging mirror creates a provider, it now seeds sensible default weekly hours (Mon&ndash;Fri 9&ndash;5, weekend closed) so the staged SmartSpa calendar renders proper availability bands instead of blank provider columns &mdash; a far better &ldquo;side-by-side&rdquo; before cutover. (Acuity's API exposes only computed availability, not weekly business hours, so these are tune-able defaults the owner adjusts in Online booking, not a literal hours mirror.) Idempotent + non-destructive: re-running the mirror never overwrites hours you've since adjusted (<code>ignoreDuplicates</code> on the provider/day key). <strong>No migration.</strong> <strong>Touched</strong>: <code>scheduler-mirror.functions.ts</code> (<code>seedDefaultHours</code> for newly-mirrored providers). Deferred (needs a migration, next session): an external-id mapping so re-mirroring after a provider/service rename matches by ID instead of name.",
+    ],
+  },
+  {
     version: "v2.4.6",
     date: "June 2026",
     items: [

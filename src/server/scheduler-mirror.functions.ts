@@ -98,6 +98,27 @@ type Sb = ReturnType<typeof admin>;
 const norm = (s: string | null | undefined): string =>
   (s ?? "").trim().toLowerCase();
 
+/**
+ * Seed sensible default weekly hours (Mon–Fri 9–5, weekend closed) for a
+ * freshly-mirrored provider so the staged calendar shows real availability
+ * bands instead of a blank column. Acuity's API doesn't expose weekly
+ * business hours (only computed availability), so this is a tune-able default,
+ * not a literal mirror. Idempotent + non-destructive: ignoreDuplicates means a
+ * re-mirror never clobbers hours the owner has since adjusted.
+ */
+async function seedDefaultHours(sb: Sb, providerId: string): Promise<void> {
+  const rows = [0, 1, 2, 3, 4, 5, 6].map((dow) => ({
+    provider_id: providerId,
+    day_of_week: dow,
+    open_time: "09:00",
+    close_time: "17:00",
+    is_closed: dow === 0 || dow === 6,
+  }));
+  await sb
+    .from("scheduling_hours")
+    .upsert(rows, { onConflict: "provider_id,day_of_week", ignoreDuplicates: true });
+}
+
 // ─── Shared helpers ──────────────────────────────────────────────────────
 
 type AcuityConn = {
@@ -216,6 +237,7 @@ export const stageAcuityMirrorFn = createServerFn({ method: "POST" })
       matched: 0,
       unmappable: [] as string[],
     };
+    const createdProviderIds: string[] = [];
     for (const cal of calendars) {
       if (!cal.name) {
         provReport.unmappable.push(`Calendar #${cal.id} (no name)`);
@@ -235,8 +257,15 @@ export const stageAcuityMirrorFn = createServerFn({ method: "POST" })
         provReport.unmappable.push(`${cal.name} (${error?.message ?? "insert failed"})`);
         continue;
       }
-      provByName.set(key, (inserted as { id: string }).id);
+      const newId = (inserted as { id: string }).id;
+      provByName.set(key, newId);
+      createdProviderIds.push(newId);
       provReport.created += 1;
+    }
+    // Give every freshly-mirrored provider default hours so the staged
+    // calendar renders availability (idempotent; won't overwrite owner edits).
+    for (const pid of createdProviderIds) {
+      await seedDefaultHours(sb, pid);
     }
 
     // ── Mirror services (appointment-types) ──
