@@ -25,6 +25,7 @@ import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import { fetchAllRows } from "@/server/paginate";
 import {
   computeVerdict,
   formatAge,
@@ -240,16 +241,23 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
       };
     });
 
-    // ── Reward-portal pulls — max(imported_at) per manufacturer ──
-    const { data: importRows } = await sb
-      .from("reward_signal_imports")
-      .select("manufacturer, imported_at")
-      .eq("user_id", effectiveUserId)
-      .order("imported_at", { ascending: false })
-      .limit(400);
+    // ── Reward-portal pulls — newest imported_at PER manufacturer ──
+    // Read ALL import rows (paginated) ordered newest-first, then take the
+    // first occurrence per manufacturer. A fixed .limit() was wrong: a
+    // manufacturer with many daily pulls could fill the whole window and bury
+    // another manufacturer's latest pull past the cutoff, falsely reading it
+    // as "no data."
+    const importRows = await fetchAllRows<ImportRow>((from, to) =>
+      sb
+        .from("reward_signal_imports")
+        .select("manufacturer, imported_at")
+        .eq("user_id", effectiveUserId)
+        .order("imported_at", { ascending: false })
+        .range(from, to),
+    );
 
     const latestByMfr = new Map<string, number | null>();
-    for (const r of (importRows ?? []) as ImportRow[]) {
+    for (const r of importRows) {
       const mfr = (r.manufacturer ?? "").toLowerCase();
       if (!mfr) continue;
       if (!latestByMfr.has(mfr)) latestByMfr.set(mfr, parseTs(r.imported_at));

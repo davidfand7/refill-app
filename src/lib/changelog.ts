@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.5.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.5.0 &mdash; Fresh-walk fix: Connection Health reads every manufacturer's latest pull.</strong> The reward-portal freshness check loaded only the newest 400 import rows, then took the first one per manufacturer. On a spa with a long history where one manufacturer pulls daily, that manufacturer could fill the whole window and bury another's most-recent pull past the cutoff &mdash; so a perfectly healthy portal could falsely read as &ldquo;no data / setting up.&rdquo; Now it pages through all import rows (newest-first) so each manufacturer's true latest pull is always seen. <strong>Touched</strong>: <code>connection-health.functions.ts</code> (<code>fetchAllRows</code> instead of <code>.limit(400)</code>). Caught in a solo fresh-walk of this session's new code.",
+    ],
+  },
+  {
     version: "v2.4.9",
     date: "June 2026",
     items: [
