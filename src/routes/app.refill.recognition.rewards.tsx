@@ -59,7 +59,7 @@ import {
   createSpaOffer,
   deleteSpaOffer,
 } from "@/server/refill-promo-calendar.functions";
-import { normalizeForMatch } from "@/lib/promo-calendar";
+import { normalizeForMatch, productMatchesName } from "@/lib/promo-calendar";
 import {
   ingestManufacturerTransactionCsv,
   type LastTxnImportReceipt,
@@ -812,13 +812,12 @@ function PromoIntelligenceCard({
   }
 
   function matchedServiceNames(o: PromoOffer): string[] {
-    const key = o.product;
-    if (!key) return [];
+    if (!o.product) return [];
+    // Use the SAME synonym-aware matcher as the at-booking badge so the card's
+    // "Applies to" is consistent with what actually badges (e.g. a Juvéderm
+    // offer matches a service named "Filler"), not a naive substring.
     return services
-      .filter((s) => {
-        const n = normalizeForMatch(s.name);
-        return n.length > 0 && n.includes(key);
-      })
+      .filter((s) => productMatchesName(o.product, normalizeForMatch(s.name)))
       .map((s) => s.name);
   }
 

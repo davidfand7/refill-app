@@ -163,8 +163,10 @@ const PRODUCT_SYNONYMS: Record<string, string[]> = {
   skinvive: ["skinvive", "skin booster"],
 };
 
-/** Does an offer's product match a (normalized) service/add-on name? */
-function productMatchesName(product: string, normName: string): boolean {
+/** Does an offer's product match a (normalized) service/add-on name? Exported
+ *  so the Promo Intelligence card matches services the SAME way the at-booking
+ *  badge does (synonym-aware: a Juvéderm offer matches a "Filler" service). */
+export function productMatchesName(product: string, normName: string): boolean {
   const syns = PRODUCT_SYNONYMS[product] ?? [product];
   return syns.some((s) => normName.includes(s));
 }

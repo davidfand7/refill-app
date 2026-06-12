@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.6.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.6.1 &mdash; Promo Intelligence match is now consistent with what actually badges.</strong> Same-night fix to v2.6.0: the new card&rsquo;s &ldquo;Applies to&rdquo; line rolled its own naive substring match (<code>serviceName.includes(product)</code>), so a <em>&ldquo;$75 off Juvéderm&rdquo;</em> offer read &ldquo;No match in your menu yet&rdquo; against a service named <strong>Filler</strong> &mdash; even though the at-booking badge and the $5 cross-sell path matched it correctly via the synonym map. Only the display was wrong (the money path was always fine). The card now reuses the canonical <code>productMatchesName</code> (Juvéderm/Restylane/Dysport &rarr; <em>Filler</em>, Botox/Dysport &rarr; <em>neurotoxin</em>, etc.), so what the card says matches what actually badges. True retail-only promos (SkinMedica serum, Latisse) still honestly show no match when the spa has no matching <em>service</em> &mdash; correct, not a miss. <strong>Touched</strong>: <code>promo-calendar.ts</code> (export <code>productMatchesName</code>), <code>app.refill.recognition.rewards.tsx</code> (card reuses it). Caught in a fresh-walk of v2.6.0 on real Rejuv data.",
+    ],
+  },
+  {
     version: "v2.6.0",
     date: "June 2026",
     items: [
