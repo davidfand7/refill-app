@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.8.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.8.1 &mdash; Connection Health now shows one clean card per manufacturer, and the &ldquo;watch&rdquo; gate merges with real imports.</strong> Follow-up to <code>v2.8.0</code>, caught the moment it went live: reward-portal cards were keyed by the <em>report variant</em> the import wrote (<code>allergan-patient360</code>, <code>galderma-savings</code>, <code>galderma-all-patients</code>) rather than the brand &mdash; so a single manufacturer showed up as multiple cards with raw titleCased names, and a <strong>&ldquo;Watch these portals&rdquo;</strong> toggle (canonical <code>allergan</code>) wouldn&rsquo;t merge with its own import (<code>allergan-patient360</code>), double-carding the same brand (one &ldquo;Allergan-patient360 &middot; Needs attention,&rdquo; one &ldquo;Allē &middot; Setting up&rdquo;). The read model now collapses every report variant to its canonical manufacturer (via the mapper&rsquo;s own <code>manufacturer</code> field), so each brand is exactly one card showing its freshest pull &mdash; and a watched portal merges with its real import instead of sitting next to it. Also fixed a grammar bug the same screens exposed: &ldquo;hasn&rsquo;t imported in 4 days ago&rdquo; &rarr; &ldquo;Allē&rsquo;s last import was 4 days ago.&rdquo; No migration; pure read-model + copy.",
+    ],
+  },
+  {
     version: "v2.8.0",
     date: "June 2026",
     items: [

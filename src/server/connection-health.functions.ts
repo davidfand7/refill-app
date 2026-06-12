@@ -26,6 +26,7 @@ import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
+import { MANUFACTURER_MAPPERS } from "@/lib/manufacturer-reward-csv";
 import {
   computeVerdict,
   formatAge,
@@ -164,9 +165,9 @@ function portalDetail(
     case "healthy":
       return `Last pulled ${ageLabel}. Refreshes on a daily schedule.`;
     case "stale":
-      return `No successful ${name} pull in ${ageLabel} — the daily import may have stopped (portal login expired, or the agent didn't run). ${BOUNDARY}`;
+      return `${name}'s last successful pull was ${ageLabel} — the daily import may have stopped (portal login expired, or the agent didn't run). ${BOUNDARY}`;
     case "broken":
-      return `${name} hasn't imported in ${ageLabel} — the auto-import looks stopped. Check the portal login. ${BOUNDARY}`;
+      return `${name}'s last import was ${ageLabel} — the auto-import looks stopped. Check the portal login. ${BOUNDARY}`;
     case "setup":
       return `${name} is set up — waiting for the first import.`;
     case "unconfigured":
@@ -194,6 +195,21 @@ function parseTs(iso: string | null): number | null {
   if (!iso) return null;
   const ms = Date.parse(iso);
   return Number.isNaN(ms) ? null : ms;
+}
+
+/**
+ * reward_signal_imports.manufacturer stores the MAPPER KEY (e.g.
+ * "allergan-patient360", "galderma-savings"), not the canonical brand. Left
+ * un-collapsed, each report variant became its own ugly per-report card
+ * ("Allergan-patient360", "Galderma-savings") AND none of them merged with an
+ * expected_portal_sources row (canonical "allergan"/"galderma"), double-carding
+ * the same manufacturer. Collapse to the mapper's canonical `manufacturer` so
+ * every report of a brand shares ONE health card and expectations merge with
+ * imports. Unknown/legacy keys (already canonical) pass through unchanged.
+ */
+function canonicalManufacturer(mapperKeyOrName: string): string {
+  const k = (mapperKeyOrName ?? "").toLowerCase();
+  return (MANUFACTURER_MAPPERS[k]?.manufacturer ?? k).toLowerCase();
 }
 
 // ─── getConnectionHealthFn ──────────────────────────────────────────────────
@@ -283,9 +299,12 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
         .range(from, to),
     );
 
+    // importRows are globally ordered imported_at DESC, so the first time we
+    // see a canonical manufacturer is its newest pull across ALL its report
+    // variants — "when did we last hear from this brand at all".
     const latestByMfr = new Map<string, number | null>();
     for (const r of importRows) {
-      const mfr = (r.manufacturer ?? "").toLowerCase();
+      const mfr = canonicalManufacturer(r.manufacturer);
       if (!mfr) continue;
       if (!latestByMfr.has(mfr)) latestByMfr.set(mfr, parseTs(r.imported_at));
     }
