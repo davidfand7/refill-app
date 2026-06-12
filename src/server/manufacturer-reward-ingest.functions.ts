@@ -406,41 +406,47 @@ export async function doIngestRewards(
   //     here we record who the candidates are so the owner can latch the right
   //     one. Keyed on the same business tuple the entry is unique on, so a
   //     re-import is idempotent and a resolve updates exactly that orphan row.
-  let held = 0;
-  const heldRows = parsed.entries
-    .filter((e) => planByEntry.get(e)!.tier === "ambiguous")
-    .map((e) => {
-      const res = planByEntry.get(e)!;
-      held++;
-      return {
-        user_id: userId,
-        import_id: importId,
-        manufacturer: e.manufacturer,
-        brand_product: e.brandProduct,
-        match_key: rewardMatchKey(e),
-        program: e.program,
-        reward_amount_usd: e.rewardAmountUsd,
-        expiration_date: e.expirationDate,
-        contact_name: e.contactName,
-        contact_email: e.contactEmail,
-        contact_phone: e.contactPhone,
-        fingerprint: fingerprintOf(e),
-        signals: res.signals,
-        candidates: res.candidateIds.map((id) => {
-          const a = attByNode.get(id) ?? {};
-          return {
-            id,
-            name: titleByNode.get(id) || null,
-            email: (a.email ?? null) as string | null,
-            phone: (a.phone ?? a.phoneRaw ?? null) as string | null,
-          };
-        }),
-        status: "pending" as const,
-        resolved_node_id: null as string | null,
-        resolved_at: null as string | null,
-        updated_at: nowIso,
-      };
+  // Dedupe by the business tuple: a duplicate export row for the same
+  // patient-brand is ONE hold (so the receipt count == the queue count), and
+  // identical rows can't collide in a single ON CONFLICT upsert batch.
+  const TUP_SEP = " ";
+  const heldByTuple = new Map<string, Record<string, unknown>>();
+  for (const e of parsed.entries) {
+    const res = planByEntry.get(e)!;
+    if (res.tier !== "ambiguous") continue;
+    const key = `${e.manufacturer}${TUP_SEP}${e.brandProduct}${TUP_SEP}${rewardMatchKey(e)}`;
+    if (heldByTuple.has(key)) continue;
+    heldByTuple.set(key, {
+      user_id: userId,
+      import_id: importId,
+      manufacturer: e.manufacturer,
+      brand_product: e.brandProduct,
+      match_key: rewardMatchKey(e),
+      program: e.program,
+      reward_amount_usd: e.rewardAmountUsd,
+      expiration_date: e.expirationDate,
+      contact_name: e.contactName,
+      contact_email: e.contactEmail,
+      contact_phone: e.contactPhone,
+      fingerprint: fingerprintOf(e),
+      signals: res.signals,
+      candidates: res.candidateIds.map((id) => {
+        const a = attByNode.get(id) ?? {};
+        return {
+          id,
+          name: titleByNode.get(id) || null,
+          email: (a.email ?? null) as string | null,
+          phone: (a.phone ?? a.phoneRaw ?? null) as string | null,
+        };
+      }),
+      status: "pending",
+      resolved_node_id: null,
+      resolved_at: null,
+      updated_at: nowIso,
     });
+  }
+  const heldRows = [...heldByTuple.values()];
+  const held = heldRows.length;
   if (heldRows.length > 0) {
     for (let i = 0; i < heldRows.length; i += CHUNK) {
       const { error } = await looseTbl(sb, "reward_attribution_holds").upsert(

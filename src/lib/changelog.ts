@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.14.3",
+    date: "June 2026",
+    items: [
+      "<strong>v2.14.3 &mdash; Attribution review: honest &ldquo;why&rdquo; copy + exact counts.</strong> Two fixes to the &ldquo;needs your eyes&rdquo; queue, both honesty. (1) A card said &ldquo;2 patients <em>share an email address</em>&rdquo; even when the two candidates clearly had <em>different</em> emails on screen &mdash; the ambiguity there is actually the reward&rsquo;s email pointing to one patient and its name to another. The reason is now derived from the candidates actually shown: it only says &ldquo;share an email/phone&rdquo; when they genuinely do, otherwise it says the patients &ldquo;match {name}&rdquo; &mdash; never a claim the screen contradicts. (2) The import receipt&rsquo;s &ldquo;held&rdquo; count now equals the number of cards in the queue exactly (deduped by reward, which also hardens the import against a duplicate export row).",
+    ],
+  },
+  {
     version: "v2.14.2",
     date: "June 2026",
     items: [

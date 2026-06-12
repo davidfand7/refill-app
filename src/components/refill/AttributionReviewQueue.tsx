@@ -21,7 +21,6 @@ import {
   resolveAttributionHoldFn,
   type AttributionHold,
 } from "@/server/reward-attribution-holds.functions";
-import { ambiguityReason, type MatchSignal } from "@/lib/match-confidence";
 
 export function AttributionReviewQueue({
   accessToken,
@@ -100,7 +99,7 @@ export function AttributionReviewQueue({
         {holds.map((h) => {
           const busy = busyId === h.id;
           const amount = h.rewardAmountUsd != null ? `$${Math.round(h.rewardAmountUsd)}` : "A";
-          const reason = ambiguityReason((h.signals as MatchSignal[]) ?? []);
+          const reason = sharedSignalReason(h.candidates);
           return (
             <div
               key={h.id}
@@ -117,13 +116,28 @@ export function AttributionReviewQueue({
                 )}
               </div>
               <p className="mt-1 text-[12px] text-ink-soft">
-                {h.candidates.length} patients {reason}
-                {h.contactName ? (
+                {h.candidates.length} patients{" "}
+                {reason ? (
                   <>
-                    {" "}
-                    under <span className="font-medium text-ink">{h.contactName}</span>
+                    {reason}
+                    {h.contactName ? (
+                      <>
+                        {" "}
+                        under{" "}
+                        <span className="font-medium text-ink">{h.contactName}</span>
+                      </>
+                    ) : null}
                   </>
-                ) : null}
+                ) : (
+                  <>
+                    match{" "}
+                    {h.contactName ? (
+                      <span className="font-medium text-ink">{h.contactName}</span>
+                    ) : (
+                      "this reward"
+                    )}
+                  </>
+                )}
                 . Which one is it?
               </p>
 
@@ -160,6 +174,28 @@ export function AttributionReviewQueue({
       </div>
     </div>
   );
+}
+
+/** Reason copy derived from the candidates actually shown — never asserts a
+ *  shared signal that isn't true on screen (two different emails are NOT
+ *  "share an email"). Returns null when the only thing in common is the
+ *  reward's name; the card then says the patients "match {name}". */
+function sharedSignalReason(
+  candidates: Array<{ email: string | null; phone: string | null }>,
+): string | null {
+  const norm = (s: string | null) => (s ?? "").trim().toLowerCase();
+  const hasDup = (vals: string[]): boolean => {
+    const seen = new Set<string>();
+    for (const v of vals) {
+      if (!v) continue;
+      if (seen.has(v)) return true;
+      seen.add(v);
+    }
+    return false;
+  };
+  if (hasDup(candidates.map((c) => norm(c.email)))) return "share an email address";
+  if (hasDup(candidates.map((c) => norm(c.phone)))) return "share a phone number";
+  return null;
 }
 
 function cap(s: string): string {
