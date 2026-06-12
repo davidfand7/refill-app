@@ -12,7 +12,7 @@
 
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { AlertTriangle, CalendarCheck, Loader2, Sparkles, Tag } from "lucide-react";
+import { AlertTriangle, ArrowRight, CalendarCheck, Loader2, Sparkles, Tag } from "lucide-react";
 import {
   getPublicDealsFn,
   type PublicDeal,
@@ -111,39 +111,67 @@ function DealsPage() {
               <ul className="space-y-3">
                 {state.deals.map((deal, i) => {
                   const ends = fmtEnds(deal.endsOn);
+                  // A Special with a mappable service becomes a deep-link: tap it
+                  // → land in the booker with that service already chosen. Offers
+                  // with no mappable service stay static (info only).
+                  const bookable = !!deal.serviceName;
+                  const body = (
+                    <div className="flex items-start gap-3">
+                      <div
+                        className="rounded-full p-2 shrink-0"
+                        style={{ background: "#fdf6dc" }}
+                      >
+                        <Tag className="h-4 w-4" style={{ color: "#8a6d0c" }} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[16px] font-semibold">{deal.headline}</div>
+                        {ends && (
+                          <div className="mt-0.5 text-[12.5px]" style={{ color: "#8a9098" }}>
+                            through {ends}
+                          </div>
+                        )}
+                        {bookable && (
+                          <div
+                            className="mt-1 inline-flex items-center gap-1 text-[12.5px] font-semibold"
+                            style={{ color: "#056048" }}
+                          >
+                            Book this <ArrowRight className="h-3.5 w-3.5" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
                   return (
                     <li
                       key={i}
-                      className="rounded-2xl border px-5 py-4"
+                      className="overflow-hidden rounded-2xl border"
                       style={{ borderColor: "#e6e2d6", background: "#fff" }}
                     >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className="rounded-full p-2 shrink-0"
-                          style={{ background: "#fdf6dc" }}
+                      {bookable ? (
+                        <Link
+                          to="/s/$slug"
+                          params={{ slug }}
+                          search={{ service: deal.serviceName ?? undefined }}
+                          className="block px-5 py-4 transition hover:bg-[#fbfaf7]"
                         >
-                          <Tag className="h-4 w-4" style={{ color: "#8a6d0c" }} />
+                          {body}
+                        </Link>
+                      ) : (
+                        <div className="px-5 py-4">{body}</div>
+                      )}
+                      {deal.landingUrl && (
+                        <div className="px-5 pb-3" style={{ marginTop: bookable ? -4 : -6 }}>
+                          <a
+                            href={deal.landingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block text-[12.5px] font-medium underline"
+                            style={{ color: "#056048" }}
+                          >
+                            Learn more
+                          </a>
                         </div>
-                        <div className="min-w-0">
-                          <div className="text-[16px] font-semibold">{deal.headline}</div>
-                          {ends && (
-                            <div className="mt-0.5 text-[12.5px]" style={{ color: "#8a9098" }}>
-                              through {ends}
-                            </div>
-                          )}
-                          {deal.landingUrl && (
-                            <a
-                              href={deal.landingUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="mt-1 inline-block text-[12.5px] font-medium underline"
-                              style={{ color: "#056048" }}
-                            >
-                              Learn more
-                            </a>
-                          )}
-                        </div>
-                      </div>
+                      )}
                     </li>
                   );
                 })}

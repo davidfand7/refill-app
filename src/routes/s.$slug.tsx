@@ -38,6 +38,12 @@ import { categoryLabel, orderedCategoryRank } from "@/lib/service-categories";
 
 export const Route = createFileRoute("/s/$slug")({
   component: PublicBookingPage,
+  // ?service=<name> lets the Deals page deep-link a tapped Special straight here
+  // with that service preselected. Optional + tolerant — an unknown value just
+  // falls through to the normal service menu.
+  validateSearch: (search: Record<string, unknown>): { service?: string } => ({
+    service: typeof search.service === "string" ? search.service : undefined,
+  }),
 });
 
 type Ctx = Extract<PublicBookingContext, { ok: true }>;
@@ -52,6 +58,7 @@ const BEST = "best" as const; // "best deal" sentinel (cheapest provider with an
 
 function PublicBookingPage() {
   const { slug } = Route.useParams();
+  const { service: preselectService } = Route.useSearch();
   const [screen, setScreen] = useState<Screen>("loading");
   const [errMsg, setErrMsg] = useState("");
   const [ctx, setCtx] = useState<Ctx | null>(null);
@@ -163,10 +170,22 @@ function PublicBookingPage() {
         }
         setScreen("choose");
         // Single service → preselect it and jump to the next open selection.
+        // Otherwise honor a ?service= deep-link from the Deals page (tap a
+        // Special → land here with that service chosen), matching by name the
+        // same way the badge matcher links offers to services. Unknown value →
+        // fall through to the normal service menu (graceful, never errors).
         if (r.services.length === 1) {
           startService(r.services[0]);
         } else {
-          setOpenSection("service");
+          const wanted = preselectService?.trim().toLowerCase();
+          const match = wanted
+            ? r.services.find((s) => {
+                const n = s.name.trim().toLowerCase();
+                return n === wanted || n.includes(wanted) || wanted.includes(n);
+              })
+            : undefined;
+          if (match) startService(match);
+          else setOpenSection("service");
         }
       } catch (e) {
         if (!cancelled) {

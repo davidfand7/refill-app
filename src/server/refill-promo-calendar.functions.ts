@@ -246,6 +246,11 @@ export type PublicDeal = {
   offerType: OfferType;
   endsOn: string | null;
   landingUrl: string | null;
+  /** The offer's target service (the normalized `product` keyword offers link
+   *  to services by — same field the at-booking badge matcher uses). Lets the
+   *  Deals page deep-link a tapped Special straight into the booker with that
+   *  service preselected. null = no mappable service, so the card stays static. */
+  serviceName: string | null;
 };
 
 export type PublicDealsResult =
@@ -280,6 +285,7 @@ export const getPublicDealsFn = createServerFn({ method: "POST" })
       offerType: o.offerType ?? "dollars_off",
       endsOn: o.endsOn,
       landingUrl: o.landingUrl,
+      serviceName: o.product?.trim() || null,
     }));
     return { ok: true, spaName: tenant.name as string, slug: data.slug, deals };
   });

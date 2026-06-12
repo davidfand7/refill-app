@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.13.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.13.0 &mdash; Tap a Special, land in the booker with that service already chosen.</strong> On your public Deals page (<code>/deals/&lt;spa&gt;</code>), each offer that maps to a bookable service is now a <strong>deep-link</strong>: a patient who sees &ldquo;30% off Xeomin&rdquo; taps it and lands straight in the booking flow with <strong>Xeomin preselected</strong> &mdash; no more tapping a generic &ldquo;Book an appointment&rdquo; and then hunting for the service. Closes the gap between seeing the deal and acting on it (the human-first, guide-to-the-next-step principle). The offer card grows a &ldquo;<strong>Book this &rarr;</strong>&rdquo; affordance; the booker reads a <code>?service=</code> hint and matches it the same way the at-booking badge links offers to services (by name). Tolerant by design &mdash; an offer with no mappable service stays a static info card, and an unrecognized hint falls through to the normal service menu (never errors). Manufacturer offers keep their &ldquo;Learn more&rdquo; brand link alongside the new tap-to-book. No migration; pure routing + a new <code>serviceName</code> on the public deal payload.",
+    ],
+  },
+  {
     version: "v2.12.0",
     date: "June 2026",
     items: [
