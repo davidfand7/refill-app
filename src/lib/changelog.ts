@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.13.2",
+    date: "June 2026",
+    items: [
+      "<strong>v2.13.2 &mdash; Deals page: &ldquo;Book this&rdquo; is an outlined chip, and &ldquo;Learn more&rdquo; stays independently clickable.</strong> Two touch-ups on the tap-to-book card: the &ldquo;Book this &rarr;&rdquo; affordance is now an <strong>outlined box</strong> (emerald border + text) rather than a solid button &mdash; lighter, since the whole card is already the tap target. And &ldquo;Learn more&rdquo; (the manufacturer brand link) is confirmed as a <strong>separate, independently clickable</strong> element: it&rsquo;s a sibling <em>outside</em> the booking link, and a negative margin that could have dragged it under the card (killing its click) was replaced with clean padding. Tap the card &rarr; booker; tap &ldquo;Learn more&rdquo; &rarr; brand page. Pure layout.",
+    ],
+  },
+  {
     version: "v2.13.1",
     date: "June 2026",
     items: [

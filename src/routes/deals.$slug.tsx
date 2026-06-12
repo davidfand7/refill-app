@@ -132,12 +132,13 @@ function DealsPage() {
                         )}
                       </div>
                       {bookable && (
-                        // Button-styled (not a real <button> — the whole card is
-                        // the <Link>, so a nested button would be invalid). Pinned
-                        // right, vertically centered with the offer headline.
+                        // Outlined box (border + text), not a solid button and not
+                        // a real <button> — the whole card is the <Link>, so this
+                        // is just the visual affordance. Pinned right, vertically
+                        // centered with the offer headline.
                         <span
-                          className="shrink-0 inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition"
-                          style={{ background: "#056048", color: "#fbfaf7" }}
+                          className="shrink-0 inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-[12.5px] font-semibold transition"
+                          style={{ borderColor: "#056048", color: "#056048", background: "#fff" }}
                         >
                           Book this <ArrowRight className="h-3.5 w-3.5" />
                         </span>
@@ -155,15 +156,25 @@ function DealsPage() {
                           to="/s/$slug"
                           params={{ slug }}
                           search={{ service: deal.serviceName ?? undefined }}
-                          className="block px-5 py-4 transition hover:bg-[#fbfaf7]"
+                          className={
+                            "block px-5 pt-4 transition hover:bg-[#fbfaf7] " +
+                            (deal.landingUrl ? "pb-2" : "pb-4")
+                          }
                         >
                           {body}
                         </Link>
                       ) : (
-                        <div className="px-5 py-4">{body}</div>
+                        <div className={"px-5 pt-4 " + (deal.landingUrl ? "pb-2" : "pb-4")}>
+                          {body}
+                        </div>
                       )}
+                      {/* "Learn more" is a SEPARATE sibling <a> (its own row,
+                          outside the booking <Link>) so it's an independent click
+                          target — the brand page, not the booker. Clean padding,
+                          no negative margins (which can drag it under the Link and
+                          silently kill its click). */}
                       {deal.landingUrl && (
-                        <div className="px-5 pb-3" style={{ marginTop: bookable ? -4 : -6 }}>
+                        <div className="px-5 pb-4">
                           <a
                             href={deal.landingUrl}
                             target="_blank"
