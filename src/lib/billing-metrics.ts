@@ -50,7 +50,14 @@ export const BILLABLE_METRICS: BillableMetricDef[] = [
     label: "Recall booking",
     description: "A lapsed or expiring-reward patient books from our outreach (Recall).",
     defaultAmount: 5,
-    live: false,
+    // Live as of v2.12.0 — the Recall engine is fully shipped (lapsed/expiring
+    // targeting, iMessage dispatch, recordRecallBookingFn writing a
+    // metric_key='recall_booking' recovery event per booking). The billing math
+    // already charged it (computeInvoiceTotal ignores `live` — it bills on the
+    // enabled toggle × verified wins), so this flag was the display gate: a
+    // "Coming soon" badge on an already-armed meter, which misled in the unsafe
+    // direction (looked free while wired to bill). Flipped to match reality.
+    live: true,
   },
   {
     key: "cross_sell_addon",

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.12.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.12.0 &mdash; Recall booking meter now reads honestly: live, not &ldquo;Coming soon.&rdquo;</strong> A verification walk caught a billing-honesty mismatch: the <strong>Recall booking</strong> $5 metric still wore a <em>&ldquo;Coming soon&rdquo;</em> badge in Billing &mdash; but it was already wired end-to-end to bill. Every recall booking writes a <code>recall_booking</code> recovery event, and the invoice math charges on the <em>enabled toggle &times; verified wins</em> &mdash; it never consulted the <code>live</code> flag. So the badge was purely cosmetic, and it misled in the <em>unsafe</em> direction: it read &ldquo;not live / free&rdquo; on a meter that was actually armed to charge. Exactly the kind of confident-wrong-number our billing-trust principle forbids. Fix mirrors the v2.4.8 cross-sell flip: <code>recall_booking.live = true</code> &mdash; the badge drops and it reads as a real $5/win meter alongside filled-slot and cross-sell. <strong>Billing behavior is unchanged</strong> (the math already included it); this only aligns the display with the truth. No money moved retroactively (the account showed $0 due). One-line flag flip; no migration. The genuinely not-yet-built meters (Lead conversion / Acquire) keep their honest &ldquo;Coming soon.&rdquo;",
+    ],
+  },
+  {
     version: "v2.11.0",
     date: "June 2026",
     items: [
