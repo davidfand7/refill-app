@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.13.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.13.1 &mdash; Deals page polish: the &ldquo;Book this&rdquo; affordance is now a button on the right.</strong> Follow-up to <code>v2.13.0</code>: the tap-to-book cue moved from a small text link <em>below</em> the offer to a solid <strong>&ldquo;Book this &rarr;&rdquo; button on the right</strong>, vertically centered with the offer name &mdash; reads as the clear call-to-action it is. The whole card stays tappable (the button is styled, not a nested control). Pure layout.",
+    ],
+  },
+  {
     version: "v2.13.0",
     date: "June 2026",
     items: [

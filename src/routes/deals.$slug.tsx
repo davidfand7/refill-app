@@ -116,7 +116,7 @@ function DealsPage() {
                   // with no mappable service stay static (info only).
                   const bookable = !!deal.serviceName;
                   const body = (
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-center gap-3">
                       <div
                         className="rounded-full p-2 shrink-0"
                         style={{ background: "#fdf6dc" }}
@@ -130,15 +130,18 @@ function DealsPage() {
                             through {ends}
                           </div>
                         )}
-                        {bookable && (
-                          <div
-                            className="mt-1 inline-flex items-center gap-1 text-[12.5px] font-semibold"
-                            style={{ color: "#056048" }}
-                          >
-                            Book this <ArrowRight className="h-3.5 w-3.5" />
-                          </div>
-                        )}
                       </div>
+                      {bookable && (
+                        // Button-styled (not a real <button> — the whole card is
+                        // the <Link>, so a nested button would be invalid). Pinned
+                        // right, vertically centered with the offer headline.
+                        <span
+                          className="shrink-0 inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition"
+                          style={{ background: "#056048", color: "#fbfaf7" }}
+                        >
+                          Book this <ArrowRight className="h-3.5 w-3.5" />
+                        </span>
+                      )}
                     </div>
                   );
                   return (
