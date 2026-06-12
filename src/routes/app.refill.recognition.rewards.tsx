@@ -882,9 +882,6 @@ function PromoIntelligenceCard({
           onClick={() => setCollapsed((c) => !c)}
           className="flex items-center gap-2 text-sm font-semibold text-ink"
         >
-          <ChevronDown
-            className={`h-4 w-4 text-ink-faint transition-transform ${collapsed ? "-rotate-90" : ""}`}
-          />
           <Tag className="h-4 w-4 text-amber" />
           Manufacturer promos
           {offers.length > 0 && (
@@ -916,6 +913,16 @@ function PromoIntelligenceCard({
             if (f) void handleFile(f);
           }}
         />
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-label={collapsed ? "Expand manufacturer promos" : "Collapse manufacturer promos"}
+          className="text-ink-faint hover:text-ink transition"
+        >
+          <ChevronDown
+            className={`h-4 w-4 transition-transform ${collapsed ? "-rotate-90" : ""}`}
+          />
+        </button>
       </div>
       {!collapsed && (
         <>

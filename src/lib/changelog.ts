@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.14.2",
+    date: "June 2026",
+    items: [
+      "<strong>v2.14.2 &mdash; Rewards page polish: consistent chevrons + clearer offer label.</strong> The <strong>Manufacturer promos</strong> collapse chevron now sits on the far right of its header, matching the offers card exactly (consistent UI). And the spa-authored offers card is retitled <strong>&ldquo;Create a Cross/Up-sell Offer&rdquo;</strong> &mdash; it says what it does.",
+    ],
+  },
+  {
     version: "v2.14.1",
     date: "June 2026",
     items: [

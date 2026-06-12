@@ -259,7 +259,7 @@ export function SpaOffersCard({
         className="flex w-full items-center gap-2 text-sm font-semibold text-ink"
       >
         <Sparkles className="h-4 w-4 text-amber" />
-        Your own offers — author a cross-sell
+        Create a Cross/Up-sell Offer
         {offers.length > 0 && (
           <span className="rounded-full bg-amber-soft px-2 py-0.5 text-[10.5px] font-semibold text-amber">
             {offers.length}
