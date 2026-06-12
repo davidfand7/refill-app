@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.11.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.11.0 &mdash; Connection Health now sees your <em>blue-bubble</em> messages &mdash; recall &amp; rescue sent from your own iMessage finally count toward the delivery card.</strong> Closes the gap <code>v2.10.0</code>&rsquo;s walk surfaced: the delivery card read your &ldquo;last sent&rdquo; from the campaign message log &mdash; but SmartSpa&rsquo;s primary channel, the <strong>iMessage drafts</strong> you send from your own Apple ID (recall/rescue drafts emailed to your Mac, then sent from Messages), leave <em>no</em> row in that log. So a spa actively texting patients every day could still see <strong>&ldquo;no text ever sent&rdquo;</strong> &mdash; the card was blind to the channel that matters most. Now every recall and rescue dispatch drops a lightweight <strong>outbound heartbeat</strong>, and the delivery card reads the <em>fresher</em> of your direct sends and your iMessage dispatches &mdash; so &ldquo;Text messages&rdquo; lights up the moment you dispatch a batch, and goes quiet (honestly) only when sending actually stops. <strong>Under the hood:</strong> a small, purpose-built <code>messaging_activity</code> table (one beat per channel, stamped at dispatch), written best-effort so a telemetry miss can never interfere with the messages themselves. The heartbeat fires at <em>dispatch</em> (reliable, server-side) rather than at your manual Send tap (which happens on your Mac with no callback) &mdash; the right scope for a card that guards the <em>system</em> going silent, not whether a human tapped Send. New table ships in its own migration; the delivery read degrades gracefully until it lands.",
+    ],
+  },
+  {
     version: "v2.10.0",
     date: "June 2026",
     items: [

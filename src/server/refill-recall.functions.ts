@@ -35,6 +35,7 @@ import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
 import { doListOverdue } from "@/server/patient-ingest.functions";
 import { recordRecoveryEvent } from "@/server/emma-attribution.functions";
+import { recordMessagingActivity } from "@/server/messaging-activity";
 import { daysSince } from "@/lib/patient-cadence";
 import type { RewardStatusNorm } from "@/lib/manufacturer-reward-csv";
 
@@ -559,6 +560,13 @@ export const draftRecallOutreachFn = createServerFn({ method: "POST" })
         error: e instanceof Error ? e.message : String(e),
       };
     }
+
+    // Outbound heartbeat: the recall drafts just went to the spa's Mac for
+    // iMessage sending. This is the killer-arch channel that writes no
+    // patient_outreach row, so without this beat Connection Health's delivery
+    // card stays blind to active recall. Best-effort — the dispatch already
+    // succeeded; a missed beat only makes the card briefly stale.
+    await recordMessagingActivity(sb, effectiveUserId, "sms", "recall", built.length);
 
     return {
       sent: true,

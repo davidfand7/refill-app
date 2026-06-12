@@ -44,6 +44,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { sendSms } from "@/server/sms-provider";
 import { fetchAllRows } from "@/server/paginate";
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
+import { recordMessagingActivity } from "@/server/messaging-activity";
 import {
   resolveOwnerDisplayName,
   resolveSpaFromNumber,
@@ -1021,6 +1022,14 @@ export async function dispatchRescueAttempt(args: {
     .from("emma_rescue_attempts")
     .update({ outreach_count: offersSent })
     .eq("id", attempt.id);
+
+  // Outbound heartbeat: rescue offers just went out (proxy iMessage or direct
+  // SMS). Like recall, the proxy/iMessage path writes no patient_outreach row,
+  // so this beat is what makes the delivery health card see rescue activity.
+  // Only stamp when something actually went out. Best-effort (never throws).
+  if (offersSent > 0) {
+    await recordMessagingActivity(sb, userId, "sms", "rescue", offersSent);
+  }
 
   return { ok: true, attemptId: attempt.id, offersSent };
 }

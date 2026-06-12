@@ -573,10 +573,45 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
       }),
     );
 
-    // Show a channel's card if we've ever sent on it OR the spa declared they
-    // expect it — mirrors the portal union (heard-from ∪ expected).
+    // The killer-arch channel — recall/rescue iMessage drafts — writes NO
+    // patient_outreach row (that table needs an Emma campaign state). So we also
+    // read the messaging_activity heartbeat (v2.11.0), stamped at every outbound
+    // dispatch, and take the FRESHER of the two per channel. Without this, an
+    // actively-dispatching spa's delivery card reads "no text ever sent."
+    // Degrades gracefully (try/catch → empty) so a missing migration can't break
+    // the page; the patient_outreach read above stays load-bearing.
+    const heartbeatByChannel = new Map<string, number | null>();
+    try {
+      type Beat = { channel: string; last_activity_at: string | null };
+      const { data, error } = await (sb as unknown as { from(t: string): any })
+        .from("messaging_activity")
+        .select("channel, last_activity_at")
+        .eq("user_id", effectiveUserId);
+      if (error) throw new Error(error.message);
+      for (const b of (data ?? []) as Beat[]) {
+        const ch = (b.channel ?? "").toLowerCase();
+        if (ch) heartbeatByChannel.set(ch, parseTs(b.last_activity_at));
+      }
+    } catch (err) {
+      console.error(
+        "[connection-health] messaging_activity read failed (degrading):",
+        err,
+      );
+    }
+
+    // Freshest outbound event per channel = max(direct send, dispatch beat).
+    const lastOutboundByChannel = new Map<string, number | null>();
+    for (const channel of deliveryChannels) {
+      const a = lastSentByChannel.get(channel) ?? null;
+      const b = heartbeatByChannel.get(channel) ?? null;
+      const merged = a == null ? b : b == null ? a : Math.max(a, b);
+      lastOutboundByChannel.set(channel, merged);
+    }
+
+    // Show a channel's card if we've ever sent on it (direct OR dispatch) OR the
+    // spa declared they expect it — mirrors the portal union (heard-from ∪ expected).
     const deliveryKeys = new Set<string>([
-      ...deliveryChannels.filter((c) => lastSentByChannel.get(c) != null),
+      ...deliveryChannels.filter((c) => lastOutboundByChannel.get(c) != null),
       ...expectedDelivery.keys(),
     ]);
 
@@ -586,7 +621,7 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
           name: titleCase(channel),
           noun: "message",
         };
-        const lastEventAtMs = lastSentByChannel.get(channel) ?? null;
+        const lastEventAtMs = lastOutboundByChannel.get(channel) ?? null;
         const expected = expectedDelivery.get(channel);
         const expectedSinceMs = expected?.expectedSinceMs ?? null;
         const neverSent = lastEventAtMs == null;
