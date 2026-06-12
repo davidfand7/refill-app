@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.7.3",
+    date: "June 2026",
+    items: [
+      "<strong>v2.7.3 &mdash; Connection Health hardening: a connection that never synced no longer borrows its login time to look &ldquo;healthy.&rdquo;</strong> Freshness should measure a real <em>data</em> event (a sync / import / webhook), never the OAuth <em>handshake</em> time. The scheduler read had a fallback &mdash; if a connection had no last-sync timestamp, it used <code>connected_at</code> instead &mdash; which would let a connected-but-never-synced calendar read &ldquo;Healthy &middot; syncing live&rdquo; off its login time alone, then drift to &ldquo;stale&rdquo; days later. The honest verdict for &ldquo;connected, nothing has arrived yet&rdquo; is <strong>&ldquo;Setting up &mdash; waiting for the first sync.&rdquo;</strong> Fallback removed; freshness now reads <code>last_sync_at</code> only. <strong>Not reachable on the live Acuity path</strong> (it stamps <code>last_sync_at</code> at connect, so behavior there is unchanged) &mdash; this hardens any future platform that could set <em>connected</em> without a sync stamp. The #2 finding from the same fresh walk as <code>v2.7.2</code>; honestly downgraded from the agent&rsquo;s &ldquo;critical&rdquo; to hardening after verifying the live connect path. Zero migration.",
+    ],
+  },
+  {
     version: "v2.7.2",
     date: "June 2026",
     items: [

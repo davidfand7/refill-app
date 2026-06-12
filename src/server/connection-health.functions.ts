@@ -214,8 +214,13 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
     ).map((row) => {
       const tier = schedulerTier(row.platform);
       const name = SCHEDULER_DISPLAY[row.platform] ?? titleCase(row.platform);
-      const lastEventAtMs =
-        parseTs(row.last_sync_at) ?? parseTs(row.connected_at);
+      // Freshness measures a real DATA event only. connected_at is the OAuth
+      // handshake time, not a sync — borrowing it would let a connected row
+      // that has NEVER synced read "Healthy · syncing live" off the auth
+      // timestamp. With no last_sync_at, the honest verdict is "setup"
+      // (waiting for first sync). Live Acuity stamps last_sync_at on connect,
+      // so this only hardens any future platform that connects without one.
+      const lastEventAtMs = parseTs(row.last_sync_at);
       const { verdict, severity } = computeVerdict({
         tier,
         connected: row.status === "connected",
