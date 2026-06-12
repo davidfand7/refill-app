@@ -8,13 +8,14 @@
  */
 
 import { Link } from "@tanstack/react-router";
-import { Gift, Layers, PhoneOutgoing, Sparkles, Wand2, Tag } from "lucide-react";
+import { Gift, Layers, PhoneOutgoing, Sparkles, Wand2, Tag, Target } from "lucide-react";
 
 export type RecognitionTab =
   | "brand-promos"
   | "inventory"
   | "manufacturers"
   | "rewards"
+  | "program"
   | "recall"
   | "allocation";
 
@@ -28,6 +29,7 @@ const TABS: Array<{
   { key: "inventory", to: "/app/refill/recognition/inventory", label: "Inventory", Icon: Layers },
   { key: "manufacturers", to: "/app/refill/recognition/manufacturers", label: "Manufacturers", Icon: Sparkles },
   { key: "rewards", to: "/app/refill/recognition/rewards", label: "Rewards", Icon: Gift },
+  { key: "program", to: "/app/refill/recognition/program", label: "Program", Icon: Target },
   { key: "recall", to: "/app/refill/recognition/recall", label: "Recall", Icon: PhoneOutgoing },
   { key: "allocation", to: "/app/refill/recognition/allocation", label: "Allocation", Icon: Wand2 },
 ];

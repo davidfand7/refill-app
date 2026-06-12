@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.7.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.7.0 &mdash; Program Intelligence: your manufacturer&rsquo;s rewards program, read for you.</strong> Phase 2 of Purchase &amp; Rebate Intelligence goes visible. New <strong>Recognition &rarr; Program</strong> tab renders the dashboard nobody logs in to read: your <strong>membership tier</strong> + progress to the next level, each <strong>rebate</strong> with its real status (Brand Adoption &ldquo;3% secured,&rdquo; Rise &ldquo;not eligible &mdash; $0 baseline quarter&rdquo;), the per-SKU progress rings, and &mdash; the headline &mdash; your <strong>moves</strong>: the exact &ldquo;buy N more X &rarr; unlock the Y% rebate.&rdquo; Built on the pure-logic brain (<code>program-intel.ts</code>): it derives moves only for rebates actually in reach (an already-secured rebate shows <em>no</em> false &ldquo;you&rsquo;re short&rdquo; &mdash; we don&rsquo;t nudge you to buy product you don&rsquo;t need), and a <strong>&ldquo;what changed&rdquo;</strong> feed that will flag the moment the manufacturer moves a threshold, price, or tier (the time-series no one else holds). Wired to a <strong>dated manual capture of the real Rejuv ASPIRE dashboard</strong> &mdash; labelled honestly as a capture, never implied live; the auto-pull swaps in behind it with zero UI change. <strong>Added</strong>: <code>app.refill.recognition.program.tsx</code>, <code>program-intel.functions.ts</code>; <strong>touched</strong>: <code>RecognitionTabs.tsx</code> (+Program tab). No migration yet (snapshot persistence rides with the pull).",
+    ],
+  },
+  {
     version: "v2.6.1",
     date: "June 2026",
     items: [
