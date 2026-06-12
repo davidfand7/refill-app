@@ -26,7 +26,7 @@ export function WatchSourcesSection({
   viewAsUserId,
   onChanged,
 }: {
-  kind: "portal" | "scheduler";
+  kind: "portal" | "scheduler" | "delivery";
   title: string;
   blurb: string;
   /** Tail of the success toast: "…will flag it if it {watchingVerb}." */

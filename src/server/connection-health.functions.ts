@@ -40,9 +40,9 @@ import {
 // ─── Output shape ────────────────────────────────────────────────────────
 
 export interface ConnectionHealthItem {
-  /** Stable key, e.g. "scheduler:acuity" / "portal:abbvie". */
+  /** Stable key, e.g. "scheduler:acuity" / "portal:abbvie" / "delivery:sms". */
   key: string;
-  kind: "scheduler" | "portal";
+  kind: "scheduler" | "portal" | "delivery";
   displayName: string;
   /** Secondary line — connected account email, or manufacturer brand. */
   subLabel: string | null;
@@ -83,6 +83,14 @@ function admin() {
 
 const CONNECTIONS_ROUTE = "/app/refill/calendar/connections";
 const REWARDS_ROUTE = "/app/refill/recognition/rewards";
+const RECOVERY_ROUTE = "/app/refill/recovery";
+
+/** The two outbound channels SmartSpa sends patients on (patient_outreach.channel).
+ *  source_key matches the channel value verbatim. */
+const DELIVERY_DISPLAY: Record<string, { name: string; noun: string }> = {
+  sms: { name: "Text messages", noun: "text" },
+  email: { name: "Emails", noun: "email" },
+};
 
 const SCHEDULER_DISPLAY: Record<string, string> = {
   acuity: "Acuity",
@@ -184,6 +192,45 @@ function portalDetail(
   }
 }
 
+function deliveryDetail(
+  name: string,
+  noun: string,
+  verdict: HealthVerdict,
+  ageLabel: string,
+  ctx?: { neverSent?: boolean; expectedAgeLabel?: string },
+): string {
+  // "Never sent" = a channel the spa declared they expect, but nothing has EVER
+  // gone out on it. Like the portal "never arrived" case, the copy must not
+  // borrow last-event phrasing — there's no last send. NOTE: delivery never
+  // hard-breaks on silence (brokenAfterH null) because a quiet stretch can be
+  // legitimate, so the honest worst case here is "stale", never "broken".
+  if (ctx?.neverSent) {
+    const since = ctx.expectedAgeLabel ?? "recently";
+    switch (verdict) {
+      case "setup":
+        return `${name} is on — waiting for the first ${noun} to go out.`;
+      case "stale":
+        return `You turned on ${name} ${since}, but nothing has gone out yet — check that your messaging is set up and the sending agent is running. ${BOUNDARY}`;
+      default:
+        break; // healthy/broken/unconfigured aren't reachable with zero sends
+    }
+  }
+  switch (verdict) {
+    case "healthy":
+      return `Last ${noun} sent ${ageLabel}. Going out automatically as patients qualify.`;
+    case "stale":
+      return `Nothing has gone out on ${name} in a while (last ${ageLabel}). Often just a quiet stretch — but if you expected recall or rescue activity, your sending may have stopped (the agent isn't running, or messages aren't being delivered). ${BOUNDARY}`;
+    case "setup":
+      return `${name} is on — waiting for the first ${noun} to go out.`;
+    case "unconfigured":
+      return `${name} aren't going out yet.`;
+    case "broken":
+      // Unreachable on the delivery tier (no hard-break on silence), but the
+      // switch must be exhaustive.
+      return `${name} sending reports a problem. ${BOUNDARY}`;
+  }
+}
+
 // ─── Row types ─────────────────────────────────────────────────────────────
 
 type SchedulerRow = {
@@ -233,7 +280,7 @@ type ExpectedAnchor = { expectedSinceMs: number | null; label: string | null };
 async function readExpectedSources(
   sb: ReturnType<typeof admin>,
   userId: string,
-  kind: "portal" | "scheduler",
+  kind: "portal" | "scheduler" | "delivery",
 ): Promise<Map<string, ExpectedAnchor>> {
   const out = new Map<string, ExpectedAnchor>();
   try {
@@ -486,6 +533,106 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
       };
     });
 
+    // ── Outbound delivery — the messages SmartSpa SENDS patients ──
+    // The third feed kind, and the first OUTBOUND one. Everything above watches
+    // data coming IN (portals, the calendar); this watches the recall / rescue
+    // messages going OUT. If sending silently stops (the messaging agent isn't
+    // running, an opt-out cascade, delivery failures), the recovery engine goes
+    // dark with no error — the same silent failure, on the outbound side.
+    //
+    // Freshness event = the last successful outbound send per channel
+    // (patient_outreach, direction='outbound', sent_at not null). connected is
+    // always true (there's no connection row to read — exactly like a portal);
+    // freshness + the expect-gate carry the whole signal. The 'delivery' tier
+    // never hard-breaks on silence (a quiet week is legitimate), so the worst
+    // verdict here is a soft "stale" nudge, never "broken".
+    const expectedDelivery = await readExpectedSources(
+      sb,
+      effectiveUserId,
+      "delivery",
+    );
+
+    const deliveryChannels = Object.keys(DELIVERY_DISPLAY);
+    const lastSentByChannel = new Map<string, number | null>();
+    await Promise.all(
+      deliveryChannels.map(async (channel) => {
+        const { data, error } = await sb
+          .from("patient_outreach")
+          .select("sent_at")
+          .eq("user_id", effectiveUserId)
+          .eq("direction", "outbound")
+          .eq("channel", channel)
+          .not("sent_at", "is", null)
+          .order("sent_at", { ascending: false })
+          .limit(1);
+        // Surface a query failure loudly — a swallowed error here would read as
+        // "nothing sent / all quiet", the exact silent absence we're guarding.
+        if (error) throw new Error(error.message);
+        const ts = parseTs((data?.[0] as { sent_at: string | null } | undefined)?.sent_at ?? null);
+        lastSentByChannel.set(channel, ts);
+      }),
+    );
+
+    // Show a channel's card if we've ever sent on it OR the spa declared they
+    // expect it — mirrors the portal union (heard-from ∪ expected).
+    const deliveryKeys = new Set<string>([
+      ...deliveryChannels.filter((c) => lastSentByChannel.get(c) != null),
+      ...expectedDelivery.keys(),
+    ]);
+
+    const deliveryItems: ConnectionHealthItem[] = [...deliveryKeys].map(
+      (channel) => {
+        const disp = DELIVERY_DISPLAY[channel] ?? {
+          name: titleCase(channel),
+          noun: "message",
+        };
+        const lastEventAtMs = lastSentByChannel.get(channel) ?? null;
+        const expected = expectedDelivery.get(channel);
+        const expectedSinceMs = expected?.expectedSinceMs ?? null;
+        const neverSent = lastEventAtMs == null;
+        const displayName = expected?.label ?? disp.name;
+        const { verdict, severity } = computeVerdict({
+          tier: "delivery",
+          connected: true, // sent before OR declared expected to send
+          lastEventAtMs,
+          expectedSinceMs,
+          nowMs,
+        });
+        const ageLabel = formatAge(
+          lastEventAtMs == null ? null : Math.max(0, nowMs - lastEventAtMs),
+        );
+        const expectedAgeLabel = formatAge(
+          expectedSinceMs == null ? null : Math.max(0, nowMs - expectedSinceMs),
+        );
+        const needsAction = severity === "error" || severity === "warn";
+        return {
+          key: `delivery:${channel}`,
+          kind: "delivery" as const,
+          displayName,
+          subLabel: "Patient messaging",
+          tier: "delivery" as HealthTier,
+          tierLabel: tierLabelOf("delivery"),
+          verdict,
+          severity,
+          statusLabel: verdictLabel(verdict),
+          detail: deliveryDetail(displayName, disp.noun, verdict, ageLabel, {
+            neverSent,
+            expectedAgeLabel,
+          }),
+          lastEventAtMs,
+          lastEventLabel: ageLabel,
+          cta: {
+            label: neverSent
+              ? "Set up messaging"
+              : needsAction
+                ? "Check sending"
+                : "View",
+            to: RECOVERY_ROUTE,
+          },
+        };
+      },
+    );
+
     // Sort worst-first so anything needing attention floats to the top.
     const sevRank: Record<HealthSeverity, number> = {
       error: 0,
@@ -497,6 +644,7 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
       ...schedulerItems,
       ...expectedSchedulerItems,
       ...portalItems,
+      ...deliveryItems,
     ].sort((a, b) => sevRank[a.severity] - sevRank[b.severity]);
 
     const attention = items.filter(
@@ -541,13 +689,22 @@ export const EXPECTABLE_SCHEDULERS: ExpectedSourceOption[] = [
   { sourceKey: "vagaro", name: "Vagaro", subLabel: "Calendar" },
 ];
 
+/** Outbound channels SmartSpa sends patients on (keys match
+ *  patient_outreach.channel). Declaring one lets Connection Health flag it if
+ *  sending ever goes quiet — the silent recovery-engine outage. */
+export const EXPECTABLE_DELIVERY: ExpectedSourceOption[] = [
+  { sourceKey: "sms", name: "Text messages", subLabel: "Patient messaging" },
+  { sourceKey: "email", name: "Emails", subLabel: "Patient messaging" },
+];
+
 const EXPECTABLE_BY_KIND: Record<string, ExpectedSourceOption[]> = {
   portal: EXPECTABLE_PORTALS,
   scheduler: EXPECTABLE_SCHEDULERS,
+  delivery: EXPECTABLE_DELIVERY,
 };
 
 export interface ExpectedSourceState extends ExpectedSourceOption {
-  kind: "portal" | "scheduler";
+  kind: "portal" | "scheduler" | "delivery";
   expected: boolean;
 }
 
@@ -561,7 +718,7 @@ function expectedTbl(sb: ReturnType<typeof admin>) {
 const kindSchema = z.object({
   accessToken: z.string().min(1),
   viewAsUserId: z.string().optional(),
-  kind: z.enum(["portal", "scheduler"]),
+  kind: z.enum(["portal", "scheduler", "delivery"]),
 });
 
 /** UI: which sources of this kind is the spa currently watching? Returns the
@@ -598,7 +755,7 @@ export const listExpectedSourcesFn = createServerFn({ method: "POST" })
 const setExpectedSchema = z.object({
   accessToken: z.string().min(1),
   viewAsUserId: z.string().optional(),
-  kind: z.enum(["portal", "scheduler"]),
+  kind: z.enum(["portal", "scheduler", "delivery"]),
   sourceKey: z.string().min(1),
   expected: z.boolean(),
 });

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.10.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.10.0 &mdash; The &ldquo;watch&rdquo; gate now covers the messages going OUT, not just the data coming in &mdash; recall &amp; rescue sending can&rsquo;t go silently dark anymore.</strong> Extends the expect-gate to a <strong>third feed</strong>, and the first <em>outbound</em> one. Until now Connection Health watched what flows <em>in</em> &mdash; your reward portals (<code>v2.8.0</code>) and your calendar (<code>v2.9.0</code>). The blind spot was the other direction: the recall and rescue <strong>messages SmartSpa sends your patients</strong>. If that quietly stops &mdash; the sending agent isn&rsquo;t running, texts stop being delivered, an opt-out cascade &mdash; nothing errors and the recovery engine just goes dark, unnoticed. Now your <strong>Text messages</strong> and <strong>Emails</strong> appear as health cards (last send + an honest freshness read), and a new <strong>&ldquo;Watch your messaging&rdquo;</strong> toggle on the Connection Health page lets you declare the channels you rely on &mdash; so a long quiet stretch surfaces as a flagged <strong>&ldquo;nothing has gone out&rdquo;</strong> nudge with a <em>Check sending</em> button, instead of silence. It <strong>never cries wolf</strong>: a quiet week is legitimate, so outbound silence soft-flags after a few days and is <em>never</em> marked a hard failure. <strong>Under the hood &mdash; the gate proving itself a third time:</strong> the third kind was a single widened constraint plus a read section &mdash; one new <code>delivery</code> tier, a registry entry, and the same <code>expected_sources</code> table, the same server-fn pair, the same shared toggle UI. No new system. Freshness reads from your existing outbound message log; verdict logic covered by the runnable spec (now 19 checks). Migrate-then-deploy; existing watches untouched.",
+    ],
+  },
+  {
     version: "v2.9.1",
     date: "June 2026",
     items: [

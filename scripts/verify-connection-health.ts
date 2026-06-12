@@ -85,9 +85,44 @@ check(
   "healthy",
 );
 
+// ── Delivery tier (outbound messaging): soft-flags on silence, NEVER breaks ──
+// delivery thresholds: stale >72h, brokenAfterH null (a quiet stretch is legit).
+check(
+  "delivery: last text 1h ago → healthy (sending recently)",
+  computeVerdict({ tier: "delivery", connected: true, lastEventAtMs: now - 1 * H, nowMs: now }).verdict,
+  "healthy",
+);
+check(
+  "delivery: last text 100h ago → stale (overdue, soft nudge)",
+  computeVerdict({ tier: "delivery", connected: true, lastEventAtMs: now - 100 * H, nowMs: now }).verdict,
+  "stale",
+);
+check(
+  "delivery: last text a YEAR ago → stale not broken (silence never hard-fails)",
+  computeVerdict({ tier: "delivery", connected: true, lastEventAtMs: now - 365 * 24 * H, nowMs: now }).verdict,
+  "stale",
+);
+check(
+  "delivery: expected channel, never sent, 1h → setup (still standing up)",
+  computeVerdict({ tier: "delivery", connected: true, lastEventAtMs: null, expectedSinceMs: now - 1 * H, nowMs: now }).verdict,
+  "setup",
+);
+check(
+  "delivery: expected channel, never sent, 100h → stale (first send overdue)",
+  computeVerdict({ tier: "delivery", connected: true, lastEventAtMs: null, expectedSinceMs: now - 100 * H, nowMs: now }).verdict,
+  "stale",
+);
+check(
+  "delivery: expected channel, never sent, a year → stale not broken",
+  computeVerdict({ tier: "delivery", connected: true, lastEventAtMs: null, expectedSinceMs: now - 365 * 24 * H, nowMs: now }).verdict,
+  "stale",
+);
+
 // ── Sanity: thresholds are what the spec assumes ──
 check("poll staleAfterH", TIER_DEFAULTS.poll.staleAfterH, 36);
 check("poll brokenAfterH", TIER_DEFAULTS.poll.brokenAfterH, 72);
+check("delivery staleAfterH", TIER_DEFAULTS.delivery.staleAfterH, 72);
+check("delivery brokenAfterH (null = never hard-fail)", TIER_DEFAULTS.delivery.brokenAfterH, null);
 
 if (failures > 0) {
   console.error(`\n${failures} check(s) failed.`);

@@ -26,6 +26,7 @@ import {
   CheckCircle2,
   Gift,
   Loader2,
+  MessageSquare,
   PlugZap,
   RefreshCw,
 } from "lucide-react";
@@ -105,7 +106,7 @@ function ConnectionHealthPage() {
     <div>
       <PageHeader
         title="Connection health"
-        description="Every feed SmartSpa relies on — your calendar and your reward-portal pulls — in one place. If a connection ever goes quiet, you'll see it here first, with one button to fix it. SmartSpa working and a connection working are two different things; this page tells them apart."
+        description="Every feed SmartSpa relies on — your calendar, your reward-portal pulls, and the messages going out to patients — in one place. If a connection ever goes quiet, you'll see it here first, with one button to fix it. SmartSpa working and a connection working are two different things; this page tells them apart."
         actions={
           <button
             type="button"
@@ -147,7 +148,8 @@ function ConnectionHealthPage() {
                   hour: "numeric",
                   minute: "2-digit",
                 })}
-                . Reward portals pull on a daily schedule; your calendar syncs live.
+                . Reward portals pull on a daily schedule; your calendar syncs
+                live; patient messages send as people qualify.
               </p>
             )}
           </>
@@ -165,6 +167,24 @@ function ConnectionHealthPage() {
             title="Watch a calendar"
             blurb="Turn on the calendar platform you use. If it's ever not connected — a revoked login, or one you meant to connect — this page flags it instead of simply showing nothing."
             watchingVerb="isn't connected"
+            accessToken={accessToken}
+            viewAsUserId={viewAsUserId}
+            onChanged={() => void load(true)}
+          />
+        )}
+
+        {/* The expect-gate for OUTBOUND messaging: declaring a channel lets this
+            page flag it if recall / rescue sending ever goes quiet — the silent
+            recovery-engine outage. Same primitive as the calendar and portal
+            toggles, third feed kind. Never cries wolf (a quiet stretch is
+            legitimate); it soft-flags after a few silent days. Self-hides if the
+            read fails. */}
+        {!loading && (
+          <WatchSourcesSection
+            kind="delivery"
+            title="Watch your messaging"
+            blurb="Turn on the channels you send patients on. If recall or rescue messages stop going out — the agent isn't running, or delivery breaks — this page flags it after a quiet stretch instead of the recovery engine going dark unnoticed."
+            watchingVerb="goes quiet"
             accessToken={accessToken}
             viewAsUserId={viewAsUserId}
             onChanged={() => void load(true)}
@@ -205,7 +225,12 @@ function SummaryBanner({
 
 function HealthCard({ item }: { item: ConnectionHealthItem }) {
   const style = SEVERITY_STYLE[item.severity];
-  const KindIcon = item.kind === "scheduler" ? CalendarClock : Gift;
+  const KindIcon =
+    item.kind === "scheduler"
+      ? CalendarClock
+      : item.kind === "delivery"
+        ? MessageSquare
+        : Gift;
   const needsAction = item.severity === "error" || item.severity === "warn";
   return (
     <section className="rounded-xl border border-rule bg-white px-5 py-4">

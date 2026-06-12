@@ -24,13 +24,19 @@
  *   - snapshot — CSV-only / manual import. A point-in-time photo that ages
  *       the instant it lands. Never "broken" by age; we show "as of <when>"
  *       and nudge a refresh.
+ *   - delivery — the OUTBOUND side: messages SmartSpa sends patients (recall /
+ *       rescue). Like realtime, silence is OFTEN legitimate (a quiet week, a
+ *       small eligible list), so we NEVER hard-break on silence — we can't know
+ *       a gap isn't real. But the cadence is tighter than a calendar's, so we
+ *       soft-flag sooner (a few quiet days) as "if you expected activity, your
+ *       sending may have stopped." The freshness event is the last send.
  *
  * This module is PURE: no DB, no React, no I/O, no clock of its own (the
  * caller passes `nowMs`). That keeps it trivially testable and free of the
  * timezone/DST traps that have bitten us before (feedback_db_timestamp_calendar_z).
  */
 
-export type HealthTier = "realtime" | "poll" | "snapshot";
+export type HealthTier = "realtime" | "poll" | "snapshot" | "delivery";
 
 export type HealthVerdict =
   | "healthy" // connected + fresh within tier contract
@@ -61,11 +67,15 @@ export interface TierThresholds {
  * poll: a daily/periodic cadence. One missed daily cycle + buffer ≈ 36h
  *   → stale; ~3 missed days → broken (something is genuinely wrong).
  * snapshot: ages forever; ~2 weeks → a gentle "refresh me" nudge, never broken.
+ * delivery: tighter than a calendar but silence can still be legit → ~3 quiet
+ *   days soft-flags as stale, but it NEVER hard-breaks on silence alone (we
+ *   can't tell a real outage from a genuinely quiet week — don't cry wolf).
  */
 export const TIER_DEFAULTS: Record<HealthTier, TierThresholds> = {
   realtime: { staleAfterH: 24 * 7, brokenAfterH: null },
   poll: { staleAfterH: 36, brokenAfterH: 72 },
   snapshot: { staleAfterH: 24 * 14, brokenAfterH: null },
+  delivery: { staleAfterH: 72, brokenAfterH: null },
 };
 
 export interface VerdictInput {
@@ -202,5 +212,7 @@ export function tierLabel(tier: HealthTier): string {
       return "Scheduled · pulled on a cadence";
     case "snapshot":
       return "Snapshot · refreshed on import";
+    case "delivery":
+      return "Outbound · sends as patients qualify";
   }
 }
