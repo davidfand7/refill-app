@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.9.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.9.1 &mdash; Toggling &ldquo;Watch a calendar&rdquo; now updates the page instantly &mdash; no manual Recheck.</strong> Tiny UX finish on <code>v2.9.0</code>: turning a calendar watch on/off wrote the change correctly (the chip flipped, the toast fired) but the Connection Health cards above didn&rsquo;t redraw until you hit Recheck, so the new &ldquo;expected but not connected&rdquo; card didn&rsquo;t appear right away. The watch toggle now re-fetches the report on a successful change, so the flagged card shows (or clears) the instant you flip it. Same for the portal toggles. One-line callback; no migration.",
+    ],
+  },
+  {
     version: "v2.9.0",
     date: "June 2026",
     items: [

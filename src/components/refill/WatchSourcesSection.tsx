@@ -24,6 +24,7 @@ export function WatchSourcesSection({
   watchingVerb,
   accessToken,
   viewAsUserId,
+  onChanged,
 }: {
   kind: "portal" | "scheduler";
   title: string;
@@ -32,6 +33,10 @@ export function WatchSourcesSection({
   watchingVerb: string;
   accessToken: string | null;
   viewAsUserId?: string;
+  /** Fired after a successful toggle so the host can re-fetch anything that
+   *  depends on the watch state (e.g. the Connection Health cards, which gain/
+   *  lose a synthetic "expected but not connected" card immediately). */
+  onChanged?: () => void;
 }) {
   const [sources, setSources] = useState<ExpectedSourceState[] | null>(null);
   const [pending, setPending] = useState<string | null>(null);
@@ -77,6 +82,9 @@ export function WatchSourcesSection({
           ? `Watching ${p.name} — Connection Health will flag it if it ${watchingVerb}.`
           : `Stopped watching ${p.name}.`,
       );
+      // Refresh anything that depends on the watch state (the health cards
+      // gain/lose the "expected but not connected" card right away).
+      onChanged?.();
     } catch {
       // revert on failure
       setSources((prev) =>

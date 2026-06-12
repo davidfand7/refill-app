@@ -167,6 +167,7 @@ function ConnectionHealthPage() {
             watchingVerb="isn't connected"
             accessToken={accessToken}
             viewAsUserId={viewAsUserId}
+            onChanged={() => void load(true)}
           />
         )}
       </div>
