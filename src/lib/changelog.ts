@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.8.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.8.0 &mdash; Connection Health can now catch a portal that was set up but never imported &mdash; the silent failure it previously couldn&rsquo;t see.</strong> The health page built its reward-portal rows from imports that had <em>already arrived</em>. So a portal you set up whose <em>first</em> pull never landed (a wrong portal login on day one, say) wrote no data, and therefore showed <strong>nothing at all</strong> &mdash; the scariest version of a connection failure, invisible on the very page meant to catch it. &ldquo;Absence is the signal&rdquo; only works if there was ever a presence. Now you can tell SmartSpa which portals you <em>expect</em> to flow (a new <strong>&ldquo;Watch these portals&rdquo;</strong> toggle on Recognition &rarr; Rewards, in the auto-import card). A watched portal that hasn&rsquo;t imported shows up honestly as <strong>&ldquo;Setting up &mdash; waiting for the first import,&rdquo;</strong> and if that first pull stays overdue it escalates on its own to <strong>&ldquo;Needs attention &mdash; the first import never landed. Check the portal login&rdquo;</strong> &mdash; with the boundary clause that SmartSpa is fine, the <em>connection</em> is the issue. New <code>expected_portal_sources</code> table; verdict logic proven by a runnable spec (<code>scripts/verify-connection-health.ts</code>); the expected read degrades gracefully (it never breaks the trust page if it can&rsquo;t load). The first concrete piece of the trusted-onboarding &ldquo;gate&rdquo;: you declare it, it gets watched, a broken first pull becomes visible and fixable.",
+    ],
+  },
+  {
     version: "v2.7.3",
     date: "June 2026",
     items: [

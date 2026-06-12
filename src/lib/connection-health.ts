@@ -79,6 +79,13 @@ export interface VerdictInput {
   /** Epoch ms of the last SUCCESSFUL data event (sync / import / webhook).
    *  null = connected but nothing has arrived yet. */
   lastEventAtMs: number | null;
+  /** Epoch ms when the spa declared they EXPECT this feed to flow (e.g. an
+   *  expected_portal_sources row). Only consulted when nothing has ever
+   *  arrived: it's the anchor we age a never-landed first import against, so a
+   *  portal that was set up but whose very first pull never came escalates out
+   *  of a benign "setup" into a flagged "stale"/"broken". null = we have no
+   *  expectation anchor, so an empty feed stays a benign "setup". */
+  expectedSinceMs?: number | null;
   /** Caller-supplied clock (epoch ms). Passed in so this stays pure. */
   nowMs: number;
   /** Per-item override of the tier defaults. */
@@ -121,8 +128,22 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
   if (!connected)
     return { verdict: "unconfigured", severity: SEVERITY_OF.unconfigured, ageMs };
 
-  // Connected but no data has ever arrived → still standing up, not a failure.
-  if (ageMs == null) return { verdict: "setup", severity: SEVERITY_OF.setup, ageMs };
+  // Connected but no data has ever arrived. Without an expectation anchor this
+  // is a benign "still standing up". WITH one (expectedSinceMs), silence ages
+  // into a problem: a portal the spa set up whose very first import never
+  // landed is the rung-1 silent failure this surface exists to catch — a login
+  // that's been wrong since day one. We age the wait-since-expected against the
+  // same tier thresholds so it escalates setup → stale → broken on its own.
+  if (ageMs == null) {
+    if (input.expectedSinceMs == null)
+      return { verdict: "setup", severity: SEVERITY_OF.setup, ageMs };
+    const waitH = Math.max(0, nowMs - input.expectedSinceMs) / 3_600_000;
+    if (t.brokenAfterH != null && waitH > t.brokenAfterH)
+      return { verdict: "broken", severity: SEVERITY_OF.broken, ageMs };
+    if (waitH > t.staleAfterH)
+      return { verdict: "stale", severity: SEVERITY_OF.stale, ageMs };
+    return { verdict: "setup", severity: SEVERITY_OF.setup, ageMs };
+  }
 
   const ageH = ageMs / 3_600_000;
   if (t.brokenAfterH != null && ageH > t.brokenAfterH)

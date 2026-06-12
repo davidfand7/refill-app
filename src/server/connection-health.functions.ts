@@ -141,7 +141,25 @@ function portalDetail(
   name: string,
   verdict: HealthVerdict,
   ageLabel: string,
+  ctx?: { neverArrived?: boolean; expectedAgeLabel?: string },
 ): string {
+  // "Never arrived" = an EXPECTED portal whose first import has not landed.
+  // Its copy must NOT borrow last-event phrasing ("hasn't imported in X")
+  // because there is no last event — it must say plainly that the very first
+  // pull never came. This is the rung-1 silent-failure made legible.
+  if (ctx?.neverArrived) {
+    const since = ctx.expectedAgeLabel ?? "recently";
+    switch (verdict) {
+      case "setup":
+        return `${name} auto-import is set up — waiting for the first import to land.`;
+      case "stale":
+        return `You set up ${name} ${since}, but no import has arrived yet — the first pull may not have landed (portal login wrong, or the agent hasn't run). ${BOUNDARY}`;
+      case "broken":
+        return `${name} was set up ${since}, but no import has EVER arrived — the first pull never landed. Check the portal login. ${BOUNDARY}`;
+      default:
+        break; // healthy/unconfigured aren't reachable with zero events
+    }
+  }
   switch (verdict) {
     case "healthy":
       return `Last pulled ${ageLabel}. Refreshes on a daily schedule.`;
@@ -272,38 +290,112 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
       if (!latestByMfr.has(mfr)) latestByMfr.set(mfr, parseTs(r.imported_at));
     }
 
-    const portalItems: ConnectionHealthItem[] = [...latestByMfr.entries()].map(
-      ([mfr, lastEventAtMs]) => {
-        const disp = PORTAL_DISPLAY[mfr] ?? { name: titleCase(mfr), brand: titleCase(mfr) };
-        const { verdict, severity } = computeVerdict({
-          tier: "poll",
-          connected: true, // we've received data from this portal before
-          lastEventAtMs,
-          nowMs,
+    // ── Expected portal sources — what the spa DECLARED should flow ──
+    // The portals above are derived ONLY from imports that already landed, so a
+    // portal set up but whose first pull never arrived (login wrong from day
+    // one) writes no row and stays INVISIBLE — the rung-1 silent failure this
+    // whole surface exists to catch. expected_portal_sources is the "we expect
+    // this" anchor: an expected-but-never-imported portal now appears, and its
+    // silence ages into a flag (computeVerdict + expectedSinceMs).
+    //
+    // ADDITIVE overlay: if this read fails (e.g. the migration hasn't been
+    // applied to this environment yet), degrade to the prior import-only
+    // behavior rather than throw and nuke the whole trust page. The core
+    // scheduler/import reads above are the load-bearing ones and DO throw loud.
+    const expectedByMfr = new Map<
+      string,
+      { expectedSinceMs: number | null; label: string | null }
+    >();
+    try {
+      type ExpectedRow = {
+        manufacturer: string;
+        expected_since: string | null;
+        label: string | null;
+      };
+      // expected_portal_sources isn't in the generated types yet; loose view
+      // (mirrors the reward_ingest_tokens cast pattern).
+      const { data: expRows, error: expErr } = await (
+        sb as unknown as { from(t: string): any }
+      )
+        .from("expected_portal_sources")
+        .select("manufacturer, expected_since, label")
+        .eq("user_id", effectiveUserId)
+        .eq("enabled", true);
+      if (expErr) throw new Error(expErr.message);
+      for (const r of (expRows ?? []) as ExpectedRow[]) {
+        const mfr = (r.manufacturer ?? "").toLowerCase();
+        if (!mfr) continue;
+        expectedByMfr.set(mfr, {
+          expectedSinceMs: parseTs(r.expected_since),
+          label: r.label,
         });
-        const ageLabel = formatAge(
-          lastEventAtMs == null ? null : Math.max(0, nowMs - lastEventAtMs),
-        );
-        return {
-          key: `portal:${mfr}`,
-          kind: "portal" as const,
-          displayName: disp.name,
-          subLabel: disp.brand,
-          tier: "poll" as HealthTier,
-          tierLabel: tierLabelOf("poll"),
-          verdict,
-          severity,
-          statusLabel: verdictLabel(verdict),
-          detail: portalDetail(disp.name, verdict, ageLabel),
-          lastEventAtMs,
-          lastEventLabel: ageLabel,
-          cta: {
-            label: verdict === "healthy" ? "View" : "Check auto-import",
-            to: REWARDS_ROUTE,
-          },
-        };
-      },
-    );
+      }
+    } catch (err) {
+      console.error(
+        "[connection-health] expected_portal_sources read failed (degrading to import-only):",
+        err,
+      );
+    }
+
+    // Union the manufacturers we've heard from with those we EXPECT to hear
+    // from — so an expected portal with zero imports still gets a card.
+    const portalMfrs = new Set<string>([
+      ...latestByMfr.keys(),
+      ...expectedByMfr.keys(),
+    ]);
+
+    const portalItems: ConnectionHealthItem[] = [...portalMfrs].map((mfr) => {
+      const lastEventAtMs = latestByMfr.get(mfr) ?? null;
+      const expected = expectedByMfr.get(mfr);
+      const expectedSinceMs = expected?.expectedSinceMs ?? null;
+      // No data has ever arrived → freshness has nothing real to measure; the
+      // copy + CTA switch to the "first import hasn't landed" framing.
+      const neverArrived = lastEventAtMs == null;
+      const disp = PORTAL_DISPLAY[mfr] ?? {
+        name: titleCase(mfr),
+        brand: titleCase(mfr),
+      };
+      const displayName = expected?.label ?? disp.name;
+      const { verdict, severity } = computeVerdict({
+        tier: "poll",
+        connected: true, // imported before OR declared expected to flow
+        lastEventAtMs,
+        expectedSinceMs,
+        nowMs,
+      });
+      const ageLabel = formatAge(
+        lastEventAtMs == null ? null : Math.max(0, nowMs - lastEventAtMs),
+      );
+      const expectedAgeLabel = formatAge(
+        expectedSinceMs == null ? null : Math.max(0, nowMs - expectedSinceMs),
+      );
+      const needsAction = severity === "error" || severity === "warn";
+      const ctaLabel = neverArrived
+        ? needsAction
+          ? "Fix login"
+          : "Finish setup"
+        : verdict === "healthy"
+          ? "View"
+          : "Check auto-import";
+      return {
+        key: `portal:${mfr}`,
+        kind: "portal" as const,
+        displayName,
+        subLabel: disp.brand,
+        tier: "poll" as HealthTier,
+        tierLabel: tierLabelOf("poll"),
+        verdict,
+        severity,
+        statusLabel: verdictLabel(verdict),
+        detail: portalDetail(displayName, verdict, ageLabel, {
+          neverArrived,
+          expectedAgeLabel,
+        }),
+        lastEventAtMs,
+        lastEventLabel: ageLabel,
+        cta: { label: ctaLabel, to: REWARDS_ROUTE },
+      };
+    });
 
     // Sort worst-first so anything needing attention floats to the top.
     const sevRank: Record<HealthSeverity, number> = {
@@ -325,4 +417,106 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
       items,
       summary: { ok: items.length - attention, attention, total: items.length },
     };
+  });
+
+// ─── Expected portal sources (the "gate" declaration) ───────────────────────
+//
+// The spa declares which manufacturer portals it EXPECTS to flow. That single
+// row is what lets Connection Health flag a portal that was set up but never
+// imported (login wrong from day one) — otherwise it's invisible (no import =
+// no row). This is the first concrete instance of the trusted-onboarding gate:
+// declare → it gets watched → a broken first pull surfaces → fix the login.
+
+/** The manufacturer portals SmartSpa can auto-import today. Canonical
+ *  lowercase keys, matching reward_signal_imports + PORTAL_DISPLAY. */
+export const EXPECTABLE_PORTALS: { manufacturer: string; name: string; brand: string }[] = [
+  { manufacturer: "allergan", name: "Allē", brand: "Allergan" },
+  { manufacturer: "galderma", name: "ASPIRE", brand: "Galderma" },
+  { manufacturer: "evolus", name: "Evolus Rewards", brand: "Evolus" },
+];
+
+export interface ExpectedPortalState {
+  manufacturer: string;
+  name: string;
+  brand: string;
+  expected: boolean;
+}
+
+// expected_portal_sources isn't in the generated types yet; loose view
+// (mirrors the reward_ingest_tokens cast pattern).
+function expectedTbl(sb: ReturnType<typeof admin>) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (sb as unknown as { from(t: string): any }).from("expected_portal_sources");
+}
+
+/** UI: which portals is this spa currently watching for? */
+export const listExpectedPortalsFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => inputSchema.parse(raw))
+  .handler(async ({ data }): Promise<ExpectedPortalState[]> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const { data: rows, error } = await expectedTbl(sb)
+      .select("manufacturer")
+      .eq("user_id", effectiveUserId)
+      .eq("enabled", true);
+    if (error) throw new Error(error.message);
+    const on = new Set(
+      ((rows ?? []) as { manufacturer: string }[]).map((r) =>
+        (r.manufacturer ?? "").toLowerCase(),
+      ),
+    );
+    return EXPECTABLE_PORTALS.map((p) => ({
+      manufacturer: p.manufacturer,
+      name: p.name,
+      brand: p.brand,
+      expected: on.has(p.manufacturer),
+    }));
+  });
+
+const setExpectedSchema = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().optional(),
+  manufacturer: z.string().min(1),
+  expected: z.boolean(),
+});
+
+/** UI: start (or stop) watching a portal. Toggling on (re)stamps
+ *  expected_since so the "first pull overdue" clock starts from the
+ *  declaration; toggling off disables without losing history. */
+export const setExpectedPortalFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => setExpectedSchema.parse(raw))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const mfr = data.manufacturer.toLowerCase();
+    if (!EXPECTABLE_PORTALS.some((p) => p.manufacturer === mfr)) {
+      throw new Error("Unknown portal.");
+    }
+    const sb = admin();
+    const nowIso = new Date().toISOString();
+    if (data.expected) {
+      const { error } = await expectedTbl(sb).upsert(
+        {
+          user_id: effectiveUserId,
+          manufacturer: mfr,
+          enabled: true,
+          expected_since: nowIso,
+          updated_at: nowIso,
+        },
+        { onConflict: "user_id,manufacturer" },
+      );
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await expectedTbl(sb)
+        .update({ enabled: false, updated_at: nowIso })
+        .eq("user_id", effectiveUserId)
+        .eq("manufacturer", mfr);
+      if (error) throw new Error(error.message);
+    }
+    return { ok: true };
   });
