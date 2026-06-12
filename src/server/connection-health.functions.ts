@@ -196,7 +196,10 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
     const nowMs = Date.now();
 
     // ── Scheduler connections (exclude fully-disconnected rows) ──
-    const { data: schedRows } = await sb
+    // Surface a query failure LOUDLY (throw → UI toast) rather than swallow it:
+    // ignoring `error` here would let a failed read render as "no connections /
+    // all healthy" — the exact silent absence this whole surface exists to catch.
+    const { data: schedRows, error: schedErr } = await sb
       .from("emma_scheduler_connections")
       .select(
         "id, platform, platform_account_email, status, last_sync_at, connected_at",
@@ -204,6 +207,7 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
       .eq("user_id", effectiveUserId)
       .in("status", ["connected", "pending", "reauth_needed", "error"])
       .order("connected_at", { ascending: false });
+    if (schedErr) throw new Error(schedErr.message);
 
     const schedulerItems: ConnectionHealthItem[] = (
       (schedRows ?? []) as SchedulerRow[]

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.7.2",
+    date: "June 2026",
+    items: [
+      "<strong>v2.7.2 &mdash; Connection Health fresh-walk fix: a silent query failure could fake &ldquo;all healthy.&rdquo;</strong> The Connection Health read (<code>connection-health.functions.ts</code>) loaded your PMS/scheduler connections but <em>ignored</em> the database error on that query &mdash; so if the read ever failed, your calendar connections would silently <em>vanish</em> from the page and it would render as if everything were fine. That is the exact failure this surface exists to prevent: the doctrine&rsquo;s cardinal sin is a <em>silent absence</em>, not an error. The read now surfaces a failure <strong>loudly</strong> (throws &rarr; on-screen error) instead of swallowing it &mdash; consistent with the reward-portal read right beside it, which already failed loud. A non-technical owner now sees &ldquo;couldn&rsquo;t load &mdash; retry&rdquo; rather than a falsely-green dashboard. Caught by a skeptical 3-agent fresh walk of the rung-1 trust surface; verified against source (3 louder agent findings downgraded as false positives in the same pass). One-line behavior change, zero migration.",
+    ],
+  },
+  {
     version: "v2.7.1",
     date: "June 2026",
     items: [
