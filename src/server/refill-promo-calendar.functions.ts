@@ -874,7 +874,12 @@ function composeOfferPushBody(
   offerTitle: string,
   slug: string,
 ): string {
-  const link = slug ? ` Book here: getrefill.app/s/${slug}` : "";
+  // Route the public booking link through the origin env so the smartspa.app
+  // cutover is a one-switch flip (bare host for the SMS; identical today).
+  const host = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://getrefill.app")
+    .replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "");
+  const link = slug ? ` Book here: ${host}/s/${slug}` : "";
   return `Hi ${firstName}! It's ${spaName} — ${offerTitle}.${link} Reply and I'll get you on the calendar. 💛`;
 }
 

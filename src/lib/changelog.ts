@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.7.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.7.1 &mdash; Branding-migration prep: the smartspa.app cutover is now a one-switch flip.</strong> Groundwork (zero behavior change today) for consolidating the app&rsquo;s front door onto <code>smartspa.app</code> for consistent SmartSpa branding. Almost every <code>getrefill.app</code> reference already routes through the <code>REFILL_PUBLIC_ORIGIN</code> env var &mdash; so the flip is mostly one env change plus a DNS/auth cutover, not a 156-line edit. This ship fixes the two public-origin URLs that <em>bypassed</em> the env and would have broken on the flip: the offer-push booking link patients receive (<code>refill-promo-calendar.functions.ts</code> &mdash; was a hardcoded <code>getrefill.app/s/&lt;slug&gt;</code>) and the password-reset redirect (<code>admin-users.ts</code>). Both now read <code>REFILL_PUBLIC_ORIGIN</code> &mdash; identical output today, correct after the cutover. <strong>Not in this ship</strong> (sequenced for daylight + email warming): the DNS/custom-domain + Supabase auth-origin cutover, the outbound from-addresses (<code>offers@</code> / <code>recall@</code> / <code>recognition@</code> &mdash; gated on smartspa.app email warming), and the <code>app.getrefill.app</code> auth-host. getrefill.app keeps serving regardless (live patient booking links). Runbook on the Desktop.",
+    ],
+  },
+  {
     version: "v2.7.0",
     date: "June 2026",
     items: [

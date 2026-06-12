@@ -236,8 +236,11 @@ export const sendPasswordReset = createServerFn({ method: "POST" })
       throw new Error("Target user has no email.");
     }
 
+    // Route through the origin env so the smartspa.app cutover flips this with
+    // everything else (identical today — env is still getrefill.app).
+    const origin = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://getrefill.app").replace(/\/+$/, "");
     const resetRes = await sb.auth.resetPasswordForEmail(targetEmail, {
-      redirectTo: "https://getrefill.app/reset-password",
+      redirectTo: `${origin}/reset-password`,
     });
     if (resetRes.error) {
       throw new Error(`Couldn't send reset: ${resetRes.error.message}`);
