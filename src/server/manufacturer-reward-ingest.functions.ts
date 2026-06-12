@@ -27,6 +27,7 @@ import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
+import { resolveMatch, type MatchResolution } from "@/lib/match-confidence";
 import {
   parseRewardCsv,
   summarizeRewardEntries,
@@ -55,6 +56,14 @@ function admin() {
 }
 type SupabaseAdmin = ReturnType<typeof admin>;
 
+/** Loose table view for tables not yet in the generated types (mirrors the
+ *  expect-gate's expectedTbl in connection-health.functions.ts). The migration
+ *  ships before this code, so production has the tables when these run. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function looseTbl(sb: SupabaseAdmin, t: string): any {
+  return (sb as unknown as { from(t: string): unknown }).from(t);
+}
+
 /** Stable non-crypto hash (FNV-1a 32-bit → hex) — Workers-safe, no node:crypto. */
 function rowHash(parts: Array<string | number | null>): string {
   const s = parts.map((p) => (p == null ? "" : String(p))).join("");
@@ -74,6 +83,9 @@ export type RewardImportReceipt = {
   dataRows: number;
   entriesUpserted: number;
   matched: number;
+  /** Confidently-skipped: matched >1 patient, held for the owner's eyes
+   *  instead of being silently credited to whoever sorted first. */
+  held: number;
   unmatchedWithContact: number;
   contactsFilled: number;
   summary: RewardSignalSummary;
@@ -198,30 +210,72 @@ export async function doIngestRewards(
       .range(from, to),
   );
 
-  const byEmail = new Map<string, string>();
-  const byPhone = new Map<string, string>();
-  const byName = new Map<string, string>();
+  // Multi-candidate index: keep EVERY node a key points to, not just the first.
+  // The old "first wins" silently credited a shared-email reward to whichever
+  // patient sorted first; the confidence gate needs to SEE the collision.
+  const byEmail = new Map<string, string[]>();
+  const byPhone = new Map<string, string[]>();
+  const byName = new Map<string, string[]>();
   const attByNode = new Map<string, NodeContact>();
+  const titleByNode = new Map<string, string>();
+  const pushKey = (m: Map<string, string[]>, k: string | null, id: string) => {
+    if (!k) return;
+    const arr = m.get(k);
+    if (arr) {
+      if (!arr.includes(id)) arr.push(id);
+    } else m.set(k, [id]);
+  };
   for (const n of nodes ?? []) {
     const a = (n.attachments as NodeContact | null) ?? {};
     attByNode.set(n.id, a);
-    const email = normEmail(a.email ?? null);
-    if (email && !byEmail.has(email)) byEmail.set(email, n.id);
-    const phone = normPhone((a.phone ?? a.phoneRaw ?? null) as string | null);
-    if (phone && !byPhone.has(phone)) byPhone.set(phone, n.id);
-    const nameKey = nameTokenKey(n.title ?? n.lookup_key ?? null);
-    if (nameKey && !byName.has(nameKey)) byName.set(nameKey, n.id);
+    titleByNode.set(n.id, n.title ?? n.lookup_key ?? "");
+    pushKey(byEmail, normEmail(a.email ?? null), n.id);
+    pushKey(byPhone, normPhone((a.phone ?? a.phoneRaw ?? null) as string | null), n.id);
+    pushKey(byName, nameTokenKey(n.title ?? n.lookup_key ?? null), n.id);
   }
 
-  const resolveNode = (e: RewardEntry): string | null => {
-    const email = normEmail(e.contactEmail);
-    if (email && byEmail.has(email)) return byEmail.get(email)!;
-    const phone = normPhone(e.contactPhone);
-    if (phone && byPhone.has(phone)) return byPhone.get(phone)!;
+  // Correction-teaches: a reward whose exact contact fingerprint the owner has
+  // already confirmed resolves straight to that patient, no second guess.
+  const aliasByFp = new Map<string, string>();
+  {
+    const { data: aliasRows } = await looseTbl(sb, "reward_match_aliases")
+      .select("fingerprint, node_id")
+      .eq("user_id", userId);
+    for (const r of (aliasRows ?? []) as Array<{ fingerprint: string; node_id: string }>) {
+      if (r.fingerprint && r.node_id) aliasByFp.set(r.fingerprint, r.node_id);
+    }
+  }
+
+  // name|email|phone — the alias key. Carries the name so a spouse on the same
+  // shared email is NOT silently inherited (their name differs → no alias hit).
+  const fingerprintOf = (e: RewardEntry): string =>
+    [nameTokenKey(e.contactName), normEmail(e.contactEmail), normPhone(e.contactPhone)]
+      .map((x) => x ?? "")
+      .join("|");
+
+  // Resolve every entry to a confidence tier up front. "high"/"learned" attribute
+  // as before; "ambiguous" is HELD (orphaned + a review card); "none" is the
+  // existing unmatched path. Computed once and reused for counts + holds.
+  const resolutionOf = (e: RewardEntry): MatchResolution => {
+    const fp = fingerprintOf(e);
+    const aliasId = aliasByFp.get(fp);
+    const emailKey = normEmail(e.contactEmail);
+    const phoneKey = normPhone(e.contactPhone);
     const nameKey = nameTokenKey(e.contactName);
-    if (nameKey && byName.has(nameKey)) return byName.get(nameKey)!;
-    return null;
+    return resolveMatch({
+      aliasNodeId: aliasId && attByNode.has(aliasId) ? aliasId : null,
+      emailIds: emailKey ? byEmail.get(emailKey) : undefined,
+      phoneIds: phoneKey ? byPhone.get(phoneKey) : undefined,
+      nameIds: nameKey ? byName.get(nameKey) : undefined,
+    });
   };
+
+  const planByEntry = new Map<RewardEntry, MatchResolution>();
+  for (const e of parsed.entries) planByEntry.set(e, resolutionOf(e));
+
+  // A confident match attributes; ambiguous/none leave the node null (orphan row).
+  const confidentNode = (res: MatchResolution): string | null =>
+    res.tier === "high" || res.tier === "learned" ? res.nodeId : null;
 
   // 3) Record the import row first so entries can reference it.
   const { data: importRow, error: importErr } = await sb
@@ -250,7 +304,7 @@ export async function doIngestRewards(
   let matched = 0;
 
   const upsertRows = parsed.entries.map((e) => {
-    const nodeId = resolveNode(e);
+    const nodeId = confidentNode(planByEntry.get(e)!);
     if (nodeId) {
       matched++;
       // Plan a gap-fill if the patient is missing a channel this entry has.
@@ -342,9 +396,94 @@ export async function doIngestRewards(
     if (!error) contactsFilled++;
   }
 
-  const unmatchedWithContact = parsed.entries.filter(
-    (e) => !resolveNode(e) && (normEmail(e.contactEmail) || normPhone(e.contactPhone)),
-  ).length;
+  const unmatchedWithContact = parsed.entries.filter((e) => {
+    const res = planByEntry.get(e)!;
+    return res.tier === "none" && (normEmail(e.contactEmail) || normPhone(e.contactPhone));
+  }).length;
+
+  // 6b) Confidence gate: HELD entries (matched >1 patient) get a review card
+  //     instead of a silent guess. The reward already landed orphaned above;
+  //     here we record who the candidates are so the owner can latch the right
+  //     one. Keyed on the same business tuple the entry is unique on, so a
+  //     re-import is idempotent and a resolve updates exactly that orphan row.
+  let held = 0;
+  const heldRows = parsed.entries
+    .filter((e) => planByEntry.get(e)!.tier === "ambiguous")
+    .map((e) => {
+      const res = planByEntry.get(e)!;
+      held++;
+      return {
+        user_id: userId,
+        import_id: importId,
+        manufacturer: e.manufacturer,
+        brand_product: e.brandProduct,
+        match_key: rewardMatchKey(e),
+        program: e.program,
+        reward_amount_usd: e.rewardAmountUsd,
+        expiration_date: e.expirationDate,
+        contact_name: e.contactName,
+        contact_email: e.contactEmail,
+        contact_phone: e.contactPhone,
+        fingerprint: fingerprintOf(e),
+        signals: res.signals,
+        candidates: res.candidateIds.map((id) => {
+          const a = attByNode.get(id) ?? {};
+          return {
+            id,
+            name: titleByNode.get(id) || null,
+            email: (a.email ?? null) as string | null,
+            phone: (a.phone ?? a.phoneRaw ?? null) as string | null,
+          };
+        }),
+        status: "pending" as const,
+        resolved_node_id: null as string | null,
+        resolved_at: null as string | null,
+        updated_at: nowIso,
+      };
+    });
+  if (heldRows.length > 0) {
+    for (let i = 0; i < heldRows.length; i += CHUNK) {
+      const { error } = await looseTbl(sb, "reward_attribution_holds").upsert(
+        heldRows.slice(i, i + CHUNK),
+        { onConflict: "user_id,manufacturer,brand_product,match_key" },
+      );
+      if (error) throw new Error(`Couldn't save attribution holds: ${error.message}`);
+    }
+  }
+
+  // Any tuple that now resolves confidently (e.g. via a learned alias) auto-closes
+  // a hold that was pending from a prior import — keep the "needs your eyes" queue
+  // honest, never showing an item the owner has effectively already answered.
+  // Match on the FULL business tuple (a bare match_key can repeat across brands).
+  const SEP = " ";
+  const confidentTuples = new Set(
+    parsed.entries
+      .filter((e) => confidentNode(planByEntry.get(e)!) != null)
+      .map((e) => `${e.manufacturer}${SEP}${e.brandProduct}${SEP}${rewardMatchKey(e)}`),
+  );
+  if (confidentTuples.size > 0) {
+    const { data: pendingHolds } = await looseTbl(sb, "reward_attribution_holds")
+      .select("id, manufacturer, brand_product, match_key")
+      .eq("user_id", userId)
+      .eq("status", "pending");
+    const toClose = (
+      (pendingHolds ?? []) as Array<{
+        id: string;
+        manufacturer: string;
+        brand_product: string;
+        match_key: string;
+      }>
+    )
+      .filter((h) =>
+        confidentTuples.has(`${h.manufacturer}${SEP}${h.brand_product}${SEP}${h.match_key}`),
+      )
+      .map((h) => h.id);
+    for (let i = 0; i < toClose.length; i += 200) {
+      await looseTbl(sb, "reward_attribution_holds")
+        .update({ status: "resolved", resolved_at: nowIso, updated_at: nowIso })
+        .in("id", toClose.slice(i, i + 200));
+    }
+  }
 
   // 7) Stamp the import row with the final counts.
   await sb
@@ -365,6 +504,7 @@ export async function doIngestRewards(
     dataRows: parsed.dataRowCount,
     entriesUpserted,
     matched,
+    held,
     unmatchedWithContact,
     contactsFilled,
     summary,

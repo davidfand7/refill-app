@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.14.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.14.0 &mdash; Confidence as a gate: a reward never lands on the wrong patient.</strong> The first trust-repair rung of the onboarding ladder. When you import a manufacturer&rsquo;s rewards, SmartSpa matches each one to a patient in your book &mdash; but until now, if a reward matched <em>more than one</em> patient (a couple who share an email, two patients with the same name), it silently credited whoever happened to sort first. A wrong dollar on the very number you check against your own portal. Now SmartSpa <strong>refuses to guess</strong>: a reward it can&rsquo;t pin to exactly one person is <strong>held in a &ldquo;needs your eyes&rdquo; queue</strong> on the Rewards page instead of being attributed. You pick the right patient in one tap &mdash; and <strong>it remembers</strong>, so the next import of that same person resolves automatically. Confident matches (a single patient, or one corroborated by name + email) still attribute instantly, untouched. The gate only opens on real ambiguity.",
+      "Under the hood this is a reusable <em>confidence-as-a-gate</em> primitive (sibling of the Connection Health expect-gate): a pure match-verdict (learned / high / ambiguous / none, an honest match-tier &mdash; not a black-box score), a held-queue table, and a learned-alias table keyed on the full contact fingerprint (so a spouse on a shared email is never silently inherited). Cross-sell and rescue can adopt the same gate as registry additions.",
+    ],
+  },
+  {
     version: "v2.13.2",
     date: "June 2026",
     items: [

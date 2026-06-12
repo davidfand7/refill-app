@@ -66,6 +66,7 @@ import {
 } from "@/server/manufacturer-transaction-ingest.functions";
 import { listServicesFn, type Service } from "@/server/refill-catalog";
 import { WatchSourcesSection } from "@/components/refill/WatchSourcesSection";
+import { AttributionReviewQueue } from "@/components/refill/AttributionReviewQueue";
 import type { PromoOffer } from "@/lib/promo-calendar";
 
 export const Route = createFileRoute("/app/refill/recognition/rewards")({
@@ -222,6 +223,14 @@ function RewardsPage() {
                   </div>
                   <p className="mt-1 text-ink-soft">
                     {receipt.matched.toLocaleString()} matched to your patient book ·{" "}
+                    {receipt.held > 0 && (
+                      <>
+                        <span className="font-semibold text-amber">
+                          {receipt.held.toLocaleString()} held for your review
+                        </span>{" "}
+                        ·{" "}
+                      </>
+                    )}
                     {receipt.unmatchedWithContact.toLocaleString()} have contact but no
                     matched patient ·{" "}
                     {receipt.contactsFilled.toLocaleString()} contact gaps filled.
@@ -231,6 +240,15 @@ function RewardsPage() {
                 </div>
               )}
             </div>
+
+            {/* Confidence gate — rewards that matched >1 patient, held for the
+                owner instead of guessed (project_trusted_onboarding, trust-repair).
+                Self-hides when the queue is empty. */}
+            <AttributionReviewQueue
+              accessToken={accessToken}
+              viewAsUserId={viewAsUserId}
+              onResolved={load}
+            />
 
             <AutoImportCard accessToken={accessToken} viewAsUserId={viewAsUserId} />
 
