@@ -123,7 +123,16 @@ function schedulerDetail(
   name: string,
   verdict: HealthVerdict,
   ageLabel: string,
+  ctx?: { expectedMissing?: boolean },
 ): string {
+  // "Expected missing" = the spa declared they use this calendar, but there's
+  // no active connection at all (never connected, or the token was revoked /
+  // it was disconnected). Without the expect-gate this platform would simply
+  // VANISH from the page — the silent calendar outage Connection Health exists
+  // to catch. Say plainly that it's expected and not flowing.
+  if (ctx?.expectedMissing) {
+    return `${name} is set as a calendar you expect, but there's no active connection — SmartSpa isn't receiving appointments from it. Connect ${name} to resume live sync. ${BOUNDARY}`;
+  }
   switch (verdict) {
     case "healthy":
       return `Connected and syncing live. Last activity ${ageLabel}.`;
@@ -212,6 +221,50 @@ function canonicalManufacturer(mapperKeyOrName: string): string {
   return (MANUFACTURER_MAPPERS[k]?.manufacturer ?? k).toLowerCase();
 }
 
+type ExpectedAnchor = { expectedSinceMs: number | null; label: string | null };
+
+/**
+ * The expect-gate read — one mechanism, every feed kind. Returns the enabled
+ * expected_sources for a tenant+kind keyed by (lowercased) source_key. ADDITIVE
+ * overlay: on ANY failure (e.g. the migration hasn't landed in this env yet) it
+ * returns an empty map so the trust page degrades to connection/import-only
+ * rather than throwing — the core reads beside it stay load-bearing and loud.
+ */
+async function readExpectedSources(
+  sb: ReturnType<typeof admin>,
+  userId: string,
+  kind: "portal" | "scheduler",
+): Promise<Map<string, ExpectedAnchor>> {
+  const out = new Map<string, ExpectedAnchor>();
+  try {
+    type Row = {
+      source_key: string;
+      expected_since: string | null;
+      label: string | null;
+    };
+    // expected_sources isn't in the generated types yet; loose view
+    // (mirrors the reward_ingest_tokens cast pattern).
+    const { data, error } = await (sb as unknown as { from(t: string): any })
+      .from("expected_sources")
+      .select("source_key, expected_since, label")
+      .eq("user_id", userId)
+      .eq("kind", kind)
+      .eq("enabled", true);
+    if (error) throw new Error(error.message);
+    for (const r of (data ?? []) as Row[]) {
+      const k = (r.source_key ?? "").toLowerCase();
+      if (!k) continue;
+      out.set(k, { expectedSinceMs: parseTs(r.expected_since), label: r.label });
+    }
+  } catch (err) {
+    console.error(
+      `[connection-health] expected_sources(${kind}) read failed (degrading):`,
+      err,
+    );
+  }
+  return out;
+}
+
 // ─── getConnectionHealthFn ──────────────────────────────────────────────────
 
 const inputSchema = z.object({
@@ -284,6 +337,56 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
       };
     });
 
+    // ── Expected scheduler/PMS connections — the silent-calendar-outage gate ──
+    // A scheduler row exists from the OAuth handshake, so "connected but never
+    // synced" already shows above. The blind spot is the OPPOSITE: a calendar
+    // whose token was revoked, or that was disconnected / never connected, has
+    // NO active row (the query above filters to active statuses) → it VANISHES
+    // from the page. If the spa DECLARED they expect that platform, surface it
+    // as a flagged "expected but not connected" card instead of nothing — the
+    // same expect-gate primitive the portals use, second feed kind.
+    const expectedSchedulers = await readExpectedSources(
+      sb,
+      effectiveUserId,
+      "scheduler",
+    );
+    const activePlatforms = new Set(
+      ((schedRows ?? []) as SchedulerRow[]).map((r) =>
+        (r.platform ?? "").toLowerCase(),
+      ),
+    );
+    const expectedSchedulerItems: ConnectionHealthItem[] = [
+      ...expectedSchedulers.entries(),
+    ]
+      .filter(([platform]) => !activePlatforms.has(platform))
+      .map(([platform, anchor]) => {
+        const tier = schedulerTier(platform);
+        const name =
+          anchor.label ?? SCHEDULER_DISPLAY[platform] ?? titleCase(platform);
+        const { verdict, severity } = computeVerdict({
+          tier,
+          connected: false, // declared expected, but no active connection
+          lastEventAtMs: null,
+          expectedSinceMs: anchor.expectedSinceMs,
+          nowMs,
+        });
+        return {
+          key: `scheduler:${platform}`,
+          kind: "scheduler" as const,
+          displayName: name,
+          subLabel: "Calendar",
+          tier,
+          tierLabel: tierLabelOf(tier),
+          verdict,
+          severity,
+          statusLabel: verdictLabel(verdict),
+          detail: schedulerDetail(name, verdict, "—", { expectedMissing: true }),
+          lastEventAtMs: null,
+          lastEventLabel: "—",
+          cta: { label: "Connect", to: CONNECTIONS_ROUTE },
+        };
+      });
+
     // ── Reward-portal pulls — newest imported_at PER manufacturer ──
     // Read ALL import rows (paginated) ordered newest-first, then take the
     // first occurrence per manufacturer. A fixed .limit() was wrong: a
@@ -313,48 +416,15 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
     // The portals above are derived ONLY from imports that already landed, so a
     // portal set up but whose first pull never arrived (login wrong from day
     // one) writes no row and stays INVISIBLE — the rung-1 silent failure this
-    // whole surface exists to catch. expected_portal_sources is the "we expect
-    // this" anchor: an expected-but-never-imported portal now appears, and its
-    // silence ages into a flag (computeVerdict + expectedSinceMs).
-    //
-    // ADDITIVE overlay: if this read fails (e.g. the migration hasn't been
-    // applied to this environment yet), degrade to the prior import-only
-    // behavior rather than throw and nuke the whole trust page. The core
-    // scheduler/import reads above are the load-bearing ones and DO throw loud.
-    const expectedByMfr = new Map<
-      string,
-      { expectedSinceMs: number | null; label: string | null }
-    >();
-    try {
-      type ExpectedRow = {
-        manufacturer: string;
-        expected_since: string | null;
-        label: string | null;
-      };
-      // expected_portal_sources isn't in the generated types yet; loose view
-      // (mirrors the reward_ingest_tokens cast pattern).
-      const { data: expRows, error: expErr } = await (
-        sb as unknown as { from(t: string): any }
-      )
-        .from("expected_portal_sources")
-        .select("manufacturer, expected_since, label")
-        .eq("user_id", effectiveUserId)
-        .eq("enabled", true);
-      if (expErr) throw new Error(expErr.message);
-      for (const r of (expRows ?? []) as ExpectedRow[]) {
-        const mfr = (r.manufacturer ?? "").toLowerCase();
-        if (!mfr) continue;
-        expectedByMfr.set(mfr, {
-          expectedSinceMs: parseTs(r.expected_since),
-          label: r.label,
-        });
-      }
-    } catch (err) {
-      console.error(
-        "[connection-health] expected_portal_sources read failed (degrading to import-only):",
-        err,
-      );
-    }
+    // whole surface exists to catch. The expect-gate (expected_sources,
+    // kind='portal') is the "we expect this" anchor: an expected-but-never-
+    // imported portal now appears and its silence ages into a flag
+    // (computeVerdict + expectedSinceMs). Degrades gracefully (see helper).
+    const expectedByMfr = await readExpectedSources(
+      sb,
+      effectiveUserId,
+      "portal",
+    );
 
     // Union the manufacturers we've heard from with those we EXPECT to hear
     // from — so an expected portal with zero imports still gets a card.
@@ -423,9 +493,11 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
       neutral: 2,
       ok: 3,
     };
-    const items = [...schedulerItems, ...portalItems].sort(
-      (a, b) => sevRank[a.severity] - sevRank[b.severity],
-    );
+    const items = [
+      ...schedulerItems,
+      ...expectedSchedulerItems,
+      ...portalItems,
+    ].sort((a, b) => sevRank[a.severity] - sevRank[b.severity]);
 
     const attention = items.filter(
       (i) => i.severity === "error" || i.severity === "warn",
@@ -438,83 +510,113 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
     };
   });
 
-// ─── Expected portal sources (the "gate" declaration) ───────────────────────
+// ─── Expected sources (the "gate" declaration — one primitive, every kind) ───
 //
-// The spa declares which manufacturer portals it EXPECTS to flow. That single
-// row is what lets Connection Health flag a portal that was set up but never
-// imported (login wrong from day one) — otherwise it's invisible (no import =
-// no row). This is the first concrete instance of the trusted-onboarding gate:
-// declare → it gets watched → a broken first pull surfaces → fix the login.
+// The spa declares which feeds it EXPECTS to flow. That single row is what lets
+// Connection Health flag a feed that's silently absent — a portal set up but
+// never imported (no import = no row), or a calendar whose token was revoked /
+// that was never connected (no active row). One mechanism, two feed kinds:
+// declare → it gets watched → a silent gap becomes a flagged, fixable card.
 
-/** The manufacturer portals SmartSpa can auto-import today. Canonical
- *  lowercase keys, matching reward_signal_imports + PORTAL_DISPLAY. */
-export const EXPECTABLE_PORTALS: { manufacturer: string; name: string; brand: string }[] = [
-  { manufacturer: "allergan", name: "Allē", brand: "Allergan" },
-  { manufacturer: "galderma", name: "ASPIRE", brand: "Galderma" },
-  { manufacturer: "evolus", name: "Evolus Rewards", brand: "Evolus" },
+export interface ExpectedSourceOption {
+  /** Canonical lowercase key: a portal's brand or a scheduler's platform. */
+  sourceKey: string;
+  name: string;
+  subLabel: string;
+}
+
+/** Reward portals SmartSpa can auto-import (keys match reward_signal_imports
+ *  canonical manufacturers + PORTAL_DISPLAY). */
+export const EXPECTABLE_PORTALS: ExpectedSourceOption[] = [
+  { sourceKey: "allergan", name: "Allē", subLabel: "Allergan" },
+  { sourceKey: "galderma", name: "ASPIRE", subLabel: "Galderma" },
+  { sourceKey: "evolus", name: "Evolus Rewards", subLabel: "Evolus" },
 ];
 
-export interface ExpectedPortalState {
-  manufacturer: string;
-  name: string;
-  brand: string;
+/** Calendar/PMS platforms a spa can actually connect today (keys match
+ *  emma_scheduler_connections.platform + SCHEDULER_DISPLAY). Kept to the live
+ *  ones — we don't offer to "watch" a platform we can't connect. */
+export const EXPECTABLE_SCHEDULERS: ExpectedSourceOption[] = [
+  { sourceKey: "acuity", name: "Acuity", subLabel: "Calendar" },
+  { sourceKey: "vagaro", name: "Vagaro", subLabel: "Calendar" },
+];
+
+const EXPECTABLE_BY_KIND: Record<string, ExpectedSourceOption[]> = {
+  portal: EXPECTABLE_PORTALS,
+  scheduler: EXPECTABLE_SCHEDULERS,
+};
+
+export interface ExpectedSourceState extends ExpectedSourceOption {
+  kind: "portal" | "scheduler";
   expected: boolean;
 }
 
-// expected_portal_sources isn't in the generated types yet; loose view
-// (mirrors the reward_ingest_tokens cast pattern).
+// expected_sources isn't in the generated types yet; loose view (mirrors the
+// reward_ingest_tokens cast pattern).
 function expectedTbl(sb: ReturnType<typeof admin>) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (sb as unknown as { from(t: string): any }).from("expected_portal_sources");
+  return (sb as unknown as { from(t: string): any }).from("expected_sources");
 }
 
-/** UI: which portals is this spa currently watching for? */
-export const listExpectedPortalsFn = createServerFn({ method: "POST" })
-  .inputValidator((raw: unknown) => inputSchema.parse(raw))
-  .handler(async ({ data }): Promise<ExpectedPortalState[]> => {
+const kindSchema = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().optional(),
+  kind: z.enum(["portal", "scheduler"]),
+});
+
+/** UI: which sources of this kind is the spa currently watching? Returns the
+ *  full roster with an `expected` flag so toggles render in a stable order. */
+export const listExpectedSourcesFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => kindSchema.parse(raw))
+  .handler(async ({ data }): Promise<ExpectedSourceState[]> => {
     const { effectiveUserId } = await resolveEffectiveUserId({
       accessToken: data.accessToken,
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
+    const options = EXPECTABLE_BY_KIND[data.kind] ?? [];
     const { data: rows, error } = await expectedTbl(sb)
-      .select("manufacturer")
+      .select("source_key")
       .eq("user_id", effectiveUserId)
+      .eq("kind", data.kind)
       .eq("enabled", true);
     if (error) throw new Error(error.message);
     const on = new Set(
-      ((rows ?? []) as { manufacturer: string }[]).map((r) =>
-        (r.manufacturer ?? "").toLowerCase(),
+      ((rows ?? []) as { source_key: string }[]).map((r) =>
+        (r.source_key ?? "").toLowerCase(),
       ),
     );
-    return EXPECTABLE_PORTALS.map((p) => ({
-      manufacturer: p.manufacturer,
-      name: p.name,
-      brand: p.brand,
-      expected: on.has(p.manufacturer),
+    return options.map((o) => ({
+      kind: data.kind,
+      sourceKey: o.sourceKey,
+      name: o.name,
+      subLabel: o.subLabel,
+      expected: on.has(o.sourceKey),
     }));
   });
 
 const setExpectedSchema = z.object({
   accessToken: z.string().min(1),
   viewAsUserId: z.string().optional(),
-  manufacturer: z.string().min(1),
+  kind: z.enum(["portal", "scheduler"]),
+  sourceKey: z.string().min(1),
   expected: z.boolean(),
 });
 
-/** UI: start (or stop) watching a portal. Toggling on (re)stamps
- *  expected_since so the "first pull overdue" clock starts from the
- *  declaration; toggling off disables without losing history. */
-export const setExpectedPortalFn = createServerFn({ method: "POST" })
+/** UI: start (or stop) watching a source. Toggling on (re)stamps
+ *  expected_since so the "overdue" clock starts from the declaration; toggling
+ *  off disables without losing history. */
+export const setExpectedSourceFn = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => setExpectedSchema.parse(raw))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const { effectiveUserId } = await resolveEffectiveUserId({
       accessToken: data.accessToken,
       viewAsUserId: data.viewAsUserId,
     });
-    const mfr = data.manufacturer.toLowerCase();
-    if (!EXPECTABLE_PORTALS.some((p) => p.manufacturer === mfr)) {
-      throw new Error("Unknown portal.");
+    const key = data.sourceKey.toLowerCase();
+    const options = EXPECTABLE_BY_KIND[data.kind] ?? [];
+    if (!options.some((o) => o.sourceKey === key)) {
+      throw new Error("Unknown source.");
     }
     const sb = admin();
     const nowIso = new Date().toISOString();
@@ -522,19 +624,21 @@ export const setExpectedPortalFn = createServerFn({ method: "POST" })
       const { error } = await expectedTbl(sb).upsert(
         {
           user_id: effectiveUserId,
-          manufacturer: mfr,
+          kind: data.kind,
+          source_key: key,
           enabled: true,
           expected_since: nowIso,
           updated_at: nowIso,
         },
-        { onConflict: "user_id,manufacturer" },
+        { onConflict: "user_id,kind,source_key" },
       );
       if (error) throw new Error(error.message);
     } else {
       const { error } = await expectedTbl(sb)
         .update({ enabled: false, updated_at: nowIso })
         .eq("user_id", effectiveUserId)
-        .eq("manufacturer", mfr);
+        .eq("kind", data.kind)
+        .eq("source_key", key);
       if (error) throw new Error(error.message);
     }
     return { ok: true };

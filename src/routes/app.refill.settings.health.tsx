@@ -7,8 +7,12 @@
  * is wrong, a plain statement that it's the CONNECTION and not us, plus the
  * one button that fixes it.
  *
- * Read-only + a Recheck button. All classification happens server-side in
- * getConnectionHealthFn → computeVerdict (pure lib). No migration.
+ * Mostly read-only (a Recheck button); all classification happens server-side
+ * in getConnectionHealthFn → computeVerdict (pure lib). The one write here is
+ * the calendar expect-gate (WatchSourcesSection, kind='scheduler') — declaring
+ * a calendar you expect so a revoked/never-connected one is FLAGGED rather than
+ * silently absent. It lives on this view-as-aware trust surface, beside the
+ * absence it guards (the portal expect-gate is the same control on Rewards).
  */
 
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -28,6 +32,7 @@ import {
 
 import { PageHeader } from "@/components/PageHeader";
 import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
+import { WatchSourcesSection } from "@/components/refill/WatchSourcesSection";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -62,6 +67,7 @@ function ConnectionHealthPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [report, setReport] = useState<ConnectionHealthReport | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
 
   const load = useCallback(
     async (isManual: boolean) => {
@@ -71,6 +77,7 @@ function ConnectionHealthPage() {
         const { data: sess } = await supabase.auth.getSession();
         const token = sess.session?.access_token;
         if (!token) return;
+        setAccessToken(token);
         const result = await getConnectionHealthFn({
           data: { accessToken: token, viewAsUserId },
         });
@@ -144,6 +151,23 @@ function ConnectionHealthPage() {
               </p>
             )}
           </>
+        )}
+
+        {/* The expect-gate for calendars: declaring one lets this page flag a
+            calendar that's expected but not connected (token revoked / never
+            connected) instead of it silently vanishing. Lives here (not the
+            connections page) because Health is the view-as-aware trust surface
+            and the absence shows right above. Same primitive as the portal
+            toggles on Recognition → Rewards. Self-hides if the read fails. */}
+        {!loading && (
+          <WatchSourcesSection
+            kind="scheduler"
+            title="Watch a calendar"
+            blurb="Turn on the calendar platform you use. If it's ever not connected — a revoked login, or one you meant to connect — this page flags it instead of simply showing nothing."
+            watchingVerb="isn't connected"
+            accessToken={accessToken}
+            viewAsUserId={viewAsUserId}
+          />
         )}
       </div>
     </div>

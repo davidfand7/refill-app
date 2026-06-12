@@ -65,11 +65,7 @@ import {
   type LastTxnImportReceipt,
 } from "@/server/manufacturer-transaction-ingest.functions";
 import { listServicesFn, type Service } from "@/server/refill-catalog";
-import {
-  listExpectedPortalsFn,
-  setExpectedPortalFn,
-  type ExpectedPortalState,
-} from "@/server/connection-health.functions";
+import { WatchSourcesSection } from "@/components/refill/WatchSourcesSection";
 import type { PromoOffer } from "@/lib/promo-calendar";
 
 export const Route = createFileRoute("/app/refill/recognition/rewards")({
@@ -566,7 +562,11 @@ function AutoImportCard({
                   Declaring a portal here lets the health page warn you if a
                   portal you set up never imports (a wrong login on day one is
                   otherwise silent). */}
-              <WatchPortalsSection
+              <WatchSourcesSection
+                kind="portal"
+                title="Watch these portals"
+                blurb="Turn on the portals you expect to import. If one you're watching ever stops sending data — or its very first import never lands — Connection Health flags it, so a wrong portal login doesn't fail silently."
+                watchingVerb="stops importing"
                 accessToken={accessToken}
                 viewAsUserId={viewAsUserId}
               />
@@ -624,136 +624,6 @@ function AutoImportCard({
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-/**
- * WatchPortalsSection — the Connection Health "expect" gate, surfaced where
- * auto-import is set up. Toggling a portal ON tells SmartSpa to watch for it:
- * if you set up Allē but its first import never lands (wrong login on day one),
- * Connection Health now shows a flagged card instead of nothing. This is the
- * first concrete instance of the trusted-onboarding gate primitive — declare →
- * it gets watched → a broken first pull becomes visible and fixable.
- */
-function WatchPortalsSection({
-  accessToken,
-  viewAsUserId,
-}: {
-  accessToken: string | null;
-  viewAsUserId?: string;
-}) {
-  const [portals, setPortals] = useState<ExpectedPortalState[] | null>(null);
-  const [pending, setPending] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!accessToken) return;
-    let alive = true;
-    void (async () => {
-      try {
-        const rows = await listExpectedPortalsFn({
-          data: { accessToken, viewAsUserId },
-        });
-        if (alive) setPortals(rows);
-      } catch {
-        // e.g. the expected_portal_sources migration hasn't landed in this
-        // environment yet — keep the section hidden rather than show an empty
-        // shell (a successful call always returns the full portal roster).
-        if (alive) setPortals(null);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [accessToken, viewAsUserId]);
-
-  async function toggle(p: ExpectedPortalState) {
-    if (!accessToken || pending) return;
-    const next = !p.expected;
-    setPending(p.manufacturer);
-    // optimistic
-    setPortals((prev) =>
-      prev
-        ? prev.map((x) =>
-            x.manufacturer === p.manufacturer ? { ...x, expected: next } : x,
-          )
-        : prev,
-    );
-    try {
-      await setExpectedPortalFn({
-        data: {
-          accessToken,
-          viewAsUserId,
-          manufacturer: p.manufacturer,
-          expected: next,
-        },
-      });
-      toast.success(
-        next
-          ? `Watching ${p.name} — Connection Health will flag it if it stops importing.`
-          : `Stopped watching ${p.name}.`,
-      );
-    } catch {
-      // revert on failure
-      setPortals((prev) =>
-        prev
-          ? prev.map((x) =>
-              x.manufacturer === p.manufacturer
-                ? { ...x, expected: p.expected }
-                : x,
-            )
-          : prev,
-      );
-      toast.error("Couldn't update. Try again.");
-    } finally {
-      setPending(null);
-    }
-  }
-
-  if (!portals) return null;
-
-  return (
-    <div className="space-y-2 rounded-lg border border-rule bg-white px-3 py-3">
-      <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ink">
-        <Eye className="h-3.5 w-3.5 text-emerald" />
-        Watch these portals
-      </div>
-      <p className="text-[11px] text-ink-faint">
-        Turn on the portals you expect to import. If one you&apos;re watching
-        ever stops sending data — or its very first import never lands —
-        Connection Health flags it, so a wrong portal login doesn&apos;t fail
-        silently.
-      </p>
-      <div className="flex flex-wrap gap-2 pt-0.5">
-        {portals.map((p) => {
-          const on = p.expected;
-          const busy = pending === p.manufacturer;
-          return (
-            <button
-              key={p.manufacturer}
-              type="button"
-              disabled={busy}
-              onClick={() => toggle(p)}
-              className={
-                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-medium transition disabled:opacity-60 " +
-                (on
-                  ? "border-emerald bg-emerald/10 text-emerald"
-                  : "border-rule bg-white text-ink-soft hover:text-ink")
-              }
-            >
-              {busy ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : on ? (
-                <Eye className="h-3.5 w-3.5" />
-              ) : (
-                <EyeOff className="h-3.5 w-3.5" />
-              )}
-              {p.name}
-              <span className="text-[10px] opacity-70">{on ? "watching" : "off"}</span>
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }

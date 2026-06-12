@@ -52,6 +52,18 @@ check(
   "setup",
 );
 
+// ── Not connected at all, but expected (e.g. revoked calendar) → broken now ──
+check(
+  "expected scheduler, NOT connected → broken (gap now, no grace)",
+  computeVerdict({ tier: "realtime", connected: false, lastEventAtMs: null, expectedSinceMs: now - 1 * H, nowMs: now }).verdict,
+  "broken",
+);
+check(
+  "NOT connected, NOT expected → unconfigured (don't invent connections)",
+  computeVerdict({ tier: "realtime", connected: false, lastEventAtMs: null, nowMs: now }).verdict,
+  "unconfigured",
+);
+
 // ── A real error still wins over the expected-silence path ──
 check(
   "expected + errored → broken (hard failure wins)",

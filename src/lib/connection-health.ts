@@ -125,8 +125,17 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
 
   if (errored) return { verdict: "broken", severity: SEVERITY_OF.broken, ageMs };
   if (pending) return { verdict: "setup", severity: SEVERITY_OF.setup, ageMs };
-  if (!connected)
+  if (!connected) {
+    // Nothing is connected. If the spa DECLARED they expect this feed (e.g. a
+    // calendar whose token was revoked, or one they intend to connect), an
+    // absent connection is a real gap NOW — there's no "still standing up"
+    // grace for "not connected at all", unlike a connected feed awaiting its
+    // first event. Without an expectation anchor, an absent feed is simply
+    // unconfigured (we don't invent connections nobody asked for).
+    if (input.expectedSinceMs != null)
+      return { verdict: "broken", severity: SEVERITY_OF.broken, ageMs };
     return { verdict: "unconfigured", severity: SEVERITY_OF.unconfigured, ageMs };
+  }
 
   // Connected but no data has ever arrived. Without an expectation anchor this
   // is a benign "still standing up". WITH one (expectedSinceMs), silence ages

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.9.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.9.0 &mdash; The &ldquo;watch&rdquo; gate now covers your calendar too &mdash; a disconnected scheduler can&rsquo;t vanish silently anymore.</strong> Extends the <code>v2.8.0</code> expect-gate from reward portals to <strong>PMS / calendar connections</strong>, the same primitive on a second feed. The blind spot it closes: a calendar whose token gets revoked (or that you disconnect, or never connected) has <em>no active connection row</em>, so it simply disappears from Connection Health &mdash; looks fine, but appointments have stopped flowing. Now you can declare the calendar you use (a <strong>&ldquo;Watch a calendar&rdquo;</strong> toggle on the Connection Health page, Acuity / Vagaro), and if it&rsquo;s ever expected-but-not-connected it shows as a flagged <strong>&ldquo;Needs attention &mdash; SmartSpa isn&rsquo;t receiving appointments&rdquo;</strong> card with a <em>Connect</em> button, instead of nothing. <strong>Under the hood &mdash; one gate, not two:</strong> the <code>expected_portal_sources</code> table is generalized to <code>expected_sources</code> (a <code>kind</code> column for portal vs. scheduler), with one shared server-fn pair, one shared verdict rule (declared-but-not-connected &rarr; flagged now, no grace), and one shared toggle UI behind both surfaces. The trusted-onboarding thesis made real: build the gate primitive once, and the second surface falls out of it. Verdict logic covered by the runnable spec (11 checks). Generalize migration ships separately; reads degrade gracefully until it lands.",
+    ],
+  },
+  {
     version: "v2.8.1",
     date: "June 2026",
     items: [
