@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.14.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.14.1 &mdash; Rewards page: jump to your patient book, and tidy the stack.</strong> Small UX on the Reward signals page. The import receipt now ends with an <strong>&ldquo;Open your patient book &rarr;&rdquo;</strong> link &mdash; once an import has matched patients (and flagged held/unmatched ones), you can go straight to the client list to act on them, instead of hunting for the nav. And the two management cards &mdash; <strong>Manufacturer promos</strong> and <strong>Your own offers</strong> &mdash; now have <strong>expand/collapse chevrons</strong>, so the page collapses to a clean header stack when you&rsquo;re focused on imports and the review queue, and opens up when you want to manage offers.",
+    ],
+  },
+  {
     version: "v2.14.0",
     date: "June 2026",
     items: [

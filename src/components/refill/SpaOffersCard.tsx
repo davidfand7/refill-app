@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Pause, Play, Plus, Send, Sparkles, Tag, Trash2 } from "lucide-react";
+import { ChevronDown, Loader2, Pause, Play, Plus, Send, Sparkles, Tag, Trash2 } from "lucide-react";
 import {
   listPromoOffers,
   createSpaOffer,
@@ -93,6 +93,7 @@ export function SpaOffersCard({
   accessToken: string | null;
   viewAsUserId?: string;
 }) {
+  const [collapsed, setCollapsed] = useState(false);
   const [open, setOpen] = useState(false);
   const [offers, setOffers] = useState<PromoOffer[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -254,7 +255,7 @@ export function SpaOffersCard({
     <div className="rounded-2xl border border-rule bg-paper/30 p-5">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setCollapsed((c) => !c)}
         className="flex w-full items-center gap-2 text-sm font-semibold text-ink"
       >
         <Sparkles className="h-4 w-4 text-amber" />
@@ -264,19 +265,35 @@ export function SpaOffersCard({
             {offers.length}
           </span>
         )}
-        <span className="ml-auto text-[11px] font-normal text-ink-faint">
-          {open ? "hide" : "add"}
-        </span>
+        <ChevronDown
+          className={cn(
+            "ml-auto h-4 w-4 text-ink-faint transition-transform",
+            collapsed && "-rotate-90",
+          )}
+        />
       </button>
 
+      {!collapsed && (
+        <>
       <p className="mt-2 text-[11px] text-ink-faint">
         Your own loyalty program — not a manufacturer's. Dollar or percent off a
         service, or a free / discounted add-on with it. It badges that service
         at booking and earns the same $5 when a matched patient books it.
       </p>
 
+      <div className="mt-3">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="inline-flex items-center gap-1 text-[12px] font-semibold text-amber hover:opacity-80"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          {open ? "Close form" : "New offer"}
+        </button>
+      </div>
+
       {open && (
-        <div className="mt-4 space-y-3">
+        <div className="mt-3 space-y-3">
           {/* Offer type selector */}
           <div>
             <Lbl>Offer type</Lbl>
@@ -561,6 +578,8 @@ export function SpaOffersCard({
             );
           })}
         </ul>
+      )}
+        </>
       )}
     </div>
   );

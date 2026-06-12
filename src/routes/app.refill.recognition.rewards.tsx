@@ -13,7 +13,7 @@
  * Manufacturers / Rewards.
  */
 
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -35,6 +35,8 @@ import {
   Download,
   Eye,
   EyeOff,
+  ChevronDown,
+  ArrowRight,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -237,6 +239,13 @@ function RewardsPage() {
                     {receipt.warnings.length > 0 &&
                       ` ${receipt.warnings.length} warning(s).`}
                   </p>
+                  <Link
+                    to="/app/refill/patients"
+                    className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-emerald-ink hover:opacity-80"
+                  >
+                    Open your patient book
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
                 </div>
               )}
             </div>
@@ -770,6 +779,7 @@ function PromoIntelligenceCard({
   const [offers, setOffers] = useState<PromoOffer[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [busy, setBusy] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -867,7 +877,14 @@ function PromoIntelligenceCard({
   return (
     <div className="rounded-2xl border border-rule bg-paper/30 p-5">
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+        <button
+          type="button"
+          onClick={() => setCollapsed((c) => !c)}
+          className="flex items-center gap-2 text-sm font-semibold text-ink"
+        >
+          <ChevronDown
+            className={`h-4 w-4 text-ink-faint transition-transform ${collapsed ? "-rotate-90" : ""}`}
+          />
           <Tag className="h-4 w-4 text-amber" />
           Manufacturer promos
           {offers.length > 0 && (
@@ -875,7 +892,7 @@ function PromoIntelligenceCard({
               {offers.length}
             </span>
           )}
-        </div>
+        </button>
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
@@ -900,6 +917,8 @@ function PromoIntelligenceCard({
           }}
         />
       </div>
+      {!collapsed && (
+        <>
       <p className="mt-2 text-[11px] text-ink-faint">
         Your manufacturer&apos;s active patient offers, matched to your own menu. Active
         offers badge the matching add-on at booking; toggle the eye to show or hide
@@ -995,6 +1014,8 @@ function PromoIntelligenceCard({
             ),
           )}
         </div>
+      )}
+        </>
       )}
     </div>
   );
