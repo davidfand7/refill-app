@@ -198,6 +198,42 @@ export const listPromoOffers = createServerFn({ method: "POST" })
     return loadTenantPromoOffers(sb, tenantId);
   });
 
+// ─── Promo Intelligence (v2.6.0) ────────────────────────────────────────────
+//
+// The owner controls whether a given MANUFACTURER promo surfaces on their
+// public Deals page (show_on_deals). Manufacturer offers default to visible
+// (the ingest leaves the column default true); this lets the owner curate the
+// pulled feed — hide the ones that don't fit, keep the ones that do — without
+// touching their own spa-authored offers (scoped to source='manufacturer').
+const setPromoOnDealsInput = z.object({
+  accessToken: z.string(),
+  viewAsUserId: z.string().optional(),
+  offerId: z.string().uuid(),
+  showOnDeals: z.boolean(),
+});
+
+export const setPromoOfferOnDeals = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => setPromoOnDealsInput.parse(input))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const { error } = await offersTbl(sb)
+      .update({ show_on_deals: data.showOnDeals })
+      .eq("id", data.offerId)
+      .eq("tenant_id", tenantId)
+      .eq("source", "manufacturer");
+    if (error) {
+      throw new Error(
+        `Couldn't update promo: ${(error as { message?: string }).message ?? "update failed"}`,
+      );
+    }
+    return { ok: true };
+  });
+
 // ─── Public Deals page (v2.4.4) ────────────────────────────────────────────
 //
 // A no-auth, patient-facing list of a spa's currently-active public offers,

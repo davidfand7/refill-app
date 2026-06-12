@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.6.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.6.0 &mdash; Promo Intelligence: the manufacturer&rsquo;s promo dump, made legible.</strong> The manufacturer-promo card used to be a black box &mdash; upload a calendar CSV, see a bare count (&ldquo;12 offers loaded&rdquo;). The owner couldn&rsquo;t see <em>which</em> promos were loaded, what was active, which of their own services each matched, or control which ones reached patients. They just badged at booking, invisibly. Now it&rsquo;s a real surface: the actual manufacturer offers, routed into <strong>Active now / Upcoming / Expired</strong>, each showing its product, dollar value, date window, and <strong>which of your own services it matches</strong> (reusing the booking matcher) &mdash; plus a one-tap <strong>on/off control for your public Deals page</strong> (<code>show_on_deals</code>). This is Phase&nbsp;1 of the Purchase &amp; Rebate Intelligence solution: turn the data nobody reads into routed, controllable intelligence. The portal <em>pull</em> that auto-feeds this (no more CSV upload) is the next slice. <strong>Touched</strong>: <code>refill-promo-calendar.functions.ts</code> (new <code>setPromoOfferOnDeals</code>, manufacturer-scoped), <code>app.refill.recognition.rewards.tsx</code> (<code>PromoCalendarCard</code> &rarr; <code>PromoIntelligenceCard</code>). No migration &mdash; every column already existed.",
+    ],
+  },
+  {
     version: "v2.5.3",
     date: "June 2026",
     items: [

@@ -33,6 +33,8 @@ import {
   RotateCw,
   MonitorDown,
   Download,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -53,9 +55,11 @@ import {
 import {
   ingestPromoCalendar,
   listPromoOffers,
+  setPromoOfferOnDeals,
   createSpaOffer,
   deleteSpaOffer,
 } from "@/server/refill-promo-calendar.functions";
+import { normalizeForMatch } from "@/lib/promo-calendar";
 import {
   ingestManufacturerTransactionCsv,
   type LastTxnImportReceipt,
@@ -235,7 +239,7 @@ function RewardsPage() {
               onImported={load}
             />
 
-            <PromoCalendarCard accessToken={accessToken} viewAsUserId={viewAsUserId} />
+            <PromoIntelligenceCard accessToken={accessToken} viewAsUserId={viewAsUserId} />
 
             <SpaOffersCard accessToken={accessToken} viewAsUserId={viewAsUserId} />
 
@@ -718,24 +722,38 @@ function LastTransactionCard({
   );
 }
 
-function PromoCalendarCard({
+// Promo Intelligence (v2.6.0) — the manufacturer's promo dump, made legible.
+// Was a black-box uploader that showed a bare count; now it lists the actual
+// manufacturer offers, routes them Active / Upcoming / Expired, shows which of
+// the spa's own services each one matches, and gives a one-tap on/off control
+// for the public Deals page. The portal PULL that auto-feeds this is the next
+// slice; for now the owner still uploads the calendar CSV here.
+function PromoIntelligenceCard({
   accessToken,
   viewAsUserId,
 }: {
   accessToken: string | null;
   viewAsUserId?: string;
 }) {
-  const [offerCount, setOfferCount] = useState<number | null>(null);
+  const [offers, setOffers] = useState<PromoOffer[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
   const [busy, setBusy] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
     if (!accessToken) return;
     try {
-      const offers = await listPromoOffers({ data: { accessToken, viewAsUserId } });
-      setOfferCount(offers.length);
+      const [all, svc] = await Promise.all([
+        listPromoOffers({ data: { accessToken, viewAsUserId } }),
+        listServicesFn({ data: { accessToken, viewAsUserId } }).catch(
+          () => [] as Service[],
+        ),
+      ]);
+      setOffers(all.filter((o) => o.source === "manufacturer"));
+      setServices(svc);
     } catch {
-      /* leave count hidden on error */
+      /* leave list empty on error */
     }
   }, [accessToken, viewAsUserId]);
 
@@ -761,18 +779,77 @@ function PromoCalendarCard({
     }
   }
 
+  async function toggleOnDeals(o: PromoOffer) {
+    if (!accessToken || !o.id) return;
+    const offerId = o.id;
+    const next = !o.showOnDeals;
+    setTogglingId(offerId);
+    // Optimistic; revert on failure.
+    setOffers((prev) => prev.map((x) => (x.id === offerId ? { ...x, showOnDeals: next } : x)));
+    try {
+      await setPromoOfferOnDeals({
+        data: { accessToken, viewAsUserId, offerId, showOnDeals: next },
+      });
+    } catch (e) {
+      setOffers((prev) =>
+        prev.map((x) => (x.id === offerId ? { ...x, showOnDeals: o.showOnDeals } : x)),
+      );
+      toast.error(e instanceof Error ? e.message : "Couldn't update.");
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  // Local calendar date (yyyy-mm-dd) for the Active / Upcoming / Expired
+  // grouping — a display bucket in the owner's own day, not a billing decision.
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+  function statusOf(o: PromoOffer): "active" | "upcoming" | "expired" {
+    if (o.endsOn && o.endsOn < todayIso) return "expired";
+    if (o.startsOn && o.startsOn > todayIso) return "upcoming";
+    return "active";
+  }
+
+  function matchedServiceNames(o: PromoOffer): string[] {
+    const key = o.product;
+    if (!key) return [];
+    return services
+      .filter((s) => {
+        const n = normalizeForMatch(s.name);
+        return n.length > 0 && n.includes(key);
+      })
+      .map((s) => s.name);
+  }
+
+  const buckets = {
+    active: offers.filter((o) => statusOf(o) === "active"),
+    upcoming: offers.filter((o) => statusOf(o) === "upcoming"),
+    expired: offers.filter((o) => statusOf(o) === "expired"),
+  };
+  const bucketMeta = [
+    { key: "active" as const, label: "Active now" },
+    { key: "upcoming" as const, label: "Upcoming" },
+    { key: "expired" as const, label: "Expired" },
+  ];
+
   return (
     <div className="rounded-2xl border border-rule bg-paper/30 p-5">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2 text-sm font-semibold text-ink">
           <Tag className="h-4 w-4 text-amber" />
-          Promo calendar — at-booking offers
+          Manufacturer promos
+          {offers.length > 0 && (
+            <span className="rounded-full bg-amber-soft px-2 py-0.5 text-[10.5px] font-semibold text-amber">
+              {offers.length}
+            </span>
+          )}
         </div>
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
           disabled={busy}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-amber/40 px-3 py-1.5 text-[12px] font-semibold text-amber hover:bg-amber-soft transition disabled:opacity-50"
+          className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-amber/40 px-3 py-1.5 text-[12px] font-semibold text-amber hover:bg-amber-soft transition disabled:opacity-50"
         >
           {busy ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -791,17 +868,103 @@ function PromoCalendarCard({
             if (f) void handleFile(f);
           }}
         />
-        {offerCount != null && (
-          <span className="ml-auto text-[11px] text-ink-faint">
-            {offerCount} offer{offerCount === 1 ? "" : "s"} loaded
-          </span>
-        )}
       </div>
       <p className="mt-2 text-[11px] text-ink-faint">
-        Upload your manufacturer's promotions calendar (Allergan "Dollars Off"
-        offers). Active offers badge the matching add-on at booking — "add
-        filler, $75 off through Jun 30."
+        Your manufacturer&apos;s active patient offers, matched to your own menu. Active
+        offers badge the matching add-on at booking; toggle the eye to show or hide
+        each on your public Deals page.
       </p>
+
+      {offers.length === 0 ? (
+        <p className="mt-4 text-[12px] text-ink-faint">
+          No promos loaded yet. Upload your manufacturer&apos;s promotions calendar
+          (Allergan &ldquo;Dollars Off&rdquo;) above — soon SmartSpa will pull these
+          for you automatically.
+        </p>
+      ) : (
+        <div className="mt-4 space-y-4">
+          {bucketMeta.map(({ key, label }) =>
+            buckets[key].length === 0 ? null : (
+              <div key={key}>
+                <div className="mb-1.5 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+                  {label}
+                  <span className="text-ink-faint/70">{buckets[key].length}</span>
+                </div>
+                <div className="space-y-1.5">
+                  {buckets[key].map((o) => {
+                    const matches = matchedServiceNames(o);
+                    const expired = key === "expired";
+                    return (
+                      <div
+                        key={o.id}
+                        className={`flex items-start gap-3 rounded-xl border border-rule bg-white px-3 py-2.5 ${expired ? "opacity-60" : ""}`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="text-[13px] font-semibold text-ink truncate">
+                            {o.title}
+                          </div>
+                          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-ink-faint">
+                            {o.manufacturer && (
+                              <span className="capitalize">{o.manufacturer}</span>
+                            )}
+                            {o.discountUsd != null && (
+                              <span className="font-semibold text-emerald-ink">
+                                ${Math.round(o.discountUsd)} off
+                              </span>
+                            )}
+                            <span className="tabular-nums">
+                              {o.startsOn ? fmtDate(o.startsOn) : "—"} –{" "}
+                              {o.endsOn ? fmtDate(o.endsOn) : "ongoing"}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-[11px]">
+                            {matches.length > 0 ? (
+                              <span className="text-emerald-ink">
+                                Applies to {matches.slice(0, 3).join(", ")}
+                                {matches.length > 3 ? ` +${matches.length - 3}` : ""}
+                              </span>
+                            ) : (
+                              <span className="text-ink-faint/80">
+                                No match in your menu yet
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {!expired && (
+                          <button
+                            type="button"
+                            onClick={() => void toggleOnDeals(o)}
+                            disabled={togglingId === o.id}
+                            title={
+                              o.showOnDeals
+                                ? "Showing on your Deals page — click to hide"
+                                : "Hidden from your Deals page — click to show"
+                            }
+                            className={`mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold transition disabled:opacity-50 ${
+                              o.showOnDeals
+                                ? "border-emerald-ink/30 bg-emerald-soft text-emerald-ink"
+                                : "border-rule bg-white text-ink-faint hover:text-ink"
+                            }`}
+                          >
+                            {togglingId === o.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : o.showOnDeals ? (
+                              <Eye className="h-3.5 w-3.5" />
+                            ) : (
+                              <EyeOff className="h-3.5 w-3.5" />
+                            )}
+                            {o.showOnDeals ? "On Deals" : "Hidden"}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ),
+          )}
+        </div>
+      )}
     </div>
   );
 }
