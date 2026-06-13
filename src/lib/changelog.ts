@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.18.2",
+    date: "June 2026",
+    items: [
+      "<strong>v2.18.2 &mdash; Public Deals page no longer shows duplicate-looking offers.</strong> When a manufacturer promo calendar lists the same product across several rows (or a spa-authored offer mirrors a manufacturer promo), the public <code>/deals/&lt;slug&gt;</code> page could render two or more identical-looking lines for the same thing. It now collapses any offers that are indistinguishable in every patient-visible field (headline, type, end date, learn-more link, service), keeping the first. Purely a display tidy-up &mdash; at-booking badging and the cross-sell <code>$5</code> win path are untouched. <strong>Touched</strong>: <code>refill-promo-calendar.functions.ts</code> (<code>getPublicDealsFn</code>). No migration.",
+    ],
+  },
+  {
     version: "v2.18.1",
     date: "June 2026",
     items: [

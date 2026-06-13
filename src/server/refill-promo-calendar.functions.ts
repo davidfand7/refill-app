@@ -280,13 +280,25 @@ export const getPublicDealsFn = createServerFn({ method: "POST" })
       (tzRow as { timezone?: string } | null)?.timezone ?? "America/Los_Angeles",
     );
 
-    const deals: PublicDeal[] = publicDeals(offers, today).map((o) => ({
+    const mapped: PublicDeal[] = publicDeals(offers, today).map((o) => ({
       headline: dealHeadline(o),
       offerType: o.offerType ?? "dollars_off",
       endsOn: o.endsOn,
       landingUrl: o.landingUrl,
       serviceName: o.product?.trim() || null,
     }));
+    // Dedup on what the patient actually sees: a manufacturer calendar that
+    // lists the same product across several rows (or a spa offer mirroring a
+    // manufacturer promo) would otherwise render as identical-looking lines.
+    // Collapse any rows indistinguishable in every visible field, keeping the
+    // first. Display-only — badging and the $5 win path are untouched.
+    const seen = new Set<string>();
+    const deals: PublicDeal[] = mapped.filter((d) => {
+      const key = [d.headline, d.offerType, d.endsOn ?? "", d.landingUrl ?? "", d.serviceName ?? ""].join("\u0000");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
     return { ok: true, spaName: tenant.name as string, slug: data.slug, deals };
   });
 
