@@ -39,8 +39,10 @@ import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import {
+  SKILL_CATALOG,
   findSkillInCatalog,
   type SkillMaterializer,
+  type SkillSolution,
 } from "@/lib/skill-catalog";
 
 // ─── Public types ───────────────────────────────────────────────────────────
@@ -56,6 +58,15 @@ export type AdoptedSkill = {
   materializedRef: Record<string, string>;
   createdAt: string;
   updatedAt: string;
+};
+
+/** A mined suggestion: a live, unadopted template whose signal fires for this spa. */
+export type SuggestedSkill = {
+  templateKey: string;
+  label: string;
+  solution: SkillSolution;
+  /** The observed signal, in the owner's words — why we're suggesting it. */
+  reason: string;
 };
 
 // ─── Admin client ─────────────────────────────────────────────────────────
@@ -250,6 +261,12 @@ const accessInput = z.object({
 
 const adoptInput = accessInput.extend({
   templateKey: z.string().min(1).max(80),
+  /** Where the adopt came from — 'catalog' (browse) or 'mined' (a suggestion). */
+  source: z.enum(["catalog", "mined", "concierge"]).optional(),
+});
+
+const templateKeyInput = accessInput.extend({
+  templateKey: z.string().min(1).max(80),
 });
 
 const skillIdInput = accessInput.extend({
@@ -337,7 +354,7 @@ export const adoptSkill = createServerFn({ method: "POST" })
         user_id: effectiveUserId,
         tenant_id: null,
         template_key: tpl.key,
-        source: "catalog",
+        source: data.source ?? "catalog",
         headline: tpl.label,
         body: tpl.adoptCopy,
         status: "accepted",
@@ -419,5 +436,175 @@ export const removeSkill = createServerFn({ method: "POST" })
       .eq("id", data.skillId)
       .eq("user_id", effectiveUserId);
     if (error) throw new Error(`Couldn't remove the Skill: ${error.message}`);
+    return { ok: true };
+  });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Phase 2 — MINING (the SOURCE axis): the agent surfaces a catalog template
+// from observed telemetry as a 'mined' suggestion. Read-only over signals we
+// already log (mirrors emma-intelligence's loadSpaSettingsInput). Rules fire
+// ONLY on real gaps, and ONLY for `live` templates (honesty — never suggest a
+// "coming soon"). Suggestions are computed live; a dismissal is remembered as
+// a dismissed skill_proposals row so we don't nag.
+// ═══════════════════════════════════════════════════════════════════════════
+
+type MiningSignals = {
+  hasDefaultProfile: boolean;
+  rescueEnabled: boolean;
+  upcomingAppts: number;
+  waitlistSize: number;
+};
+
+async function loadMiningSignals(
+  sb: SupabaseAdmin,
+  userId: string,
+): Promise<MiningSignals> {
+  const nowIso = new Date().toISOString();
+  const [policy, apptRes, waitRes, profileRes] = await Promise.all([
+    sb
+      .from("emma_noshow_policies")
+      .select("rescue_enabled")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    sb
+      .from("emma_appointments")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .gte("scheduled_at", nowIso)
+      .neq("status", "cancelled"),
+    sb
+      .from("emma_waitlist")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("status", "active"),
+    sb
+      .from("emma_preshow_profiles")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("is_default", true)
+      .maybeSingle(),
+  ]);
+  return {
+    hasDefaultProfile: Boolean(profileRes.data),
+    rescueEnabled: policy.data?.rescue_enabled ?? false,
+    upcomingAppts: apptRes.count ?? 0,
+    waitlistSize: waitRes.count ?? 0,
+  };
+}
+
+/** Evaluate the mining rules against real signals → suggested LIVE templates. */
+function evaluateMiningRules(sig: MiningSignals): SuggestedSkill[] {
+  const out: SuggestedSkill[] = [];
+
+  // Pre-Visit Reminders: upcoming appointments but no reminder cadence set up.
+  if (!sig.hasDefaultProfile && sig.upcomingAppts >= 1) {
+    const t = findSkillInCatalog("pre_visit_reminder");
+    if (t && t.status === "live") {
+      const n = sig.upcomingAppts;
+      out.push({
+        templateKey: t.key,
+        label: t.label,
+        solution: t.solution,
+        reason: `You have ${n} upcoming appointment${n === 1 ? "" : "s"} but no reminder cadence set up yet — Pre-Visit Reminders would cut the no-shows.`,
+      });
+    }
+  }
+
+  // Waitlist Auto-Fill: a waitlist is building but rescue isn't on.
+  if (!sig.rescueEnabled && sig.waitlistSize >= 3) {
+    const t = findSkillInCatalog("waitlist_auto_fill");
+    if (t && t.status === "live") {
+      const n = sig.waitlistSize;
+      out.push({
+        templateKey: t.key,
+        label: t.label,
+        solution: t.solution,
+        reason: `${n} patient${n === 1 ? " is" : "s are"} on your waitlist and Waitlist Auto-Fill isn't on yet — a cancellation could become a kept slot.`,
+      });
+    }
+  }
+
+  return out;
+}
+
+// ─── listSuggestedSkills ──────────────────────────────────────────────────────
+
+export const listSuggestedSkills = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => accessInput.parse(raw))
+  .handler(async ({ data }): Promise<SuggestedSkill[]> => {
+    const { effectiveUserId, isViewingAs } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+
+    // Earned-gate — premature suggestions are noise. Operator (view-as) bypasses.
+    if (!isViewingAs) {
+      const reached = await reachedValueMoment(sb, effectiveUserId);
+      if (!reached) return [];
+    }
+
+    // Exclude what she's already adopted or has dismissed.
+    const [adoptedRes, dismissedRes] = await Promise.all([
+      loose(sb).from("skills").select("template_key").eq("user_id", effectiveUserId),
+      loose(sb)
+        .from("skill_proposals")
+        .select("template_key")
+        .eq("user_id", effectiveUserId)
+        .eq("status", "dismissed"),
+    ]);
+    const excluded = new Set<string>();
+    for (const r of (adoptedRes.data as { template_key: string }[] | null) ?? [])
+      excluded.add(r.template_key);
+    for (const r of (dismissedRes.data as { template_key: string }[] | null) ?? [])
+      excluded.add(r.template_key);
+
+    const signals = await loadMiningSignals(sb, effectiveUserId);
+    return evaluateMiningRules(signals).filter((s) => !excluded.has(s.templateKey));
+  });
+
+// ─── dismissSuggestion (remembered so we don't nag) ───────────────────────────
+
+export const dismissSuggestion = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => templateKeyInput.parse(raw))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { effectiveUserId, callerUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const nowIso = new Date().toISOString();
+    // Validate the template exists (don't persist junk).
+    if (!findSkillInCatalog(data.templateKey)) {
+      throw new Error("That Skill isn't in the catalog.");
+    }
+    const { data: existing } = await loose(sb)
+      .from("skill_proposals")
+      .select("id")
+      .eq("user_id", effectiveUserId)
+      .eq("template_key", data.templateKey)
+      .eq("status", "pending")
+      .maybeSingle();
+    const existingId = (existing as { id: string } | null)?.id ?? null;
+    if (existingId) {
+      const { error } = await loose(sb)
+        .from("skill_proposals")
+        .update({ status: "dismissed", dismissed_at: nowIso, updated_at: nowIso })
+        .eq("id", existingId);
+      if (error) throw new Error(`Couldn't dismiss: ${error.message}`);
+    } else {
+      const { error } = await loose(sb)
+        .from("skill_proposals")
+        .insert({
+          user_id: effectiveUserId,
+          tenant_id: null,
+          template_key: data.templateKey,
+          source: "mined",
+          status: "dismissed",
+          dismissed_at: nowIso,
+          created_by: callerUserId,
+        });
+      if (error) throw new Error(`Couldn't dismiss: ${error.message}`);
+    }
     return { ok: true };
   });

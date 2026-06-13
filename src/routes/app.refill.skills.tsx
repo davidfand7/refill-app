@@ -25,6 +25,8 @@ import {
   Settings2,
   Sparkles,
   Trash2,
+  Wand2,
+  X,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -39,10 +41,13 @@ import {
 import { hasReachedValueMoment } from "@/server/wishlist.functions";
 import {
   adoptSkill,
+  dismissSuggestion,
   listMySkills,
+  listSuggestedSkills,
   removeSkill,
   setSkillEnabled,
   type AdoptedSkill,
+  type SuggestedSkill,
 } from "@/server/skills.functions";
 
 export const Route = createFileRoute("/app/refill/skills")({
@@ -66,18 +71,21 @@ function SkillsPage() {
 
   const [valueMoment, setValueMoment] = useState<boolean | null>(null);
   const [skills, setSkills] = useState<AdoptedSkill[] | null>(null);
+  const [suggestions, setSuggestions] = useState<SuggestedSkill[]>([]);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       const t = await token();
-      const [{ reached }, mine] = await Promise.all([
+      const [{ reached }, mine, suggested] = await Promise.all([
         hasReachedValueMoment({ data: { accessToken: t, viewAsUserId } }),
         listMySkills({ data: { accessToken: t, viewAsUserId } }),
+        listSuggestedSkills({ data: { accessToken: t, viewAsUserId } }),
       ]);
       setValueMoment(reached);
       setSkills(mine);
+      setSuggestions(suggested);
     } catch (e) {
       // Fail closed on the gate (don't show prematurely); empty list otherwise.
       setValueMoment((v) => (v === null ? false : v));
@@ -98,17 +106,35 @@ function SkillsPage() {
 
   const unlocked = adminViewing || valueMoment === true;
 
-  const adopt = async (tpl: SkillTemplate) => {
+  const adopt = async (
+    tpl: { key: string; label: string },
+    source: "catalog" | "mined" = "catalog",
+  ) => {
     setBusyKey(tpl.key);
     try {
       const t = await token();
       await adoptSkill({
-        data: { accessToken: t, viewAsUserId, templateKey: tpl.key },
+        data: { accessToken: t, viewAsUserId, templateKey: tpl.key, source },
       });
       toast.success(`"${tpl.label}" added to your back office.`);
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't add the Skill.");
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  const dismiss = async (s: SuggestedSkill) => {
+    setBusyKey(s.templateKey);
+    try {
+      const t = await token();
+      await dismissSuggestion({
+        data: { accessToken: t, viewAsUserId, templateKey: s.templateKey },
+      });
+      setSuggestions((prev) => prev.filter((x) => x.templateKey !== s.templateKey));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't dismiss.");
     } finally {
       setBusyKey(null);
     }
@@ -174,6 +200,26 @@ function SkillsPage() {
         <LockedState />
       ) : (
         <div className="space-y-8 pb-16">
+          {/* ── Suggested for you (mined from your activity) ──────────── */}
+          {suggestions.length > 0 && (
+            <section>
+              <SectionLabel>Suggested for you</SectionLabel>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {suggestions.map((s) => (
+                  <SuggestionCard
+                    key={s.templateKey}
+                    suggestion={s}
+                    busy={busyKey === s.templateKey}
+                    onAdopt={() =>
+                      adopt({ key: s.templateKey, label: s.label }, "mined")
+                    }
+                    onDismiss={() => dismiss(s)}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* ── Your Skills (adopted) ─────────────────────────────────── */}
           {adopted.length > 0 && (
             <section>
@@ -368,6 +414,63 @@ function CatalogCard({
             Coming soon
           </span>
         )}
+      </div>
+    </div>
+  );
+}
+
+function SuggestionCard({
+  suggestion,
+  busy,
+  onAdopt,
+  onDismiss,
+}: {
+  suggestion: SuggestedSkill;
+  busy: boolean;
+  onAdopt: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="flex flex-col rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+      <div className="flex items-start gap-2">
+        <Wand2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <div className="text-[14px] font-semibold text-ink">{suggestion.label}</div>
+            <span className="inline-flex items-center rounded-full border border-rule bg-white/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+              {skillSolutionLabel(suggestion.solution)}
+            </span>
+          </div>
+          <p className="mt-1 text-[12px] leading-relaxed text-ink-soft">
+            {suggestion.reason}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex items-center gap-2 pt-3 border-t border-amber-200">
+        <button
+          type="button"
+          onClick={onAdopt}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 rounded-full bg-emerald px-3 py-1.5 text-[12px] font-semibold text-paper shadow-sm transition hover:opacity-95 disabled:opacity-50"
+        >
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Plus className="h-3.5 w-3.5" />
+          )}
+          Add to my back office
+        </button>
+        <button
+          type="button"
+          onClick={onDismiss}
+          disabled={busy}
+          className="ml-auto inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium text-ink-faint transition hover:text-ink disabled:opacity-50"
+          title="Dismiss this suggestion"
+        >
+          <X className="h-3 w-3" />
+          Dismiss
+        </button>
       </div>
     </div>
   );

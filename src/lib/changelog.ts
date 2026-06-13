@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.20.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.20.0 &mdash; Skills now suggests itself: &ldquo;Suggested for you,&rdquo; mined from your own activity.</strong> The Skills page can now <em>notice</em> when a routine would help and offer it &mdash; the Ownership Flywheel's mining source. It reads signals you already generate (upcoming appointments with no reminder cadence set up; a waitlist building while rescue is off) and surfaces the matching Skill at the top of the page with the reason in plain language &mdash; <em>&ldquo;You have 12 upcoming appointments but no reminder cadence set up yet,&rdquo;</em> &mdash; one tap to add, or dismiss it and we won't bring it up again. <strong>Honest by construction</strong>: it only ever suggests a Skill that's actually live and that you haven't already added, and it only fires on a real gap &mdash; a fully-set-up spa (reminders on, rescue on) correctly sees <em>nothing</em>. Same earned-gate as the rest of Skills (nothing before your first verified win). <strong>New</strong>: <code>listSuggestedSkills</code> + <code>dismissSuggestion</code> in <code>skills.functions.ts</code> (read-only telemetry mirror of the recommendation engine; a dismissal is remembered as a dismissed <code>skill_proposals</code> row), &ldquo;Suggested for you&rdquo; section + <code>SuggestionCard</code> in <code>app.refill.skills.tsx</code>; <code>adoptSkill</code> now records the proposal <code>source</code> ('catalog' vs 'mined'). No migration. <em>Next</em>: concierge/custom authoring (source 3) and the autonomous tier.",
+    ],
+  },
+  {
     version: "v2.19.1",
     date: "June 2026",
     items: [
