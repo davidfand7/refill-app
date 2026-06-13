@@ -163,12 +163,25 @@ const PRODUCT_SYNONYMS: Record<string, string[]> = {
   skinvive: ["skinvive", "skin booster"],
 };
 
+/** Whole-word containment: does `needle` (one or more space-separated tokens)
+ *  appear as a complete token-run inside `haystack`? Both are already
+ *  normalized (lowercase, single-spaced), so padding each end with a space
+ *  turns a raw substring test into a word-boundary one. This is the confidence
+ *  gate for cross-sell — a substring-only hit is weak evidence and must NOT
+ *  badge: "Detox Treatment" no longer matches Botox's "tox treatment" synonym,
+ *  and "Eyelash Extensions" no longer matches Latisse's "lash". */
+function containsWords(haystack: string, needle: string): boolean {
+  if (!needle) return false;
+  return ` ${haystack} `.includes(` ${needle} `);
+}
+
 /** Does an offer's product match a (normalized) service/add-on name? Exported
  *  so the Promo Intelligence card matches services the SAME way the at-booking
- *  badge does (synonym-aware: a Juvéderm offer matches a "Filler" service). */
+ *  badge does (synonym-aware: a Juvéderm offer matches a "Filler" service).
+ *  Matches on whole words only, so a partial-keyword collision never badges. */
 export function productMatchesName(product: string, normName: string): boolean {
   const syns = PRODUCT_SYNONYMS[product] ?? [product];
-  return syns.some((s) => normName.includes(s));
+  return syns.some((s) => containsWords(normName, s));
 }
 
 // ─── Date parsing ("June 3", "May 5 - June 30", "Ongoing") ─────────────────

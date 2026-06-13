@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.15.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.15.0 &mdash; Cross-sell offers only badge a real match (the confidence gate, applied).</strong> The same &ldquo;don&rsquo;t guess&rdquo; discipline now behind reward attribution now guards the at-booking offer badge. Matching a manufacturer/spa offer to a service used a loose <em>substring</em> test, so a partial keyword buried inside an unrelated service name would wrongly badge it: a <strong>&ldquo;Detox Treatment&rdquo;</strong> picked up a <strong>Botox</strong> offer (because &ldquo;de<strong>tox treatment</strong>&rdquo; contains the &ldquo;tox treatment&rdquo; synonym), and <strong>&ldquo;Eyelash Extensions&rdquo;</strong> picked up a <strong>Latisse</strong> offer (because &ldquo;eye<strong>lash</strong> extensions&rdquo; contains &ldquo;lash&rdquo;). The matcher now requires a <strong>whole-word</strong> hit, so a weak partial match simply doesn&rsquo;t badge &mdash; the honest move, exactly like a low-confidence reward match is held rather than guessed. Every real match is unchanged (Dermal&nbsp;Filler &rarr; Juv&eacute;derm, Neurotoxin &rarr; Botox, Lash&nbsp;Lift &rarr; Latisse, &hellip;). Because this is the one canonical <code>productMatchesName</code>, the fix lands in all three places at once: the booking badge, the $5 cross-sell win path, and the Promo Intelligence &ldquo;Applies&nbsp;to&rdquo; card. <strong>Touched</strong>: <code>promo-calendar.ts</code> (<code>productMatchesName</code> now word-boundary).",
+    ],
+  },
+  {
     version: "v2.14.3",
     date: "June 2026",
     items: [
