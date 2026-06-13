@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.22.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.22.1 &mdash; Recall page now shows when the Weekly Digest is on.</strong> Small honesty touch: once you&rsquo;ve adopted the <strong>Weekly Recall Digest</strong> Skill, the Recall page shows a quiet line confirming it &mdash; <em>&ldquo;Weekly Recall Digest is on. Your first weekly heads-up emails you Monday,&rdquo;</em> or the date the last one went out. The routine&rsquo;s state is visible right where you act on it, so there&rsquo;s never a question of whether it&rsquo;s running. <strong>Touched</strong>: <code>refill-recall.functions.ts</code> (<code>computeRecallView</code> now returns <code>digestEnabled</code> + <code>digestLastSentAt</code>), <code>app.refill.recognition.recall.tsx</code> (the status line). No migration.",
+    ],
+  },
+  {
     version: "v2.22.0",
     date: "June 2026",
     items: [

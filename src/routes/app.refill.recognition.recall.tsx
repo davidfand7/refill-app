@@ -263,6 +263,19 @@ function RecallPage() {
               </p>
             </div>
 
+            {/* Weekly Recall Digest routine state (honest — reflects the Skill) */}
+            {view.digestEnabled && (
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-emerald/25 bg-emerald-soft/40 px-4 py-2 text-[12px] text-emerald-ink">
+                <CalendarClock className="h-3.5 w-3.5 shrink-0" />
+                <span className="font-semibold">Weekly Recall Digest is on.</span>
+                <span className="text-emerald-ink/80">
+                  {view.digestLastSentAt
+                    ? `Last heads-up emailed ${fmtDate(view.digestLastSentAt.slice(0, 10))}.`
+                    : "Your first weekly heads-up emails you Monday."}
+                </span>
+              </div>
+            )}
+
             {/* Trigger selector */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {groups.map((g) => (

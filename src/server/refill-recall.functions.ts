@@ -103,6 +103,29 @@ export type RecallView = {
   dollarsOnTable: number;
   /** …across this many distinct patients (all four triggers). */
   distinctPatients: number;
+  /** Whether the Weekly Recall Digest routine is on (Skill adopted/On). */
+  digestEnabled: boolean;
+  /** When the last weekly digest actually went out (null = none yet). */
+  digestLastSentAt: string | null;
+};
+
+// recall_digest_* columns aren't in the generated types yet — narrow loose read.
+type LooseDigestRead = {
+  from(t: string): {
+    select(c: string): {
+      eq(
+        c: string,
+        v: unknown,
+      ): {
+        maybeSingle(): Promise<{
+          data: {
+            recall_digest_enabled: boolean | null;
+            recall_digest_last_sent_at: string | null;
+          } | null;
+        }>;
+      };
+    };
+  };
 };
 
 const GROUP_LABELS: Record<RecallTrigger, string> = {
@@ -297,7 +320,22 @@ export async function computeRecallView(
       ),
     ).size;
 
-    return { groups, dollarsOnTable, distinctPatients };
+    // ── 4) Digest routine state (for the page's honest "digest is on" chip) ──
+    const { data: digestRow } = await (sb as unknown as LooseDigestRead)
+      .from("emma_noshow_policies")
+      .select("recall_digest_enabled, recall_digest_last_sent_at")
+      .eq("user_id", effectiveUserId)
+      .maybeSingle();
+    const digestEnabled = Boolean(digestRow?.recall_digest_enabled);
+    const digestLastSentAt = digestRow?.recall_digest_last_sent_at ?? null;
+
+    return {
+      groups,
+      dollarsOnTable,
+      distinctPatients,
+      digestEnabled,
+      digestLastSentAt,
+    };
 }
 
 export const listRecallTargets = createServerFn({ method: "POST" })
