@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.18.4",
+    date: "June 2026",
+    items: [
+      "<strong>v2.18.4 &mdash; Concierge onboarding is now a setting, not a separate track.</strong> When our team is white-glove onboarding a spa, the owner now sees an honest banner &mdash; &ldquo;Your SmartSpa team is setting this up with you&rdquo; &mdash; so they always know a person is co-driving. The point (per the trusted-onboarding strategy): concierge and self-serve ride the <em>exact same rails</em>. The flag forks no behavior &mdash; same gates, same code paths &mdash; it only adds transparency, which is the whole moat: the owner should always know who&rsquo;s driving, and can take the wheel any time. Admin flips <code>concierge_mode_enabled</code> per spa from <strong>/app/admin/agents</strong> (ON during onboarding, OFF once they self-drive). <strong>New</strong>: <code>concierge.functions.ts</code> (<code>getConciergeState</code>), <code>ConciergeBanner.tsx</code>, catalog entry in <code>feature-flag-catalog.ts</code>. <strong>Touched</strong>: <code>RefillShellChrome.tsx</code>. No migration (uses the existing feature_flags table).",
+    ],
+  },
+  {
     version: "v2.18.3",
     date: "June 2026",
     items: [

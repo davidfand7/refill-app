@@ -110,6 +110,16 @@ export const FLAG_CATALOG: FeatureFlagDefinition[] = [
       "Spa sees Plaid Mode (Pro) toggle on gated-platform cards + can opt in via consent gate.",
     offMeaning: "Plaid Mode hidden from this spa entirely.",
   },
+  {
+    key: "concierge_mode_enabled",
+    label: "Concierge onboarding (operator co-driving)",
+    description:
+      "When ON for a tenant, the spa sees an honest banner that their SmartSpa team is actively co-setting-up their account. Concierge is a SETTING, not a separate track (project_trusted_onboarding): the spa rides the exact same gates/rails as a self-serve spa — this flag only adds the transparency banner so the owner knows a human is driving alongside them. Default OFF — admin flips ON per spa while concierge-onboarding them, OFF once they're self-driving.",
+    defaultEnabled: false,
+    onMeaning:
+      "Spa sees the 'your SmartSpa team is setting this up with you' banner. Same rails as self-serve — no forked behavior.",
+    offMeaning: "No concierge banner; the spa is self-driving (still the same rails).",
+  },
 ];
 
 export function findFlagInCatalog(key: string): FeatureFlagDefinition | undefined {

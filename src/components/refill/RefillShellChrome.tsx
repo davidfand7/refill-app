@@ -18,6 +18,7 @@
 import { useLocation } from "@tanstack/react-router";
 import { Sparkles } from "lucide-react";
 
+import { ConciergeBanner } from "@/components/refill/ConciergeBanner";
 import { DemoBanner } from "@/components/DemoBanner";
 import { RefillNav, type RefillNavKey } from "@/components/refill/RefillNav";
 import { WishlistWidget } from "@/components/WishlistWidget";
@@ -95,6 +96,7 @@ export function RefillShellChrome({
   return (
     <div className="mx-auto max-w-6xl px-4 pt-4">
       <DemoBanner />
+      <ConciergeBanner />
       {viewAs === "admin" && (
         <div
           className="mb-3 rounded-lg border px-3 py-2 text-[12px] flex items-center gap-2"
