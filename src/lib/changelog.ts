@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.16.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.16.1 &mdash; Rescue gate, calibrated against real data: a flexible patient still gets the text.</strong> v2.16.0 held every fit with no explicit treatment match — but real waitlists mostly carry <em>no</em> per-patient treatment preference (a patient who just said &ldquo;text me about any opening&rdquo;). Holding those would have quietly switched rescue automation off. Corrected: a patient with no preference on a <strong>typed</strong> slot now <strong>auto-texts</strong> as before — they opted into any opening and we can honestly tell them what it&rsquo;s for. The gate now holds only the genuinely-blind case: an opening with <strong>no treatment set at all</strong>, where SmartSpa can&rsquo;t tell the patient what they&rsquo;d be coming in for. Narrow, honest, and it won&rsquo;t suppress legitimate sends. <strong>Touched</strong>: <code>emma-rescue.functions.ts</code> (tier split explicit/open/blind; hold only &ldquo;blind&rdquo;), <code>RescueReviewQueue.tsx</code> (copy matches the real reason). No migration.",
+    ],
+  },
+  {
     version: "v2.16.0",
     date: "June 2026",
     items: [

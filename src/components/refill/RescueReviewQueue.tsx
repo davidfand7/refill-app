@@ -90,9 +90,9 @@ export function RescueReviewQueue({
         </span>
       </div>
       <p className="mt-1.5 text-[12px] text-ink-soft">
-        These waitlist patients fit the opening, but not closely enough for SmartSpa
-        to text them on its own — so it held them for your eyes instead of auto-sending.
-        Send the ones that make sense, skip the rest.
+        These openings had no treatment set, so SmartSpa couldn&rsquo;t tell each patient
+        what they&rsquo;d be coming in for — it held them for your eyes instead of texting
+        blind. Send the ones that make sense, skip the rest.
       </p>
 
       <div className="mt-4 space-y-2.5">

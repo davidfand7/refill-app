@@ -135,12 +135,16 @@ type WaitlistRow = {
 };
 
 /** Confidence tier of a rescue fit — the gate signal for the autonomous send.
- *  "explicit" = the patient's own waitlist treatment matched the freed slot (a
- *  real signal → safe to auto-text). "open" = the patient was kept by a default
- *  (no waitlist preference, or the slot has no treatment set), so there's no
- *  positive treatment agreement → direct mode HOLDS it for a one-tap human OK
- *  rather than auto-texting blind. */
-export type RescueMatchTier = "explicit" | "open";
+ *  "explicit" = the patient's own waitlist treatment matched the freed slot.
+ *  "open" = the patient is on the waitlist with no preference (they opted into
+ *  "any opening") AND the slot has a treatment, so we can honestly name what
+ *  it's for. Both of those auto-text — they're consented and describable.
+ *  "blind" = the freed slot itself has NO treatment set, so SmartSpa can't even
+ *  tell the patient what they'd be coming in for → direct mode HOLDS it for a
+ *  one-tap human OK rather than texting blind. (Calibrated against real data:
+ *  most waitlists carry no per-patient treatment preference, so holding "open"
+ *  would have silently switched rescue automation off.) */
+export type RescueMatchTier = "explicit" | "open" | "blind";
 
 async function selectFitPatients(
   sb: SupabaseAdmin,
@@ -187,10 +191,14 @@ async function selectFitPatients(
   const tierByWaitlistId = new Map<string, RescueMatchTier>();
   const candidates: WaitlistRow[] = waitlist.filter((w) => {
     let tier: RescueMatchTier | null = null;
-    if (!w.treatment_types || w.treatment_types.length === 0) {
-      tier = "open"; // patient has no preference — kept, but no positive match
-    } else if (!trtLower) {
-      tier = "open"; // appointment has no treatment_type — can't confirm a fit
+    if (!trtLower) {
+      // The slot has no treatment set — we can't even name the opening, so
+      // every candidate here is "blind" and the gate holds them in direct mode.
+      tier = "blind";
+    } else if (!w.treatment_types || w.treatment_types.length === 0) {
+      // No per-patient preference, but the slot IS typed — they opted into any
+      // opening and we can tell them what it's for, so this auto-texts.
+      tier = "open";
     } else if (
       w.treatment_types.some(
         (t) => t.toLowerCase() === trtLower || trtLower.includes(t.toLowerCase()),
@@ -1012,16 +1020,16 @@ export async function dispatchRescueAttempt(args: {
   } else {
     // Direct mode — per-patient auto-send (production behavior when no proxy
     // fields are configured). This is the ONLY truly-autonomous outbound send,
-    // so the confidence gate lives here: a low-confidence ("open") fit — no
-    // positive treatment agreement between patient and slot — is HELD for the
-    // owner's one-tap OK instead of auto-texted. Explicit treatment matches
+    // so the confidence gate lives here: a "blind" fit — the freed slot has no
+    // treatment set, so we can't honestly tell the patient what they'd be
+    // claiming — is HELD for the owner's one-tap OK instead of auto-texted.
+    // Explicit matches and consented "open" fits (no preference + a typed slot)
     // send as before. Held offers don't count toward offersSent (no send
     // happened) and surface in the rescue-page review queue.
     for (const c of collected) {
-      if (c.matchTier === "open") {
-        const heldReason = apt.treatment_type
-          ? "On your waitlist with no treatment preference, so we held this for your OK before texting."
-          : "This opening has no treatment set, so we couldn't confirm the fit — your OK before we text.";
+      if (c.matchTier === "blind") {
+        const heldReason =
+          "This opening has no treatment set, so SmartSpa couldn't tell this patient what they'd be coming in for — your OK before we text.";
         try {
           // held_at / held_reason were added by the v2.16.0 migration; cast
           // narrowly since they're not in the generated types yet. Best-effort:
