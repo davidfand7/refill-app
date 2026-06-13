@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.16.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.16.0 &mdash; Rescue won&rsquo;t auto-text on a weak match — it holds it for your OK (the confidence gate, on the autonomous send).</strong> When a slot frees, Rescue in direct mode texts your waitlist on its own — the one truly hands-off message SmartSpa sends. Now that send is gated by confidence, the same way reward attribution is. A patient is only <strong>auto-texted</strong> when their own waitlist treatment genuinely matches the freed slot. A <strong>low-confidence</strong> fit — someone on the waitlist with <em>no</em> treatment preference, or an opening with no treatment set — is <strong>held</strong> instead of texted blind, and surfaces in a new <strong>&ldquo;a few rescue texts need your OK&rdquo;</strong> queue at the top of the Rescue page. One tap sends the exact text the auto-path would have; or skip it. Nothing is lost — a held offer is one tap from going out, never a silent drop and never an auto-blast to someone who didn&rsquo;t really fit. Held offers don&rsquo;t count as &ldquo;sent&rdquo; until you send them. <strong>Touched</strong>: <code>emma-rescue.functions.ts</code> (confidence tier on fit-patients + hold in direct dispatch + <code>listHeldRescueOffers</code>/<code>sendHeldRescueOffer</code>/<code>dismissHeldRescueOffer</code>), <code>RescueReviewQueue.tsx</code>, <code>recovery.rescue.tsx</code>, migration <code>emma_rescue_offers.held_at/held_reason</code>.",
+    ],
+  },
+  {
     version: "v2.15.0",
     date: "June 2026",
     items: [

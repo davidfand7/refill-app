@@ -134,6 +134,14 @@ type WaitlistRow = {
   treatment_types: string[];
 };
 
+/** Confidence tier of a rescue fit — the gate signal for the autonomous send.
+ *  "explicit" = the patient's own waitlist treatment matched the freed slot (a
+ *  real signal → safe to auto-text). "open" = the patient was kept by a default
+ *  (no waitlist preference, or the slot has no treatment set), so there's no
+ *  positive treatment agreement → direct mode HOLDS it for a one-tap human OK
+ *  rather than auto-texting blind. */
+export type RescueMatchTier = "explicit" | "open";
+
 async function selectFitPatients(
   sb: SupabaseAdmin,
   userId: string,
@@ -153,6 +161,7 @@ async function selectFitPatients(
     patientNodeId: string;
     phone: string;
     lifetimeSpend: number;
+    matchTier: RescueMatchTier;
   }>
 > {
   // Paginated: a capped read silently drops waitlist members past row 1,000,
@@ -169,14 +178,28 @@ async function selectFitPatients(
   );
   if (waitlist.length === 0) return [];
 
-  // Treatment filter at the waitlist row level.
+  // Treatment filter at the waitlist row level. Each kept candidate also gets
+  // a confidence tier: "explicit" when the patient's own waitlist treatment
+  // matches the freed slot, "open" when they're kept by a default (no
+  // preference, or the slot has no treatment) — the gate holds the "open" ones
+  // in direct mode (see dispatch step 6b).
   const trtLower = appointmentTreatment?.toLowerCase() ?? "";
+  const tierByWaitlistId = new Map<string, RescueMatchTier>();
   const candidates: WaitlistRow[] = waitlist.filter((w) => {
-    if (!w.treatment_types || w.treatment_types.length === 0) return true;
-    if (!trtLower) return true; // appointment has no treatment_type — open
-    return w.treatment_types.some((t) =>
-      t.toLowerCase() === trtLower || trtLower.includes(t.toLowerCase()),
-    );
+    let tier: RescueMatchTier | null = null;
+    if (!w.treatment_types || w.treatment_types.length === 0) {
+      tier = "open"; // patient has no preference — kept, but no positive match
+    } else if (!trtLower) {
+      tier = "open"; // appointment has no treatment_type — can't confirm a fit
+    } else if (
+      w.treatment_types.some(
+        (t) => t.toLowerCase() === trtLower || trtLower.includes(t.toLowerCase()),
+      )
+    ) {
+      tier = "explicit"; // the patient's own treatment matches the freed slot
+    }
+    if (tier) tierByWaitlistId.set(w.id, tier);
+    return tier !== null;
   });
   if (candidates.length === 0) return [];
 
@@ -225,6 +248,7 @@ async function selectFitPatients(
     patientNodeId: string;
     phone: string;
     lifetimeSpend: number;
+    matchTier: RescueMatchTier;
   }> = [];
   for (const c of candidates) {
     const p = patientById.get(c.patient_node_id);
@@ -238,6 +262,7 @@ async function selectFitPatients(
       patientNodeId: c.patient_node_id,
       phone: p.phone,
       lifetimeSpend: p.lifetimeSpend,
+      matchTier: tierByWaitlistId.get(c.id) ?? "open",
     });
   }
 
@@ -827,6 +852,7 @@ export async function dispatchRescueAttempt(args: {
     phone: string;
     lifetimeSpend: number;
     claimUrl: string;
+    matchTier: RescueMatchTier;
   };
   const collected: CollectedOffer[] = [];
   for (const fp of fitPatients) {
@@ -851,6 +877,7 @@ export async function dispatchRescueAttempt(args: {
       phone: fp.phone,
       lifetimeSpend: fp.lifetimeSpend,
       claimUrl: buildRescueClaimUrl(offer.token),
+      matchTier: fp.matchTier,
     });
   }
 
@@ -983,9 +1010,34 @@ export async function dispatchRescueAttempt(args: {
       offersSent = collected.length;
     }
   } else {
-    // Direct mode — existing per-patient send loop (production behavior
-    // when no proxy fields are configured).
+    // Direct mode — per-patient auto-send (production behavior when no proxy
+    // fields are configured). This is the ONLY truly-autonomous outbound send,
+    // so the confidence gate lives here: a low-confidence ("open") fit — no
+    // positive treatment agreement between patient and slot — is HELD for the
+    // owner's one-tap OK instead of auto-texted. Explicit treatment matches
+    // send as before. Held offers don't count toward offersSent (no send
+    // happened) and surface in the rescue-page review queue.
     for (const c of collected) {
+      if (c.matchTier === "open") {
+        const heldReason = apt.treatment_type
+          ? "On your waitlist with no treatment preference, so we held this for your OK before texting."
+          : "This opening has no treatment set, so we couldn't confirm the fit — your OK before we text.";
+        try {
+          // held_at / held_reason were added by the v2.16.0 migration; cast
+          // narrowly since they're not in the generated types yet. Best-effort:
+          // if the write fails we leave the offer unsent rather than blast it.
+          await (sb.from("emma_rescue_offers") as unknown as {
+            update(v: Record<string, unknown>): {
+              eq(c: string, v: string): Promise<{ error: unknown }>;
+            };
+          })
+            .update({ held_at: new Date().toISOString(), held_reason: heldReason })
+            .eq("id", c.offerId);
+        } catch (e) {
+          console.error("[rescue] hold-write failed:", e);
+        }
+        continue;
+      }
       const body = composeRescueSms({
         spaName,
         treatmentType: apt.treatment_type,
@@ -2404,6 +2456,226 @@ export const listRescueActivity = createServerFn({ method: "POST" })
           : null,
       };
     });
+  });
+
+// ─── Held-rescue review queue (the autonomous-send confidence gate) ────────
+//
+// Direct mode holds low-confidence ("open") fits instead of auto-texting them
+// (see dispatch step 6b). These three fns are the human side of that gate on
+// the rescue page: list the held offers, release one with a single tap (we
+// send the same SMS the auto-path would have), or dismiss it. Mirrors the
+// reward-attribution hold queue (reward-attribution-holds.functions.ts).
+
+/** held_at / held_reason live on emma_rescue_offers as of the v2.16.0 migration
+ *  but aren't in the generated types yet — a loose handle keeps these queries
+ *  readable without weakening the typed client everywhere else. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function looseOffers(sb: SupabaseAdmin): any {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (sb as unknown as { from(t: string): any }).from("emma_rescue_offers");
+}
+
+export type HeldRescueOffer = {
+  offerId: string;
+  patientName: string | null;
+  treatmentType: string | null;
+  scheduledAt: string;
+  heldReason: string | null;
+  heldAt: string;
+  lifetimeSpendUsd: number | null;
+};
+
+const heldListInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+});
+
+export const listHeldRescueOffers = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => heldListInput.parse(input))
+  .handler(async ({ data }): Promise<HeldRescueOffer[]> => {
+    const { resolveEffectiveUserId } = await import("@/server/auth-helpers");
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+
+    // Held = created but not auto-sent, and not yet acted on (no send, not
+    // declined/expired/claimed). The migration may not be live in every
+    // environment yet — degrade to an empty queue rather than break the page.
+    let rows: Array<{
+      id: string;
+      appointment_id: string;
+      patient_node_id: string;
+      held_at: string;
+      held_reason: string | null;
+    }> = [];
+    try {
+      const res = await looseOffers(sb)
+        .select("id, appointment_id, patient_node_id, held_at, held_reason")
+        .eq("user_id", effectiveUserId)
+        .not("held_at", "is", null)
+        .is("message_id", null)
+        .is("declined_at", null)
+        .is("expired_at", null)
+        .is("claimed_at", null)
+        .order("held_at", { ascending: false })
+        .limit(200);
+      if (res.error) return [];
+      rows = res.data ?? [];
+    } catch {
+      return [];
+    }
+    if (rows.length === 0) return [];
+
+    const aptIds = Array.from(new Set(rows.map((r) => r.appointment_id)));
+    const patientIds = Array.from(new Set(rows.map((r) => r.patient_node_id)));
+    const [{ data: appts }, { data: patients }] = await Promise.all([
+      sb
+        .from("emma_appointments")
+        .select("id, scheduled_at, treatment_type")
+        .in("id", aptIds),
+      sb.from("knowledge_nodes").select("id, title, attachments").in("id", patientIds),
+    ]);
+    const aptById = new Map((appts ?? []).map((a) => [a.id, a]));
+    const patientById = new Map(
+      (patients ?? []).map((p) => [p.id, p]),
+    );
+
+    return rows.map((r) => {
+      const apt = aptById.get(r.appointment_id);
+      const p = patientById.get(r.patient_node_id);
+      const spend = (p?.attachments as { lifetimeSpendUsd?: number } | null)?.lifetimeSpendUsd;
+      return {
+        offerId: r.id,
+        patientName: (p?.title as string | null) ?? null,
+        treatmentType: apt?.treatment_type ?? null,
+        scheduledAt: apt?.scheduled_at ?? "",
+        heldReason: r.held_reason,
+        heldAt: r.held_at,
+        lifetimeSpendUsd: spend == null ? null : Number(spend),
+      };
+    });
+  });
+
+const heldActInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  offerId: z.string().uuid(),
+});
+
+/** Release a held offer: send the same rescue SMS the auto-path would have. */
+export const sendHeldRescueOffer = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => heldActInput.parse(input))
+  .handler(async ({ data }): Promise<{ ok: boolean; sent: boolean }> => {
+    const { resolveEffectiveUserId } = await import("@/server/auth-helpers");
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+
+    const { data: offer } = await looseOffers(sb)
+      .select(
+        "id, token, appointment_id, patient_node_id, rescue_attempt_id, held_at, message_id",
+      )
+      .eq("id", data.offerId)
+      .eq("user_id", effectiveUserId)
+      .maybeSingle();
+    if (!offer) throw new Error("That rescue offer couldn't be found.");
+    if (offer.message_id) return { ok: true, sent: true }; // already sent — idempotent
+
+    const { data: apt } = await sb
+      .from("emma_appointments")
+      .select("scheduled_at, treatment_type, provider_name, status")
+      .eq("id", offer.appointment_id)
+      .maybeSingle();
+    if (!apt) throw new Error("The freed appointment couldn't be found.");
+    // Only send if the slot is still genuinely open.
+    if (apt.status !== "cancelled" && apt.status !== "no_show") {
+      throw new Error("That slot is no longer open — nothing to send.");
+    }
+    if (new Date(apt.scheduled_at).getTime() <= Date.now()) {
+      throw new Error("That opening is in the past — too late to text.");
+    }
+
+    // The patient's phone (offer row doesn't carry it).
+    const { data: patientNode } = await sb
+      .from("knowledge_nodes")
+      .select("attachments")
+      .eq("id", offer.patient_node_id)
+      .maybeSingle();
+    const phone = (patientNode?.attachments as { phone?: string } | null)?.phone ?? null;
+    if (!phone) throw new Error("That patient has no phone number on file.");
+
+    const spaName = await resolveSpaName(sb, effectiveUserId);
+    const ownerDisplayName = await resolveOwnerDisplayName(sb, effectiveUserId);
+    const fromNumber = await resolveSpaFromNumber(sb, effectiveUserId);
+    if (!fromNumber) {
+      throw new Error("Your spa has no SMS number set, so this can't be texted.");
+    }
+
+    const body = composeRescueSms({
+      spaName,
+      treatmentType: apt.treatment_type,
+      providerName: apt.provider_name,
+      ownerDisplayName,
+      scheduledAt: apt.scheduled_at,
+      claimUrl: buildRescueClaimUrl(offer.token),
+    });
+
+    try {
+      const resp = await sendSms({ from: fromNumber, to: phone, body });
+      await looseOffers(sb)
+        .update({ message_id: resp.messageId, held_at: null })
+        .eq("id", offer.id)
+        .eq("user_id", effectiveUserId);
+    } catch (e) {
+      // Keep it held (retryable) but record the error so it's not silent.
+      await looseOffers(sb)
+        .update({
+          send_error:
+            e instanceof Error ? `sms: ${e.message}` : "sms: unknown error",
+        })
+        .eq("id", offer.id)
+        .eq("user_id", effectiveUserId);
+      throw new Error("Couldn't send the text. It's still in your queue to retry.");
+    }
+
+    // Recompute outreach_count from actually-sent offers (exact, race-safe).
+    if (offer.rescue_attempt_id) {
+      const { count } = await sb
+        .from("emma_rescue_offers")
+        .select("id", { count: "exact", head: true })
+        .eq("rescue_attempt_id", offer.rescue_attempt_id)
+        .not("message_id", "is", null);
+      await sb
+        .from("emma_rescue_attempts")
+        .update({ outreach_count: count ?? 0 })
+        .eq("id", offer.rescue_attempt_id);
+    }
+    // Outbound heartbeat so the delivery-health card sees this manual send.
+    await recordMessagingActivity(sb, effectiveUserId, "sms", "rescue", 1);
+
+    return { ok: true, sent: true };
+  });
+
+/** Dismiss a held offer: the owner chose not to text this patient. */
+export const dismissHeldRescueOffer = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => heldActInput.parse(input))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { resolveEffectiveUserId } = await import("@/server/auth-helpers");
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    await looseOffers(sb)
+      .update({ declined_at: new Date().toISOString(), held_at: null })
+      .eq("id", data.offerId)
+      .eq("user_id", effectiveUserId)
+      .not("held_at", "is", null);
+    return { ok: true };
   });
 
 // ─── extractFirstName helper ──────────────────────────────────────────────

@@ -35,6 +35,7 @@ import {
 
 import { PageHeader } from "@/components/PageHeader";
 import { RefillSolutionTabs } from "@/components/refill/RefillSolutionTabs";
+import { RescueReviewQueue } from "@/components/refill/RescueReviewQueue";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -264,6 +265,14 @@ function RescueAgentPage() {
                 <div className="w-11 h-6 bg-rule rounded-full peer peer-checked:bg-emerald transition relative after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition peer-checked:after:translate-x-5" />
               </label>
             </section>
+
+            {/* Confidence gate: low-confidence direct-mode fits held for the
+                owner's one-tap OK (self-hides when the queue is empty). */}
+            <RescueReviewQueue
+              accessToken={accessToken}
+              viewAsUserId={viewAsUserId}
+              onChanged={() => void load()}
+            />
 
             {/* Performance card */}
             <section className="rounded-2xl border border-rule bg-white">
