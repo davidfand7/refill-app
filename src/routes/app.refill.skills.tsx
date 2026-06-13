@@ -41,6 +41,7 @@ import {
 import { hasReachedValueMoment } from "@/server/wishlist.functions";
 import {
   adoptSkill,
+  createConciergeProposal,
   dismissSuggestion,
   listMySkills,
   listSuggestedSkills,
@@ -108,7 +109,7 @@ function SkillsPage() {
 
   const adopt = async (
     tpl: { key: string; label: string },
-    source: "catalog" | "mined" = "catalog",
+    source: "catalog" | "mined" | "concierge" = "catalog",
   ) => {
     setBusyKey(tpl.key);
     try {
@@ -200,7 +201,12 @@ function SkillsPage() {
         <LockedState />
       ) : (
         <div className="space-y-8 pb-16">
-          {/* ── Suggested for you (mined from your activity) ──────────── */}
+          {/* ── Operator: author a suggestion for this spa (concierge) ── */}
+          {adminViewing && (
+            <OperatorAuthorPanel viewAsUserId={viewAsUserId} onCreated={load} />
+          )}
+
+          {/* ── Suggested for you (mined or operator-authored) ────────── */}
           {suggestions.length > 0 && (
             <section>
               <SectionLabel>Suggested for you</SectionLabel>
@@ -211,7 +217,7 @@ function SkillsPage() {
                     suggestion={s}
                     busy={busyKey === s.templateKey}
                     onAdopt={() =>
-                      adopt({ key: s.templateKey, label: s.label }, "mined")
+                      adopt({ key: s.templateKey, label: s.label }, s.source)
                     }
                     onDismiss={() => dismiss(s)}
                   />
@@ -444,6 +450,11 @@ function SuggestionCard({
           <p className="mt-1 text-[12px] leading-relaxed text-ink-soft">
             {suggestion.reason}
           </p>
+          <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-ink-faint">
+            {suggestion.source === "concierge"
+              ? "From your SmartSpa team"
+              : "Noticed from your activity"}
+          </div>
         </div>
       </div>
 
@@ -473,6 +484,138 @@ function SuggestionCard({
         </button>
       </div>
     </div>
+  );
+}
+
+function OperatorAuthorPanel({
+  viewAsUserId,
+  onCreated,
+}: {
+  viewAsUserId: string | undefined;
+  onCreated: () => void | Promise<void>;
+}) {
+  const liveTemplates = SKILL_CATALOG.filter((t) => t.status === "live");
+  const [open, setOpen] = useState(false);
+  const [templateKey, setTemplateKey] = useState(liveTemplates[0]?.key ?? "");
+  const [headline, setHeadline] = useState("");
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const send = async () => {
+    if (!templateKey || !body.trim()) {
+      toast.error("Pick a Skill and write a short note.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const t = await token();
+      await createConciergeProposal({
+        data: {
+          accessToken: t,
+          viewAsUserId,
+          templateKey,
+          headline: headline.trim() || null,
+          body: body.trim(),
+        },
+      });
+      toast.success("Suggestion sent — it's now in this spa's queue.");
+      setHeadline("");
+      setBody("");
+      setOpen(false);
+      await onCreated();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't send the suggestion.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const inputCls =
+    "w-full rounded-md border border-rule bg-white px-3 py-1.5 text-[13px] text-ink placeholder:text-ink-faint focus:border-emerald focus:outline-none disabled:opacity-50";
+
+  return (
+    <section className="rounded-xl border border-dashed border-emerald/40 bg-emerald-soft/10 p-4">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-2 text-left"
+      >
+        <Wand2 className="h-4 w-4 text-emerald-ink" />
+        <div className="text-[13px] font-semibold text-emerald-ink">
+          Operator · suggest a Skill for this spa
+        </div>
+        <span className="ml-auto text-[11px] text-ink-faint">
+          {open ? "Hide" : "Author"}
+        </span>
+      </button>
+      {open && (
+        <div className="mt-3 space-y-3">
+          <div className="text-[11px] leading-relaxed text-ink-soft">
+            Drops a tailored suggestion into this spa's "Suggested for you" on the
+            same rails she'd see a mined one — she still adopts or dismisses it
+            herself. Live Skills only.
+          </div>
+          <div>
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-soft">
+              Skill
+            </div>
+            <select
+              value={templateKey}
+              onChange={(e) => setTemplateKey(e.target.value)}
+              disabled={busy}
+              className={inputCls}
+            >
+              {liveTemplates.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-soft">
+              Headline (optional)
+            </div>
+            <input
+              type="text"
+              value={headline}
+              onChange={(e) => setHeadline(e.target.value)}
+              maxLength={140}
+              disabled={busy}
+              placeholder="Short title…"
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-soft">
+              Why it fits this spa
+            </div>
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              maxLength={2000}
+              rows={3}
+              disabled={busy}
+              placeholder="From your onboarding chat — e.g. they mentioned lots of last-minute cancellations and no reminders set up yet."
+              className={inputCls}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={send}
+            disabled={busy || !body.trim()}
+            className="inline-flex items-center gap-1.5 rounded-full bg-emerald px-4 py-2 text-[13px] font-semibold text-paper shadow-sm transition hover:opacity-95 disabled:opacity-50"
+          >
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Plus className="h-3.5 w-3.5" />
+            )}
+            Send suggestion to this spa
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 

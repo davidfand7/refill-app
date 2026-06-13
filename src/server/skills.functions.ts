@@ -60,13 +60,16 @@ export type AdoptedSkill = {
   updatedAt: string;
 };
 
-/** A mined suggestion: a live, unadopted template whose signal fires for this spa. */
+/** A suggestion: a live, unadopted template surfaced to this spa — either mined
+ * from telemetry or hand-authored by an operator (concierge). */
 export type SuggestedSkill = {
   templateKey: string;
   label: string;
   solution: SkillSolution;
-  /** The observed signal, in the owner's words — why we're suggesting it. */
+  /** The reason — the mined signal, or the operator's tailored note. */
   reason: string;
+  /** Where it came from (drives the adopt attribution + a small UI marker). */
+  source: "mined" | "concierge";
 };
 
 // ─── Admin client ─────────────────────────────────────────────────────────
@@ -269,6 +272,12 @@ const templateKeyInput = accessInput.extend({
   templateKey: z.string().min(1).max(80),
 });
 
+const conciergeInput = accessInput.extend({
+  templateKey: z.string().min(1).max(80),
+  headline: z.string().max(140).nullable().optional(),
+  body: z.string().min(1).max(2000),
+});
+
 const skillIdInput = accessInput.extend({
   skillId: z.string().uuid(),
 });
@@ -387,6 +396,16 @@ export const adoptSkill = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(`Couldn't add the Skill: ${error.message}`);
     if (!skillRow) throw new Error("Skill adopt returned no row.");
+
+    // Any prior PENDING proposal for this template (e.g. an operator's concierge
+    // suggestion) is now satisfied — mark it accepted so it leaves the queue.
+    await loose(sb)
+      .from("skill_proposals")
+      .update({ status: "accepted", accepted_at: nowIso, updated_at: nowIso })
+      .eq("user_id", effectiveUserId)
+      .eq("template_key", tpl.key)
+      .eq("status", "pending");
+
     return hydrate(skillRow as SkillRow);
   });
 
@@ -506,6 +525,7 @@ function evaluateMiningRules(sig: MiningSignals): SuggestedSkill[] {
         label: t.label,
         solution: t.solution,
         reason: `You have ${n} upcoming appointment${n === 1 ? "" : "s"} but no reminder cadence set up yet — Pre-Visit Reminders would cut the no-shows.`,
+        source: "mined",
       });
     }
   }
@@ -520,6 +540,7 @@ function evaluateMiningRules(sig: MiningSignals): SuggestedSkill[] {
         label: t.label,
         solution: t.solution,
         reason: `${n} patient${n === 1 ? " is" : "s are"} on your waitlist and Waitlist Auto-Fill isn't on yet — a cancellation could become a kept slot.`,
+        source: "mined",
       });
     }
   }
@@ -544,14 +565,22 @@ export const listSuggestedSkills = createServerFn({ method: "POST" })
       if (!reached) return [];
     }
 
-    // Exclude what she's already adopted or has dismissed.
-    const [adoptedRes, dismissedRes] = await Promise.all([
+    // Exclude what she's already adopted or has dismissed; gather PENDING
+    // proposals (operator-authored concierge suggestions live here).
+    const [adoptedRes, dismissedRes, pendingRes, signals] = await Promise.all([
       loose(sb).from("skills").select("template_key").eq("user_id", effectiveUserId),
       loose(sb)
         .from("skill_proposals")
         .select("template_key")
         .eq("user_id", effectiveUserId)
         .eq("status", "dismissed"),
+      loose(sb)
+        .from("skill_proposals")
+        .select("template_key, headline, body, source")
+        .eq("user_id", effectiveUserId)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false }),
+      loadMiningSignals(sb, effectiveUserId),
     ]);
     const excluded = new Set<string>();
     for (const r of (adoptedRes.data as { template_key: string }[] | null) ?? [])
@@ -559,8 +588,32 @@ export const listSuggestedSkills = createServerFn({ method: "POST" })
     for (const r of (dismissedRes.data as { template_key: string }[] | null) ?? [])
       excluded.add(r.template_key);
 
-    const signals = await loadMiningSignals(sb, effectiveUserId);
-    return evaluateMiningRules(signals).filter((s) => !excluded.has(s.templateKey));
+    // Merge keyed by template — a tailored persisted proposal (concierge) wins
+    // over a generic mined rule for the same template.
+    const byKey = new Map<string, SuggestedSkill>();
+    type PendingRow = {
+      template_key: string;
+      headline: string | null;
+      body: string | null;
+      source: string | null;
+    };
+    for (const r of (pendingRes.data as PendingRow[] | null) ?? []) {
+      const t = findSkillInCatalog(r.template_key);
+      if (!t || t.status !== "live") continue; // never surface a non-live template
+      if (excluded.has(r.template_key) || byKey.has(r.template_key)) continue;
+      byKey.set(r.template_key, {
+        templateKey: t.key,
+        label: t.label,
+        solution: t.solution,
+        reason: r.body || r.headline || t.adoptCopy,
+        source: r.source === "concierge" ? "concierge" : "mined",
+      });
+    }
+    for (const s of evaluateMiningRules(signals)) {
+      if (excluded.has(s.templateKey) || byKey.has(s.templateKey)) continue;
+      byKey.set(s.templateKey, s);
+    }
+    return Array.from(byKey.values());
   });
 
 // ─── dismissSuggestion (remembered so we don't nag) ───────────────────────────
@@ -605,6 +658,90 @@ export const dismissSuggestion = createServerFn({ method: "POST" })
           created_by: callerUserId,
         });
       if (error) throw new Error(`Couldn't dismiss: ${error.message}`);
+    }
+    return { ok: true };
+  });
+
+// ─── createConciergeProposal (operator-authored, source='concierge') ──────────
+//
+// Concierge = a setting, not a separate track (project_trusted_onboarding). An
+// operator viewing a spa as operator (persona switcher → viewAsUserId) can
+// hand-author a tailored suggestion that lands in THAT spa's "Suggested for you"
+// queue on the exact same rails she'd see a mined one. Only LIVE templates are
+// suggestable (honesty), and only when genuinely operating-as a tenant — a
+// non-admin can't reach this (resolveEffectiveUserId enforces admin for viewAs).
+
+export const createConciergeProposal = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => conciergeInput.parse(raw))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { effectiveUserId, callerUserId, isViewingAs } =
+      await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
+    if (!isViewingAs) {
+      throw new Error(
+        "Concierge authoring is operator-only — open the spa via the persona switcher first.",
+      );
+    }
+    const tpl = findSkillInCatalog(data.templateKey);
+    if (!tpl) throw new Error("That Skill isn't in the catalog.");
+    if (tpl.status !== "live") {
+      throw new Error(`"${tpl.label}" isn't live yet, so it can't be suggested.`);
+    }
+
+    const sb = admin();
+    // Don't suggest something the spa already owns.
+    const { data: existingSkill } = await loose(sb)
+      .from("skills")
+      .select("id")
+      .eq("user_id", effectiveUserId)
+      .eq("template_key", tpl.key)
+      .maybeSingle();
+    if ((existingSkill as { id: string } | null)?.id) {
+      throw new Error("This spa already has that Skill active.");
+    }
+
+    const nowIso = new Date().toISOString();
+    const headline = data.headline?.trim() || null;
+    const body = data.body.trim();
+
+    // Refresh an existing pending proposal for this template, else insert one.
+    const { data: existingPending } = await loose(sb)
+      .from("skill_proposals")
+      .select("id")
+      .eq("user_id", effectiveUserId)
+      .eq("template_key", tpl.key)
+      .eq("status", "pending")
+      .maybeSingle();
+    const pendingId = (existingPending as { id: string } | null)?.id ?? null;
+
+    if (pendingId) {
+      const { error } = await loose(sb)
+        .from("skill_proposals")
+        .update({
+          source: "concierge",
+          headline,
+          body,
+          created_by: callerUserId,
+          updated_at: nowIso,
+        })
+        .eq("id", pendingId);
+      if (error) throw new Error(`Couldn't author suggestion: ${error.message}`);
+    } else {
+      const { error } = await loose(sb)
+        .from("skill_proposals")
+        .insert({
+          user_id: effectiveUserId,
+          tenant_id: null,
+          template_key: tpl.key,
+          source: "concierge",
+          headline,
+          body,
+          status: "pending",
+          created_by: callerUserId,
+        });
+      if (error) throw new Error(`Couldn't author suggestion: ${error.message}`);
     }
     return { ok: true };
   });

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.21.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.21.0 &mdash; Skills: concierge can hand-author a suggestion (the third source).</strong> When our team is co-driving a spa's onboarding, we can now turn what we heard in the conversation straight into product. Viewing a spa as operator (persona switcher), the Skills page shows an <strong>&ldquo;Operator · suggest a Skill for this spa&rdquo;</strong> panel: pick a live Skill, add a short tailored note (&ldquo;You mentioned a lot of last-minute cancellations&hellip;&rdquo;), and send &mdash; it lands in <em>that</em> spa's &ldquo;Suggested for you&rdquo; queue on the <em>exact same rails</em> she'd see a mined suggestion, marked &ldquo;From your SmartSpa team.&rdquo; She still adopts or dismisses it herself &mdash; concierge is a setting, never a separate track. That completes the funnel's <strong>source axis: catalog &rarr; mined &rarr; concierge</strong>. Honest by construction: only <em>live</em> Skills are suggestable, never one the spa already has, and only a real operator (admin viewing-as) can author. <strong>New</strong>: <code>createConciergeProposal</code> in <code>skills.functions.ts</code> (+ <code>listSuggestedSkills</code> now merges persisted pending proposals with mined ones; adopting clears any pending proposal), <code>OperatorAuthorPanel</code> + source marker in <code>app.refill.skills.tsx</code>. No migration. <em>Next</em>: net-new custom templates + the autonomous tier both need an engine behind them (Tier-2, gated on the agent-bundle sign/notarize + MFA track).",
+    ],
+  },
+  {
     version: "v2.20.0",
     date: "June 2026",
     items: [
