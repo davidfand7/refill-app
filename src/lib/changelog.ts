@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.19.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.19.1 &mdash; Skills: Waitlist Auto-Fill goes live, and On/Pause now really starts &amp; stops the routine.</strong> A second Skill is now adoptable for real: <strong>Waitlist Auto-Fill</strong> &mdash; adopting it turns on your Rescue routine (fill a canceled slot from the best-fit waitlist patient; low-confidence fits held for your one-tap OK) and deep-links you into Rescue to set the eligible treatments + limits. And the <strong>On / Pause toggle on a wired Skill is now genuinely wired to the engine</strong>: pausing Pre-Visit Reminders or Waitlist Auto-Fill actually stops that agent from dispatching (it flips <code>preshow_enabled</code> / <code>rescue_enabled</code> on your no-show policy &mdash; the same switch the Reminders/Rescue pages use), not just a cosmetic record flag. <strong>Honesty note</strong>: Auto-Verify Recoveries stays <em>Coming soon</em> on purpose &mdash; the reconciliation already runs against whatever transactions flow in, so there's no real on/off for you to &ldquo;turn on,&rdquo; and we won't ship a toggle that does nothing. <strong>Touched</strong>: <code>skill-catalog.ts</code> (Waitlist Auto-Fill &rarr; live), <code>skills.functions.ts</code> (engine-gate wiring on adopt + toggle). No migration.",
+    ],
+  },
+  {
     version: "v2.19.0",
     date: "June 2026",
     items: [

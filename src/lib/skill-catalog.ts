@@ -90,12 +90,14 @@ export const SKILL_CATALOG: SkillTemplate[] = [
     key: "waitlist_auto_fill",
     label: "Waitlist Auto-Fill",
     description:
-      "When an appointment cancels, offer the freed slot to the best-fit waitlist patient — low-confidence fits are held for your one-tap OK.",
+      "When an appointment cancels, offer the freed slot to the best-fit waitlist patient — low-confidence fits are held for your one-tap OK. Adopting this turns on your Rescue routine; fine-tune the eligible treatments and limits in Rescue.",
     solution: "refill",
     materializer: "routine",
-    status: "preview",
-    adoptCopy: "Will fill canceled slots from your waitlist, holding the unsure ones for you.",
+    status: "live",
+    adoptCopy:
+      "Turns on rescue so canceled slots get filled from your waitlist — then opens Rescue so you can set the rules.",
     liftHint: "Turns a cancellation into a kept slot.",
+    manageTo: "/app/refill/recovery/rescue",
   },
   {
     key: "weekly_offer",

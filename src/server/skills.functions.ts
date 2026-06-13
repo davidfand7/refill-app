@@ -196,6 +196,51 @@ async function ensureDefaultPreshowProfile(
   return created.id;
 }
 
+// ─── The real engine gate for the wired routines ─────────────────────────────
+//
+// Both the preshow (Reminders) and rescue (Waitlist Auto-Fill) agents dispatch
+// off a boolean on the spa's emma_noshow_policies row (preshow_enabled /
+// rescue_enabled — see emma-preshow.functions.ts:321 and emma-rescue.functions.ts:666).
+// Mapping a wired Skill's On/Pause to that boolean makes the toggle GENUINELY
+// gate the engine, not just flip a cosmetic record flag.
+type PolicyGateField = "preshow_enabled" | "rescue_enabled";
+const POLICY_GATE: Record<string, PolicyGateField> = {
+  pre_visit_reminder: "preshow_enabled",
+  waitlist_auto_fill: "rescue_enabled",
+};
+
+async function setNoshowPolicyGate(
+  sb: SupabaseAdmin,
+  userId: string,
+  field: PolicyGateField,
+  value: boolean,
+): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const { data: existing } = await sb
+    .from("emma_noshow_policies")
+    .select("id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existing) {
+    const patch: Database["public"]["Tables"]["emma_noshow_policies"]["Update"] = {
+      updated_at: nowIso,
+    };
+    patch[field] = value;
+    const { error } = await sb
+      .from("emma_noshow_policies")
+      .update(patch)
+      .eq("user_id", userId);
+    if (error) throw new Error(`Couldn't update routine state: ${error.message}`);
+  } else {
+    const row: Database["public"]["Tables"]["emma_noshow_policies"]["Insert"] = {
+      user_id: userId,
+    };
+    row[field] = value;
+    const { error } = await sb.from("emma_noshow_policies").insert(row);
+    if (error) throw new Error(`Couldn't set up routine state: ${error.message}`);
+  }
+}
+
 // ─── Zod validators ───────────────────────────────────────────────────────
 
 const accessInput = z.object({
@@ -265,7 +310,9 @@ export const adoptSkill = createServerFn({ method: "POST" })
       }
     }
 
-    // Materialize the engine artifact (Phase 1: only pre_visit_reminder is wired).
+    // Materialize the engine artifact + flip the real engine ON.
+    //   pre_visit_reminder → ensure a default reminder profile + preshow_enabled
+    //   waitlist_auto_fill  → rescue_enabled on the no-show policy
     const materializedRef: Record<string, string> = {};
     if (tpl.key === "pre_visit_reminder") {
       const profileId = await ensureDefaultPreshowProfile(
@@ -274,8 +321,12 @@ export const adoptSkill = createServerFn({ method: "POST" })
         tpl.label,
       );
       materializedRef.preshowProfileId = profileId;
-      if (tpl.manageTo) materializedRef.manageTo = tpl.manageTo;
     }
+    const gateField = POLICY_GATE[tpl.key];
+    if (gateField) {
+      await setNoshowPolicyGate(sb, effectiveUserId, gateField, true);
+    }
+    if (tpl.manageTo) materializedRef.manageTo = tpl.manageTo;
 
     const nowIso = new Date().toISOString();
 
@@ -341,7 +392,13 @@ export const setSkillEnabled = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(`Couldn't update the Skill: ${error.message}`);
     if (!row) throw new Error("Skill not found.");
-    return hydrate(row as SkillRow);
+    const skill = row as SkillRow;
+    // Flip the REAL engine gate so On/Pause genuinely starts/stops dispatch.
+    const gateField = POLICY_GATE[skill.template_key];
+    if (gateField) {
+      await setNoshowPolicyGate(sb, effectiveUserId, gateField, data.enabled);
+    }
+    return hydrate(skill);
   });
 
 // ─── removeSkill (honest exit — never touches engine artifacts) ───────────────
