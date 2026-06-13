@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.18.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.18.1 &mdash; Export now reads the spa you&rsquo;re viewing (fixes &ldquo;exported 0&rdquo;).</strong> The one-click data export was resolving to the signed-in operator&rsquo;s own account instead of the spa being viewed, so an admin/owner viewing a tenant exported an empty book (header row, zero patients). The patient book, appointments, and waitlist export now forward the same <code>viewAsUserId</code> every other spa-owner data fetcher uses, so the download contains the full roster of the spa on screen. Client-only fix on <code>app.refill.settings.account.tsx</code>; the server fn already verified the viewer&rsquo;s admin role before honoring it (security boundary unchanged). No migration.",
+    ],
+  },
+  {
     version: "v2.18.0",
     date: "June 2026",
     items: [

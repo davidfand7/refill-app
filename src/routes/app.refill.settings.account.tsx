@@ -41,6 +41,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
+import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { cn } from "@/lib/utils";
 import { exportSpaData, type SpaDataExport } from "@/server/data-export.functions";
 
@@ -416,6 +417,13 @@ function patientsToCsv(patients: SpaDataExport["patients"]): string {
 
 function YourDataSection() {
   const [busy, setBusy] = useState<"csv" | "json" | null>(null);
+  // Forward the admin/tenant "view-as" user so the export reads the spa being
+  // viewed, not the operator's own (empty) book — same plumbing every other
+  // spa-owner data fetcher uses. Without it, viewing Rejuv as a tenant exported
+  // 0 patients (resolveEffectiveUserId fell back to the signed-in operator).
+  const membership = useTenantMembership();
+  const viewAsUserId =
+    membership.status === "tenant" ? membership.viewAsUserId : undefined;
 
   async function fetchExport(): Promise<SpaDataExport | null> {
     const { data: sess } = await supabase.auth.getSession();
@@ -424,7 +432,7 @@ function YourDataSection() {
       toast.error("Please sign in again.");
       return null;
     }
-    return exportSpaData({ data: { accessToken: token } });
+    return exportSpaData({ data: { accessToken: token, viewAsUserId } });
   }
 
   async function downloadPatientCsv() {
