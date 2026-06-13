@@ -27,6 +27,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   CheckCircle2,
+  Download,
   Eye,
   EyeOff,
   Loader2,
@@ -34,12 +35,14 @@ import {
   Mail,
   X,
 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 
 import { PageHeader } from "@/components/PageHeader";
 import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { exportSpaData, type SpaDataExport } from "@/server/data-export.functions";
 
 export const Route = createFileRoute("/app/refill/settings/account")({
   component: AccountSettingsPage,
@@ -381,8 +384,134 @@ function AccountSettingsPage() {
             </div>
           </form>
         </section>
+
+        {/* Your data & leaving — the honest-exit rung. */}
+        <YourDataSection />
       </div>
     </div>
+  );
+}
+
+// ─── Your data & leaving (honest exit) ──────────────────────────────────────
+
+function triggerDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function patientsToCsv(patients: SpaDataExport["patients"]): string {
+  const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+  const header = ["Name", "Email", "Phone", "Lifetime spend (USD)"];
+  const lines = patients.map((p) =>
+    [p.name ?? "", p.email ?? "", p.phone ?? "", p.lifetimeSpendUsd != null ? p.lifetimeSpendUsd.toFixed(2) : ""]
+      .map((c) => esc(String(c)))
+      .join(","),
+  );
+  return [header.map(esc).join(","), ...lines].join("\r\n");
+}
+
+function YourDataSection() {
+  const [busy, setBusy] = useState<"csv" | "json" | null>(null);
+
+  async function fetchExport(): Promise<SpaDataExport | null> {
+    const { data: sess } = await supabase.auth.getSession();
+    const token = sess.session?.access_token;
+    if (!token) {
+      toast.error("Please sign in again.");
+      return null;
+    }
+    return exportSpaData({ data: { accessToken: token } });
+  }
+
+  async function downloadPatientCsv() {
+    if (busy) return;
+    setBusy("csv");
+    try {
+      const data = await fetchExport();
+      if (!data) return;
+      const blob = new Blob([patientsToCsv(data.patients)], { type: "text/csv;charset=utf-8;" });
+      triggerDownload(blob, `smartspa-patient-book-${data.exportedAt.slice(0, 10)}.csv`);
+      toast.success(`Exported ${data.counts.patients} patients.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't export your data.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function downloadFullJson() {
+    if (busy) return;
+    setBusy("json");
+    try {
+      const data = await fetchExport();
+      if (!data) return;
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      triggerDownload(blob, `smartspa-export-${data.exportedAt.slice(0, 10)}.json`);
+      toast.success(
+        `Exported ${data.counts.patients} patients · ${data.counts.appointments} appointments · ${data.counts.waitlist} waitlist.`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't export your data.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-rule bg-white px-5 py-5">
+      <h2 className="text-base font-semibold text-ink">Your data &amp; leaving</h2>
+      <p className="mt-1 text-[13px] text-ink-soft">
+        Your data is yours. Take your full patient book, appointments, and waitlist with
+        you anytime — one click, no questions asked. SmartSpa earns its keep by being
+        useful, not by holding your data hostage.
+      </p>
+
+      <div className="mt-4 flex flex-wrap gap-2.5">
+        <button
+          type="button"
+          onClick={() => void downloadPatientCsv()}
+          disabled={busy !== null}
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald text-paper px-3.5 py-2 text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
+        >
+          {busy === "csv" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          Download patient book (CSV)
+        </button>
+        <button
+          type="button"
+          onClick={() => void downloadFullJson()}
+          disabled={busy !== null}
+          className="inline-flex items-center gap-2 rounded-lg border border-rule bg-white px-3.5 py-2 text-sm font-medium text-ink hover:bg-rule-soft/50 transition disabled:opacity-50"
+        >
+          {busy === "json" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          Download everything (JSON)
+        </button>
+      </div>
+
+      <div className="mt-5 rounded-lg bg-rule-soft/40 border border-rule p-4">
+        <div className="text-[12px] font-semibold uppercase tracking-wider text-ink-soft">
+          If you ever want to leave
+        </div>
+        <ol className="mt-2 space-y-1.5 text-[13px] text-ink-soft list-decimal list-inside">
+          <li>Export your data above — it&rsquo;s a complete copy you keep.</li>
+          <li>
+            Remove your card on the{" "}
+            <Link to="/app/billing" className="text-emerald font-medium hover:underline">
+              Billing page
+            </Link>{" "}
+            and billing stops. We never charge after that.
+          </li>
+          <li>That&rsquo;s it. No phone call, no &ldquo;are you sure,&rdquo; no retention maze.</li>
+        </ol>
+        <p className="mt-2.5 text-[11.5px] text-ink-faint">
+          Your billing ledger has its own CSV export on the Billing page. Easy to leave is
+          how we prove SmartSpa is worth staying for.
+        </p>
+      </div>
+    </section>
   );
 }
 

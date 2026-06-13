@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.18.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.18.0 &mdash; Your data is yours: one-click export + an honest way out (the leaveable rung).</strong> On <strong>Settings &rarr; Login</strong> there&rsquo;s now a <strong>&ldquo;Your data &amp; leaving&rdquo;</strong> section: download your full <strong>patient book as a CSV</strong> (names, contact, lifetime value &mdash; Excel-ready) or <strong>everything as a JSON archive</strong> (patients + appointments + waitlist, the complete operational record, paged so nothing is silently truncated). Beside it, a plain three-step path out: export your data, remove your card on Billing (and billing stops &mdash; we never charge after that), done. No phone call, no &ldquo;are you sure,&rdquo; no retention maze. Easy-to-leave de-risks the decision to start <em>and</em> is the best reason to stay &mdash; it proves SmartSpa earns its keep by being useful, not by holding your data hostage. (The billing ledger keeps its own CSV on the Billing page.) <strong>New</strong>: <code>data-export.functions.ts</code> (<code>exportSpaData</code>), &ldquo;Your data &amp; leaving&rdquo; section on <code>app.refill.settings.account.tsx</code>. Read-only; no migration.",
+    ],
+  },
+  {
     version: "v2.17.0",
     date: "June 2026",
     items: [
