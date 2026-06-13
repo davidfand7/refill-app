@@ -36,6 +36,7 @@ import {
   aiDraftWishlistDescription,
   aiEstimateWishlistBuild,
   aiPolishWishlistDescription,
+  hasReachedValueMoment,
   listMyWishlistRequests,
   submitWishlistRequest,
   type PolishedSpec,
@@ -73,10 +74,44 @@ export function WishlistWidget() {
   // spa-owner on an authenticated app page). Admin-only routes hide it.
   const onAdminRoute = location.pathname.startsWith("/app/admin/");
   const hasTenant = membership.status === "tenant";
-  const visible = hasTenant && !onAdminRoute;
 
   const viewAsUserId =
     membership.status === "tenant" ? membership.viewAsUserId : undefined;
+  // An admin explicitly viewing-as a tenant is operator context — never hide
+  // the channel from us, whatever stage the spa is at.
+  const adminViewing =
+    membership.status === "tenant" && membership.viewAsExplicit === true;
+
+  // Earned-gate (project_trusted_onboarding): the wishlist appears only once
+  // the spa has felt SmartSpa earn its keep — its first verified recovery win
+  // ("time-to-first-verifiable-dollar"). Before that, premature wishes are
+  // noise, so we keep the affordance out of sight. null = still checking.
+  const [valueMoment, setValueMoment] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!hasTenant || adminViewing) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess.session?.access_token;
+        if (!token) return;
+        const { reached } = await hasReachedValueMoment({
+          data: { accessToken: token, viewAsUserId },
+        });
+        if (!cancelled) setValueMoment(reached);
+      } catch {
+        // Fail open is wrong here (would show prematurely); fail closed —
+        // leave the gate shut on a transient error, it re-checks on remount.
+        if (!cancelled) setValueMoment(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [hasTenant, adminViewing, viewAsUserId]);
+
+  const visible =
+    hasTenant && !onAdminRoute && (adminViewing || valueMoment === true);
 
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<ActiveTab>("submit");

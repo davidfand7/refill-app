@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.18.3",
+    date: "June 2026",
+    items: [
+      "<strong>v2.18.3 &mdash; The Wishlist is now an <em>earned</em> affordance.</strong> The floating Wishlist button used to appear the moment a spa logged in &mdash; but a feature wishlist before you've felt SmartSpa earn its keep is just noise. It now stays out of sight until the spa hits its first <strong>verified recovery win</strong> (real recovered revenue &mdash; the same &ldquo;first verifiable dollar&rdquo; the billing scoreboard counts). Once earned, it stays. This is the trusted-onboarding ladder's <em>wishlist-as-earned-gate</em> rung: the request channel shows up exactly when a wish is informed by real value, not before. (It also always shows for us when we're viewing a spa as an operator, so the support line is never hidden.) <strong>New</strong>: <code>hasReachedValueMoment</code> in <code>wishlist.functions.ts</code>. <strong>Touched</strong>: <code>WishlistWidget.tsx</code>. No migration. <em>Follow-on</em>: the Skill funnel (agent proposes a wish &rarr; built Skill from observed work) is an agent-side build, scoped separately.",
+    ],
+  },
+  {
     version: "v2.18.2",
     date: "June 2026",
     items: [

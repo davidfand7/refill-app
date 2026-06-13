@@ -273,6 +273,35 @@ export const listMyWishlistRequests = createServerFn({ method: "POST" })
     return (rows ?? []).map(hydrate);
   });
 
+// ─── Earned-gate: the value moment (project_trusted_onboarding) ─────────────
+//
+// The wishlist is an EARNED affordance, not an early-onboarding prompt:
+// premature wishes — before the spa has felt SmartSpa earn its keep — are
+// noise. The strategy doc's magic moment is "time-to-first-verifiable-dollar,"
+// so the gate opens the first time this spa has a VERIFIED recovery win (real
+// recovered revenue — the same signal the billing scoreboard bills on). Once
+// earned it stays open. emma_recovery_events is user-scoped (predates the
+// tenant model), so we check the resolved owner's user_id. The widget also
+// shows for an admin explicitly viewing-as a tenant (operator context), so the
+// support channel is never hidden from us regardless of the spa's stage.
+export const hasReachedValueMoment = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => listMyInput.parse(raw))
+  .handler(async ({ data }): Promise<{ reached: boolean }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const { data: rows, error } = await sb
+      .from("emma_recovery_events")
+      .select("id")
+      .eq("user_id", effectiveUserId)
+      .not("verified_at", "is", null)
+      .limit(1);
+    if (error) throw new Error(`Couldn't check value moment: ${error.message}`);
+    return { reached: (rows ?? []).length > 0 };
+  });
+
 export const addReplyToWishlistRequest = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => replyInput.parse(raw))
   .handler(async ({ data }): Promise<WishlistRequest> => {
