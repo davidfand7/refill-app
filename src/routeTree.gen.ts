@@ -43,6 +43,7 @@ import { Route as AppRepNetworkRouteImport } from './routes/app.rep.network'
 import { Route as AppRepLedgerRouteImport } from './routes/app.rep.ledger'
 import { Route as AppRepIntegrationsRouteImport } from './routes/app.rep.integrations'
 import { Route as AppRepEconomicsRouteImport } from './routes/app.rep.economics'
+import { Route as AppRefillSkillsRouteImport } from './routes/app.refill.skills'
 import { Route as AppRefillSharingRouteImport } from './routes/app.refill.sharing'
 import { Route as AppRefillScheduleRouteImport } from './routes/app.refill.schedule'
 import { Route as AppRefillRescueRouteImport } from './routes/app.refill.rescue'
@@ -325,6 +326,11 @@ const AppRepEconomicsRoute = AppRepEconomicsRouteImport.update({
   id: '/economics',
   path: '/economics',
   getParentRoute: () => AppRepRoute,
+} as any)
+const AppRefillSkillsRoute = AppRefillSkillsRouteImport.update({
+  id: '/skills',
+  path: '/skills',
+  getParentRoute: () => AppRefillRoute,
 } as any)
 const AppRefillSharingRoute = AppRefillSharingRouteImport.update({
   id: '/sharing',
@@ -1007,6 +1013,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/rescue': typeof AppRefillRescueRoute
   '/app/refill/schedule': typeof AppRefillScheduleRoute
   '/app/refill/sharing': typeof AppRefillSharingRoute
+  '/app/refill/skills': typeof AppRefillSkillsRoute
   '/app/rep/economics': typeof AppRepEconomicsRoute
   '/app/rep/integrations': typeof AppRepIntegrationsRoute
   '/app/rep/ledger': typeof AppRepLedgerRoute
@@ -1148,6 +1155,7 @@ export interface FileRoutesByTo {
   '/app/refill/rescue': typeof AppRefillRescueRoute
   '/app/refill/schedule': typeof AppRefillScheduleRoute
   '/app/refill/sharing': typeof AppRefillSharingRoute
+  '/app/refill/skills': typeof AppRefillSkillsRoute
   '/app/rep/economics': typeof AppRepEconomicsRoute
   '/app/rep/integrations': typeof AppRepIntegrationsRoute
   '/app/rep/ledger': typeof AppRepLedgerRoute
@@ -1296,6 +1304,7 @@ export interface FileRoutesById {
   '/app/refill/rescue': typeof AppRefillRescueRoute
   '/app/refill/schedule': typeof AppRefillScheduleRoute
   '/app/refill/sharing': typeof AppRefillSharingRoute
+  '/app/refill/skills': typeof AppRefillSkillsRoute
   '/app/rep/economics': typeof AppRepEconomicsRoute
   '/app/rep/integrations': typeof AppRepIntegrationsRoute
   '/app/rep/ledger': typeof AppRepLedgerRoute
@@ -1446,6 +1455,7 @@ export interface FileRouteTypes {
     | '/app/refill/rescue'
     | '/app/refill/schedule'
     | '/app/refill/sharing'
+    | '/app/refill/skills'
     | '/app/rep/economics'
     | '/app/rep/integrations'
     | '/app/rep/ledger'
@@ -1587,6 +1597,7 @@ export interface FileRouteTypes {
     | '/app/refill/rescue'
     | '/app/refill/schedule'
     | '/app/refill/sharing'
+    | '/app/refill/skills'
     | '/app/rep/economics'
     | '/app/rep/integrations'
     | '/app/rep/ledger'
@@ -1734,6 +1745,7 @@ export interface FileRouteTypes {
     | '/app/refill/rescue'
     | '/app/refill/schedule'
     | '/app/refill/sharing'
+    | '/app/refill/skills'
     | '/app/rep/economics'
     | '/app/rep/integrations'
     | '/app/rep/ledger'
@@ -2118,6 +2130,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/app/rep/economics'
       preLoaderRoute: typeof AppRepEconomicsRouteImport
       parentRoute: typeof AppRepRoute
+    }
+    '/app/refill/skills': {
+      id: '/app/refill/skills'
+      path: '/skills'
+      fullPath: '/app/refill/skills'
+      preLoaderRoute: typeof AppRefillSkillsRouteImport
+      parentRoute: typeof AppRefillRoute
     }
     '/app/refill/sharing': {
       id: '/app/refill/sharing'
@@ -3034,6 +3053,7 @@ interface AppRefillRouteChildren {
   AppRefillRescueRoute: typeof AppRefillRescueRoute
   AppRefillScheduleRoute: typeof AppRefillScheduleRoute
   AppRefillSharingRoute: typeof AppRefillSharingRoute
+  AppRefillSkillsRoute: typeof AppRefillSkillsRoute
   AppRefillIndexRoute: typeof AppRefillIndexRoute
   AppRefillAgentsAttributionRoute: typeof AppRefillAgentsAttributionRoute
   AppRefillAgentsPreshowRoute: typeof AppRefillAgentsPreshowRoute
@@ -3080,6 +3100,7 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillRescueRoute: AppRefillRescueRoute,
   AppRefillScheduleRoute: AppRefillScheduleRoute,
   AppRefillSharingRoute: AppRefillSharingRoute,
+  AppRefillSkillsRoute: AppRefillSkillsRoute,
   AppRefillIndexRoute: AppRefillIndexRoute,
   AppRefillAgentsAttributionRoute: AppRefillAgentsAttributionRoute,
   AppRefillAgentsPreshowRoute: AppRefillAgentsPreshowRoute,

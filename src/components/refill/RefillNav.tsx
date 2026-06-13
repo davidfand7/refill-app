@@ -27,6 +27,7 @@ export type RefillNavKey =
   | "catalog"
   | "recognition"
   | "recovery"
+  | "skills"
   | "settings";
 
 type RefillNavItem = {
@@ -57,7 +58,12 @@ const ITEMS: RefillNavItem[] = [
   { key: "recognition", to: "/app/refill/recognition/inventory", label: "Promos", shortLabel: "Promos" },
   // The Refill Solution: prevent (reminders) + recover (rescue) no-shows.
   { key: "recovery", to: "/app/refill/recovery",           label: "Refill",   shortLabel: "Refill", dividerAfter: true },
-  // ── Spine (data primitives + back-office) ──────────────────────────────
+  // ── Spine (ownership layer + data primitives + back-office) ────────────
+  // "Skills" (v2.19.0): the cross-solution Ownership Flywheel surface — the
+  // routines SmartSpa runs across every Solution. Earned-gated at the page
+  // level (hidden until the first verified win). Placement provisional per
+  // project_skill_funnel's open IA decision.
+  { key: "skills",   to: "/app/refill/skills",             label: "Skills",   shortLabel: "Skills" },
   { key: "patients", to: "/app/refill/patients",          label: "Patients", shortLabel: "Patients" },
   { key: "catalog",  to: "/app/refill/catalog/services",  label: "Catalog",  shortLabel: "Catalog" },
   // "Account" (Spine back-office): Reports + Login/Sender/Spa profile/

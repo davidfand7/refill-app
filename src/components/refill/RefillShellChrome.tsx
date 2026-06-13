@@ -32,6 +32,8 @@ function deriveActiveKey(pathname: string): RefillNavKey | undefined {
     pathname.startsWith("/app/refill/appointments")
   )
     return "calendar";
+  // "Skills" — the cross-solution Ownership Flywheel surface (v2.19.0).
+  if (pathname.startsWith("/app/refill/skills")) return "skills";
   if (pathname.startsWith("/app/refill/patients")) return "patients";
   if (pathname.startsWith("/app/refill/catalog")) return "catalog";
   // "Promos" Solution (recognition namespace; old /promos redirects in).

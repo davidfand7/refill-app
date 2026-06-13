@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.19.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.19.0 &mdash; Your Skills: the routines SmartSpa runs for you, that you own.</strong> A new <strong>Skills</strong> tab (in the nav, after Refill) is the start of the Ownership Flywheel &mdash; a curated catalog of automations you can adopt with one tap, make yours, and turn off any time. Phase 1 wires the first one end-to-end: adopt <strong>Pre-Visit Reminders</strong> and it sets up your default reminder cadence, then deep-links you into Reminders to fine-tune the timing, tone, and wording. The rest of the catalog (Auto-Recall, Waitlist Auto-Fill, Weekly Offer, Reward-Expiry Sweep, No-Show Follow-Up, Auto-Verify Recoveries, Monthly Export) is shown so you can see what's coming, but clearly marked <em>Coming soon</em> &mdash; we won't let you &ldquo;add&rdquo; a Skill that doesn't do anything yet. Like the wishlist, Skills is <strong>earned</strong>: it stays out of the way until your first verified win, then unlocks. Removing a Skill never deletes the routine it set up &mdash; leaving is clean by design. <strong>New</strong>: <code>skills.functions.ts</code> (<code>listMySkills</code> / <code>adoptSkill</code> / <code>setSkillEnabled</code> / <code>removeSkill</code>), <code>skill-catalog.ts</code>, <code>app.refill.skills.tsx</code>, migration <code>v2_19_0_skill_funnel</code> (<code>skill_proposals</code> &rarr; <code>skills</code> lineage). <strong>Touched</strong>: <code>RefillNav.tsx</code>, <code>RefillShellChrome.tsx</code>. One gate, two pluggable axes (source: catalog&rarr;mined&rarr;concierge &middot; materializer: flip&rarr;routine&rarr;autonomous) &mdash; mining + concierge sources and the autonomous tier plug in next, no rebuild.",
+    ],
+  },
+  {
     version: "v2.18.4",
     date: "June 2026",
     items: [
