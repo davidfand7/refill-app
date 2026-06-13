@@ -228,8 +228,8 @@ function BillingPage() {
           </div>
         )}
 
-        {/* This-month ledger */}
-        <LedgerCard ledger={ledger} />
+        {/* This-month scoreboard */}
+        <ScoreboardCard ledger={ledger} />
 
         {/* Card on file */}
         <CardOnFileSection
@@ -303,9 +303,16 @@ function BillingPage() {
   );
 }
 
-// ─── This-month ledger ──────────────────────────────────────────────────────
+// ─── This-month scoreboard ──────────────────────────────────────────────────
+//
+// The billing-trust rung (project_trusted_onboarding, step 8): the charge is a
+// SCOREBOARD, not a tax. We lead with the value SmartSpa created for the spa and
+// show our fee as the small, fair, leaveable cut beside it — never the hero. The
+// three honesties (fair / conservative / leaveable) are stated plainly because
+// we can afford radical billing honesty: the spa is the wedge, not the profit
+// center. No billing math changes here — this only tells the truth more loudly.
 
-function LedgerCard({ ledger }: { ledger: BillingLedger | null }) {
+function ScoreboardCard({ ledger }: { ledger: BillingLedger | null }) {
   if (!ledger) {
     return (
       <div className="rounded-xl border border-border bg-card p-5 flex items-center gap-2 text-sm text-ink-soft">
@@ -320,67 +327,152 @@ function LedgerCard({ ledger }: { ledger: BillingLedger | null }) {
     timeZone: "UTC",
   });
   const activeLines = ledger.lines.filter((l) => l.count > 0);
+  const winCount = ledger.wins.length;
+  const recoveredUsd = +ledger.wins.reduce((s, w) => s + w.revenueUsd, 0).toFixed(2);
+  const fee = ledger.totalDueUsd;
+  // Only frame the ratio when we actually know the recovered revenue (many
+  // wins carry no attributed $ — manufacturer/native price unknown — and we
+  // never invent a number the data can't back).
+  const hasRevenue = recoveredUsd > 0;
+  const keptPct = hasRevenue && fee > 0 ? Math.floor(((recoveredUsd - fee) / recoveredUsd) * 100) : null;
+  const multiple = hasRevenue && fee > 0 ? recoveredUsd / fee : null;
 
   return (
     <section className="rounded-2xl border border-emerald/30 bg-emerald-soft/40 overflow-hidden">
-      <div className="px-5 sm:px-6 py-3.5 border-b border-emerald/20 flex items-center justify-between gap-3 flex-wrap">
+      <div className="px-5 sm:px-6 py-3 border-b border-emerald/20">
         <span className="text-xs font-semibold tracking-wider text-emerald uppercase">
-          If this month closed today · {monthLabel}
-        </span>
-        <span className="text-2xl font-bold tabular-nums text-emerald">
-          {money(ledger.totalDueUsd)}
+          Your SmartSpa scoreboard · {monthLabel}
         </span>
       </div>
-      <div className="px-5 sm:px-6 py-4 space-y-1.5">
-        {ledger.monthlyBaseUsd > 0 && (
-          <Row label="Monthly base" value={money(ledger.monthlyBaseUsd)} />
-        )}
-        {activeLines.map((l) => (
-          <Row
-            key={l.metricKey}
-            label={`${l.label} · ${l.count} ${l.count === 1 ? "win" : "wins"}${
-              l.mode === "percent" ? ` (${money(l.revenueUsd)})` : ""
-            }`}
-            value={money(l.charge)}
-          />
-        ))}
-        {activeLines.length === 0 && ledger.monthlyBaseUsd === 0 && (
+
+      <div className="px-5 sm:px-6 py-5">
+        {winCount === 0 && ledger.pendingCount === 0 ? (
           <p className="text-sm text-ink-soft">
-            No billable wins yet this month — that's $0 due. Every win Refill creates will
-            appear here, priced.
+            No wins yet this month — so <span className="font-semibold text-foreground">$0</span>.
+            Every booking SmartSpa creates for you shows up here, and you only ever
+            pay on value created.
           </p>
-        )}
-        {ledger.wins.length > 0 && (
-          <details className="pt-2 text-[12px]">
-            <summary className="cursor-pointer text-emerald hover:underline">
-              View all {ledger.wins.length} {ledger.wins.length === 1 ? "win" : "wins"} (newest first)
-            </summary>
-            <div className="mt-2 flex justify-end">
-              <button
-                type="button"
-                onClick={() => downloadWinsCsv(monthLabel, ledger.wins)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald/30 px-2.5 py-1 text-emerald hover:bg-emerald/10 transition-colors"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Download CSV
-              </button>
+        ) : (
+          <>
+            {/* Hero: what SmartSpa created (the win, not the bill) */}
+            <div className="flex flex-wrap items-end gap-x-8 gap-y-2">
+              <div>
+                <div className="text-[11px] font-medium uppercase tracking-wide text-emerald/80">
+                  SmartSpa booked for you
+                </div>
+                <div className="text-3xl font-bold tabular-nums text-emerald">
+                  {winCount} {winCount === 1 ? "win" : "wins"}
+                </div>
+              </div>
+              {hasRevenue && (
+                <div>
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-emerald/80">
+                    In visits recovered
+                  </div>
+                  <div className="text-3xl font-bold tabular-nums text-emerald">
+                    {money(recoveredUsd)}
+                  </div>
+                </div>
+              )}
             </div>
-            <ul className="mt-2 max-h-80 overflow-auto divide-y divide-emerald/10">
-              {ledger.wins.map((w) => (
-                <li key={w.id} className="flex items-center justify-between gap-3 py-1.5">
-                  <span className="text-ink-soft min-w-0 truncate">
-                    {new Date(w.date).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                    })}{" "}
-                    · {w.label} · {w.patientName ?? "—"}
-                  </span>
-                  <span className="tabular-nums font-medium text-foreground shrink-0">
-                    {money(w.charge)}
-                  </span>
-                </li>
+
+            {/* The fee, framed as the small fair cut — never the hero */}
+            <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
+              <span className="text-ink-soft">Your SmartSpa fee this month:</span>
+              <span className="font-semibold tabular-nums text-foreground">{money(fee)}</span>
+              {keptPct != null && multiple != null && (
+                <span className="text-[12.5px] text-emerald">
+                  · you keep {keptPct}% of what we recovered{" "}
+                  <span className="text-ink-soft">({multiple >= 10 ? Math.round(multiple) : multiple.toFixed(1)}× your fee)</span>
+                </span>
+              )}
+              {fee === 0 && (
+                <span className="text-[12.5px] text-emerald">· completely free this month</span>
+              )}
+            </div>
+
+            {/* Pending — recorded, not charged: the conservative proof */}
+            {ledger.pendingCount > 0 && (
+              <p className="mt-2 text-[12.5px] text-ink-soft">
+                <span className="font-medium text-foreground">{ledger.pendingCount}</span> more
+                recorded and <span className="font-medium">not charged</span> — we wait until the
+                patient actually pays before a win ever bills.
+              </p>
+            )}
+          </>
+        )}
+
+        {/* The three honesties: fair · conservative · leaveable */}
+        <ul className="mt-4 grid gap-1.5 border-t border-emerald/20 pt-4 text-[12.5px] text-ink-soft sm:grid-cols-1">
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald mt-0.5 shrink-0" />
+            Charged only after the patient actually pays — never on a maybe.
+          </li>
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald mt-0.5 shrink-0" />
+            You keep every dollar of the visit. The fee is a small flat amount per win, not a cut of your revenue.
+          </li>
+          <li className="flex items-start gap-2">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald mt-0.5 shrink-0" />
+            Turn any meter off — or remove your card — anytime. No lock-in.
+          </li>
+        </ul>
+
+        {/* The math behind it — demoted to an audit detail */}
+        {(activeLines.length > 0 || ledger.monthlyBaseUsd > 0) && (
+          <details className="mt-4 text-[12px]">
+            <summary className="cursor-pointer text-emerald hover:underline">
+              The math behind it — {money(fee)}{" "}
+              {fee === 1 ? "charge" : "charges"} this month
+            </summary>
+            <div className="mt-2 space-y-1.5 rounded-lg bg-white/60 p-3">
+              {ledger.monthlyBaseUsd > 0 && (
+                <Row label="Monthly base" value={money(ledger.monthlyBaseUsd)} />
+              )}
+              {activeLines.map((l) => (
+                <Row
+                  key={l.metricKey}
+                  label={`${l.label} · ${l.count} ${l.count === 1 ? "win" : "wins"}${
+                    l.mode === "percent" ? ` (${money(l.revenueUsd)})` : ""
+                  }`}
+                  value={money(l.charge)}
+                />
               ))}
-            </ul>
+              <div className="flex items-baseline justify-between gap-3 border-t border-emerald/20 pt-1.5 text-sm font-semibold">
+                <span className="text-foreground">Total this month</span>
+                <span className="tabular-nums text-foreground">{money(fee)}</span>
+              </div>
+              {ledger.wins.length > 0 && (
+                <div className="pt-1 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => downloadWinsCsv(monthLabel, ledger.wins)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-emerald/30 px-2.5 py-1 text-emerald hover:bg-emerald/10 transition-colors"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download every win (CSV)
+                  </button>
+                </div>
+              )}
+              {ledger.wins.length > 0 && (
+                <ul className="mt-1 max-h-80 overflow-auto divide-y divide-emerald/10">
+                  {ledger.wins.map((w) => (
+                    <li key={w.id} className="flex items-center justify-between gap-3 py-1.5">
+                      <span className="text-ink-soft min-w-0 truncate">
+                        {new Date(w.date).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                        })}{" "}
+                        · {w.label} · {w.patientName ?? "—"}
+                      </span>
+                      <span className="tabular-nums font-medium text-foreground shrink-0">
+                        {money(w.charge)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </details>
         )}
       </div>

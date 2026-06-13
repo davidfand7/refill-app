@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.17.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.17.0 &mdash; Billing is a scoreboard, not a tax (the billing-trust rung).</strong> The top of the Billing page now leads with the <strong>value SmartSpa created for you</strong> &mdash; the wins it booked this month, and the visit revenue recovered when we know it &mdash; and shows our fee as the small cut beside it, never the hero. When the recovered revenue is known you see exactly how good the trade is: <em>&ldquo;you keep 98% of what we recovered (72&times; your fee).&rdquo;</em> Three honesties are stated plainly, because we can afford to: <strong>charged only after the patient actually pays</strong> (never on a maybe &mdash; and a new line shows how many wins are recorded-but-not-charged, waiting on the visit), <strong>you keep every dollar of the visit</strong> (the fee is a small flat amount per win, not a cut of your revenue), and <strong>turn any meter off or remove your card anytime</strong> (no lock-in). The full per-meter math + every win + CSV export are still one click away under &ldquo;the math behind it.&rdquo; <strong>No billing math changed</strong> &mdash; radical honesty means telling the truth more loudly, not charging differently. <strong>Touched</strong>: <code>refill-fee-rules.functions.ts</code> (<code>pendingCount</code> on the ledger &mdash; recorded-not-charged), <code>app.billing.index.tsx</code> (scoreboard reframe of the hero), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.16.1",
     date: "June 2026",
     items: [

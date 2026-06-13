@@ -86,6 +86,10 @@ export type BillingLedger = {
   lines: LedgerLine[];
   wins: LedgerWin[];
   totalDueUsd: number;
+  /** Wins recorded this period but NOT yet verified (the patient hasn't paid
+   *  yet) — so they are NOT billed. The scoreboard shows this as the visible
+   *  proof that SmartSpa never charges on a maybe (conservative-by-construction). */
+  pendingCount: number;
 };
 
 // ─── Zod ────────────────────────────────────────────────────────────────────
@@ -217,6 +221,20 @@ export const getBillingLedger = createServerFn({ method: "POST" })
       .eq("tenant_id", tenantId);
     const userIds = (memberships ?? []).map((m) => m.user_id);
     const wins: LedgerWin[] = [];
+    // Recorded-but-unverified wins this period — counted, not charged (the
+    // conservative-by-construction proof for the scoreboard). Uses the partial
+    // index on (user_id, created_at) where verified_at is null.
+    let pendingCount = 0;
+    if (userIds.length > 0) {
+      const { count } = await sb
+        .from("emma_recovery_events")
+        .select("id", { count: "exact", head: true })
+        .in("user_id", userIds)
+        .is("verified_at", null)
+        .gte("created_at", periodStart.toISOString())
+        .lt("created_at", periodEnd.toISOString());
+      pendingCount = count ?? 0;
+    }
     if (userIds.length > 0) {
       // Full set for the period — paged past PostgREST's 1,000-row cap so a
       // high-volume month is shown complete (and exportable), never silently
@@ -272,5 +290,6 @@ export const getBillingLedger = createServerFn({ method: "POST" })
       lines,
       wins,
       totalDueUsd,
+      pendingCount,
     };
   });
