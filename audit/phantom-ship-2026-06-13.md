@@ -49,6 +49,7 @@ src/server/program-intel.functions.ts
 | Commit | Claimed ref | Actual file | Reason dismissed |
 |---|---|---|---|
 | `9e527048` (v2.16.0) | `recovery.rescue.tsx` | `src/routes/app.refill.recovery.rescue.tsx` | Abbreviation of route file; file WAS in commit |
+| `1b253398` (v2.3.43) | multiple (glob patterns, `.md` planning docs, `composio-zoho.ts`, route abbreviations) | whole-codebase bootstrap (504 files) | Bootstrap commit: entire codebase pushed as one commit; all historical changelog entries were added at once, so many `<code>` refs trace to pre-bootstrap history, renamed files (e.g. `composio-zoho.ts` → `zoho.functions.ts`), glob notation (`{vagaro,zenoti,...}-install.tsx`), and planning `.md` documents — none are genuine phantom ships in a feature commit |
 
 ---
 
