@@ -217,11 +217,20 @@ async function ensureDefaultPreshowProfile(
 // rescue_enabled — see emma-preshow.functions.ts:321 and emma-rescue.functions.ts:666).
 // Mapping a wired Skill's On/Pause to that boolean makes the toggle GENUINELY
 // gate the engine, not just flip a cosmetic record flag.
-type PolicyGateField = "preshow_enabled" | "rescue_enabled";
+// recall_digest_enabled isn't in the generated types yet (same loose posture as
+// the skills tables) — build the patch as a plain record and cast at the call.
+type PolicyGateField =
+  | "preshow_enabled"
+  | "rescue_enabled"
+  | "recall_digest_enabled";
 const POLICY_GATE: Record<string, PolicyGateField> = {
   pre_visit_reminder: "preshow_enabled",
   waitlist_auto_fill: "rescue_enabled",
+  auto_recall: "recall_digest_enabled",
 };
+
+type NoshowUpdate = Database["public"]["Tables"]["emma_noshow_policies"]["Update"];
+type NoshowInsert = Database["public"]["Tables"]["emma_noshow_policies"]["Insert"];
 
 async function setNoshowPolicyGate(
   sb: SupabaseAdmin,
@@ -236,21 +245,17 @@ async function setNoshowPolicyGate(
     .eq("user_id", userId)
     .maybeSingle();
   if (existing) {
-    const patch: Database["public"]["Tables"]["emma_noshow_policies"]["Update"] = {
-      updated_at: nowIso,
-    };
-    patch[field] = value;
+    const patch: Record<string, unknown> = { updated_at: nowIso, [field]: value };
     const { error } = await sb
       .from("emma_noshow_policies")
-      .update(patch)
+      .update(patch as NoshowUpdate)
       .eq("user_id", userId);
     if (error) throw new Error(`Couldn't update routine state: ${error.message}`);
   } else {
-    const row: Database["public"]["Tables"]["emma_noshow_policies"]["Insert"] = {
-      user_id: userId,
-    };
-    row[field] = value;
-    const { error } = await sb.from("emma_noshow_policies").insert(row);
+    const row: Record<string, unknown> = { user_id: userId, [field]: value };
+    const { error } = await sb
+      .from("emma_noshow_policies")
+      .insert(row as NoshowInsert);
     if (error) throw new Error(`Couldn't set up routine state: ${error.message}`);
   }
 }

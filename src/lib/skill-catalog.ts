@@ -77,14 +77,16 @@ export const SKILL_CATALOG: SkillTemplate[] = [
   // ── PREVIEW (on the menu, wiring queued) ────────────────────────────────
   {
     key: "auto_recall",
-    label: "Auto-Recall Lapsed Patients",
+    label: "Weekly Recall Digest",
     description:
-      "Reach out to patients who are due back — on a cadence or as their manufacturer reward nears expiry — and invite them to rebook.",
+      "Once a week, SmartSpa tallies who's due back — expiring manufacturer rewards and lapsed regulars — and emails you a heads-up: the dollars on the table and how many patients. You open Recall and send the outreach in one tap. The digest never messages a patient on its own.",
     solution: "promos",
     materializer: "routine",
-    status: "preview",
-    adoptCopy: "Will quietly surface who's due back and tee up the outreach.",
-    liftHint: "Brings lapsed patients back before they drift.",
+    status: "live",
+    adoptCopy:
+      "Turns on a weekly digest of who's due back and the dollars on the table — then opens Recall. You always do the sending.",
+    liftHint: "Catches lapsed patients and expiring rewards before they drift.",
+    manageTo: "/app/refill/recognition/recall",
   },
   {
     key: "waitlist_auto_fill",

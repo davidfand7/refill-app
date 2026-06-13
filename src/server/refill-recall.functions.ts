@@ -139,15 +139,18 @@ type RewardDbRow = {
   patient_node_id: string | null;
 };
 
-export const listRecallTargets = createServerFn({ method: "POST" })
-  .inputValidator((raw: unknown) => input.parse(raw))
-  .handler(async ({ data }): Promise<RecallView> => {
-    const { effectiveUserId } = await resolveEffectiveUserId({
-      accessToken: data.accessToken,
-      viewAsUserId: data.viewAsUserId,
-    });
-    const sb = admin();
+type RecallSb = ReturnType<typeof admin>;
 
+/**
+ * The pure recall computation, shared by the interactive surface
+ * (listRecallTargets) and the weekly Recall Digest cron. Keeping it in one
+ * place means the digest reads EXACTLY what the Recall page shows — no second,
+ * drifting definition of "who's due".
+ */
+export async function computeRecallView(
+  sb: RecallSb,
+  effectiveUserId: string,
+): Promise<RecallView> {
     // ── 1) Reward-driven triggers (expiring / eligible-idle / becoming) ──
     const rewardRows = await fetchAllRows<RewardDbRow>((from, to) =>
       sb
@@ -295,6 +298,16 @@ export const listRecallTargets = createServerFn({ method: "POST" })
     ).size;
 
     return { groups, dollarsOnTable, distinctPatients };
+}
+
+export const listRecallTargets = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => input.parse(raw))
+  .handler(async ({ data }): Promise<RecallView> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    return computeRecallView(admin(), effectiveUserId);
   });
 
 // ─── recordRecallBookingFn (Slice B — the $5 win) ──────────────────────────
@@ -576,3 +589,198 @@ export const draftRecallOutreachFn = createServerFn({ method: "POST" })
       error: null,
     };
   });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RECALL DIGEST (v2.22.0) — the honest "Auto-Recall" routine.
+//
+// A weekly scheduled job (pg_cron → /api/cron/recall-digest) that computes the
+// same recall view the page shows and emails the OWNER a heads-up: "$X on the
+// table across N patients due." Gated by emma_noshow_policies.recall_digest_
+// enabled (the Skill's adopt/On flips it; pause flips it off). The digest is a
+// nudge to come review — it sends NO patient outreach. Sending stays one-click
+// and consented on the Recall page (draftRecallOutreachFn). That boundary is
+// the Tier-2 line (project_trusted_onboarding): a routine can surface and
+// summarize on its own, but a blue-bubble to a patient still wants a human tap.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function digestMoney(n: number): string {
+  return `$${Math.round(n).toLocaleString()}`;
+}
+
+/** Pure email composer for the weekly digest — no I/O, easy to eyeball. */
+export function composeRecallDigestEmail(args: {
+  spaName: string;
+  view: RecallView;
+  ctaUrl: string;
+}): { subject: string; text: string; html: string } {
+  const { spaName, view, ctaUrl } = args;
+  const dollars = Math.round(view.dollarsOnTable);
+  const patients = view.distinctPatients;
+
+  const subject =
+    dollars > 0
+      ? `${spaName} — ${digestMoney(dollars)} on the table: ${patients} patient${patients === 1 ? "" : "s"} due for recall`
+      : `${spaName} — ${patients} patient${patients === 1 ? "" : "s"} due for recall`;
+
+  // Only show groups that actually have someone in them.
+  const liveGroups = view.groups.filter((g) => g.patients > 0);
+  const rowsHtml = liveGroups
+    .map(
+      (g) => `<tr>
+  <td style="padding:8px 12px;border-bottom:1px solid #eee9dd;font-size:13px;color:#1a1a1a;">${g.label}</td>
+  <td style="padding:8px 12px;border-bottom:1px solid #eee9dd;font-size:13px;color:#1a1a1a;text-align:right;font-variant-numeric:tabular-nums;">${g.patients.toLocaleString()}</td>
+  <td style="padding:8px 12px;border-bottom:1px solid #eee9dd;font-size:13px;color:#047857;text-align:right;font-variant-numeric:tabular-nums;">${g.dollars > 0 ? digestMoney(g.dollars) : "—"}</td>
+</tr>`,
+    )
+    .join("");
+  const rowsText = liveGroups
+    .map(
+      (g) =>
+        `  • ${g.label}: ${g.patients} patient${g.patients === 1 ? "" : "s"}${g.dollars > 0 ? ` · ${digestMoney(g.dollars)} in rewards` : ""}`,
+    )
+    .join("\n");
+
+  const html = `<!doctype html><html><body style="margin:0;padding:32px;background:#fafaf7;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Inter,sans-serif;color:#1a1a1a;">
+  <div style="max-width:560px;margin:0 auto;">
+    <div style="font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#047857;margin-bottom:6px;">SmartSpa · Recall digest</div>
+    <h1 style="font-size:20px;margin:0 0 4px;color:#1a1a1a;">Money on the table this week</h1>
+    <p style="font-size:13px;color:#555;margin:0 0 20px;line-height:1.55;">Here's who's due back at ${spaName} — expiring rewards and lapsed regulars the manufacturer would otherwise send to “a provider near you.” Book them into your own chair instead.</p>
+
+    <div style="display:flex;gap:28px;padding:16px 18px;background:#fff;border:1px solid #e6e2d6;border-radius:12px;margin-bottom:18px;">
+      <div>
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#999;">On the table</div>
+        <div style="font-size:26px;font-weight:700;color:#047857;font-variant-numeric:tabular-nums;">${digestMoney(dollars)}</div>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#999;">Patients to recall</div>
+        <div style="font-size:26px;font-weight:700;color:#1a1a1a;font-variant-numeric:tabular-nums;">${patients.toLocaleString()}</div>
+      </div>
+    </div>
+
+    <table style="width:100%;border-collapse:collapse;background:#fff;border:1px solid #e6e2d6;border-radius:12px;overflow:hidden;margin-bottom:22px;">
+      <thead>
+        <tr style="background:#f7f6f3;">
+          <th style="padding:8px 12px;text-align:left;font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#999;">Trigger</th>
+          <th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#999;">Patients</th>
+          <th style="padding:8px 12px;text-align:right;font-size:10px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#999;">Rewards</th>
+        </tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+
+    <a href="${ctaUrl}" style="display:inline-block;background:#047857;color:#fff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 20px;border-radius:9px;">Review &amp; send recall &rarr;</a>
+
+    <p style="font-size:12px;color:#888;margin:18px 0 0;line-height:1.55;">Nothing was sent to any patient — this is just your weekly heads-up. Open Recall, pick who to reach, and send the drafts in one tap. You can turn this digest off any time from <strong>Skills</strong>.</p>
+  </div>
+</body></html>`;
+
+  const text = `SmartSpa · Recall digest — ${spaName}\n\nMoney on the table this week:\n  On the table: ${digestMoney(dollars)}\n  Patients to recall: ${patients}\n\n${rowsText}\n\nReview & send recall: ${ctaUrl}\n\nNothing was sent to any patient — this is your weekly heads-up. Open Recall, pick who to reach, and send in one tap. Turn this digest off any time from Skills.`;
+
+  return { subject, text, html };
+}
+
+async function ownerEmailForUserId(
+  sb: RecallSb,
+  userId: string,
+): Promise<string | null> {
+  try {
+    const { data, error } = await sb.auth.admin.getUserById(userId);
+    if (error) {
+      console.warn("[recall-digest] owner email lookup failed", userId, error.message);
+      return null;
+    }
+    return data?.user?.email ?? null;
+  } catch (e) {
+    console.warn("[recall-digest] owner email lookup threw", userId, e);
+    return null;
+  }
+}
+
+async function spaNameForUserId(sb: RecallSb, userId: string): Promise<string> {
+  const { data } = await sb
+    .from("knowledge_nodes")
+    .select("title")
+    .eq("user_id", userId)
+    .eq("node_type", "spa_profile")
+    .maybeSingle();
+  return data?.title?.trim() || "Your spa";
+}
+
+export type RecallDigestResult =
+  | { status: "sent"; email: string; dollars: number; patients: number }
+  | { status: "empty" }
+  | { status: "no_email" }
+  | { status: "error"; error: string };
+
+/**
+ * Compute + deliver one spa's weekly recall digest. Honest by construction:
+ *   • an empty book sends NOTHING (no noise),
+ *   • it emails the owner a summary only — never a patient,
+ *   • on success it stamps recall_digest_last_sent_at for the cron's dedup.
+ */
+export async function sendRecallDigestForUser(
+  sb: RecallSb,
+  userId: string,
+  publicOrigin: string,
+): Promise<RecallDigestResult> {
+  const view = await computeRecallView(sb, userId);
+  if (view.distinctPatients === 0) return { status: "empty" };
+
+  const email = await ownerEmailForUserId(sb, userId);
+  if (!email) return { status: "no_email" };
+
+  const resendKey = process.env.RESEND_API_KEY;
+  if (!resendKey) return { status: "error", error: "RESEND_API_KEY missing on the worker." };
+
+  const spaName = await spaNameForUserId(sb, userId);
+  const ctaUrl = `${publicOrigin.replace(/\/$/, "")}/app/refill/recognition/recall`;
+  const { subject, text, html } = composeRecallDigestEmail({ spaName, view, ctaUrl });
+
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: process.env.REFILL_FROM_EMAIL ?? "recall@getrefill.app",
+        to: [email],
+        subject,
+        text,
+        html,
+        tags: [
+          { name: "type", value: "refill-recall-digest" },
+          { name: "tenant", value: userId },
+        ],
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) {
+      return {
+        status: "error",
+        error: `Resend ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`,
+      };
+    }
+  } catch (e) {
+    return { status: "error", error: e instanceof Error ? e.message : String(e) };
+  }
+
+  // Stamp the send for the cron's 6-day dedup guard. recall_digest_last_sent_at
+  // isn't in types.ts yet (same posture as skills' loose tables) — cast the
+  // update payload. Best-effort: a missed stamp only risks a duplicate next run.
+  const stamp: Record<string, unknown> = {
+    recall_digest_last_sent_at: new Date().toISOString(),
+  };
+  await sb
+    .from("emma_noshow_policies")
+    .update(stamp as Database["public"]["Tables"]["emma_noshow_policies"]["Update"])
+    .eq("user_id", userId);
+
+  return {
+    status: "sent",
+    email,
+    dollars: Math.round(view.dollarsOnTable),
+    patients: view.distinctPatients,
+  };
+}

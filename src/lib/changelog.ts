@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.22.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.22.0 &mdash; Weekly Recall Digest: the first Skill that runs on a schedule and reports back.</strong> &ldquo;Auto-Recall&rdquo; is now a real, adoptable Skill &mdash; and an honest one. Once a week, SmartSpa tallies who&rsquo;s due back (expiring manufacturer rewards + lapsed regulars &mdash; the exact same math the Recall page shows) and emails you a heads-up: <em>the dollars on the table and how many patients</em>, broken down by trigger, with a one-tap link into Recall. <strong>It never messages a patient on its own</strong> &mdash; the digest is a nudge to come review; the sending stays one-click and consented on the Recall page. That boundary is deliberate: a routine can surface and summarize for you, but a blue-bubble to a patient still wants your tap (the autonomous tier is a separate, gated step). <strong>Honest by construction</strong>: a spa with nobody to recall gets <em>no</em> email (no noise), and adopting the Skill / its On&middot;Pause genuinely flips the engine &mdash; <code>recall_digest_enabled</code> on your policy is what the weekly job reads. <strong>New</strong>: <code>api.cron.recall-digest.ts</code> (secret-gated weekly cron), <code>computeRecallView</code> + <code>composeRecallDigestEmail</code> + <code>sendRecallDigestForUser</code> in <code>refill-recall.functions.ts</code>, migrations <code>v2_22_0_recall_digest</code> (gate columns) + <code>_cron</code> (pg_cron registration). <strong>Touched</strong>: <code>skill-catalog.ts</code> (Auto-Recall &rarr; live, now &ldquo;Weekly Recall Digest&rdquo;), <code>skills.functions.ts</code> (<code>recall_digest_enabled</code> in the engine gate). <em>Next</em>: the autonomous tier (agent sends with confidence-gating) &mdash; gated on the agent-bundle sign/notarize + MFA track.",
+    ],
+  },
+  {
     version: "v2.21.0",
     date: "June 2026",
     items: [
