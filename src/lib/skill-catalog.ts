@@ -18,6 +18,7 @@
  * The MATERIALIZER axis maps onto the autonomy ladder (project_trusted_onboarding):
  *   flip       (Tier 0) — turn on an existing knob
  *   routine    (Tier 1) — a named, owned, manageable routine   ← Phase 1 ships here
+ *   surface    (Tier 1) — turns on an in-app, glanceable indicator (a badge)
  *   autonomous (Tier 2) — an authored .claude skill the agent runs (gated, later)
  */
 
@@ -29,7 +30,7 @@ export type SkillSolution =
   | "account" // back-office
   | "cross"; // spans solutions
 
-export type SkillMaterializer = "flip" | "routine" | "autonomous";
+export type SkillMaterializer = "flip" | "routine" | "autonomous" | "surface";
 
 /** `live` = wired end-to-end + adoptable. `preview` = on the menu, not yet wired. */
 export type SkillStatus = "live" | "preview";
@@ -116,12 +117,14 @@ export const SKILL_CATALOG: SkillTemplate[] = [
     key: "reward_expiry_sweep",
     label: "Reward-Expiry Sweep",
     description:
-      "Surface patients whose manufacturer reward expires soon so you can recall them while it still counts.",
+      "Keep a running, at-a-glance count of manufacturer rewards expiring soon, pinned right on your Recall tab — so the money about to evaporate is always in view, not just in the Monday digest. No extra email; it's an ambient badge you can act on any time.",
     solution: "promos",
-    materializer: "routine",
-    status: "preview",
-    adoptCopy: "Will flag soon-to-expire rewards in time to act.",
-    liftHint: "Captures rewards before they lapse.",
+    materializer: "surface",
+    status: "live",
+    adoptCopy:
+      "Pins a live “expiring soon” badge on your Recall tab so the at-risk reward dollars are always one glance away.",
+    liftHint: "Keeps evaporating reward money in view, all week.",
+    manageTo: "/app/refill/recognition/recall",
   },
   {
     key: "no_show_followup",

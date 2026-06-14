@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.23.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.23.0 &mdash; Reward-Expiry Sweep goes live as an ambient badge &mdash; the funnel&rsquo;s new <em>surface</em> Skill.</strong> A fourth Skill is now adoptable, and it&rsquo;s a new <em>kind</em>: instead of flipping a flag or running a routine, it turns on an in-app <strong>surface</strong>. Adopt <strong>Reward-Expiry Sweep</strong> and a live count of manufacturer rewards expiring soon gets pinned right on your <strong>Recall</strong> tab &mdash; the money about to evaporate is always one glance away, all week, with <em>no extra email</em>. <strong>Honest by construction</strong>: we deliberately did <em>not</em> ship &ldquo;another expiring-rewards email&rdquo; (the Weekly Recall Digest already covers that &mdash; a second one would be redundant noise). This is a genuinely different <em>channel</em> &mdash; ambient and glanceable vs. the weekly digest &mdash; and it&rsquo;s gated: adopting shows the badge, pausing hides it. <strong>New</strong>: <code>surface</code> materializer (migration <code>v2_23_0_skill_surface_materializer</code> widens the constraint; 4th kind on the funnel&rsquo;s materializer axis), <code>getRewardExpiryBadge</code> + <code>RecallExpiryBadge</code> (shares one &ldquo;expiring&rdquo; definition with Recall). <strong>Touched</strong>: <code>skill-catalog.ts</code> (Reward-Expiry Sweep &rarr; live), <code>refill-recall.functions.ts</code>, <code>RecognitionTabs.tsx</code>. <em>Next</em>: the autonomous (Tier-2) tier, still gated on the agent-bundle sign/notarize + MFA externals.",
+    ],
+  },
+  {
     version: "v2.22.2",
     date: "June 2026",
     items: [

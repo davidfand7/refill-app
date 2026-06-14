@@ -349,6 +349,102 @@ export const listRecallTargets = createServerFn({ method: "POST" })
     return computeRecallView(admin(), effectiveUserId);
   });
 
+// ─── getRewardExpiryBadge (the 'surface' materializer — Reward-Expiry Sweep) ──
+//
+// Powers the ambient "expiring soon" badge pinned on the Recall tab. It is the
+// honest, distinct counterpart to the Weekly Recall Digest: the digest is a
+// weekly EMAIL; this is an always-visible in-app glance, opt-in via the Skill.
+// Gated on the Skill being adopted + enabled (skills.template_key=
+// 'reward_expiry_sweep'); paused → badge returns enabled=false → hides. The
+// "expiring" definition matches Recall's Expiring trigger (≤window days, not
+// already-expired, not not_yet_eligible) so there's ONE notion of "expiring".
+
+const EXPIRY_BADGE_WINDOW_DAYS = 60;
+
+const badgeInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+});
+
+export type RewardExpiryBadge = {
+  /** Whether the Reward-Expiry Sweep Skill is adopted + on for this spa. */
+  enabled: boolean;
+  /** Distinct patients with a reward expiring within the window. */
+  count: number;
+  /** Reward dollars on those expiring rewards. */
+  dollars: number;
+};
+
+// skills isn't in the generated types — narrow loose read of the enable flag.
+type LooseSkillEnabledRead = {
+  from(t: string): {
+    select(c: string): {
+      eq(
+        c: string,
+        v: unknown,
+      ): {
+        eq(
+          c: string,
+          v: unknown,
+        ): { maybeSingle(): Promise<{ data: { enabled: boolean } | null }> };
+      };
+    };
+  };
+};
+
+export const getRewardExpiryBadge = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => badgeInput.parse(raw))
+  .handler(async ({ data }): Promise<RewardExpiryBadge> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+
+    // Gate: only render when the Skill is adopted AND on.
+    const { data: skillRow } = await (sb as unknown as LooseSkillEnabledRead)
+      .from("skills")
+      .select("enabled")
+      .eq("user_id", effectiveUserId)
+      .eq("template_key", "reward_expiry_sweep")
+      .maybeSingle();
+    if (!skillRow || !skillRow.enabled) {
+      return { enabled: false, count: 0, dollars: 0 };
+    }
+
+    const now = new Date();
+    const todayIso = now.toISOString().slice(0, 10);
+    const windowEndIso = new Date(
+      now.getTime() + EXPIRY_BADGE_WINDOW_DAYS * 86_400_000,
+    )
+      .toISOString()
+      .slice(0, 10);
+
+    const rows = await fetchAllRows<{
+      patient_node_id: string | null;
+      reward_amount_usd: number | null;
+    }>((from, to) =>
+      sb
+        .from("patient_reward_entries")
+        .select("patient_node_id, reward_amount_usd")
+        .eq("user_id", effectiveUserId)
+        .neq("status_norm", "not_yet_eligible")
+        .gte("expiration_date", todayIso)
+        .lte("expiration_date", windowEndIso)
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
+
+    const patientKeys = new Set<string>();
+    let dollars = 0;
+    rows.forEach((r, i) => {
+      patientKeys.add(r.patient_node_id ?? `row:${i}`);
+      dollars += r.reward_amount_usd != null ? Number(r.reward_amount_usd) : 0;
+    });
+
+    return { enabled: true, count: patientKeys.size, dollars: Math.round(dollars) };
+  });
+
 // ─── recordRecallBookingFn (Slice B — the $5 win) ──────────────────────────
 //
 // Called by BookDialog after a successful owner booking made *from* a Recall

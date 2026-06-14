@@ -8,7 +8,60 @@
  */
 
 import { Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { Gift, Layers, PhoneOutgoing, Sparkles, Wand2, Tag, Target } from "lucide-react";
+
+import { supabase } from "@/integrations/supabase/client";
+import { useTenantMembership } from "@/lib/use-tenant-membership";
+import { getRewardExpiryBadge } from "@/server/refill-recall.functions";
+
+/**
+ * Reward-Expiry Sweep (the 'surface' materializer): an ambient badge of rewards
+ * expiring soon, pinned on the Recall tab. Self-fetching + best-effort — only
+ * renders when the Skill is adopted + on AND there's expiring money. A miss
+ * never breaks the tab strip.
+ */
+function RecallExpiryBadge() {
+  const membership = useTenantMembership();
+  const viewAsUserId =
+    membership.status === "tenant" ? membership.viewAsUserId : undefined;
+  const [badge, setBadge] = useState<{ count: number; dollars: number } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (membership.status === "loading") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { data: sess } = await supabase.auth.getSession();
+        const token = sess.session?.access_token;
+        if (!token) return;
+        const r = await getRewardExpiryBadge({
+          data: { accessToken: token, viewAsUserId },
+        });
+        if (cancelled) return;
+        setBadge(r.enabled && r.count > 0 ? { count: r.count, dollars: r.dollars } : null);
+      } catch {
+        /* badge is best-effort — never break the tabs */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [membership.status, viewAsUserId]);
+
+  if (!badge) return null;
+  return (
+    <span
+      title={`$${badge.dollars.toLocaleString()} in rewards expiring within 60 days — open Recall`}
+      className="ml-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none tabular-nums"
+      style={{ background: "#fef3c7", color: "#92400e" }}
+    >
+      {badge.count}
+    </span>
+  );
+}
 
 export type RecognitionTab =
   | "brand-promos"
@@ -50,6 +103,7 @@ export function RecognitionTabs({ active }: { active: RecognitionTab }) {
           >
             <Icon className="h-3.5 w-3.5" />
             {label}
+            {key === "recall" && <RecallExpiryBadge />}
           </Link>
         ))}
       </div>
