@@ -167,12 +167,14 @@ export const SKILL_CATALOG: SkillTemplate[] = [
     key: "monthly_patient_book_export",
     label: "Monthly Patient-Book Export",
     description:
-      "Get your full patient book exported on a schedule for your bookkeeping — no manual download each month.",
+      "Once a month, SmartSpa emails you a CSV of your full patient book for bookkeeping — no manual download each month. It goes to you only; nothing is sent to a patient. You can pull a fresh full export (with appointments and waitlist) any time from your account page.",
     solution: "account",
-    materializer: "autonomous",
-    status: "preview",
-    adoptCopy: "Will deliver your patient-book export on a schedule.",
+    materializer: "routine",
+    status: "live",
+    adoptCopy:
+      "Turns on a monthly patient-book export emailed straight to you — then opens your account page where you can pull a full export any time.",
     liftHint: "Your books, ready without the monthly chore.",
+    manageTo: "/app/refill/settings/account",
   },
 ];
 

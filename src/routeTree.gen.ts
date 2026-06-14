@@ -77,6 +77,7 @@ import { Route as ApiCronSchedulingRemindersRouteImport } from './routes/api.cro
 import { Route as ApiCronRefillTrialDripRouteImport } from './routes/api.cron.refill-trial-drip'
 import { Route as ApiCronRefillInvoiceRouteImport } from './routes/api.cron.refill-invoice'
 import { Route as ApiCronRecallDigestRouteImport } from './routes/api.cron.recall-digest'
+import { Route as ApiCronPatientExportRouteImport } from './routes/api.cron.patient-export'
 import { Route as ApiCronLightModeSilenceRouteImport } from './routes/api.cron.light-mode-silence'
 import { Route as ApiCronJanePollRouteImport } from './routes/api.cron.jane-poll'
 import { Route as ApiCronEmmaSweepRouteImport } from './routes/api.cron.emma-sweep'
@@ -497,6 +498,11 @@ const ApiCronRefillInvoiceRoute = ApiCronRefillInvoiceRouteImport.update({
 const ApiCronRecallDigestRoute = ApiCronRecallDigestRouteImport.update({
   id: '/api/cron/recall-digest',
   path: '/api/cron/recall-digest',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCronPatientExportRoute = ApiCronPatientExportRouteImport.update({
+  id: '/api/cron/patient-export',
+  path: '/api/cron/patient-export',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCronLightModeSilenceRoute = ApiCronLightModeSilenceRouteImport.update({
@@ -987,6 +993,7 @@ export interface FileRoutesByFullPath {
   '/api/cron/emma-sweep': typeof ApiCronEmmaSweepRoute
   '/api/cron/jane-poll': typeof ApiCronJanePollRoute
   '/api/cron/light-mode-silence': typeof ApiCronLightModeSilenceRoute
+  '/api/cron/patient-export': typeof ApiCronPatientExportRoute
   '/api/cron/recall-digest': typeof ApiCronRecallDigestRoute
   '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
@@ -1134,6 +1141,7 @@ export interface FileRoutesByTo {
   '/api/cron/emma-sweep': typeof ApiCronEmmaSweepRoute
   '/api/cron/jane-poll': typeof ApiCronJanePollRoute
   '/api/cron/light-mode-silence': typeof ApiCronLightModeSilenceRoute
+  '/api/cron/patient-export': typeof ApiCronPatientExportRoute
   '/api/cron/recall-digest': typeof ApiCronRecallDigestRoute
   '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
@@ -1280,6 +1288,7 @@ export interface FileRoutesById {
   '/api/cron/emma-sweep': typeof ApiCronEmmaSweepRoute
   '/api/cron/jane-poll': typeof ApiCronJanePollRoute
   '/api/cron/light-mode-silence': typeof ApiCronLightModeSilenceRoute
+  '/api/cron/patient-export': typeof ApiCronPatientExportRoute
   '/api/cron/recall-digest': typeof ApiCronRecallDigestRoute
   '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
@@ -1432,6 +1441,7 @@ export interface FileRouteTypes {
     | '/api/cron/emma-sweep'
     | '/api/cron/jane-poll'
     | '/api/cron/light-mode-silence'
+    | '/api/cron/patient-export'
     | '/api/cron/recall-digest'
     | '/api/cron/refill-invoice'
     | '/api/cron/refill-trial-drip'
@@ -1579,6 +1589,7 @@ export interface FileRouteTypes {
     | '/api/cron/emma-sweep'
     | '/api/cron/jane-poll'
     | '/api/cron/light-mode-silence'
+    | '/api/cron/patient-export'
     | '/api/cron/recall-digest'
     | '/api/cron/refill-invoice'
     | '/api/cron/refill-trial-drip'
@@ -1724,6 +1735,7 @@ export interface FileRouteTypes {
     | '/api/cron/emma-sweep'
     | '/api/cron/jane-poll'
     | '/api/cron/light-mode-silence'
+    | '/api/cron/patient-export'
     | '/api/cron/recall-digest'
     | '/api/cron/refill-invoice'
     | '/api/cron/refill-trial-drip'
@@ -1872,6 +1884,7 @@ export interface RootRouteChildren {
   ApiCronEmmaSweepRoute: typeof ApiCronEmmaSweepRoute
   ApiCronJanePollRoute: typeof ApiCronJanePollRoute
   ApiCronLightModeSilenceRoute: typeof ApiCronLightModeSilenceRoute
+  ApiCronPatientExportRoute: typeof ApiCronPatientExportRoute
   ApiCronRecallDigestRoute: typeof ApiCronRecallDigestRoute
   ApiCronRefillInvoiceRoute: typeof ApiCronRefillInvoiceRoute
   ApiCronRefillTrialDripRoute: typeof ApiCronRefillTrialDripRoute
@@ -2380,6 +2393,13 @@ declare module '@tanstack/react-router' {
       path: '/api/cron/recall-digest'
       fullPath: '/api/cron/recall-digest'
       preLoaderRoute: typeof ApiCronRecallDigestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/patient-export': {
+      id: '/api/cron/patient-export'
+      path: '/api/cron/patient-export'
+      fullPath: '/api/cron/patient-export'
+      preLoaderRoute: typeof ApiCronPatientExportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/cron/light-mode-silence': {
@@ -3247,6 +3267,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronEmmaSweepRoute: ApiCronEmmaSweepRoute,
   ApiCronJanePollRoute: ApiCronJanePollRoute,
   ApiCronLightModeSilenceRoute: ApiCronLightModeSilenceRoute,
+  ApiCronPatientExportRoute: ApiCronPatientExportRoute,
   ApiCronRecallDigestRoute: ApiCronRecallDigestRoute,
   ApiCronRefillInvoiceRoute: ApiCronRefillInvoiceRoute,
   ApiCronRefillTrialDripRoute: ApiCronRefillTrialDripRoute,

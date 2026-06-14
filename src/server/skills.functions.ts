@@ -225,12 +225,14 @@ type PolicyGateField =
   | "preshow_enabled"
   | "rescue_enabled"
   | "recall_digest_enabled"
-  | "rescue_autonomous_enabled";
+  | "rescue_autonomous_enabled"
+  | "patient_export_enabled";
 const POLICY_GATE: Record<string, PolicyGateField> = {
   pre_visit_reminder: "preshow_enabled",
   waitlist_auto_fill: "rescue_enabled",
   auto_recall: "recall_digest_enabled",
   autonomous_rescue: "rescue_autonomous_enabled",
+  monthly_patient_book_export: "patient_export_enabled",
 };
 
 // ─── The autonomy trust rung (Tier-2 Autonomous · Slice 4) ────────────────────

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.31.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.31.0 &mdash; Monthly Patient-Book Export goes live as a Skill: your patient book, emailed to you every month for bookkeeping.</strong> Adopt the <strong>Monthly Patient-Book Export</strong> Skill and once a month SmartSpa emails you a CSV of your full patient book &mdash; no manual download each month. It goes to <em>you</em> only; nothing is ever sent to a patient (it&rsquo;s your own data, in the honest-exit spirit &mdash; so it&rsquo;s deliberately <em>not</em> affected by the patient-sending pause). On/Pause genuinely starts and stops the monthly send, and Manage opens your account page where you can pull a full export (with appointments and waitlist) any time. Honest by construction: a spa with an empty book gets no email, an owner with no email on file is skipped, and a 25-day dedup guard makes the job safe to re-run. The monthly export reuses the <em>exact</em> same roster as the on-demand account-page export &mdash; one definition, no drift. This is the second <em>routine</em>-style Skill in the Account solution to ship. <strong>New</strong>: migration <code>v2_31_0_patient_export</code> (<code>patient_export_enabled</code> + <code>patient_export_last_sent_at</code>), <code>sendPatientBookExportForUser</code> + the <code>/api/cron/patient-export</code> monthly job, and a factored-out <code>gatherSpaDataExport</code> shared by the page and the cron. <strong>Touched</strong>: <code>data-export</code> (the gather split + the emailer), <code>skill-catalog</code> (export Skill &rarr; live routine), <code>skills.functions</code> (the On/Pause gate).",
+    ],
+  },
+  {
     version: "v2.30.0",
     date: "June 2026",
     items: [
