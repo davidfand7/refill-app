@@ -92,6 +92,7 @@ function AListRulesPage() {
   const [clearText, setClearText] = useState("");
   const [busy, setBusy] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [flaggedOpen, setFlaggedOpen] = useState(false);
   const [freshness, setFreshness] = useState<ReliabilityFreshness | null>(null);
   const [recomputing, setRecomputing] = useState(false);
 
@@ -196,6 +197,24 @@ function AListRulesPage() {
       ),
     [reliabilityFlags],
   );
+
+  // The flagged patients, by name, for the drill-in list — so the operator can
+  // eyeball it and recognize their problem clients (the trust-by-recognition
+  // check). Joins the 6mo-flagged reliability rows to patient names, worst
+  // first (cancels + no-shows).
+  const flaggedList = useMemo(() => {
+    if (!patients) return [];
+    const byId = new Map(patients.map((p) => [p.id, p]));
+    return reliabilityFlags
+      .filter((f) => f.cancellations6mo > 0 || f.noShows6mo > 0)
+      .map((f) => ({
+        id: f.patientNodeId,
+        name: byId.get(f.patientNodeId)?.displayName ?? "(unknown patient)",
+        cancels: f.cancellations6mo,
+        noShows: f.noShows6mo,
+      }))
+      .sort((a, b) => b.cancels + b.noShows - (a.cancels + a.noShows));
+  }, [reliabilityFlags, patients]);
 
   const matchingIds = useMemo(() => {
     if (!patients) return new Set<string>();
@@ -552,6 +571,53 @@ function AListRulesPage() {
                 </span>
               </span>
             </label>
+
+            {/* Drill-in: see exactly WHO is flagged (trust by recognition —
+                operators know their problem clients by name). Outside the label
+                so it never toggles the rule. */}
+            {flaggedList.length > 0 && (
+              <div className="pl-6">
+                <button
+                  type="button"
+                  onClick={() => setFlaggedOpen((o) => !o)}
+                  className="inline-flex items-center gap-1 text-[12px] font-semibold text-emerald hover:opacity-80"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  {flaggedOpen ? "Hide" : "View"} the {flaggedList.length.toLocaleString()} flagged
+                  patient{flaggedList.length === 1 ? "" : "s"}
+                  {flaggedOpen ? (
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  )}
+                </button>
+                {flaggedOpen && (
+                  <ul className="mt-2 max-h-72 overflow-y-auto rounded-lg border border-rule bg-white divide-y divide-rule">
+                    {flaggedList.map((f) => (
+                      <li
+                        key={f.id}
+                        className="flex items-center gap-2 px-3 py-1.5 text-[12.5px]"
+                      >
+                        <span className="font-medium text-ink">{f.name}</span>
+                        <span className="ml-auto text-ink-faint">
+                          {f.cancels > 0 && (
+                            <>
+                              {f.cancels} cancel{f.cancels === 1 ? "" : "s"}
+                            </>
+                          )}
+                          {f.cancels > 0 && f.noShows > 0 && " · "}
+                          {f.noShows > 0 && (
+                            <span className="text-rose">
+                              {f.noShows} no-show{f.noShows === 1 ? "" : "s"}
+                            </span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
         </section>
 

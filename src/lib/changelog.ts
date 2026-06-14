@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.40.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.40.0 &mdash; See exactly <em>who</em> is flagged for cancellation history, by name.</strong> On the A-list rules page, the &ldquo;Exclude cancellation history&rdquo; summary told you <em>how many</em> patients were flagged (e.g. &ldquo;103 flagged · 151 cancels / 1 no-show&rdquo;) but not who. Now there&rsquo;s a <strong>&ldquo;View the N flagged patients&rdquo;</strong> link that opens the actual list &mdash; each patient by name with their last-6-months cancels and no-shows, worst first. You&rsquo;ll recognize your problem clients instantly, which is the fastest way to confirm the rule is doing the right thing (most owners know their flaky regulars by heart). It&rsquo;s a read-only drill-in &mdash; opening it never changes the rule. <strong>Touched</strong>: the A-list rules page (joins the flagged reliability rows to patient names + a collapsible list).",
+    ],
+  },
+  {
     version: "v2.39.0",
     date: "June 2026",
     items: [
