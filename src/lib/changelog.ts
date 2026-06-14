@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.26.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.26.0 &mdash; One switch to pause everything: the honest-pause kill switch (Tier-2 Autonomous &middot; Slice 3).</strong> The third and final safety rail under autonomy &mdash; the brake you can always reach. A new <strong>&ldquo;Pause all sending&rdquo;</strong> control at the top of your Skills page stops <em>every</em> automated message at once: rescue texts, appointment reminders, and the weekly recall digest. It sits above every individual on/off &mdash; flip it and a paused spa sends nothing to anyone until you resume, no matter what each engine&rsquo;s own setting says. One tap turns a calm &ldquo;sending is active&rdquo; row into a clear amber &ldquo;all sending is paused&rdquo; banner; one tap brings it back. Every flip is written to the immutable agent-action ledger (who paused, when), so the brake is as auditable as the sends it governs. It&rsquo;s deliberately <em>not</em> locked behind earning Skills &mdash; a safety control has to be reachable the moment you want it. With this, the autonomous tier now has all three rails it needs before an agent ever sends on its own: a <strong>memory</strong> (the action ledger, v2.24.0), a <strong>governor</strong> (the cross-agent frequency cap, v2.25.0), and now a <strong>brake</strong> (this). <strong>New</strong>: migration <code>v2_26_0_sending_pause</code> (<code>sending_paused</code> on the policy row), <code>sending-pause.ts</code>, <code>getSendingPaused</code>/<code>setSendingPaused</code>. <strong>Touched</strong>: <code>emma-rescue</code> + <code>emma-preshow</code> + the recall-digest cron (all poll the switch at dispatch) &middot; the Skills page (the control). Next: the explicit, <em>earned</em> Autonomous Rescue Skill &mdash; the payoff these rails make safe.",
+    ],
+  },
+  {
     version: "v2.25.0",
     date: "June 2026",
     items: [
