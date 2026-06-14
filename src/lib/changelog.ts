@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.22.2",
+    date: "June 2026",
+    items: [
+      "<strong>v2.22.2 &mdash; Recall emails now use your real spa name, not &ldquo;Your spa.&rdquo;</strong> The Weekly Recall Digest (and the recall iMessage-draft email) were falling back to a generic &ldquo;Your spa&rdquo; because they looked the spa name up the wrong way (<code>node_type='spa_profile'</code> instead of the canonical <code>context='spa-profile'</code>/<code>lookup_key='spa-name'</code> node). Both now call the shared <code>getSpaName()</code> resolver, so the subject and body read your actual practice name. Small thing, big difference in how the email <em>feels</em> &mdash; craft is the moat. <strong>Touched</strong>: <code>refill-recall.functions.ts</code> (digest + dispatch both use <code>getSpaName</code>). No migration.",
+    ],
+  },
+  {
     version: "v2.22.1",
     date: "June 2026",
     items: [

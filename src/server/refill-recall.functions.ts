@@ -32,6 +32,7 @@ import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import { getSpaName } from "@/server/emma-optout.functions";
 import { fetchAllRows } from "@/server/paginate";
 import { doListOverdue } from "@/server/patient-ingest.functions";
 import { recordRecoveryEvent } from "@/server/emma-attribution.functions";
@@ -482,21 +483,17 @@ export const draftRecallOutreachFn = createServerFn({ method: "POST" })
     const sb = admin();
 
     // Destination inbox + spa identity (same sources as Recognition dispatch).
-    const [{ data: policy }, { data: spaProfile }] = await Promise.all([
+    const [{ data: policy }, spaName] = await Promise.all([
       sb
         .from("emma_noshow_policies")
         .select("rescue_proxy_email")
         .eq("user_id", effectiveUserId)
         .maybeSingle(),
-      sb
-        .from("knowledge_nodes")
-        .select("title")
-        .eq("user_id", effectiveUserId)
-        .eq("node_type", "spa_profile")
-        .maybeSingle(),
+      // Canonical spa-name resolver (context='spa-profile'/lookup_key='spa-name').
+      // The old node_type='spa_profile' read missed it → generic "Your spa".
+      getSpaName(effectiveUserId),
     ]);
     const proxyEmail = policy?.rescue_proxy_email?.trim() || null;
-    const spaName = spaProfile?.title?.trim() || "Your spa";
 
     type Built = { fullName: string; phone: string; body: string };
     const built: Built[] = [];
@@ -734,16 +731,6 @@ async function ownerEmailForUserId(
   }
 }
 
-async function spaNameForUserId(sb: RecallSb, userId: string): Promise<string> {
-  const { data } = await sb
-    .from("knowledge_nodes")
-    .select("title")
-    .eq("user_id", userId)
-    .eq("node_type", "spa_profile")
-    .maybeSingle();
-  return data?.title?.trim() || "Your spa";
-}
-
 export type RecallDigestResult =
   | { status: "sent"; email: string; dollars: number; patients: number }
   | { status: "empty" }
@@ -770,7 +757,7 @@ export async function sendRecallDigestForUser(
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return { status: "error", error: "RESEND_API_KEY missing on the worker." };
 
-  const spaName = await spaNameForUserId(sb, userId);
+  const spaName = await getSpaName(userId);
   const ctaUrl = `${publicOrigin.replace(/\/$/, "")}/app/refill/recognition/recall`;
   const { subject, text, html } = composeRecallDigestEmail({ spaName, view, ctaUrl });
 
