@@ -191,6 +191,9 @@ export function SpaOffersCard({
           addonLabel: needsAddon ? addonLabel.trim() : null,
           activeWeekdays: weekdays.size ? [...weekdays].sort((a, b) => a - b) : null,
           quantityCap: capN,
+          // Picking a weekday makes it a recurring weekly offer, so its cap
+          // resets each week; otherwise the cap is lifetime.
+          capPeriod: weekdays.size ? "weekly" : "total",
           startsOn: startsOn || null,
           endsOn: endsOn || null,
           title: label.trim() || undefined,
@@ -476,11 +479,12 @@ export function SpaOffersCard({
                 })}
               </div>
               <p className="mt-1 text-[10.5px] text-ink-faint">
-                Blank = every day. Pick Tue for &ldquo;Tox Tuesdays.&rdquo;
+                Blank = every day. Pick Tue for &ldquo;Tox Tuesdays&rdquo; — it
+                then repeats weekly.
               </p>
             </div>
             <div>
-              <Lbl>Limit (optional)</Lbl>
+              <Lbl>{weekdays.size > 0 ? "Limit / week (optional)" : "Limit (optional)"}</Lbl>
               <input
                 type="number"
                 inputMode="numeric"
@@ -492,7 +496,9 @@ export function SpaOffersCard({
                 className="w-full rounded border border-rule bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber/30"
               />
               <p className="mt-1 text-[10.5px] text-ink-faint">
-                Stops after this many redemptions.
+                {weekdays.size > 0
+                  ? "Resets each week — e.g. 20 every Tox Tuesday."
+                  : "Stops after this many redemptions."}
               </p>
             </div>
           </div>

@@ -106,12 +106,14 @@ export const SKILL_CATALOG: SkillTemplate[] = [
     key: "weekly_offer",
     label: "Weekly Offer (e.g. Tox Tuesday)",
     description:
-      "Run a recurring offer and show an at-booking add-on badge for it — without re-creating it every week.",
+      "Run a standing weekly special — pick the day it runs (e.g. Tuesdays) and an optional per-week limit, and it badges that service at booking every week on its own, with the limit resetting each week. No re-creating it Monday morning. Pausing this Skill takes all your weekly offers off booking at once; turning it back on returns them.",
     solution: "promos",
     materializer: "routine",
-    status: "preview",
-    adoptCopy: "Will keep your recurring offer live and badged at booking.",
+    status: "live",
+    adoptCopy:
+      "Opens your offers page to set up a recurring weekly offer (pick a day + an optional weekly limit) — then it badges at booking every week and the limit resets each week. On/Pause is the master switch for your weekly offers.",
     liftHint: "A standing reason to add on, every week.",
+    manageTo: "/app/refill/recognition/rewards",
   },
   {
     key: "reward_expiry_sweep",

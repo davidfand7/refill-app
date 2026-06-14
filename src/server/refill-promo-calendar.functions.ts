@@ -125,6 +125,29 @@ export async function loadTenantPromoOffers(
   return ((data as OfferDbRow[] | null) ?? []).map(rowToOffer);
 }
 
+/**
+ * Master switch for a spa's RECURRING (weekly) offers — the engine wiring
+ * behind the "Weekly Offer" Skill's On/Pause. Pausing flips is_active off on
+ * every source='spa' offer whose cap is weekly, so they stop badging at
+ * booking (matchOfferForName / publicDeals already honor is_active); resuming
+ * flips them back on. Scoped to cap_period='weekly' so it never touches a
+ * one-off spa offer or any manufacturer promo. Returns how many rows it moved.
+ */
+export async function setSpaWeeklyOffersActive(
+  sb: AnySb,
+  userId: string,
+  enabled: boolean,
+): Promise<number> {
+  const tenantId = await getTenantIdForUser(sb, userId);
+  const { data } = await offersTbl(sb)
+    .update({ is_active: enabled })
+    .eq("tenant_id", tenantId)
+    .eq("source", "spa")
+    .eq("cap_period", "weekly")
+    .select("id");
+  return ((data as { id: string }[] | null) ?? []).length;
+}
+
 export type PromoIngestReceipt = {
   offers: number;
   skipped: number;

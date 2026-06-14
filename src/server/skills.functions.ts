@@ -46,6 +46,7 @@ import {
 } from "@/lib/skill-catalog";
 import { recordAgentAction } from "@/server/messaging-activity";
 import { setAttributionEnabled } from "@/server/refill-attribution-agent.functions";
+import { setSpaWeeklyOffersActive } from "@/server/refill-promo-calendar.functions";
 
 // ─── Public types ───────────────────────────────────────────────────────────
 
@@ -416,6 +417,12 @@ export const adoptSkill = createServerFn({ method: "POST" })
     if (tpl.key === "auto_verify_recoveries") {
       await setAttributionEnabled(sb, effectiveUserId, true);
     }
+    // weekly_offer materializes by AUTHORING (she creates the offer on the
+    // manage page). Adopting just ensures her existing weekly offers (if any)
+    // are live — a no-op for a spa that hasn't authored one yet.
+    if (tpl.key === "weekly_offer") {
+      await setSpaWeeklyOffersActive(sb, effectiveUserId, true);
+    }
     if (tpl.manageTo) materializedRef.manageTo = tpl.manageTo;
 
     const nowIso = new Date().toISOString();
@@ -501,6 +508,11 @@ export const setSkillEnabled = createServerFn({ method: "POST" })
     // Auto-Verify's gate is the attribution master toggle (separate store).
     if (skill.template_key === "auto_verify_recoveries") {
       await setAttributionEnabled(sb, effectiveUserId, data.enabled);
+    }
+    // Weekly Offer's gate is is_active on the spa's weekly offers (the offers
+    // table, not emma_noshow_policies) — the master switch for recurring offers.
+    if (skill.template_key === "weekly_offer") {
+      await setSpaWeeklyOffersActive(sb, effectiveUserId, data.enabled);
     }
     return hydrate(skill);
   });

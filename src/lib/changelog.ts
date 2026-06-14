@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.33.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.33.0 &mdash; Weekly Offer (&ldquo;Tox Tuesday&rdquo;) goes live as a Skill &mdash; a standing weekly special you set up once.</strong> Building on last release&rsquo;s weekly-cap engine, the <strong>Weekly Offer</strong> Skill is now adoptable from your Skills page. Adopt it and it opens your offers page, where authoring a recurring special is now a one-step thing: pick the day it runs (e.g. Tuesdays) and an optional per-week limit, and it badges that service at booking <em>every</em> week on its own &mdash; with the limit resetting each week, so &ldquo;20 per Tox Tuesday&rdquo; gives a fresh 20 every Tuesday. No re-creating it Monday morning. The On/Pause is the honest master switch for your weekly offers: <em>Pause</em> takes every weekly offer off booking at once, <em>On</em> brings them back &mdash; it really flips them, it&rsquo;s not a cosmetic toggle. The offer form now says what it&rsquo;s doing: choose a weekday and the limit field relabels to &ldquo;Limit / week&rdquo; and tells you it resets weekly, so there&rsquo;s no guessing whether the cap is lifetime or per-week. This is the third <em>routine</em>-style Skill in the Promos solution, and it closes the third of the four Skill-funnel &ldquo;coming soon&rdquo; tiles. <strong>New</strong>: <code>setSpaWeeklyOffersActive</code> (the master-switch helper). <strong>Touched</strong>: <code>skill-catalog</code> (Weekly Offer &rarr; live routine, deep-links your offers page), <code>skills.functions</code> (adopt + On/Pause flip the weekly offers), <code>SpaOffersCard</code> (a chosen weekday now authors a weekly-resetting offer, with honest per-week cap labelling).",
+    ],
+  },
+  {
     version: "v2.32.0",
     date: "June 2026",
     items: [
