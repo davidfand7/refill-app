@@ -18,6 +18,7 @@ export type BillableMetricKey =
   | "slot_fill"
   | "recall_booking"
   | "cross_sell_addon"
+  | "reschedule_booking"
   | "lead_conversion";
 
 export type FeeMode = "flat" | "percent";
@@ -66,6 +67,17 @@ export const BILLABLE_METRICS: BillableMetricDef[] = [
     defaultAmount: 5,
     // Live as of v2.4.8 — the Cross-Sell offer engine (manufacturer + spa
     // offers, both booking paths, cohort targeting + push) is fully shipped.
+    live: true,
+  },
+  {
+    key: "reschedule_booking",
+    label: "Reschedule booking",
+    description:
+      "A patient who cancelled or no-showed rebooks after a Reschedule Reminders nudge.",
+    defaultAmount: 5,
+    // Live as of v2.37.0 — Reschedule Reminders drafts the nudge and the booking
+    // paths credit a reschedule_booking win when a recently-nudged patient
+    // rebooks (verified-only on reconcile, like cross-sell / recall).
     live: true,
   },
   {

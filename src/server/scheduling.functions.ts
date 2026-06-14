@@ -50,6 +50,7 @@ import {
   loadTenantPromoOffers,
   recordCrossSellWin,
 } from "@/server/refill-promo-calendar.functions";
+import { recordRescheduleWinIfNudged } from "@/server/reschedule.functions";
 import { getTenantOwnerUserId } from "@/server/scheduling-settings.functions";
 import { bestActiveOfferForName, badgeableOffers, type AddOnOffer } from "@/lib/promo-calendar";
 import {
@@ -963,6 +964,20 @@ export const confirmBooking = createServerFn({ method: "POST" })
         });
       } catch (e) {
         console.error("[cross-sell] public self-book win failed:", e);
+      }
+      // Reschedule: a recently-nudged patient self-booking is a $5
+      // reschedule_booking win (after cross-sell so a promo'd rebook stays one
+      // win). Best-effort.
+      try {
+        await recordRescheduleWinIfNudged({
+          sb,
+          userId: updated.user_id,
+          appointmentId: updated.id,
+          email: data.email,
+          phone: data.phone || null,
+        });
+      } catch (e) {
+        console.error("[reschedule] public self-book win failed:", e);
       }
     }
 

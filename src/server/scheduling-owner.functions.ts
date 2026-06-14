@@ -26,6 +26,7 @@ import {
   loadTenantPromoOffers,
   recordCrossSellWin,
 } from "@/server/refill-promo-calendar.functions";
+import { recordRescheduleWinIfNudged } from "@/server/reschedule.functions";
 import { bestActiveOfferForName, badgeableOffers, type AddOnOffer } from "@/lib/promo-calendar";
 import { zonedWallClockToUtc, zonedDateParts, todayIsoInTz } from "@/lib/scheduling-slots";
 import { sendBookingConfirmation } from "@/server/scheduling-email";
@@ -782,6 +783,21 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
       });
     } catch (e) {
       console.error("[cross-sell] win record failed:", e);
+    }
+
+    // Reschedule: if this patient was recently nudged to rebook, credit a $5
+    // reschedule_booking win (after cross-sell, so a promo'd rebook stays one
+    // win). Best-effort — never blocks the booking.
+    try {
+      await recordRescheduleWinIfNudged({
+        sb,
+        userId: effectiveUserId,
+        appointmentId: created.id,
+        email: data.patientEmail ?? null,
+        phone: data.patientPhone ?? null,
+      });
+    } catch (e) {
+      console.error("[reschedule] win record failed:", e);
     }
 
     return { ok: true, id: created.id };

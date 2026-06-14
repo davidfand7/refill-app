@@ -544,7 +544,7 @@ export const deleteSpaOffer = createServerFn({ method: "POST" })
 // Resolve a booking to a patient node by contact (emails are stored
 // lowercased; phone as last-10 digits) so the cross_sell win can attribute +
 // later verify against a real transaction.
-async function resolvePatientNodeByContact(
+export async function resolvePatientNodeByContact(
   sb: AnySb,
   userId: string,
   email: string | null,

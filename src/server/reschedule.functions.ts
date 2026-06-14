@@ -19,8 +19,14 @@ import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import { getTenantIdForUser } from "@/server/scheduling-settings.functions";
 import { resolveSpaName } from "@/server/emma-spa-profile";
 import { recordAgentAction, recordMessagingActivity } from "@/server/messaging-activity";
+import { recordRecoveryEvent } from "@/server/emma-attribution.functions";
+import { resolvePatientNodeByContact } from "@/server/refill-promo-calendar.functions";
 import { fetchAllRows } from "@/server/paginate";
 import { classifyAppointmentOutcome } from "@/lib/noshow-classify";
+
+/** A reschedule win is attributable only when the rebooking lands within this
+ *  window of the nudge — beyond it, the booking isn't credibly ours. */
+const RESCHEDULE_ATTRIBUTION_DAYS = 30;
 
 function admin() {
   const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -584,3 +590,60 @@ export const draftRescheduleNudges = createServerFn({ method: "POST" })
 
     return { drafted: built.length, skippedNoPhone, sentTo: pol.proxyEmail, error: null };
   });
+
+// ─── The $5 win (Slice 3) ────────────────────────────────────────────────────
+//
+// Called from the booking paths (owner create + public self-book), AFTER the
+// cross-sell hook, so a rebooking that's ALSO a cross-sell stays a single $5 win
+// (the one-event-per-appointment unique index lets cross_sell — recorded first —
+// win the tie; this no-ops via 23505). Credits reschedule_booking when a
+// recently-nudged patient rebooks. Best-effort, never blocks a booking.
+//
+// Attribution note (honest): the signal is "we drafted a nudge for this patient"
+// (agent_actions reschedule·nudge_drafted) — the owner reviews + sends via the
+// iMessage MCP, which is outside our system, so a draft is the truest send-proxy
+// we have. Provisional until the reconcile cron matches a real transaction, so
+// it only bills verified — same conservative path as cross-sell / recall.
+export async function recordRescheduleWinIfNudged(args: {
+  sb: AnySb;
+  userId: string;
+  appointmentId: string;
+  email: string | null;
+  phone: string | null;
+}): Promise<{ recorded: boolean; reason?: string }> {
+  const patientNodeId = await resolvePatientNodeByContact(
+    args.sb,
+    args.userId,
+    args.email,
+    args.phone,
+  );
+  if (!patientNodeId) return { recorded: false, reason: "unmatched_patient" };
+
+  const sinceIso = new Date(
+    Date.now() - RESCHEDULE_ATTRIBUTION_DAYS * 86_400_000,
+  ).toISOString();
+  const { data: nudge } = await loose(args.sb)
+    .from("agent_actions")
+    .select("id")
+    .eq("user_id", args.userId)
+    .eq("agent", "reschedule")
+    .eq("action", "nudge_drafted")
+    .eq("patient_node_id", patientNodeId)
+    .gte("created_at", sinceIso)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!nudge) return { recorded: false, reason: "no_recent_nudge" };
+
+  await recordRecoveryEvent({
+    sb: args.sb as unknown as Parameters<typeof recordRecoveryEvent>[0]["sb"],
+    userId: args.userId,
+    appointmentId: args.appointmentId,
+    patientNodeId,
+    recoveryAgent: "reschedule",
+    metricKey: "reschedule_booking",
+    attributionMethod: "direct",
+    notes: "Reschedule: rebooked after a reschedule nudge",
+  });
+  return { recorded: true };
+}

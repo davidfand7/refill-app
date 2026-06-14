@@ -44,7 +44,13 @@ import { loadAttributionSettings } from "@/server/refill-attribution-agent.funct
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
-export type RecoveryAgent = "rescue" | "post_recovery" | "preshow" | "recall" | "cross_sell";
+export type RecoveryAgent =
+  | "rescue"
+  | "post_recovery"
+  | "preshow"
+  | "recall"
+  | "cross_sell"
+  | "reschedule";
 export type VerificationSource = "qbo" | "stripe" | "square" | "manual";
 
 export type RecoveryEvent = {

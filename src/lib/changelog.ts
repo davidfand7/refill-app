@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.37.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.37.0 &mdash; Reschedule Reminders now earns its keep: a $5 win when a nudged patient rebooks.</strong> When a patient you nudged through Reschedule Reminders comes back and books &mdash; whether you book them or they self-book from the link &mdash; SmartSpa records a <strong>reschedule booking</strong> win, the same flat $5 as every other meter. It&rsquo;s credited only when the rebooking lands within 30 days of the nudge, and it&rsquo;s <em>provisional</em> until your books confirm the patient actually paid &mdash; so, exactly like recall and cross-sell, it only ever bills on a <em>verified</em> win, never on a hopeful one. No double-billing: a rebooking that&rsquo;s also a cross-sell stays a single $5 win (one event per appointment). Nothing about your pricing changes &mdash; this just lights up the meter that was always part of &ldquo;free + $5 per win&rdquo; for this Solution. <strong>New</strong>: migration <code>v2_37_0_reschedule_agent</code> (adds <code>reschedule</code> to the recovery-agent set), <code>reschedule_booking</code> joins the billable-metric taxonomy at $5, and <code>recordRescheduleWinIfNudged</code> in both booking paths. <strong>Touched</strong>: <code>billing-metrics</code>, <code>emma-attribution</code> (the agent type), <code>scheduling-owner</code> + <code>scheduling</code> (the booking hooks).",
+    ],
+  },
+  {
     version: "v2.36.0",
     date: "June 2026",
     items: [
