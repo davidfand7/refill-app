@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.25.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.25.0 &mdash; The cross-agent frequency cap: no patient gets texted twice in a day, even by two different agents (Tier-2 Autonomous &middot; Slice 2).</strong> The second safety rail under autonomy. Your rescue agent and your pre-show reminder agent are separate engines that don&rsquo;t know about each other &mdash; so without a shared brake, a patient could get a &ldquo;your appointment is tomorrow&rdquo; reminder in the morning and a &ldquo;a slot just opened&rdquo; rescue blast in the afternoon. Now every patient text writes a per-patient row to the <code>agent_actions</code> ledger (the shared memory we built in v2.24.0), and before the <strong>rescue agent</strong> auto-texts anyone, it checks that ledger: if <em>any</em> agent already reached that patient by SMS in the last ~20 hours, it <em>yields</em> &mdash; the redundant blast is held and recorded as a suppression (an honest audit of a thing the agent decided <em>not</em> to do), and a later sweep re-evaluates once the window passes. The asymmetry is deliberate: a <strong>pre-show reminder</strong> always counts toward the tally but is never itself suppressed &mdash; we never silence a reminder for an appointment a patient actually has (that&rsquo;s the part that reduces no-shows). The cap exists to stop redundant outreach from stacking, not to drop the messages that matter. <strong>New</strong>: <code>frequency-cap.ts</code> (<code>checkRecentContact()</code>, fails open so a telemetry hiccup never blocks a real send). <strong>Touched</strong>: <code>emma-rescue.functions.ts</code> (reads the cap + yields, now logs one ledger row per patient texted) &middot; <code>emma-preshow.functions.ts</code> (contributes to the tally). Next: a one-tap &ldquo;pause all sending&rdquo; kill switch, then the explicit, <em>earned</em> Autonomous Rescue Skill.",
+    ],
+  },
+  {
     version: "v2.24.0",
     date: "June 2026",
     items: [

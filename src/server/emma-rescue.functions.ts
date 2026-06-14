@@ -46,6 +46,10 @@ import { fetchAllRows } from "@/server/paginate";
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
 import { recordMessagingActivity, recordAgentAction } from "@/server/messaging-activity";
 import {
+  checkRecentContact,
+  FREQUENCY_CAP_WINDOW_HOURS,
+} from "@/server/frequency-cap";
+import {
   resolveOwnerDisplayName,
   resolveSpaFromNumber,
   resolveSpaName,
@@ -57,6 +61,8 @@ export type RescueDispatchResult = {
   ok: boolean;
   attemptId: string | null;
   offersSent: number;
+  /** Texts the frequency cap held back (patient contacted in-window). */
+  offersSuppressed?: number;
   reason?: string;
 };
 
@@ -896,6 +902,7 @@ export async function dispatchRescueAttempt(args: {
   //     check could be path-aware. Re-used here for readability.)
 
   let offersSent = 0;
+  let offersSuppressed = 0;
 
   if (isProxyMode && collected.length > 0) {
     // Hydrate patient names once for the aggregated bodies.
@@ -1046,6 +1053,33 @@ export async function dispatchRescueAttempt(args: {
         }
         continue;
       }
+      // Tier-2 cross-agent frequency cap (Slice 2): before this autonomous text
+      // fires, has ANY agent (this rescue run, an earlier one, or a preshow
+      // reminder) already contacted this patient by SMS in the window? If so,
+      // YIELD — don't stack a "a slot opened" blast on top of a message they
+      // just got. We record the suppression in the ledger (the honest audit of
+      // a thing the agent decided NOT to do) and leave the offer unsent; a
+      // later sweep re-evaluates once the window has passed.
+      const recent = await checkRecentContact(sb, userId, c.patientNodeId, "sms");
+      if (recent.recentlyContacted) {
+        offersSuppressed++;
+        await recordAgentAction(sb, userId, {
+          agent: "rescue",
+          action: "sms_suppressed",
+          channel: "sms",
+          patientNodeId: c.patientNodeId,
+          count: 1,
+          confidenceTier: c.matchTier,
+          initiatedBy: "autonomous",
+          metadata: {
+            reason: "frequency_cap",
+            window_h: FREQUENCY_CAP_WINDOW_HOURS,
+            last_agent: recent.lastAgent,
+            last_at: recent.lastAt,
+          },
+        });
+        continue;
+      }
       const body = composeRescueSms({
         spaName,
         treatmentType: apt.treatment_type,
@@ -1065,6 +1099,20 @@ export async function dispatchRescueAttempt(args: {
           .update({ message_id: resp.messageId })
           .eq("id", c.offerId);
         offersSent++;
+        // Tier-2 ledger (autonomous): one IMMUTABLE row PER patient texted with
+        // no human tap — the dispute-proof record of what the agent did on its
+        // own AND the shared tally the frequency cap reads next time. (Slice 1
+        // logged this as one aggregate row; per-patient is what makes the
+        // cross-agent cap above possible.) Best-effort — the text already sent.
+        await recordAgentAction(sb, userId, {
+          agent: "rescue",
+          action: "sms_sent",
+          channel: "sms",
+          patientNodeId: c.patientNodeId,
+          count: 1,
+          confidenceTier: c.matchTier,
+          initiatedBy: "autonomous",
+        });
       } catch (e) {
         await sb
           .from("emma_rescue_offers")
@@ -1074,19 +1122,6 @@ export async function dispatchRescueAttempt(args: {
           })
           .eq("id", c.offerId);
       }
-    }
-
-    // Tier-2 ledger (autonomous): the direct-mode SMS that just fired with no
-    // human tap — the dispute-proof record of what the agent did on its own.
-    // Best-effort (never throws); the texts already went out.
-    if (offersSent > 0) {
-      await recordAgentAction(sb, userId, {
-        agent: "rescue",
-        action: "sms_sent",
-        channel: "sms",
-        count: offersSent,
-        initiatedBy: "autonomous",
-      });
     }
   }
 
@@ -1104,7 +1139,7 @@ export async function dispatchRescueAttempt(args: {
     await recordMessagingActivity(sb, userId, "sms", "rescue", offersSent);
   }
 
-  return { ok: true, attemptId: attempt.id, offersSent };
+  return { ok: true, attemptId: attempt.id, offersSent, offersSuppressed };
 }
 
 // ─── Public landing-page payload ──────────────────────────────────────────

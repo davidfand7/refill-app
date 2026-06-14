@@ -28,6 +28,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 import { sendSms } from "@/server/sms-provider";
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
+import { recordAgentAction } from "@/server/messaging-activity";
 import {
   resolveSpaFromNumber,
   resolveSpaName,
@@ -680,6 +681,23 @@ export async function dispatchPreShowReminder(args: {
       message: dispatchError.message,
     };
   }
+
+  // Tier-2 cross-agent tally (Slice 2): a scheduled reminder just went out —
+  // record a per-patient ledger row so the frequency cap counts it. Preshow is
+  // TRANSACTIONAL, so it contributes to the tally but never self-suppresses
+  // (we never silence a reminder for an appointment the patient actually has);
+  // what it does do is make a redundant rescue blast to the same patient that
+  // day yield. Best-effort — the reminder already sent.
+  await recordAgentAction(sb, userId, {
+    agent: "preshow",
+    action: effectiveChannel === "email" ? "email_sent" : "sms_sent",
+    channel: effectiveChannel === "email" ? "email" : "sms",
+    patientNodeId: apt.patient_node_id,
+    count: 1,
+    initiatedBy: "autonomous",
+    metadata: { offset_hours: offsetHours },
+  });
+
   return { ok: true, messageId, channel, sentAt };
 }
 
