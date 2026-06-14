@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.27.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.27.0 &mdash; Autonomous Rescue: the agent earns the right to act on its own (Tier-2 Autonomous &middot; Slice 4 &mdash; the payoff).</strong> The fourth and final kind of Skill goes live: <em>autonomous</em> &mdash; one the agent <em>runs</em>, not just one you switch on. <strong>Autonomous Rescue</strong> lets SmartSpa text a confident waitlist match the instant a slot frees, with no tap from you. The point is <em>how you get there</em>: it&rsquo;s earned, not default. By design, rescue now <strong>holds every confident match for your one-tap OK</strong> in the review queue &mdash; that queue is the training ground. Each offer you approve is a vote of confidence in the agent&rsquo;s judgment, recorded in the action ledger; once you&rsquo;ve approved a handful, the Autonomous Rescue Skill <em>unlocks</em> on your Skills page (you&rsquo;ll see your progress, e.g. &ldquo;2/3 so far&rdquo;). Adopt it and confident offers start sending on their own &mdash; while uncertain (&ldquo;blind&rdquo;) matches keep waiting for you, always. The scariest version &mdash; an agent blasting people you never vetted &mdash; is impossible by construction. And everything from the last three releases is what makes this safe: the agent acts with a <strong>memory</strong> (the ledger), a <strong>governor</strong> (the frequency cap), a <strong>brake</strong> (pause-all), and now an <strong>earned licence</strong>. <em>Nothing changes for spas already running rescue</em> &mdash; you&rsquo;re grandfathered in as autonomous. <strong>New</strong>: migration <code>v2_27_0_rescue_autonomous</code> (<code>rescue_autonomous_enabled</code> + grandfather backfill), the <code>autonomous_rescue</code> catalog Skill, <code>getAutonomyRung</code> + the earn gate. <strong>Touched</strong>: <code>emma-rescue</code> (the autonomy gate + logs each held-offer approval), <code>skills.functions</code> + the Skills page (the earned card).",
+    ],
+  },
+  {
     version: "v2.26.0",
     date: "June 2026",
     items: [

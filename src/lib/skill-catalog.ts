@@ -149,6 +149,19 @@ export const SKILL_CATALOG: SkillTemplate[] = [
     liftHint: "Saves the weekly manual-confirm chore.",
   },
   {
+    key: "autonomous_rescue",
+    label: "Autonomous Rescue",
+    description:
+      "Let SmartSpa text confident waitlist matches the moment a slot frees — on its own, no tap from you. Uncertain matches still wait for your OK.",
+    solution: "refill",
+    materializer: "autonomous",
+    status: "live",
+    manageTo: "/app/refill/recovery/rescue",
+    adoptCopy:
+      "Will auto-send the confident rescue offers; still holds the uncertain ones for you.",
+    liftHint: "Slots fill faster — the agent acts the instant one opens.",
+  },
+  {
     key: "monthly_patient_book_export",
     label: "Monthly Patient-Book Export",
     description:

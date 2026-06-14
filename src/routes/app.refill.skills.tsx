@@ -46,6 +46,7 @@ import {
   adoptSkill,
   createConciergeProposal,
   dismissSuggestion,
+  getAutonomyRung,
   getSendingPaused,
   listMySkills,
   listSuggestedSkills,
@@ -53,6 +54,7 @@ import {
   setSendingPaused,
   setSkillEnabled,
   type AdoptedSkill,
+  type AutonomyRung,
   type SendingPauseState,
   type SuggestedSkill,
 } from "@/server/skills.functions";
@@ -83,20 +85,23 @@ function SkillsPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [sending, setSending] = useState<SendingPauseState | null>(null);
   const [pauseBusy, setPauseBusy] = useState(false);
+  const [autonomyRung, setAutonomyRung] = useState<AutonomyRung | null>(null);
 
   const load = useCallback(async () => {
     try {
       const t = await token();
-      const [{ reached }, mine, suggested, pause] = await Promise.all([
+      const [{ reached }, mine, suggested, pause, rung] = await Promise.all([
         hasReachedValueMoment({ data: { accessToken: t, viewAsUserId } }),
         listMySkills({ data: { accessToken: t, viewAsUserId } }),
         listSuggestedSkills({ data: { accessToken: t, viewAsUserId } }),
         getSendingPaused({ data: { accessToken: t, viewAsUserId } }),
+        getAutonomyRung({ data: { accessToken: t, viewAsUserId } }),
       ]);
       setValueMoment(reached);
       setSkills(mine);
       setSuggestions(suggested);
       setSending(pause);
+      setAutonomyRung(rung);
     } catch (e) {
       // Fail closed on the gate (don't show prematurely); empty list otherwise.
       setValueMoment((v) => (v === null ? false : v));
@@ -299,6 +304,11 @@ function SkillsPage() {
                   tpl={tpl}
                   busy={busyKey === tpl.key}
                   onAdopt={() => adopt(tpl)}
+                  earnGate={
+                    tpl.materializer === "autonomous" && autonomyRung
+                      ? autonomyRung
+                      : undefined
+                  }
                 />
               ))}
             </div>
@@ -488,12 +498,16 @@ function CatalogCard({
   tpl,
   busy,
   onAdopt,
+  earnGate,
 }: {
   tpl: SkillTemplate;
   busy: boolean;
   onAdopt: () => void;
+  earnGate?: AutonomyRung;
 }) {
   const isLive = tpl.status === "live";
+  // An autonomous Skill that hasn't been earned yet: show progress, not Add.
+  const locked = !!earnGate && !earnGate.earned;
   return (
     <div
       className={
@@ -512,10 +526,27 @@ function CatalogCard({
           {tpl.description}
         </p>
         <p className="mt-2 text-[11px] italic text-ink-faint">{tpl.liftHint}</p>
+        {earnGate && (
+          <p className="mt-2 text-[11px] font-medium text-ink-faint">
+            {earnGate.earned
+              ? "✓ Earned — you've approved enough held offers to let SmartSpa send on its own."
+              : `Earn this by approving held offers — ${earnGate.approved}/${earnGate.required} so far.`}
+          </p>
+        )}
       </div>
 
       <div className="mt-3 flex items-center gap-2 pt-3 border-t border-rule/60">
-        {isLive ? (
+        {!isLive ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-rule px-3 py-1.5 text-[12px] font-medium text-ink-faint">
+            <Lock className="h-3 w-3" />
+            Coming soon
+          </span>
+        ) : locked ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-rule px-3 py-1.5 text-[12px] font-medium text-ink-faint">
+            <Lock className="h-3 w-3" />
+            {`Approve ${earnGate!.required} held offers to unlock`}
+          </span>
+        ) : (
           <button
             type="button"
             onClick={onAdopt}
@@ -529,11 +560,6 @@ function CatalogCard({
             )}
             Add to my back office
           </button>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-rule px-3 py-1.5 text-[12px] font-medium text-ink-faint">
-            <Lock className="h-3 w-3" />
-            Coming soon
-          </span>
         )}
       </div>
     </div>

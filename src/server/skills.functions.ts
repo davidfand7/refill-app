@@ -223,12 +223,44 @@ async function ensureDefaultPreshowProfile(
 type PolicyGateField =
   | "preshow_enabled"
   | "rescue_enabled"
-  | "recall_digest_enabled";
+  | "recall_digest_enabled"
+  | "rescue_autonomous_enabled";
 const POLICY_GATE: Record<string, PolicyGateField> = {
   pre_visit_reminder: "preshow_enabled",
   waitlist_auto_fill: "rescue_enabled",
   auto_recall: "recall_digest_enabled",
+  autonomous_rescue: "rescue_autonomous_enabled",
 };
+
+// ─── The autonomy trust rung (Tier-2 Autonomous · Slice 4) ────────────────────
+//
+// Autonomous Rescue is EARNED, not default: the owner unlocks it after approving
+// N held rescue offers — each approval (the one-tap OK in the review queue) is
+// logged in the immutable ledger as rescue·held_offer_approved. The held queue
+// is the training ground; once she's signed off on the agent's judgment N times,
+// she's shown she trusts it. The ledger we built in Slice 1 is the trust meter.
+export const AUTONOMY_RUNG_APPROVALS = 3;
+
+async function countHeldOfferApprovals(
+  sb: SupabaseAdmin,
+  userId: string,
+): Promise<number> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tbl = (sb as unknown as { from(t: string): any }).from("agent_actions");
+  const { count } = await tbl
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("agent", "rescue")
+    .eq("action", "held_offer_approved");
+  return count ?? 0;
+}
+
+async function reachedAutonomyRung(
+  sb: SupabaseAdmin,
+  userId: string,
+): Promise<boolean> {
+  return (await countHeldOfferApprovals(sb, userId)) >= AUTONOMY_RUNG_APPROVALS;
+}
 
 type NoshowUpdate = Database["public"]["Tables"]["emma_noshow_policies"]["Update"];
 type NoshowInsert = Database["public"]["Tables"]["emma_noshow_policies"]["Insert"];
@@ -340,11 +372,24 @@ export const adoptSkill = createServerFn({ method: "POST" })
           "Skills unlock after your first verified win — once SmartSpa has earned its keep.",
         );
       }
+      // Autonomous materializer = a STRICTER, separately-earned rung: the agent
+      // only sends on its own once you've approved enough of its held offers.
+      if (tpl.materializer === "autonomous") {
+        const earned = await reachedAutonomyRung(sb, effectiveUserId);
+        if (!earned) {
+          const have = await countHeldOfferApprovals(sb, effectiveUserId);
+          throw new Error(
+            `Autonomous Rescue unlocks after you've approved ${AUTONOMY_RUNG_APPROVALS} held offers — you've approved ${have} so far. Keep reviewing the queue and it'll open up.`,
+          );
+        }
+      }
     }
 
     // Materialize the engine artifact + flip the real engine ON.
     //   pre_visit_reminder → ensure a default reminder profile + preshow_enabled
     //   waitlist_auto_fill  → rescue_enabled on the no-show policy
+    //   autonomous_rescue   → rescue must be ON for autonomy to mean anything,
+    //                         then the autonomy flag flips via POLICY_GATE below
     const materializedRef: Record<string, string> = {};
     if (tpl.key === "pre_visit_reminder") {
       const profileId = await ensureDefaultPreshowProfile(
@@ -353,6 +398,10 @@ export const adoptSkill = createServerFn({ method: "POST" })
         tpl.label,
       );
       materializedRef.preshowProfileId = profileId;
+    }
+    if (tpl.key === "autonomous_rescue") {
+      // Autonomy rides on rescue — ensure the base agent is on first.
+      await setNoshowPolicyGate(sb, effectiveUserId, "rescue_enabled", true);
     }
     const gateField = POLICY_GATE[tpl.key];
     if (gateField) {
@@ -842,5 +891,33 @@ export const setSendingPaused = createServerFn({ method: "POST" })
     return {
       paused: data.paused,
       pausedAt: data.paused ? nowIso : null,
+    };
+  });
+
+// ─── Autonomy rung progress (Tier-2 Autonomous · Slice 4) ─────────────────────
+//
+// Feeds the "Autonomous Rescue" catalog card: how many held offers the owner has
+// approved vs. the N she needs to unlock the Skill. An operator viewing-as is
+// always treated as earned (operator context is never gated).
+
+export type AutonomyRung = {
+  approved: number;
+  required: number;
+  earned: boolean;
+};
+
+export const getAutonomyRung = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => accessInput.parse(raw))
+  .handler(async ({ data }): Promise<AutonomyRung> => {
+    const { effectiveUserId, isViewingAs } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const approved = await countHeldOfferApprovals(sb, effectiveUserId);
+    return {
+      approved,
+      required: AUTONOMY_RUNG_APPROVALS,
+      earned: isViewingAs || approved >= AUTONOMY_RUNG_APPROVALS,
     };
   });

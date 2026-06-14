@@ -1049,10 +1049,22 @@ export async function dispatchRescueAttempt(args: {
     // Explicit matches and consented "open" fits (no preference + a typed slot)
     // send as before. Held offers don't count toward offersSent (no send
     // happened) and surface in the rescue-page review queue.
+    //
+    // Tier-2 autonomy gate (Slice 4): confident matches only AUTO-send once the
+    // owner has turned on Autonomous Rescue (earned + adopted). Until then even
+    // confident offers are HELD for her one-tap OK — the review queue is the
+    // training ground that earns autonomy. Blind matches are held regardless.
+    const autonomousEnabled =
+      (policy as { rescue_autonomous_enabled?: boolean })
+        .rescue_autonomous_enabled === true;
     for (const c of collected) {
-      if (c.matchTier === "blind") {
-        const heldReason =
-          "This opening has no treatment set, so SmartSpa couldn't tell this patient what they'd be coming in for — your OK before we text.";
+      const holdReason =
+        c.matchTier === "blind"
+          ? "This opening has no treatment set, so SmartSpa couldn't tell this patient what they'd be coming in for — your OK before we text."
+          : !autonomousEnabled
+            ? "SmartSpa found a confident match — approve it to text them. (Turn on Autonomous Rescue to let SmartSpa send these the moment a slot frees.)"
+            : null;
+      if (holdReason) {
         try {
           // held_at / held_reason were added by the v2.16.0 migration; cast
           // narrowly since they're not in the generated types yet. Best-effort:
@@ -1062,7 +1074,7 @@ export async function dispatchRescueAttempt(args: {
               eq(c: string, v: string): Promise<{ error: unknown }>;
             };
           })
-            .update({ held_at: new Date().toISOString(), held_reason: heldReason })
+            .update({ held_at: new Date().toISOString(), held_reason: holdReason })
             .eq("id", c.offerId);
         } catch (e) {
           console.error("[rescue] hold-write failed:", e);
@@ -2726,6 +2738,18 @@ export const sendHeldRescueOffer = createServerFn({ method: "POST" })
         .update({ outreach_count: count ?? 0 })
         .eq("id", offer.rescue_attempt_id);
     }
+    // Tier-2 trust rung (Slice 4): the owner just approved a held offer with a
+    // tap. This is the earn signal for Autonomous Rescue — N of these unlock the
+    // Skill (reachedAutonomyRung reads exactly these rows). Best-effort.
+    await recordAgentAction(sb, effectiveUserId, {
+      agent: "rescue",
+      action: "held_offer_approved",
+      channel: "sms",
+      patientNodeId: offer.patient_node_id,
+      count: 1,
+      initiatedBy: "owner",
+    });
+
     // Outbound heartbeat so the delivery-health card sees this manual send.
     await recordMessagingActivity(sb, effectiveUserId, "sms", "rescue", 1);
 
