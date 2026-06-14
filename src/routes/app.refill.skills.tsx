@@ -305,7 +305,9 @@ function SkillsPage() {
                   busy={busyKey === tpl.key}
                   onAdopt={() => adopt(tpl)}
                   earnGate={
-                    tpl.materializer === "autonomous" && autonomyRung
+                    tpl.materializer === "autonomous" &&
+                    tpl.status === "live" &&
+                    autonomyRung
                       ? autonomyRung
                       : undefined
                   }
