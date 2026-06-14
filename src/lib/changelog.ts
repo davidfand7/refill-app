@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.29.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.29.0 &mdash; Recovery events that never matched now retire on their own &mdash; so you&rsquo;re never billed for a stale one months later.</strong> Closing a fairness gap in the money trail. When an agent saves an appointment, SmartSpa logs a <em>provisional</em> recovery and the daily reconciliation tries to match it to a real transaction inside your verification window (72h by default). If a match never lands, that provisional used to sit unverified <em>forever</em> &mdash; quietly re-checked on every pass, and worse, a transaction imported months later could still match it and <strong>bill you for a months-old recovery</strong>. Now, once a provisional has gone unmatched past its window (plus a safety buffer, with a 30-day floor), reconciliation retires it: it stops being re-checked and can never late-match into a surprise charge. <strong>What&rsquo;s protected:</strong> a recovery that&rsquo;s already matched and waiting for your one-tap review is <em>never</em> retired &mdash; only the truly dead ones are. And nothing about billing changes: a recovery only ever bills once <em>you</em> (or a confirmed match) verify it, so a retired one was never going to bill anyway. If you ever want to claim a retired recovery, confirming it manually still works and clears the retirement. The reconciliation summary now reports how many it retired each run. <strong>New</strong>: migration <code>v2_29_0_recovery_event_expiry</code> (<code>expired_at</code> + <code>expiry_reason</code> on <code>emma_recovery_events</code>, plus a partial index that keeps the daily scan fast as dead rows accumulate). <strong>Touched</strong>: <code>emma-attribution</code> (skip-expired scan + the retire sweep + manual-confirm clears the flag), <code>api.cron.emma-reconcile</code> (skips spas whose only unverified rows are already retired; reports an <code>expired</code> tally).",
+    ],
+  },
+  {
     version: "v2.28.0",
     date: "June 2026",
     items: [

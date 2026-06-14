@@ -45,18 +45,26 @@ export const Route = createFileRoute("/api/cron/emma-reconcile")({
           auth: { persistSession: false, autoRefreshToken: false },
         });
 
-        // Find spas with at least one unverified recovery event.
-        const { data: rows, error } = await sb
-          .from("emma_recovery_events")
+        // Find spas with at least one LIVE unverified recovery event.
+        // v2.29.0: skip expired ones — a spa whose only unverified rows are
+        // expired no longer needs a reconcile pass (the rows are dead).
+        // expired_at isn't in the generated types yet → loose-cast the filter.
+        const { data: rows, error } = await (
+          sb.from("emma_recovery_events") as unknown as { select(c: string): any }
+        )
           .select("user_id")
           .is("verified_at", null)
+          .is("expired_at", null)
           .limit(10000);
         if (error) return jsonResp(500, { error: `scan: ${error.message}` });
-        const userIds = Array.from(new Set((rows ?? []).map((r) => r.user_id)));
+        const userIds = Array.from(
+          new Set(((rows ?? []) as { user_id: string }[]).map((r) => r.user_id)),
+        );
 
         let totalMatched = 0;
         let totalScanned = 0;
         let totalQueuedForReview = 0;
+        let totalExpired = 0;
         const errors: string[] = [];
 
         for (const userId of userIds) {
@@ -65,6 +73,7 @@ export const Route = createFileRoute("/api/cron/emma-reconcile")({
             totalMatched += r.matched;
             totalScanned += r.scanned;
             totalQueuedForReview += r.queuedForReview;
+            totalExpired += r.expired;
           } catch (e) {
             errors.push(
               `${userId}: ${e instanceof Error ? e.message : "unknown"}`,
@@ -81,6 +90,8 @@ export const Route = createFileRoute("/api/cron/emma-reconcile")({
           // that got proposed amounts written but stayed unverified for
           // Karen to review on /app/refill/recovery.
           queued_for_review: totalQueuedForReview,
+          // v2.29.0: provisionals retired unmatched-past-window this pass.
+          expired: totalExpired,
           errors: errors.slice(0, 20),
         });
       },

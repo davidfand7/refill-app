@@ -186,7 +186,7 @@ export async function recordRecoveryEvent(args: {
 export async function reconcileRecoveryEventsForUser(args: {
   sb: SupabaseAdmin;
   userId: string;
-}): Promise<{ matched: number; scanned: number; queuedForReview: number }> {
+}): Promise<{ matched: number; scanned: number; queuedForReview: number; expired: number }> {
   const { sb, userId } = args;
 
   // v1.34.9.5: load tenant's AttributionSettings + enforce them in dispatch.
@@ -199,19 +199,26 @@ export async function reconcileRecoveryEventsForUser(args: {
     userId,
   );
   if (!settings.enabled) {
-    return { matched: 0, scanned: 0, queuedForReview: 0 };
+    return { matched: 0, scanned: 0, queuedForReview: 0, expired: 0 };
   }
   const windowMs = settings.windowHours * 60 * 60 * 1000;
   const threshold = settings.autoConfirmThresholdUsd;
 
+  // v2.29.0: skip already-expired provisionals — they're dead and must never
+  // late-match (the stale-charge fairness risk). expired_at isn't in the
+  // generated Supabase types yet → loose-cast the column filter.
   const { data: unverified } = await sb
     .from("emma_recovery_events")
     .select("id, patient_node_id, created_at, appointment_id")
     .eq("user_id", userId)
     .is("verified_at", null)
+    .is("expired_at" as never, null)
     .not("patient_node_id", "is", null);
   if (!unverified || unverified.length === 0) {
-    return { matched: 0, scanned: 0, queuedForReview: 0 };
+    // Even with nothing to match, still run the expiry sweep below so dead
+    // provisionals stop being re-scanned forever.
+    const expired = await expireDeadProvisionals(sb, userId, windowMs);
+    return { matched: 0, scanned: 0, queuedForReview: 0, expired };
   }
 
   let matched = 0;
@@ -267,7 +274,61 @@ export async function reconcileRecoveryEventsForUser(args: {
     }
   }
 
-  return { matched, scanned: unverified.length, queuedForReview };
+  // v2.29.0: after the match attempt, retire any provisional that has gone
+  // unmatched past its window. Rows matched/queued above are excluded by the
+  // WHERE (they now have a matched_transaction_id or verified_at).
+  const expired = await expireDeadProvisionals(sb, userId, windowMs);
+
+  return { matched, scanned: unverified.length, queuedForReview, expired };
+}
+
+/**
+ * v2.29.0 — stamp expired_at on truly-dead provisional recovery events so they
+ * stop being re-scanned and can never late-match into a stale charge.
+ *
+ * "Truly dead" = verified_at IS NULL AND matched_transaction_id IS NULL AND the
+ * match window has fully elapsed (+ grace). The age floor is
+ * max(30d, windowMs + 7d grace): the 30d floor for normal tenants, and for a
+ * long-window tenant (windowHours up to 720 = 30d) we always wait past the
+ * window's close + a buffer before expiring, so we never clip a row whose
+ * window is still open.
+ *
+ * ⚠️ A "queued for review" event (matched_transaction_id NOT NULL, verified_at
+ * NULL = legit pending owner OK) is deliberately NOT expired here — expiring it
+ * would silently drop a real pending charge. Manual confirm still works on an
+ * expired row (it clears the expiry — owner override).
+ */
+async function expireDeadProvisionals(
+  sb: SupabaseAdmin,
+  userId: string,
+  windowMs: number,
+): Promise<number> {
+  const graceMs = 7 * 24 * 60 * 60 * 1000;
+  const minAgeMs = 30 * 24 * 60 * 60 * 1000;
+  const expiryAgeMs = Math.max(minAgeMs, windowMs + graceMs);
+  const cutoff = new Date(Date.now() - expiryAgeMs).toISOString();
+
+  // expired_at / expiry_reason aren't in the generated types yet → loose-cast
+  // the table builder (same pattern as sending-pause.ts / frequency-cap.ts).
+  const tbl = (sb as unknown as { from(t: string): any }).from(
+    "emma_recovery_events",
+  );
+  const { data: rows, error } = await tbl
+    .update({
+      expired_at: new Date().toISOString(),
+      expiry_reason: "unmatched_past_window",
+    })
+    .eq("user_id", userId)
+    .is("verified_at", null)
+    .is("matched_transaction_id", null)
+    .is("expired_at", null)
+    .lt("created_at", cutoff)
+    .select("id");
+  if (error) {
+    console.error("expireDeadProvisionals failed:", error.message);
+    return 0;
+  }
+  return (rows as { id: string }[] | null)?.length ?? 0;
 }
 
 // ─── Zod ──────────────────────────────────────────────────────────────────
@@ -416,7 +477,11 @@ export const manualConfirmRecovery = createServerFn({ method: "POST" })
         attributed_revenue_usd: data.amountUsd,
         verified_by: effectiveUserId,
         notes: data.notes ?? null,
-      })
+        // v2.29.0: confirming an expired provisional is an owner override —
+        // clear the expiry so it reads as a clean verified row, not a
+        // contradictory expired-but-verified one. (Loose-cast: not in types.)
+        ...({ expired_at: null, expiry_reason: null } as Record<string, unknown>),
+      } as never)
       .eq("id", data.recoveryEventId)
       .eq("user_id", effectiveUserId)
       .is("verified_at", null) // Don't clobber an already-verified row.
