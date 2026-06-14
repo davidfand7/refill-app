@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.28.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.28.0 &mdash; One opt-out rule, everywhere: a patient who says stop is never messaged by any agent.</strong> Hardening the compliance layer. &ldquo;Banned&rdquo; and &ldquo;opted-out&rdquo; are now read through a single shared rule (<code>patient-contactability</code>) that every outbound path consults &mdash; closing two real gaps a fresh-walk audit surfaced: <strong>Recall</strong> had <em>no</em> opt-out check at all (an opted-out patient could appear in a recall list, the weekly digest dollars, and the drafts), and <strong>campaign blasts</strong> caught a STOP-reply opt-out but missed a spa-flagged one (someone you marked opted-out without a STOP text could still get a blast). Recall now drops banned/opted-out patients <em>at the source</em>, so they vanish from the list, the digest totals, and the drafts at once. Pre-show reminders now run through the same shared rule too. (Rescue already filtered opt-outs correctly &mdash; verified, not changed.) <strong>New</strong>: <code>patient-contactability.ts</code> (<code>patientOptOutStatus</code> + batch <code>loadBlockedNodeIds</code>). <strong>Touched</strong>: <code>refill-recall</code> (source-level filter), <code>emma-blast</code> (the missed flag), <code>emma-preshow</code> (now shares the rule).",
+    ],
+  },
+  {
     version: "v2.27.0",
     date: "June 2026",
     items: [

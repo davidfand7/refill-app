@@ -27,6 +27,7 @@ import { z } from "zod";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { verifyAuth } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
+import { patientOptOutStatus } from "@/server/patient-contactability";
 import { callGeminiOneShot } from "@/server/gemini-oneshot";
 import { sendSms } from "@/server/sms-provider";
 import { bookingUrlFor, ensureBookingToken } from "@/server/emma-booking.functions";
@@ -921,11 +922,19 @@ export async function dispatchOutreach({
         message: "Patient summary missing.",
       };
     }
-    if (patientSummary.banned) {
+    // Compliance: banned OR opted-out blocks all outbound. The state-table
+    // opted_out check above catches STOP replies; this also catches a spa-flagged
+    // attachments.opted_out (no STOP) that previously slipped through — one
+    // shared rule via patient-contactability.
+    const optOut = patientOptOutStatus(patientSummary);
+    if (optOut.blocked) {
       return {
         ok: false,
-        skipReason: "banned",
-        message: "Patient flagged banned — outbound blocked.",
+        skipReason: optOut.reason === "opted_out" ? "opted_out" : "banned",
+        message:
+          optOut.reason === "opted_out"
+            ? "Patient opted out — outbound blocked."
+            : "Patient flagged banned — outbound blocked.",
       };
     }
 

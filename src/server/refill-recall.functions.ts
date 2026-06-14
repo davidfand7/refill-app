@@ -38,6 +38,7 @@ import { doListOverdue } from "@/server/patient-ingest.functions";
 import { recordRecoveryEvent } from "@/server/emma-attribution.functions";
 import { recordMessagingActivity, recordAgentAction } from "@/server/messaging-activity";
 import { isSendingPaused } from "@/server/sending-pause";
+import { loadBlockedNodeIds } from "@/server/patient-contactability";
 import { daysSince } from "@/lib/patient-cadence";
 import type { RewardStatusNorm } from "@/lib/manufacturer-reward-csv";
 
@@ -290,6 +291,27 @@ export async function computeRecallView(
         email: p.email,
         matched: true,
       }));
+
+    // ── 2.5) Compliance: never recall a banned / opted-out patient ──
+    // Drop them at the SOURCE so they vanish from the page list, the digest
+    // dollars, AND the drafts in one place (recall previously had no opt-out
+    // check anywhere). In-place splice keeps the const bindings; downstream
+    // groups/dollars/distinct read the filtered arrays. See patient-contactability.
+    const blockedNodes = await loadBlockedNodeIds(
+      sb,
+      effectiveUserId,
+      [...expiring, ...eligibleIdle, ...becoming, ...lapsed].map(
+        (t) => t.patientNodeId,
+      ),
+    );
+    if (blockedNodes.size > 0) {
+      for (const arr of [expiring, eligibleIdle, becoming, lapsed]) {
+        for (let i = arr.length - 1; i >= 0; i--) {
+          const nid = arr[i].patientNodeId;
+          if (nid && blockedNodes.has(nid)) arr.splice(i, 1);
+        }
+      }
+    }
 
     // ── 3) Assemble groups + the twin headline ──
     const byTrigger: Record<RecallTrigger, RecallTarget[]> = {

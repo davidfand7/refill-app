@@ -30,6 +30,7 @@ import { sendSms } from "@/server/sms-provider";
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
 import { recordAgentAction } from "@/server/messaging-activity";
 import { sendingPausedFromRow } from "@/server/sending-pause";
+import { patientOptOutStatus } from "@/server/patient-contactability";
 import {
   resolveSpaFromNumber,
   resolveSpaName,
@@ -377,18 +378,17 @@ export async function dispatchPreShowReminder(args: {
     } | null;
   } | null;
 
-  if (patientAttachments?.banned) {
+  // Compliance: banned or opted-out blocks outbound — one shared rule via
+  // patient-contactability (same definition recall/blast/rescue use).
+  const optOut = patientOptOutStatus(patientAttachments);
+  if (optOut.blocked) {
     return {
       ok: false,
-      skipReason: "banned",
-      message: "Patient banned — outbound blocked.",
-    };
-  }
-  if (patientAttachments?.opted_out) {
-    return {
-      ok: false,
-      skipReason: "opted_out",
-      message: "Patient opted out.",
+      skipReason: optOut.reason === "opted_out" ? "opted_out" : "banned",
+      message:
+        optOut.reason === "opted_out"
+          ? "Patient opted out."
+          : "Patient banned — outbound blocked.",
     };
   }
 
