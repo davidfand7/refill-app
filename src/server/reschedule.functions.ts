@@ -231,7 +231,6 @@ async function computeRescheduleTargets(
 ): Promise<RescheduleTarget[]> {
   const any = loose(sb);
   const sinceIso = new Date(Date.now() - pol.lookbackDays * 86_400_000).toISOString();
-  const nowIso = new Date().toISOString();
 
   type ApptRow = {
     id: string;
@@ -298,17 +297,6 @@ async function computeRescheduleTargets(
         .in("patient_node_id", slice),
     ids,
   );
-  const rebooked = await collectIdSet(
-    (slice) =>
-      any
-        .from("emma_appointments")
-        .select("patient_node_id")
-        .eq("user_id", userId)
-        .in("status", ["scheduled", "confirmed"])
-        .gt("scheduled_at", nowIso)
-        .in("patient_node_id", slice),
-    ids,
-  );
   const opted = await collectIdSet(
     (slice) =>
       any
@@ -319,7 +307,37 @@ async function computeRescheduleTargets(
         .in("patient_node_id", slice),
     ids,
   );
-  ids = ids.filter((id) => !nudged.has(id) && !rebooked.has(id) && !opted.has(id));
+
+  // "Already rescheduled" = the patient has a REAL appointment (anything that
+  // isn't itself a cancel/no-show) dated AFTER the cancel/no-show we'd nudge
+  // them about — a future booking they made, OR a past visit they already
+  // attended. Either way they've come back; don't nudge. (This subsumes the old
+  // future-only "rebooked" check, which missed people who already returned.)
+  const goodMaxByPatient = new Map<string, string>();
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const { data } = await any
+      .from("emma_appointments")
+      .select("patient_node_id, scheduled_at")
+      .eq("user_id", userId)
+      .in("status", ["scheduled", "confirmed", "showed", "rescheduled"])
+      .in("patient_node_id", ids.slice(i, i + CHUNK));
+    for (const r of (data ?? []) as Array<{
+      patient_node_id: string | null;
+      scheduled_at: string;
+    }>) {
+      if (!r.patient_node_id) continue;
+      const prev = goodMaxByPatient.get(r.patient_node_id);
+      if (!prev || r.scheduled_at > prev) goodMaxByPatient.set(r.patient_node_id, r.scheduled_at);
+    }
+  }
+  const hasReturned = (id: string): boolean => {
+    const latestGood = goodMaxByPatient.get(id);
+    const outcome = byPatient.get(id);
+    // ISO timestamps compare lexicographically = chronologically.
+    return Boolean(latestGood && outcome && latestGood > outcome.scheduledAt);
+  };
+
+  ids = ids.filter((id) => !nudged.has(id) && !opted.has(id) && !hasReturned(id));
   if (ids.length === 0) return [];
 
   // Resolve contact from the patient node (emma_appointments has no denormalized

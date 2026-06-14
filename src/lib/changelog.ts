@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.36.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.36.0 &mdash; Reschedule Reminders now hides anyone who already came back.</strong> A correctness fix that makes the win-back list real. Before, the list only skipped patients with a <em>future</em> booking &mdash; so someone who cancelled on the 26th but already <em>attended</em> a visit on the 1st could still show up as &ldquo;to win back,&rdquo; even though they&rsquo;d clearly rescheduled. Now a patient drops off the list the moment they have <em>any</em> real appointment dated after the cancel or no-show we&rsquo;d nudge them about &mdash; a future booking they made <em>or</em> a past visit they already showed up for. Only the patients who genuinely haven&rsquo;t come back remain. <strong>Touched</strong>: <code>reschedule.functions</code> (the &ldquo;already rescheduled&rdquo; suppression now compares each patient&rsquo;s most recent good appointment against the outcome date, instead of only checking for a future booking).",
+    ],
+  },
+  {
     version: "v2.35.0",
     date: "June 2026",
     items: [
