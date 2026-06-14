@@ -60,3 +60,60 @@ export async function recordMessagingActivity(
     );
   }
 }
+
+// ─── agent_actions ledger (Tier-2 Autonomous · Slice 1) ──────────────────────
+//
+// The immutable, append-only record of an action an agent took on the spa's
+// behalf. Unlike the messaging_activity heartbeat above (one mutable row per
+// channel), this writes one IMMUTABLE row PER action — the dispute-proof spine
+// under autonomy. Same best-effort contract: a ledger miss must never break the
+// dispatch it describes (it logs and swallows, never throws).
+//
+// agent_actions isn't in the generated Supabase types yet → loose-cast insert
+// (mirrors recordMessagingActivity / the skills tables).
+
+export type AgentActionInput = {
+  /** Which agent acted: 'rescue' | 'recall_digest' | … */
+  agent: string;
+  /** What it did: 'sms_sent' | 'digest_emailed' | … */
+  action: string;
+  channel?: MessagingChannel | "imessage" | null;
+  /** Patient-directed actions carry the node; owner-facing ones leave it null. */
+  patientNodeId?: string | null;
+  count?: number;
+  /** The confidence the action fired at, when it had one. */
+  confidenceTier?: string | null;
+  /** Did the agent act on its own, or did the owner trigger it? */
+  initiatedBy?: "autonomous" | "owner";
+  metadata?: Record<string, unknown>;
+};
+
+export async function recordAgentAction(
+  sb: SupabaseClient,
+  userId: string,
+  input: AgentActionInput,
+): Promise<void> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const tbl = (sb as unknown as { from(t: string): any }).from(
+      "agent_actions",
+    );
+    const { error } = await tbl.insert({
+      user_id: userId,
+      agent: input.agent,
+      action: input.action,
+      channel: input.channel ?? null,
+      patient_node_id: input.patientNodeId ?? null,
+      count: Math.max(0, input.count ?? 1),
+      confidence_tier: input.confidenceTier ?? null,
+      initiated_by: input.initiatedBy ?? "autonomous",
+      metadata: input.metadata ?? {},
+    });
+    if (error) throw new Error(error.message);
+  } catch (err) {
+    console.error(
+      `[agent-actions] ledger write failed (non-fatal) for ${input.agent}/${input.action}:`,
+      err,
+    );
+  }
+}

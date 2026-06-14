@@ -44,7 +44,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { sendSms } from "@/server/sms-provider";
 import { fetchAllRows } from "@/server/paginate";
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
-import { recordMessagingActivity } from "@/server/messaging-activity";
+import { recordMessagingActivity, recordAgentAction } from "@/server/messaging-activity";
 import {
   resolveOwnerDisplayName,
   resolveSpaFromNumber,
@@ -1074,6 +1074,19 @@ export async function dispatchRescueAttempt(args: {
           })
           .eq("id", c.offerId);
       }
+    }
+
+    // Tier-2 ledger (autonomous): the direct-mode SMS that just fired with no
+    // human tap — the dispute-proof record of what the agent did on its own.
+    // Best-effort (never throws); the texts already went out.
+    if (offersSent > 0) {
+      await recordAgentAction(sb, userId, {
+        agent: "rescue",
+        action: "sms_sent",
+        channel: "sms",
+        count: offersSent,
+        initiatedBy: "autonomous",
+      });
     }
   }
 

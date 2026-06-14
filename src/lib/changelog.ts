@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.24.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.24.0 &mdash; The agent action ledger: every autonomous send is now an immutable, dispute-proof record (Tier-2 groundwork).</strong> The first piece of the autonomous-Skills tier &mdash; the trust spine that has to exist <em>before</em> an agent ever sends on its own. A new append-only <code>agent_actions</code> table records one immutable row per action an agent takes on your behalf: what it did, for whom, on which channel, at what confidence, and crucially whether the <em>agent</em> initiated it autonomously or <em>you</em> did. (Distinct from the existing delivery heartbeat, which is a mutable per-channel freshness signal &mdash; this is a permanent, per-action history that&rsquo;s never overwritten.) Wired into the two places the system already acts on its own: the <strong>Weekly Recall Digest</strong> send and the <strong>rescue direct-mode text</strong> (the one truly-autonomous patient send today). It changes nothing you can see yet &mdash; it&rsquo;s the foundation the next slices ride on (a per-patient/cross-agent frequency cap so no one gets texted twice in a day, a one-tap &ldquo;pause all sending&rdquo; kill switch, then the explicit, <em>earned</em> Autonomous Rescue Skill). <strong>New</strong>: migration <code>v2_24_0_agent_actions</code>, <code>recordAgentAction()</code> in <code>messaging-activity.ts</code>. <strong>Touched</strong>: <code>refill-recall.functions.ts</code> + <code>emma-rescue.functions.ts</code> (both now log to the ledger, best-effort). Full design: <code>~/Desktop/SmartSpa-Tier2-Autonomous-Scope-v1.html</code>.",
+    ],
+  },
+  {
     version: "v2.23.0",
     date: "June 2026",
     items: [

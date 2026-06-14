@@ -36,7 +36,7 @@ import { getSpaName } from "@/server/emma-optout.functions";
 import { fetchAllRows } from "@/server/paginate";
 import { doListOverdue } from "@/server/patient-ingest.functions";
 import { recordRecoveryEvent } from "@/server/emma-attribution.functions";
-import { recordMessagingActivity } from "@/server/messaging-activity";
+import { recordMessagingActivity, recordAgentAction } from "@/server/messaging-activity";
 import { daysSince } from "@/lib/patient-cadence";
 import type { RewardStatusNorm } from "@/lib/manufacturer-reward-csv";
 
@@ -897,6 +897,20 @@ export async function sendRecallDigestForUser(
     .from("emma_noshow_policies")
     .update(stamp as Database["public"]["Tables"]["emma_noshow_policies"]["Update"])
     .eq("user_id", userId);
+
+  // Tier-2 ledger: the weekly digest just went out on its own (owner-facing
+  // autonomous send). Best-effort — the email already sent.
+  await recordAgentAction(sb, userId, {
+    agent: "recall_digest",
+    action: "digest_emailed",
+    channel: "email",
+    count: 1,
+    initiatedBy: "autonomous",
+    metadata: {
+      dollars: Math.round(view.dollarsOnTable),
+      patients: view.distinctPatients,
+    },
+  });
 
   return {
     status: "sent",
