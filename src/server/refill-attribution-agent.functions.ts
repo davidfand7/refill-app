@@ -200,6 +200,49 @@ export const updateAttributionSettings = createServerFn({ method: "POST" })
     return next;
   });
 
+/**
+ * v2.30.0 — flip just the `enabled` master toggle, server-side (no accessToken).
+ * The Auto-Verify Recoveries Skill (skills.functions.ts) gates auto-reconciliation
+ * through this: adopt → on, Pause → off. Mirrors the upsert in
+ * updateAttributionSettings but callable from the dispatch/skills layer, like
+ * loadAttributionSettings / setNoshowPolicyGate. Preserves all other settings.
+ */
+export async function setAttributionEnabled(
+  sb: ReturnType<typeof admin>,
+  userId: string,
+  enabled: boolean,
+): Promise<void> {
+  const prior = await loadSettings(sb, userId);
+  const next: AttributionSettings = {
+    ...prior,
+    enabled,
+    updatedAt: new Date().toISOString(),
+  };
+  const { data: existing } = await sb
+    .from("knowledge_nodes")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("node_type", "attribution_settings")
+    .maybeSingle();
+  if (existing) {
+    const { error } = await sb
+      .from("knowledge_nodes")
+      .update({ attachments: next as unknown as Json, updated_at: next.updatedAt! })
+      .eq("id", existing.id);
+    if (error) throw new Error(`Couldn't update attribution settings: ${error.message}`);
+  } else {
+    const { error } = await sb.from("knowledge_nodes").insert({
+      user_id: userId,
+      node_type: "attribution_settings",
+      title: "Attribution settings",
+      context: "agent_config",
+      content: "",
+      attachments: next as unknown as Json,
+    });
+    if (error) throw new Error(`Couldn't create attribution settings: ${error.message}`);
+  }
+}
+
 // ─── Performance metrics ──────────────────────────────────────────────────
 
 export const getAttributionAgentMetrics = createServerFn({ method: "POST" })

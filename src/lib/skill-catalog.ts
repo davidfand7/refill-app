@@ -141,12 +141,14 @@ export const SKILL_CATALOG: SkillTemplate[] = [
     key: "auto_verify_recoveries",
     label: "Auto-Verify Recoveries",
     description:
-      "Stop confirming recovered-revenue wins by hand — reconcile them automatically against your books (QuickBooks / Stripe / Square).",
+      "Stop confirming recovered-revenue wins by hand. SmartSpa reconciles each win against your books — matching the patient's transaction inside your verification window — and confirms it automatically. Pause it any time to go back to confirming by hand. You set the window and the auto-confirm threshold under Attribution.",
     solution: "account",
     materializer: "flip",
-    status: "preview",
-    adoptCopy: "Will reconcile your wins automatically instead of by hand.",
+    status: "live",
+    adoptCopy:
+      "Keeps auto-reconciliation on, so wins verify themselves against your books — then opens Attribution to tune the window and threshold. Pause any time to confirm by hand.",
     liftHint: "Saves the weekly manual-confirm chore.",
+    manageTo: "/app/billing/attribution",
   },
   {
     key: "autonomous_rescue",

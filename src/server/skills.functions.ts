@@ -45,6 +45,7 @@ import {
   type SkillSolution,
 } from "@/lib/skill-catalog";
 import { recordAgentAction } from "@/server/messaging-activity";
+import { setAttributionEnabled } from "@/server/refill-attribution-agent.functions";
 
 // ─── Public types ───────────────────────────────────────────────────────────
 
@@ -407,6 +408,12 @@ export const adoptSkill = createServerFn({ method: "POST" })
     if (gateField) {
       await setNoshowPolicyGate(sb, effectiveUserId, gateField, true);
     }
+    // auto_verify_recoveries lives in attribution settings, not emma_noshow_policies
+    // (enabled defaults ON, so this is idempotent on a fresh spa; it re-enables a
+    // spa that had turned it off). The reconcile cron honors this flag at dispatch.
+    if (tpl.key === "auto_verify_recoveries") {
+      await setAttributionEnabled(sb, effectiveUserId, true);
+    }
     if (tpl.manageTo) materializedRef.manageTo = tpl.manageTo;
 
     const nowIso = new Date().toISOString();
@@ -488,6 +495,10 @@ export const setSkillEnabled = createServerFn({ method: "POST" })
     const gateField = POLICY_GATE[skill.template_key];
     if (gateField) {
       await setNoshowPolicyGate(sb, effectiveUserId, gateField, data.enabled);
+    }
+    // Auto-Verify's gate is the attribution master toggle (separate store).
+    if (skill.template_key === "auto_verify_recoveries") {
+      await setAttributionEnabled(sb, effectiveUserId, data.enabled);
     }
     return hydrate(skill);
   });

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.30.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.30.0 &mdash; Auto-Verify Recoveries goes live as a Skill &mdash; the first <em>flip</em>-style Skill on your Skills page.</strong> SmartSpa already reconciles your recovered-revenue wins against your books automatically (matching each patient&rsquo;s transaction inside your verification window and confirming it), so you don&rsquo;t confirm every win by hand. Until now that lived only deep in Attribution settings. <strong>Auto-Verify Recoveries</strong> brings it up onto your Skills page as a Skill you own: <em>On</em> keeps auto-reconciliation running, <em>Pause</em> stops it and sends wins back to your manual confirm queue, and <em>Manage</em> opens Attribution to tune the window and the auto-confirm threshold. The On/Pause is the real switch &mdash; it flips the same master toggle the nightly reconciliation honors, not a cosmetic record. (It&rsquo;s on by default, so adopting it just puts the knob in your hands; nothing changes until you pause it.) This is the fourth kind of Skill to ship: a <em>flip</em> &mdash; turning an existing engine knob into something you own and see, alongside the routine, surface, and autonomous kinds already live. <strong>New</strong>: <code>setAttributionEnabled</code> (server-side master-toggle flip). <strong>Touched</strong>: <code>skill-catalog</code> (Auto-Verify → live, deep-links Attribution), <code>skills.functions</code> (adopt + On/Pause flip the attribution toggle).",
+    ],
+  },
+  {
     version: "v2.29.0",
     date: "June 2026",
     items: [
