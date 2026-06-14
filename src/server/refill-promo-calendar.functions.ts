@@ -26,6 +26,7 @@ import {
   normalizeForMatch,
   publicDeals,
   dealHeadline,
+  mondayOf,
   type PromoOffer,
   type OfferType,
   type OfferCohort,
@@ -78,12 +79,14 @@ type OfferDbRow = {
   active_weekdays: number[] | null;
   quantity_cap: number | string | null;
   redeemed_count: number | string | null;
+  cap_period: string | null;
+  cap_period_start: string | null;
 };
 
 // Single source of truth for the columns we read, so the loader + insert
 // selects never drift. New offer-engine columns land here (v2.4.2+).
 const OFFER_COLS =
-  "id, source, manufacturer, product, title, discount_usd, starts_on, ends_on, landing_url, promotion_type, raw_title, offer_type, value_pct, addon_service_name, addon_label, is_active, target_cohort, show_on_deals, active_weekdays, quantity_cap, redeemed_count";
+  "id, source, manufacturer, product, title, discount_usd, starts_on, ends_on, landing_url, promotion_type, raw_title, offer_type, value_pct, addon_service_name, addon_label, is_active, target_cohort, show_on_deals, active_weekdays, quantity_cap, redeemed_count, cap_period, cap_period_start";
 
 function rowToOffer(r: OfferDbRow): PromoOffer {
   return {
@@ -108,6 +111,8 @@ function rowToOffer(r: OfferDbRow): PromoOffer {
     activeWeekdays: r.active_weekdays ?? null,
     quantityCap: r.quantity_cap != null ? Number(r.quantity_cap) : null,
     redeemedCount: r.redeemed_count != null ? Number(r.redeemed_count) : 0,
+    capPeriod: r.cap_period === "weekly" ? "weekly" : "total",
+    capPeriodStart: r.cap_period_start,
   };
 }
 
@@ -364,6 +369,9 @@ const createSpaOfferInput = z.object({
   activeWeekdays: z.array(z.number().int().min(0).max(6)).max(7).nullable().optional(),
   /** Max redemptions; null = unlimited. */
   quantityCap: z.number().int().positive().max(100000).nullable().optional(),
+  /** How the cap accrues: 'total' (lifetime, default) or 'weekly' (resets each
+   *  week — for a recurring offer like "20 per Tox Tuesday"). */
+  capPeriod: z.enum(["total", "weekly"]).default("total"),
   /** yyyy-mm-dd; null/omitted = no bound (starts now / ongoing). */
   startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
@@ -432,6 +440,10 @@ export const createSpaOffer = createServerFn({ method: "POST" })
       active_weekdays:
         data.activeWeekdays && data.activeWeekdays.length > 0 ? data.activeWeekdays : null,
       quantity_cap: data.quantityCap ?? null,
+      // A new weekly offer starts with a fresh count; the first redemption's
+      // RPC stamps cap_period_start, so we leave it null here.
+      cap_period: data.capPeriod,
+      cap_period_start: null,
     };
     const { data: inserted, error } = await offersTbl(sb)
       .insert(row)
@@ -675,13 +687,18 @@ export async function recordCrossSellWin(args: {
 
   // Recurrence: count the redemption against a capped offer via an ATOMIC
   // DB-side increment (a single UPDATE under a row lock) so concurrent bookings
-  // can't lose updates the way a read-modify-write would. Best-effort.
+  // can't lose updates the way a read-modify-write would. p_week_start (this
+  // week's Monday in the spa's own timezone) lets a 'weekly' cap reset itself
+  // lazily inside the lock; a 'total' cap ignores it. Best-effort.
   if (matchedOffer.quantityCap != null && matchedOffer.id) {
     await (
       args.sb as unknown as {
         rpc(fn: string, params: Record<string, unknown>): PromiseLike<unknown>;
       }
-    ).rpc("increment_offer_redemption", { p_offer_id: matchedOffer.id });
+    ).rpc("increment_offer_redemption", {
+      p_offer_id: matchedOffer.id,
+      p_week_start: mondayOf(today),
+    });
   }
   return { recorded: true };
 }

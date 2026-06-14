@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.32.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.32.0 &mdash; Offer caps can now reset every week &mdash; the engine groundwork for a recurring &ldquo;Tox Tuesday&rdquo; offer.</strong> Your spa-authored offers already support a weekday window (run only on Tuesdays) and a redemption limit (&ldquo;first 20 patients&rdquo;). Until now that limit was <em>lifetime</em>: once it filled, the offer was done forever. This release teaches the cap to recur. An offer&rsquo;s cap can now be <em>weekly</em> &mdash; it counts only <em>this week&rsquo;s</em> redemptions and resets on its own at the start of each week, so &ldquo;20 per Tox Tuesday&rdquo; gives a fresh 20 every Tuesday with no re-creating it. The reset is lazy and lock-safe: the same atomic increment that already prevents two simultaneous bookings from miscounting now also notices a new week and resets the count inside the row lock &mdash; no nightly job, no race. The week boundary (Monday) is computed in <em>your</em> timezone so it flips at your local week-start, not UTC. Existing offers and every manufacturer promo are untouched &mdash; they default to the old <em>lifetime</em> behavior exactly as before. This is the engine half; the Skill and the authoring toggle that let you turn it on land next. <strong>New</strong>: migration <code>v2_32_0_weekly_offer_cap</code> (<code>cap_period</code> + <code>cap_period_start</code> on the offers table, and a week-aware <code>increment_offer_redemption</code> RPC), plus pure <code>mondayOf</code> / <code>effectiveRedeemedCount</code> helpers so the at-booking matcher and the database agree on the reset. <strong>Touched</strong>: <code>promo-calendar</code> (week-aware <code>isActive</code>), <code>refill-promo-calendar.functions</code> (reads the new columns, passes the week start to the increment).",
+    ],
+  },
+  {
     version: "v2.31.0",
     date: "June 2026",
     items: [

@@ -81,6 +81,14 @@ export type PromoOffer = {
   quantityCap?: number | null;
   /** Redemptions so far (incremented on each cross-sell win). */
   redeemedCount?: number;
+  /** How the cap accrues. "total" (default) = lifetime; once redeemedCount
+   *  reaches quantityCap the offer is exhausted forever. "weekly" = the cap
+   *  counts only the current week's redemptions ("20 per Tox Tuesday"), reset
+   *  lazily each week. */
+  capPeriod?: "total" | "weekly";
+  /** For a weekly cap: the Monday (ISO yyyy-mm-dd) the stored redeemedCount
+   *  belongs to. A count whose week is before today's reads as 0. */
+  capPeriodStart?: string | null;
 };
 
 /** The badge shape attached to a service / add-on at booking. */
@@ -308,6 +316,31 @@ function weekdayOf(iso: string): number | null {
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
 
+/** The Monday (ISO yyyy-mm-dd) of the week containing `iso`. Pure; weeks start
+ *  Monday so a "weekly" cap resets the same way the at-booking matcher and the
+ *  DB increment RPC compute it. Returns the input unchanged if unparseable. */
+export function mondayOf(iso: string): string {
+  const [y, m, d] = iso.split("-").map((n) => parseInt(n, 10));
+  if (!y || !m || !d) return iso;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const dow = dt.getUTCDay(); // 0=Sun…6=Sat
+  const sinceMonday = (dow + 6) % 7; // Mon→0, Sun→6
+  dt.setUTCDate(dt.getUTCDate() - sinceMonday);
+  return dt.toISOString().slice(0, 10);
+}
+
+/** The redemption count that counts AGAINST the cap right now. For a lifetime
+ *  ("total") cap it's the raw stored count. For a "weekly" cap, a stored count
+ *  whose cap_period_start is before this week's Monday belongs to a past week,
+ *  so it reads as 0 — letting the offer badge again at the start of a new week
+ *  even before any redemption has lazily reset the row. Mirrors the DB RPC. */
+export function effectiveRedeemedCount(offer: PromoOffer, todayIso: string): number {
+  const count = offer.redeemedCount ?? 0;
+  if (offer.capPeriod !== "weekly") return count;
+  if (!offer.capPeriodStart) return count; // never redeemed this period → as-is (0)
+  return offer.capPeriodStart >= mondayOf(todayIso) ? count : 0;
+}
+
 function isActive(offer: PromoOffer, todayIso: string): boolean {
   if (offer.startsOn && todayIso < offer.startsOn) return false;
   if (offer.endsOn && todayIso > offer.endsOn) return false;
@@ -316,8 +349,12 @@ function isActive(offer: PromoOffer, todayIso: string): boolean {
     const dow = weekdayOf(todayIso);
     if (dow == null || !offer.activeWeekdays.includes(dow)) return false;
   }
-  // Quantity cap: exhausted once redemptions reach the cap.
-  if (offer.quantityCap != null && (offer.redeemedCount ?? 0) >= offer.quantityCap) {
+  // Quantity cap: exhausted once redemptions reach the cap. A weekly cap counts
+  // only this week's redemptions (effectiveRedeemedCount handles the reset).
+  if (
+    offer.quantityCap != null &&
+    effectiveRedeemedCount(offer, todayIso) >= offer.quantityCap
+  ) {
     return false;
   }
   return true;
