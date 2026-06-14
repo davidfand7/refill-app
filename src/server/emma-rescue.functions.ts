@@ -50,6 +50,10 @@ import {
   FREQUENCY_CAP_WINDOW_HOURS,
 } from "@/server/frequency-cap";
 import {
+  sendingPausedFromRow,
+  SENDING_PAUSED_REASON,
+} from "@/server/sending-pause";
+import {
   resolveOwnerDisplayName,
   resolveSpaFromNumber,
   resolveSpaName,
@@ -675,6 +679,18 @@ export async function dispatchRescueAttempt(args: {
       attemptId: null,
       offersSent: 0,
       reason: "Rescue agent disabled for this spa.",
+    };
+  }
+  // Tier-2 kill switch (Slice 3): the master pause sits above every per-engine
+  // enable. If the spa has paused all sending, halt here — before any attempt,
+  // proxy draft, or direct text. The policy row is already loaded, so this is a
+  // free read of a column it's holding.
+  if (sendingPausedFromRow(policy)) {
+    return {
+      ok: false,
+      attemptId: null,
+      offersSent: 0,
+      reason: SENDING_PAUSED_REASON,
     };
   }
   if (apt.status !== "cancelled" && apt.status !== "no_show") {

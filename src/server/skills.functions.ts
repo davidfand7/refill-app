@@ -44,6 +44,7 @@ import {
   type SkillMaterializer,
   type SkillSolution,
 } from "@/lib/skill-catalog";
+import { recordAgentAction } from "@/server/messaging-activity";
 
 // ─── Public types ───────────────────────────────────────────────────────────
 
@@ -749,4 +750,97 @@ export const createConciergeProposal = createServerFn({ method: "POST" })
       if (error) throw new Error(`Couldn't author suggestion: ${error.message}`);
     }
     return { ok: true };
+  });
+
+// ─── Sending kill switch (Tier-2 Autonomous · Slice 3) ────────────────────────
+//
+// The unified one-tap "pause all sending." A single flag on emma_noshow_policies
+// that every dispatching agent polls (rescue / preshow / recall-digest) and
+// bails on. NOT earned-gated — a safety control must always be reachable, even
+// for a spa that hasn't unlocked Skills yet. Admin viewing-as is honored so an
+// operator can pause on a spa's behalf.
+
+export type SendingPauseState = {
+  paused: boolean;
+  pausedAt: string | null;
+};
+
+export const getSendingPaused = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => accessInput.parse(raw))
+  .handler(async ({ data }): Promise<SendingPauseState> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const { data: row, error } = await loose(sb)
+      .from("emma_noshow_policies")
+      .select("sending_paused, sending_paused_at")
+      .eq("user_id", effectiveUserId)
+      .maybeSingle();
+    if (error) throw new Error(`Couldn't read sending status: ${error.message}`);
+    const r = (row ?? null) as {
+      sending_paused?: boolean;
+      sending_paused_at?: string | null;
+    } | null;
+    return {
+      paused: r?.sending_paused === true,
+      pausedAt: r?.sending_paused_at ?? null,
+    };
+  });
+
+const pauseInput = accessInput.extend({ paused: z.boolean() });
+
+export const setSendingPaused = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => pauseInput.parse(raw))
+  .handler(async ({ data }): Promise<SendingPauseState> => {
+    const { effectiveUserId, callerUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const nowIso = new Date().toISOString();
+
+    // Upsert the flag onto the spa's policy row (create the row if a brand-new
+    // spa flips it before any engine has written one).
+    const { data: existing } = await loose(sb)
+      .from("emma_noshow_policies")
+      .select("id")
+      .eq("user_id", effectiveUserId)
+      .maybeSingle();
+    const patch: Record<string, unknown> = {
+      sending_paused: data.paused,
+      sending_paused_at: data.paused ? nowIso : null,
+      sending_paused_by: data.paused ? callerUserId : null,
+      updated_at: nowIso,
+    };
+    if (existing) {
+      const { error } = await loose(sb)
+        .from("emma_noshow_policies")
+        .update(patch)
+        .eq("user_id", effectiveUserId);
+      if (error)
+        throw new Error(`Couldn't update sending status: ${error.message}`);
+    } else {
+      const { error } = await loose(sb)
+        .from("emma_noshow_policies")
+        .insert({ user_id: effectiveUserId, ...patch });
+      if (error)
+        throw new Error(`Couldn't set sending status: ${error.message}`);
+    }
+
+    // Audit the flip in the immutable ledger — the kill switch is a thing
+    // someone did on the spa's behalf, so it belongs in the same history as the
+    // sends it governs. Best-effort (never throws).
+    await recordAgentAction(sb, effectiveUserId, {
+      agent: "kill_switch",
+      action: data.paused ? "sending_paused" : "sending_resumed",
+      initiatedBy: "owner",
+      metadata: { via: "skills_page", by_user: callerUserId },
+    });
+
+    return {
+      paused: data.paused,
+      pausedAt: data.paused ? nowIso : null,
+    };
   });

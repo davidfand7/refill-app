@@ -37,6 +37,7 @@ import { fetchAllRows } from "@/server/paginate";
 import { doListOverdue } from "@/server/patient-ingest.functions";
 import { recordRecoveryEvent } from "@/server/emma-attribution.functions";
 import { recordMessagingActivity, recordAgentAction } from "@/server/messaging-activity";
+import { isSendingPaused } from "@/server/sending-pause";
 import { daysSince } from "@/lib/patient-cadence";
 import type { RewardStatusNorm } from "@/lib/manufacturer-reward-csv";
 
@@ -831,6 +832,7 @@ export type RecallDigestResult =
   | { status: "sent"; email: string; dollars: number; patients: number }
   | { status: "empty" }
   | { status: "no_email" }
+  | { status: "paused" }
   | { status: "error"; error: string };
 
 /**
@@ -844,6 +846,9 @@ export async function sendRecallDigestForUser(
   userId: string,
   publicOrigin: string,
 ): Promise<RecallDigestResult> {
+  // Tier-2 kill switch (Slice 3): the master pause halts the weekly digest too.
+  // This cron doesn't load the policy row, so query the flag directly.
+  if (await isSendingPaused(sb, userId)) return { status: "paused" };
   const view = await computeRecallView(sb, userId);
   if (view.distinctPatients === 0) return { status: "empty" };
 

@@ -21,8 +21,11 @@ import {
   Check,
   Loader2,
   Lock,
+  PauseCircle,
+  PlayCircle,
   Plus,
   Settings2,
+  ShieldAlert,
   Sparkles,
   Trash2,
   Wand2,
@@ -43,11 +46,14 @@ import {
   adoptSkill,
   createConciergeProposal,
   dismissSuggestion,
+  getSendingPaused,
   listMySkills,
   listSuggestedSkills,
   removeSkill,
+  setSendingPaused,
   setSkillEnabled,
   type AdoptedSkill,
+  type SendingPauseState,
   type SuggestedSkill,
 } from "@/server/skills.functions";
 
@@ -75,18 +81,22 @@ function SkillsPage() {
   const [suggestions, setSuggestions] = useState<SuggestedSkill[]>([]);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [sending, setSending] = useState<SendingPauseState | null>(null);
+  const [pauseBusy, setPauseBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const t = await token();
-      const [{ reached }, mine, suggested] = await Promise.all([
+      const [{ reached }, mine, suggested, pause] = await Promise.all([
         hasReachedValueMoment({ data: { accessToken: t, viewAsUserId } }),
         listMySkills({ data: { accessToken: t, viewAsUserId } }),
         listSuggestedSkills({ data: { accessToken: t, viewAsUserId } }),
+        getSendingPaused({ data: { accessToken: t, viewAsUserId } }),
       ]);
       setValueMoment(reached);
       setSkills(mine);
       setSuggestions(suggested);
+      setSending(pause);
     } catch (e) {
       // Fail closed on the gate (don't show prematurely); empty list otherwise.
       setValueMoment((v) => (v === null ? false : v));
@@ -123,6 +133,30 @@ function SkillsPage() {
       toast.error(e instanceof Error ? e.message : "Couldn't add the Skill.");
     } finally {
       setBusyKey(null);
+    }
+  };
+
+  const togglePause = async () => {
+    if (!sending) return;
+    const next = !sending.paused;
+    setPauseBusy(true);
+    try {
+      const t = await token();
+      const res = await setSendingPaused({
+        data: { accessToken: t, viewAsUserId, paused: next },
+      });
+      setSending(res);
+      toast.success(
+        next
+          ? "All sending paused — nothing goes out until you resume."
+          : "Sending resumed — your agents are active again.",
+      );
+    } catch (e) {
+      toast.error(
+        e instanceof Error ? e.message : "Couldn't change sending status.",
+      );
+    } finally {
+      setPauseBusy(false);
     }
   };
 
@@ -191,6 +225,15 @@ function SkillsPage() {
         title="Your Skills"
         description="Routines SmartSpa runs for you — across every Solution. Add one from the catalog, make it yours, turn it off any time."
       />
+
+      {/* ── Master kill switch — always reachable, above the earned-gate ── */}
+      {sending && (
+        <SendingControl
+          state={sending}
+          busy={pauseBusy}
+          onToggle={togglePause}
+        />
+      )}
 
       {loading ? (
         <div className="flex items-center gap-2 py-16 justify-center text-ink-soft text-sm">
@@ -267,6 +310,78 @@ function SkillsPage() {
           </section>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * The unified "pause all sending" kill switch. Always shown (above the earned
+ * gate) — a safety control has to be reachable even before Skills unlock. Two
+ * honest states: a calm "active" row with a Pause action, and a loud amber
+ * banner when paused that names exactly what's held + a one-tap Resume.
+ */
+function SendingControl({
+  state,
+  busy,
+  onToggle,
+}: {
+  state: SendingPauseState;
+  busy: boolean;
+  onToggle: () => void;
+}) {
+  if (state.paused) {
+    return (
+      <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3.5">
+        <div className="flex items-start gap-3">
+          <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-amber-900">
+              All sending is paused
+            </div>
+            <p className="mt-0.5 text-xs leading-relaxed text-amber-800">
+              Rescue texts, appointment reminders, and the weekly recall digest
+              are all held — nothing goes out to anyone until you resume.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onToggle}
+            disabled={busy}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-700 disabled:opacity-50"
+          >
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <PlayCircle className="h-3.5 w-3.5" />
+            )}
+            Resume sending
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-rule bg-paper px-4 py-3">
+      <div className="flex items-center gap-2.5 text-sm text-ink-soft">
+        <span className="relative flex h-2 w-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+        </span>
+        Automated sending is active.
+      </div>
+      <button
+        type="button"
+        onClick={onToggle}
+        disabled={busy}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-rule px-3 py-1.5 text-xs font-semibold text-ink-soft transition hover:border-amber-300 hover:text-amber-700 disabled:opacity-50"
+      >
+        {busy ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <PauseCircle className="h-3.5 w-3.5" />
+        )}
+        Pause all sending
+      </button>
     </div>
   );
 }

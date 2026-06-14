@@ -29,6 +29,7 @@ import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 import { sendSms } from "@/server/sms-provider";
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
 import { recordAgentAction } from "@/server/messaging-activity";
+import { sendingPausedFromRow } from "@/server/sending-pause";
 import {
   resolveSpaFromNumber,
   resolveSpaName,
@@ -60,7 +61,8 @@ export type PreShowSkipReason =
   | "no_phone_number"
   | "from_unavailable"
   | "send_failed"
-  | "outside_treatment_cadence";
+  | "outside_treatment_cadence"
+  | "sending_paused";
 
 // ─── Admin client ─────────────────────────────────────────────────────────
 
@@ -324,6 +326,15 @@ export async function dispatchPreShowReminder(args: {
       ok: false,
       skipReason: "preshow_disabled",
       message: "Pre-show reminders are disabled for this spa.",
+    };
+  }
+  // Tier-2 kill switch (Slice 3): the master pause halts reminders too. The
+  // policy row is already loaded — a free read of a column it's holding.
+  if (sendingPausedFromRow(policyRes.data)) {
+    return {
+      ok: false,
+      skipReason: "sending_paused",
+      message: "All sending is paused for this spa.",
     };
   }
   const apt = aptRes.data;

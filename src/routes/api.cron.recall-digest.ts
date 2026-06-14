@@ -106,6 +106,7 @@ export const Route = createFileRoute("/api/cron/recall-digest")({
         let sent = 0;
         let empty = 0;
         let skippedNoEmail = 0;
+        let skippedPaused = 0;
         const errors: string[] = [];
 
         for (const r of due) {
@@ -118,6 +119,7 @@ export const Route = createFileRoute("/api/cron/recall-digest")({
             if (result.status === "sent") sent += 1;
             else if (result.status === "empty") empty += 1;
             else if (result.status === "no_email") skippedNoEmail += 1;
+            else if (result.status === "paused") skippedPaused += 1;
             else errors.push(`${r.user_id}: ${result.error}`);
           } catch (e) {
             errors.push(
@@ -133,6 +135,7 @@ export const Route = createFileRoute("/api/cron/recall-digest")({
           digests_sent: sent,
           nothing_to_recall: empty,
           skipped_no_owner_email: skippedNoEmail,
+          skipped_paused: skippedPaused,
           errors: errors.slice(0, 20),
         });
       },
