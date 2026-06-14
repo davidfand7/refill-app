@@ -117,6 +117,8 @@ function ReschedulePage() {
   }
 
   const targets = data?.targets ?? [];
+  const fresh = targets.filter((t) => !t.nudgedAt);
+  const nudgedList = targets.filter((t) => t.nudgedAt);
 
   return (
     <div>
@@ -190,13 +192,9 @@ function ReschedulePage() {
               </span>
             ) : (
               <>
-                <strong>{targets.length}</strong> patient{targets.length === 1 ? "" : "s"} to win
-                back
-                {data && data.reachable !== targets.length && (
-                  <span className="text-ink-faint">
-                    {" "}
-                    · {data.reachable} reachable by text
-                  </span>
+                <strong>{fresh.length}</strong> patient{fresh.length === 1 ? "" : "s"} to win back
+                {data && data.reachable !== fresh.length && (
+                  <span className="text-ink-faint"> · {data.reachable} reachable by text</span>
                 )}
               </>
             )}
@@ -219,51 +217,75 @@ function ReschedulePage() {
           </button>
         </div>
 
-        {/* The list */}
-        {!loading && targets.length === 0 && (
+        {/* Empty state — distinguishes "nobody at all" from "all caught up". */}
+        {!loading && fresh.length === 0 && (
           <div className="rounded-xl border border-rule bg-paper/30 px-5 py-8 text-center text-sm text-ink-soft">
             <CalendarClock className="mx-auto mb-2 h-6 w-6 text-ink-faint" />
-            Nobody to win back right now. Recent cancels and no-shows who haven&rsquo;t already
-            rebooked or been nudged will appear here.
+            {nudgedList.length > 0
+              ? "All caught up — everyone eligible has been nudged. They stay below until they rebook or the window passes."
+              : "Nobody to win back right now. Recent cancels and no-shows who haven’t already rebooked or been nudged will appear here."}
           </div>
         )}
 
-        {targets.length > 0 && (
+        {/* To win back (actionable) */}
+        {fresh.length > 0 && (
           <ul className="space-y-1.5">
-            {targets.map((t) => {
-              const reachable = Boolean((t.phone ?? "").trim());
-              return (
-                <li
-                  key={t.patientNodeId}
-                  className="flex items-center gap-2 rounded-lg border border-rule bg-white px-3 py-2.5 text-[13px]"
-                >
-                  <span className="font-medium text-ink">{t.name || "(unnamed)"}</span>
-                  <KindBadge kind={t.kind} />
-                  {t.treatmentType && (
-                    <span className="text-ink-faint">· {t.treatmentType}</span>
-                  )}
-                  <span className="text-ink-faint">· {fmtWhen(t.scheduledAt)}</span>
-                  <div className="ml-auto flex items-center gap-2 text-ink-faint">
-                    {reachable ? (
-                      <Phone className="h-3.5 w-3.5 text-emerald" />
-                    ) : t.email ? (
-                      <Mail className="h-3.5 w-3.5" />
-                    ) : (
-                      <span
-                        className="inline-flex items-center gap-1 text-[11px] text-amber"
-                        title="No phone — can't text"
-                      >
-                        <AlertTriangle className="h-3.5 w-3.5" /> no phone
-                      </span>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
+            {fresh.map((t) => (
+              <TargetRow key={t.patientNodeId} t={t} />
+            ))}
           </ul>
+        )}
+
+        {/* Recently nudged (greyed, kept for continuity — never silently hidden) */}
+        {nudgedList.length > 0 && (
+          <div className="pt-1">
+            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+              Recently nudged · {nudgedList.length}
+            </div>
+            <ul className="space-y-1.5">
+              {nudgedList.map((t) => (
+                <TargetRow key={t.patientNodeId} t={t} nudged />
+              ))}
+            </ul>
+          </div>
         )}
       </div>
     </div>
+  );
+}
+
+function TargetRow({ t, nudged }: { t: RescheduleTarget; nudged?: boolean }) {
+  const reachable = Boolean((t.phone ?? "").trim());
+  return (
+    <li
+      className={cn(
+        "flex items-center gap-2 rounded-lg border border-rule bg-white px-3 py-2.5 text-[13px]",
+        nudged && "opacity-60",
+      )}
+    >
+      <span className="font-medium text-ink">{t.name || "(unnamed)"}</span>
+      <KindBadge kind={t.kind} />
+      {t.treatmentType && <span className="text-ink-faint">· {t.treatmentType}</span>}
+      <span className="text-ink-faint">· {fmtWhen(t.scheduledAt)}</span>
+      <div className="ml-auto flex items-center gap-2 text-ink-faint">
+        {nudged && t.nudgedAt ? (
+          <span className="inline-flex items-center gap-1 text-[11px] text-emerald">
+            <Send className="h-3 w-3" /> nudged {fmtWhen(t.nudgedAt)}
+          </span>
+        ) : reachable ? (
+          <Phone className="h-3.5 w-3.5 text-emerald" />
+        ) : t.email ? (
+          <Mail className="h-3.5 w-3.5" />
+        ) : (
+          <span
+            className="inline-flex items-center gap-1 text-[11px] text-amber"
+            title="No phone — can't text"
+          >
+            <AlertTriangle className="h-3.5 w-3.5" /> no phone
+          </span>
+        )}
+      </div>
+    </li>
   );
 }
 

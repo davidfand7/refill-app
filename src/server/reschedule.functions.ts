@@ -173,6 +173,9 @@ export type RescheduleTarget = {
   treatmentType: string | null;
   noticeKnown: boolean;
   leadHours: number | null;
+  /** When this patient was last drafted a nudge (ISO), or null = not yet nudged
+   *  (still actionable). Set patients are shown greyed for continuity, not hidden. */
+  nudgedAt: string | null;
 };
 
 type ReschedulePolicy = {
@@ -285,24 +288,33 @@ async function computeRescheduleTargets(
       treatmentType: a.treatment_type,
       noticeKnown: res.noticeKnown,
       leadHours: res.leadHours,
+      nudgedAt: null, // filled in below once the nudge map is built
     });
   }
   let ids = [...byPatient.keys()];
   if (ids.length === 0) return [];
 
-  // Suppressions, each chunked.
-  const nudged = await collectIdSet(
-    (slice) =>
-      any
-        .from("agent_actions")
-        .select("patient_node_id")
-        .eq("user_id", userId)
-        .eq("agent", "reschedule")
-        .eq("action", "nudge_drafted")
-        .gte("created_at", sinceIso)
-        .in("patient_node_id", slice),
-    ids,
-  );
+  // Nudged map: patient → most recent nudge time in-window. We KEEP nudged
+  // patients (shown greyed for continuity) rather than hiding them — the draft
+  // path filters them out so they're never re-texted, but the owner still sees
+  // who was just drafted instead of the list silently emptying.
+  const nudgedAt = new Map<string, string>();
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const { data } = await any
+      .from("agent_actions")
+      .select("patient_node_id, created_at")
+      .eq("user_id", userId)
+      .eq("agent", "reschedule")
+      .eq("action", "nudge_drafted")
+      .gte("created_at", sinceIso)
+      .in("patient_node_id", ids.slice(i, i + CHUNK))
+      .order("created_at", { ascending: false });
+    for (const r of (data ?? []) as Array<{ patient_node_id: string | null; created_at: string }>) {
+      if (r.patient_node_id && !nudgedAt.has(r.patient_node_id)) {
+        nudgedAt.set(r.patient_node_id, r.created_at);
+      }
+    }
+  }
   const opted = await collectIdSet(
     (slice) =>
       any
@@ -343,7 +355,8 @@ async function computeRescheduleTargets(
     return Boolean(latestGood && outcome && latestGood > outcome.scheduledAt);
   };
 
-  ids = ids.filter((id) => !nudged.has(id) && !opted.has(id) && !hasReturned(id));
+  // Drop opted-out + already-returned (resolved); KEEP nudged (shown greyed).
+  ids = ids.filter((id) => !opted.has(id) && !hasReturned(id));
   if (ids.length === 0) return [];
 
   // Resolve contact from the patient node (emma_appointments has no denormalized
@@ -371,9 +384,19 @@ async function computeRescheduleTargets(
   const out: RescheduleTarget[] = ids.map((id) => {
     const t = byPatient.get(id)!;
     const c = contact.get(id);
-    return { ...t, name: c?.name ?? "", phone: c?.phone ?? null, email: c?.email ?? null };
+    return {
+      ...t,
+      name: c?.name ?? "",
+      phone: c?.phone ?? null,
+      email: c?.email ?? null,
+      nudgedAt: nudgedAt.get(id) ?? null,
+    };
   });
-  out.sort((a, b) => (a.scheduledAt < b.scheduledAt ? 1 : -1));
+  // Actionable (not yet nudged) first, then by recency.
+  out.sort((a, b) => {
+    if (!a.nudgedAt !== !b.nudgedAt) return a.nudgedAt ? 1 : -1;
+    return a.scheduledAt < b.scheduledAt ? 1 : -1;
+  });
   return out;
 }
 
@@ -412,7 +435,9 @@ export const listRescheduleTargets = createServerFn({ method: "POST" })
       lookbackDays: pol.lookbackDays,
       hasProxyEmail: Boolean(pol.proxyEmail),
       sendingPaused: pol.sendingPaused,
-      reachable: targets.filter((t) => (t.phone ?? "").trim()).length,
+      // Reachable = fresh (not-yet-nudged) patients with a phone — the count the
+      // Draft button acts on. Already-nudged ones are shown but not re-drafted.
+      reachable: targets.filter((t) => !t.nudgedAt && (t.phone ?? "").trim()).length,
       targets,
     };
   });
@@ -487,6 +512,7 @@ export const draftRescheduleNudges = createServerFn({ method: "POST" })
     }> = [];
     let skippedNoPhone = 0;
     for (const t of targets) {
+      if (t.nudgedAt) continue; // already drafted in-window — never re-text
       const phone = (t.phone ?? "").trim();
       if (!phone) {
         skippedNoPhone += 1;

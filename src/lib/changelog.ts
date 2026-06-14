@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.38.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.38.0 &mdash; Reschedule: nudged patients stay visible instead of vanishing.</strong> A UX fix. Before, drafting rebook nudges made those patients disappear from the page (the dedup, so you never text someone twice) &mdash; correct, but it could leave the list looking empty with no sense of what happened. Now they move into a greyed <strong>&ldquo;Recently nudged&rdquo;</strong> section, each showing when it was drafted, so you keep continuity and always see who&rsquo;s been reached. The actionable <strong>&ldquo;to win back&rdquo;</strong> count and the Draft button now reflect only the not-yet-nudged patients, and the empty state distinguishes &ldquo;nobody to win back&rdquo; from &ldquo;all caught up &mdash; everyone&rsquo;s been nudged.&rdquo; Already-nudged patients are still never re-texted. <strong>Touched</strong>: <code>reschedule.functions</code> (surfaces a <code>nudgedAt</code> per patient instead of hiding them; the drafter skips them), the Reschedule page (split list + greyed section).",
+    ],
+  },
+  {
     version: "v2.37.0",
     date: "June 2026",
     items: [
