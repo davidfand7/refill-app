@@ -258,6 +258,28 @@ export function NoShowDefinitionCard({
         </div>
       </div>
 
+      {/* Spa-wide opt-in: apply the rule to reliability scoring too (v2.39.0) */}
+      <div className="mt-3 flex items-start justify-between gap-3 rounded-lg border border-rule bg-white px-3 py-2.5">
+        <div>
+          <div className="text-sm font-medium text-ink">Apply to reliability scoring</div>
+          <div className="text-[11px] text-ink-faint leading-relaxed">
+            Also count a late cancel as a no-show in patient reliability — a chronic
+            late-canceller can reach the <em>in-recovery</em> tier (which can require a
+            deposit). Off by default; this changes how patients are scored.
+          </div>
+        </div>
+        <Toggle
+          on={policy.noshowRuleAppliesReliability}
+          disabled={saving}
+          label="Apply no-show rule to reliability scoring"
+          onClick={() =>
+            void persist({
+              noshowRuleAppliesReliability: !policy.noshowRuleAppliesReliability,
+            })
+          }
+        />
+      </div>
+
       {/* Live reclassification preview */}
       {preview && (
         <div className="mt-3 rounded-lg border border-emerald/30 bg-emerald-soft/30 px-4 py-3">

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.39.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.39.0 &mdash; Your no-show rule can now apply to reliability scoring, not just reschedule nudges.</strong> Closing the Reschedule arc. On the No-show definition card there&rsquo;s a new opt-in: <strong>&ldquo;Apply to reliability scoring.&rdquo;</strong> Turn it on and a <em>late cancel</em> (a cancellation given inside your required-notice window) counts as a no-show in a patient&rsquo;s reliability too &mdash; so a chronic <em>late-canceller</em>, not just a chronic no-shower, can reach the <em>in-recovery</em> tier (which can trigger your deposit policy). It&rsquo;s off by default and opt-in by design, because it changes how a patient is <em>judged</em> &mdash; we never flip that silently. Off = exactly today&rsquo;s behavior (only an outright no-show counts). The reclassification is additive and uses the same one no-show rule everywhere, so the definition you set is the definition that&rsquo;s applied &mdash; no second place to configure, no drift. (Your raw cancellation counts and grace display are left as-is; this affects the reliability tier that gates deposits.) Takes effect as reliability recomputes &mdash; on each patient&rsquo;s next status change and the daily sweep. <strong>New</strong>: migration <code>v2_39_0_noshow_rule_reliability</code> (<code>noshow_rule_applies_reliability</code> opt-in flag). <strong>Touched</strong>: <code>emma-reliability</code> (reclassifies late cancels via the shared <code>classifyAppointmentOutcome</code> when opted in), <code>emma-appointments</code> (carries the flag), the No-show definition card (the toggle).",
+    ],
+  },
+  {
     version: "v2.38.0",
     date: "June 2026",
     items: [

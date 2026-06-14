@@ -37,6 +37,7 @@ import { z } from "zod";
 
 import type { Database, Json } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import { classifyAppointmentOutcome } from "@/lib/noshow-classify";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -227,26 +228,42 @@ export async function recomputeReliabilityForPatient(args: {
 }): Promise<{ tier: ReliabilityTier; transitioned: boolean }> {
   const { sb, userId, patientNodeId } = args;
 
-  // 1) Load policy thresholds (or use defaults)
-  const { data: policy } = await sb
+  // 1) Load policy thresholds (or use defaults) + the spa-wide no-show rule
+  //    opt-in (v2.39.0). The two new columns aren't in generated types yet, so
+  //    read the whole row off a loose view of the client.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const looseSb = sb as unknown as { from(t: string): any };
+  const { data: policy } = await looseSb
     .from("emma_noshow_policies")
-    .select("reliability_tier_thresholds")
+    .select("reliability_tier_thresholds, noshow_rule_applies_reliability, noshow_notice_hours")
     .eq("user_id", userId)
     .maybeSingle();
   const thresholds = readThresholds(policy?.reliability_tier_thresholds ?? null);
+  const ruleExt = (policy ?? {}) as unknown as {
+    noshow_rule_applies_reliability?: boolean | null;
+    noshow_notice_hours?: number | null;
+  };
+  const applyRule = ruleExt.noshow_rule_applies_reliability === true;
+  const noticeHours = ruleExt.noshow_notice_hours ?? 24;
 
   // 2) Pull appointment history for this patient
   const windowMs =
     thresholds.in_recovery_window_months * 30 * 24 * 60 * 60 * 1000;
   const windowStart = new Date(Date.now() - windowMs).toISOString();
 
-  const { data: appointments } = await sb
+  // cancelled_at (v2.34.0) isn't in generated types yet — read via the loose view.
+  const { data: appointments } = await looseSb
     .from("emma_appointments")
-    .select("status, scheduled_at, updated_at")
+    .select("status, scheduled_at, updated_at, cancelled_at")
     .eq("user_id", userId)
     .eq("patient_node_id", patientNodeId);
 
-  const all = appointments ?? [];
+  const all = (appointments ?? []) as Array<{
+    status: string;
+    scheduled_at: string;
+    updated_at: string | null;
+    cancelled_at: string | null;
+  }>;
   let noShows6mo = 0;
   let totalVisits = 0;
   let cancellations6mo = 0;
@@ -255,11 +272,27 @@ export async function recomputeReliabilityForPatient(args: {
   let lastActivityAt: string | null = null;
 
   for (const a of all) {
+    // When the spa opts in (v2.39.0), a late cancel (cancelled inside the
+    // notice window) ALSO counts as a no-show for the reliability tier — so a
+    // chronic late-canceller can reach in_recovery, not just a no-shower. The
+    // raw cancellation counts (grace display) are left untouched: a late cancel
+    // counts toward BOTH, by design (it's the stricter outcome the rule names).
+    const countsAsNoShow =
+      a.status === "no_show" ||
+      (applyRule &&
+        a.status === "cancelled" &&
+        classifyAppointmentOutcome({
+          status: a.status,
+          scheduledAt: a.scheduled_at,
+          cancelledAt: a.cancelled_at,
+          noticeHours,
+        }).outcome === "no_show");
+
     if (a.status === "showed") totalVisits++;
-    if (a.status === "no_show") noShowsLifetime++;
+    if (countsAsNoShow) noShowsLifetime++;
     if (a.status === "cancelled") cancellationsLifetime++;
     if (a.scheduled_at >= windowStart) {
-      if (a.status === "no_show") noShows6mo++;
+      if (countsAsNoShow) noShows6mo++;
       if (a.status === "cancelled") cancellations6mo++;
     }
     const activity = a.updated_at ?? a.scheduled_at;
