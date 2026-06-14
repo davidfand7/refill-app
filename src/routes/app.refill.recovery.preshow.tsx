@@ -42,6 +42,7 @@ import {
 
 import { PageHeader } from "@/components/PageHeader";
 import { RefillSolutionTabs } from "@/components/refill/RefillSolutionTabs";
+import { NoShowDefinitionCard } from "@/components/refill/NoShowDefinitionCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -349,6 +350,9 @@ function PreshowAgentPage() {
           enabled={policy?.preshowEnabled ?? false}
           profileCount={profiles?.length ?? 0}
         />
+
+        {/* No-show definition & Reschedule Reminders (v2.34.0) */}
+        <NoShowDefinitionCard accessToken={accessToken} viewAsUserId={viewAsUserId} />
 
         {/* Profiles section */}
         <section>

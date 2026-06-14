@@ -129,6 +129,18 @@ export type NoShowPolicy = {
    * this address. Null = no proxy email.
    */
   rescueProxyEmail: string | null;
+  // ── Reschedule Reminders (v2.34.0) ──
+  /** Master on/off for the Reschedule Reminders agent (also the Skill gate). */
+  rescheduleEnabled: boolean;
+  /** THE canonical no-show rule: a cancellation with less than this many hours'
+   *  notice counts as a no-show. Default 24. */
+  noshowNoticeHours: number;
+  /** Whether the operator wants to follow up honored cancels. */
+  rescheduleTargetCancels: boolean;
+  /** Whether the operator wants to follow up no-shows (incl. late cancels). */
+  rescheduleTargetNoshows: boolean;
+  /** How far back the sweep looks for un-followed-up outcomes (days). */
+  rescheduleLookbackDays: number;
 };
 
 // ─── Admin client ─────────────────────────────────────────────────────────
@@ -213,6 +225,12 @@ const policyUpdateInput = z.object({
       depositRefundWindowHours: z.number().int().min(1).max(168).optional(),
       rescueProxyPhone: z.string().max(40).optional().nullable(),
       rescueProxyEmail: z.string().email().max(200).optional().nullable(),
+      // Reschedule Reminders (v2.34.0)
+      rescheduleEnabled: z.boolean().optional(),
+      noshowNoticeHours: z.number().int().min(0).max(336).optional(),
+      rescheduleTargetCancels: z.boolean().optional(),
+      rescheduleTargetNoshows: z.boolean().optional(),
+      rescheduleLookbackDays: z.number().int().min(1).max(90).optional(),
     })
     .strict(),
 });
@@ -409,6 +427,11 @@ const POLICY_DEFAULTS: NoShowPolicy = {
   } as Json,
   rescueProxyPhone: null,
   rescueProxyEmail: null,
+  rescheduleEnabled: false,
+  noshowNoticeHours: 24,
+  rescheduleTargetCancels: true,
+  rescheduleTargetNoshows: true,
+  rescheduleLookbackDays: 14,
 };
 
 function rowToPolicy(
@@ -433,6 +456,24 @@ function rowToPolicy(
     reliabilityTierThresholds: row.reliability_tier_thresholds,
     rescueProxyPhone: row.rescue_proxy_phone,
     rescueProxyEmail: row.rescue_proxy_email,
+    // v2.34.0 columns aren't in generated types yet — read via a loose view
+    // (same posture as the skills tables) with defaults for a not-yet-migrated row.
+    ...(() => {
+      const r = row as unknown as {
+        reschedule_enabled?: boolean | null;
+        noshow_notice_hours?: number | null;
+        reschedule_target_cancels?: boolean | null;
+        reschedule_target_noshows?: boolean | null;
+        reschedule_lookback_days?: number | null;
+      };
+      return {
+        rescheduleEnabled: r.reschedule_enabled ?? false,
+        noshowNoticeHours: r.noshow_notice_hours ?? 24,
+        rescheduleTargetCancels: r.reschedule_target_cancels ?? true,
+        rescheduleTargetNoshows: r.reschedule_target_noshows ?? true,
+        rescheduleLookbackDays: r.reschedule_lookback_days ?? 14,
+      };
+    })(),
   };
 }
 
@@ -708,9 +749,22 @@ export const updateAppointmentStatus = createServerFn({ method: "POST" })
         });
     }
 
+    // v2.34.0: stamp the cancellation moment so Reschedule Reminders can tell a
+    // fair-notice cancel from a late one (notice lead-time = scheduled_at −
+    // cancelled_at). Clear it when an appointment leaves the cancelled state.
+    // cancelled_at isn't in generated types yet → loose-cast the patch.
+    const statusPatch: Record<string, unknown> = { status: data.status };
+    if (data.status === "cancelled") {
+      statusPatch.cancelled_at = new Date().toISOString();
+    } else if (existing.status === "cancelled") {
+      statusPatch.cancelled_at = null;
+    }
+
     const { data: updated, error: updErr } = await sb
       .from("emma_appointments")
-      .update({ status: data.status })
+      .update(
+        statusPatch as Database["public"]["Tables"]["emma_appointments"]["Update"],
+      )
       .eq("id", data.appointmentId)
       .eq("user_id", userId)
       .select("*")
@@ -852,7 +906,21 @@ export const updateNoShowPolicy = createServerFn({ method: "POST" })
     if (data.patch.rescueProxyEmail !== undefined)
       patch.rescue_proxy_email = data.patch.rescueProxyEmail;
 
-    if (Object.keys(patch).length === 0) {
+    // v2.34.0 Reschedule Reminders columns — not in generated types yet, so
+    // collected in a loose patch and merged at the upsert (loose-cast there).
+    const extPatch: Record<string, unknown> = {};
+    if (data.patch.rescheduleEnabled !== undefined)
+      extPatch.reschedule_enabled = data.patch.rescheduleEnabled;
+    if (data.patch.noshowNoticeHours !== undefined)
+      extPatch.noshow_notice_hours = data.patch.noshowNoticeHours;
+    if (data.patch.rescheduleTargetCancels !== undefined)
+      extPatch.reschedule_target_cancels = data.patch.rescheduleTargetCancels;
+    if (data.patch.rescheduleTargetNoshows !== undefined)
+      extPatch.reschedule_target_noshows = data.patch.rescheduleTargetNoshows;
+    if (data.patch.rescheduleLookbackDays !== undefined)
+      extPatch.reschedule_lookback_days = data.patch.rescheduleLookbackDays;
+
+    if (Object.keys(patch).length === 0 && Object.keys(extPatch).length === 0) {
       throw new Error("Nothing to update.");
     }
 
@@ -860,7 +928,7 @@ export const updateNoShowPolicy = createServerFn({ method: "POST" })
     const { data: updated, error } = await sb
       .from("emma_noshow_policies")
       .upsert(
-        { user_id: userId, ...patch },
+        { user_id: userId, ...patch, ...extPatch } as unknown as Database["public"]["Tables"]["emma_noshow_policies"]["Insert"],
         { onConflict: "user_id" },
       )
       .select("*")

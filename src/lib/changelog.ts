@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.34.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.34.0 &mdash; Reschedule Reminders, part 1: define a no-show on <em>your</em> terms, and see what it means.</strong> Groundwork for winning back the patients who cancel or no-show. The heart of it is a distinction you control: a <strong>cancellation</strong> is notice given before the appointment <em>and</em> at or beyond your required window; a <strong>no-show</strong> is no notice &mdash; or a &ldquo;cancellation&rdquo; that lands inside your window (a late cancel, which now counts as a no-show). On your Reminders page there&rsquo;s a new <strong>&ldquo;No-show definition &amp; Reschedule Reminders&rdquo;</strong> card: set your required-notice window (e.g. 24h), choose whether to follow up cancels, no-shows, or both, and flip the whole thing on or off. The card shows a <strong>live read on your real data</strong> &mdash; &ldquo;in the last 30 days, <em>N</em> of your <em>M</em> cancellations count as no-shows by your 24h rule&rdquo; &mdash; so the rule is concrete, not abstract. Honest by construction: a cancellation we can&rsquo;t time (no cancellation timestamp on record, as with some imported history) is left as a cancel and <em>never</em> branded a no-show. Nothing is sent yet &mdash; this release is the definition and the mirror; the rebook-nudge drafting lands next. Under the hood this no-show rule is built as one canonical primitive, so a later release can apply it spa-wide (to reliability scoring and grace credits) without a rewrite. <strong>New</strong>: migration <code>v2_34_0_reschedule_reminders</code> (<code>cancelled_at</code> on appointments, backfilled from the status-event audit trail; the notice rule + targeting columns on your no-show policy), a pure <code>classifyAppointmentOutcome</code> classifier, <code>getRescheduleClassificationPreview</code>, and the settings card. <strong>Touched</strong>: <code>emma-appointments</code> (writes <code>cancelled_at</code> on cancel; carries the new policy fields), the Reminders page (mounts the card).",
+    ],
+  },
+  {
     version: "v2.33.0",
     date: "June 2026",
     items: [
