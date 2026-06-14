@@ -106,6 +106,7 @@ import { Route as AppRefillSettingsBookingRouteImport } from './routes/app.refil
 import { Route as AppRefillSettingsBookerInstallRouteImport } from './routes/app.refill.settings.booker-install'
 import { Route as AppRefillSettingsAccountRouteImport } from './routes/app.refill.settings.account'
 import { Route as AppRefillRecoveryRescueRouteImport } from './routes/app.refill.recovery.rescue'
+import { Route as AppRefillRecoveryRescheduleRouteImport } from './routes/app.refill.recovery.reschedule'
 import { Route as AppRefillRecoveryPreshowRouteImport } from './routes/app.refill.recovery.preshow'
 import { Route as AppRefillRecognitionRewardsRouteImport } from './routes/app.refill.recognition.rewards'
 import { Route as AppRefillRecognitionRecallRouteImport } from './routes/app.refill.recognition.recall'
@@ -656,6 +657,12 @@ const AppRefillRecoveryRescueRoute = AppRefillRecoveryRescueRouteImport.update({
   path: '/rescue',
   getParentRoute: () => AppRefillRecoveryRoute,
 } as any)
+const AppRefillRecoveryRescheduleRoute =
+  AppRefillRecoveryRescheduleRouteImport.update({
+    id: '/reschedule',
+    path: '/reschedule',
+    getParentRoute: () => AppRefillRecoveryRoute,
+  } as any)
 const AppRefillRecoveryPreshowRoute =
   AppRefillRecoveryPreshowRouteImport.update({
     id: '/preshow',
@@ -1086,6 +1093,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/recognition/recall': typeof AppRefillRecognitionRecallRoute
   '/app/refill/recognition/rewards': typeof AppRefillRecognitionRewardsRoute
   '/app/refill/recovery/preshow': typeof AppRefillRecoveryPreshowRoute
+  '/app/refill/recovery/reschedule': typeof AppRefillRecoveryRescheduleRoute
   '/app/refill/recovery/rescue': typeof AppRefillRecoveryRescueRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
@@ -1229,6 +1237,7 @@ export interface FileRoutesByTo {
   '/app/refill/recognition/recall': typeof AppRefillRecognitionRecallRoute
   '/app/refill/recognition/rewards': typeof AppRefillRecognitionRewardsRoute
   '/app/refill/recovery/preshow': typeof AppRefillRecoveryPreshowRoute
+  '/app/refill/recovery/reschedule': typeof AppRefillRecoveryRescheduleRoute
   '/app/refill/recovery/rescue': typeof AppRefillRecoveryRescueRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
@@ -1381,6 +1390,7 @@ export interface FileRoutesById {
   '/app/refill/recognition/recall': typeof AppRefillRecognitionRecallRoute
   '/app/refill/recognition/rewards': typeof AppRefillRecognitionRewardsRoute
   '/app/refill/recovery/preshow': typeof AppRefillRecoveryPreshowRoute
+  '/app/refill/recovery/reschedule': typeof AppRefillRecoveryRescheduleRoute
   '/app/refill/recovery/rescue': typeof AppRefillRecoveryRescueRoute
   '/app/refill/settings/account': typeof AppRefillSettingsAccountRoute
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
@@ -1534,6 +1544,7 @@ export interface FileRouteTypes {
     | '/app/refill/recognition/recall'
     | '/app/refill/recognition/rewards'
     | '/app/refill/recovery/preshow'
+    | '/app/refill/recovery/reschedule'
     | '/app/refill/recovery/rescue'
     | '/app/refill/settings/account'
     | '/app/refill/settings/booker-install'
@@ -1677,6 +1688,7 @@ export interface FileRouteTypes {
     | '/app/refill/recognition/recall'
     | '/app/refill/recognition/rewards'
     | '/app/refill/recovery/preshow'
+    | '/app/refill/recovery/reschedule'
     | '/app/refill/recovery/rescue'
     | '/app/refill/settings/account'
     | '/app/refill/settings/booker-install'
@@ -1828,6 +1840,7 @@ export interface FileRouteTypes {
     | '/app/refill/recognition/recall'
     | '/app/refill/recognition/rewards'
     | '/app/refill/recovery/preshow'
+    | '/app/refill/recovery/reschedule'
     | '/app/refill/recovery/rescue'
     | '/app/refill/settings/account'
     | '/app/refill/settings/booker-install'
@@ -2598,6 +2611,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillRecoveryRescueRouteImport
       parentRoute: typeof AppRefillRecoveryRoute
     }
+    '/app/refill/recovery/reschedule': {
+      id: '/app/refill/recovery/reschedule'
+      path: '/reschedule'
+      fullPath: '/app/refill/recovery/reschedule'
+      preLoaderRoute: typeof AppRefillRecoveryRescheduleRouteImport
+      parentRoute: typeof AppRefillRecoveryRoute
+    }
     '/app/refill/recovery/preshow': {
       id: '/app/refill/recovery/preshow'
       path: '/preshow'
@@ -3066,12 +3086,14 @@ const AppRefillPatientsRouteWithChildren =
 
 interface AppRefillRecoveryRouteChildren {
   AppRefillRecoveryPreshowRoute: typeof AppRefillRecoveryPreshowRoute
+  AppRefillRecoveryRescheduleRoute: typeof AppRefillRecoveryRescheduleRoute
   AppRefillRecoveryRescueRoute: typeof AppRefillRecoveryRescueRoute
   AppRefillRecoveryIndexRoute: typeof AppRefillRecoveryIndexRoute
 }
 
 const AppRefillRecoveryRouteChildren: AppRefillRecoveryRouteChildren = {
   AppRefillRecoveryPreshowRoute: AppRefillRecoveryPreshowRoute,
+  AppRefillRecoveryRescheduleRoute: AppRefillRecoveryRescheduleRoute,
   AppRefillRecoveryRescueRoute: AppRefillRecoveryRescueRoute,
   AppRefillRecoveryIndexRoute: AppRefillRecoveryIndexRoute,
 }

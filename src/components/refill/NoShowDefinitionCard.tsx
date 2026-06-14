@@ -13,8 +13,9 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { CalendarClock, Loader2 } from "lucide-react";
+import { ArrowRight, CalendarClock, Loader2 } from "lucide-react";
 import {
   getNoShowPolicy,
   updateNoShowPolicy,
@@ -293,6 +294,17 @@ export function NoShowDefinitionCard({
           )}
         </div>
       )}
+
+      {/* Guide to the action surface */}
+      <div className="mt-3 flex justify-end">
+        <Link
+          to="/app/refill/recovery/reschedule"
+          className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-emerald hover:opacity-80"
+        >
+          View cancels &amp; no-shows to win back
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
     </section>
   );
 }

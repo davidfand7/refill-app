@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.35.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.35.0 &mdash; Reschedule Reminders goes live: draft a warm rebook nudge to everyone who cancelled or no-showed.</strong> Part 2 builds on last release&rsquo;s no-show definition. There&rsquo;s a new <strong>Reschedule</strong> tab in Refill with its own page: it lists the recent cancels and no-shows you chose to follow up &mdash; each classified by <em>your</em> notice rule, one row per patient &mdash; and a <strong>Draft rebook nudges</strong> button composes a warm &ldquo;we&rsquo;d love to get you back on the calendar&rdquo; message for each and sends the batch to your iMessage proxy inbox, where you review and tap Send. Nothing goes to a patient on its own. Honest and careful by construction: it never nudges someone who has <em>already rebooked</em> (a future appointment), never double-nudges (anyone messaged in your look-back window is held back), respects opt-outs and the global sending pause, and only counts patients it can actually reach. The <strong>Reschedule Reminders</strong> Skill is now live on your Skills page &mdash; adopt it to turn the routine on and jump straight to the page; On/Pause is the real engine switch. (This renames and replaces the old &ldquo;No-Show Follow-Up&rdquo; coming-soon tile &mdash; the last of the four.) <strong>New</strong>: <code>listRescheduleTargets</code> + <code>draftRescheduleNudges</code> (reusing the same human-gated draft-to-proxy pipeline as Recall and offer-push), the <code>/app/refill/recovery/reschedule</code> page, and a Reschedule sub-tab. <strong>Touched</strong>: <code>skill-catalog</code> (Reschedule Reminders → live), <code>skills.functions</code> (the On/Pause gate), the no-show settings card (now links to the page).",
+    ],
+  },
+  {
     version: "v2.34.0",
     date: "June 2026",
     items: [

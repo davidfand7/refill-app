@@ -8,9 +8,14 @@
  */
 
 import { Link } from "@tanstack/react-router";
-import { LayoutDashboard, BellRing, LifeBuoy, Inbox } from "lucide-react";
+import { LayoutDashboard, BellRing, LifeBuoy, CalendarClock, Inbox } from "lucide-react";
 
-export type RefillSolutionTab = "overview" | "reminders" | "rescue" | "inbox";
+export type RefillSolutionTab =
+  | "overview"
+  | "reminders"
+  | "rescue"
+  | "reschedule"
+  | "inbox";
 
 const TABS: Array<{
   key: RefillSolutionTab;
@@ -21,6 +26,7 @@ const TABS: Array<{
   { key: "overview", to: "/app/refill/recovery", label: "Overview", Icon: LayoutDashboard },
   { key: "reminders", to: "/app/refill/recovery/preshow", label: "Reminders", Icon: BellRing },
   { key: "rescue", to: "/app/refill/recovery/rescue", label: "Rescue", Icon: LifeBuoy },
+  { key: "reschedule", to: "/app/refill/recovery/reschedule", label: "Reschedule", Icon: CalendarClock },
   { key: "inbox", to: "/app/refill/inbox", label: "Inbox", Icon: Inbox },
 ];
 

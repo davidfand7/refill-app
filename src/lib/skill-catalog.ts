@@ -129,15 +129,17 @@ export const SKILL_CATALOG: SkillTemplate[] = [
     manageTo: "/app/refill/recognition/recall",
   },
   {
-    key: "no_show_followup",
-    label: "No-Show Follow-Up",
+    key: "reschedule_reminders",
+    label: "Reschedule Reminders",
     description:
-      "Re-engage a patient who no-showed with a warm nudge to rebook, instead of letting them slip away.",
+      "Win back the patients who cancelled or no-showed — on your own definition of each. Set your required-notice window (a late cancel counts as a no-show), choose whether to follow up cancels, no-shows, or both, and SmartSpa drafts a warm rebook nudge for each — you review and send. Adopting this turns the routine on and opens the Reschedule page; the no-show rule lives in your Reminders settings.",
     solution: "refill",
     materializer: "routine",
-    status: "preview",
-    adoptCopy: "Will follow up after a no-show to win the rebook.",
-    liftHint: "Recovers visits a no-show would have lost.",
+    status: "live",
+    adoptCopy:
+      "Turns on Reschedule Reminders and opens the Reschedule page, where you draft warm rebook nudges to recent cancels and no-shows. You always review and send.",
+    liftHint: "Recovers visits a cancel-and-forget would have lost.",
+    manageTo: "/app/refill/recovery/reschedule",
   },
   {
     key: "auto_verify_recoveries",
