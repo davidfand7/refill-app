@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.49.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.49.0 &mdash; Calendar security: verified &amp; documented how your Acuity webhook feed is protected.</strong> Following up on v2.47.0: we watched real, live webhook deliveries and confirmed that Acuity signs them with an <em>account key</em> that OAuth integrations like ours can&rsquo;t access (it lives in your Acuity settings, not in the connection we&rsquo;re granted). So the real protection on your booking feed is &mdash; and always has been &mdash; the unique 48-character secret address in its webhook URL: a strong, server-to-server key that never appears in a browser. We&rsquo;ve settled on that as the gate and kept the signature-checking machinery <strong>dormant</strong>; it arms itself automatically if that account key ever becomes available (for example, via an optional &ldquo;paste your Acuity key&rdquo; step down the road). No behavior change &mdash; your feed kept flowing throughout (verified live) &mdash; this is the settled posture, written down so it&rsquo;s never re-investigated from scratch.",
+    ],
+  },
+  {
     version: "v2.48.0",
     date: "June 2026",
     items: [

@@ -95,11 +95,21 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
         // real deliveries don't validate against our OAuth client_secret
         // (production confirmed 772/772 fail). So we probe every credential we
         // DO possess against the live signature and record which scheme
-        // matched, letting one real delivery reveal Acuity's actual signing
-        // key in the audit trail. Until a connection has produced ≥1 valid
-        // signature we stay ADVISORY (the 48-char path secret is the gate);
-        // once proven, an invalid signature on that connection is a forgery
-        // and is hard-rejected. This can never silently drop a working feed.
+        // matched, to learn Acuity's actual signing key from the audit trail.
+        // Until a connection has produced ≥1 valid signature we stay ADVISORY
+        // (the 48-char path secret is the gate); once proven, an invalid
+        // signature on that connection is a forgery and is hard-rejected. This
+        // can never silently drop a working feed.
+        //
+        // v2.49.0 — CONCLUSION (verified on real deliveries 2026-06-15): the
+        // scheme stays NULL — NONE of the credentials we hold (access_token,
+        // client_secret, refresh_token, client_id) match, confirming Acuity
+        // signs with the account API key we can't obtain via OAuth. DECISION:
+        // the path secret IS the gate (≈192-bit bearer, server-to-server over
+        // TLS); this probe + latch are intentionally kept DORMANT — they
+        // auto-arm only if a matching key is ever captured (e.g. an optional
+        // onboarding API-key paste). This is a settled posture, not an open
+        // investigation. See project_calendar_mirror_state.
         const probe = await probeAcuityWebhookSignature({
           rawBody,
           signatureHeader: signature,
