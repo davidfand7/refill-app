@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.44.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.44.0 &mdash; Reschedule Reminders: set a grace window before a nudge goes out.</strong> The strongest objection to a rebook nudge is &ldquo;they would&rsquo;ve rebooked anyway.&rdquo; This kills it. In <em>Reminders → No-show definition</em>, there&rsquo;s a new setting: <strong>&ldquo;Give patients N days to rebook on their own first.&rdquo;</strong> A patient who cancels or no-shows now sits in a grace window for however long you choose &mdash; and SmartSpa only surfaces them for a nudge once that window has passed <em>and</em> they <em>still</em> haven&rsquo;t rebooked. So you never chase someone who was always going to come back on their own; you only spend a nudge on the ones who truly slipped away. The reschedule page shows it honestly &mdash; the people still inside their grace window appear as &ldquo;N still in their grace window&rdquo; rather than the list silently leaving them out. It&rsquo;s a fairness dial: a longer wait means fewer nudges (and fewer recovered visits) &mdash; your call, your patients. Default is <strong>0 days</strong> (off), so nothing changes unless you set it. <strong>New</strong>: <code>reschedule_delay_days</code> policy field + the grace filter in the reschedule sweep (anchored on the cancel time, or the appointment time when the cancel wasn&rsquo;t timed). <strong>Touched</strong>: <code>reschedule.functions</code>, <code>emma-appointments</code> policy, the no-show settings card + reschedule page. One small migration (a new column, default 0).",
+    ],
+  },
+  {
     version: "v2.43.0",
     date: "June 2026",
     items: [

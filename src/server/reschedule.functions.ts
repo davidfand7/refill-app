@@ -184,6 +184,7 @@ type ReschedulePolicy = {
   targetCancels: boolean;
   targetNoshows: boolean;
   lookbackDays: number;
+  delayDays: number;
   proxyEmail: string | null;
   sendingPaused: boolean;
 };
@@ -195,7 +196,7 @@ async function loadReschedulePolicy(
   const { data } = await loose(sb)
     .from("emma_noshow_policies")
     .select(
-      "reschedule_enabled, noshow_notice_hours, reschedule_target_cancels, reschedule_target_noshows, reschedule_lookback_days, rescue_proxy_email, sending_paused",
+      "reschedule_enabled, noshow_notice_hours, reschedule_target_cancels, reschedule_target_noshows, reschedule_lookback_days, reschedule_delay_days, rescue_proxy_email, sending_paused",
     )
     .eq("user_id", userId)
     .maybeSingle();
@@ -206,6 +207,7 @@ async function loadReschedulePolicy(
     targetCancels: (r.reschedule_target_cancels as boolean) ?? true,
     targetNoshows: (r.reschedule_target_noshows as boolean) ?? true,
     lookbackDays: (r.reschedule_lookback_days as number) ?? 14,
+    delayDays: (r.reschedule_delay_days as number) ?? 0,
     proxyEmail: ((r.rescue_proxy_email as string | null) ?? "")?.trim() || null,
     sendingPaused: r.sending_paused === true,
   };
@@ -237,7 +239,7 @@ async function computeRescheduleTargets(
   sb: AnySb,
   userId: string,
   pol: ReschedulePolicy,
-): Promise<RescheduleTarget[]> {
+): Promise<{ targets: RescheduleTarget[]; heldInGrace: number }> {
   const any = loose(sb);
   const sinceIso = new Date(Date.now() - pol.lookbackDays * 86_400_000).toISOString();
 
@@ -263,8 +265,21 @@ async function computeRescheduleTargets(
   // Classify, filter to the chosen classes, dedupe to one row per patient
   // (the most recent, since the rows are ordered newest-first).
   const byPatient = new Map<string, RescheduleTarget>();
+  // Patients whose most-recent chosen outcome is still inside the operator's
+  // grace window — held back (give them time to self-rebook first), but counted
+  // so the page shows them honestly instead of the list silently shrinking.
+  const graceHeld = new Set<string>();
+  // The deciding outcome's scheduled_at per patient — the already-returned
+  // check needs it for BOTH nudge candidates and grace-held rows.
+  const outcomeSchedAt = new Map<string, string>();
+  // "Decided" once we hit a patient's most-recent outcome in a CHOSEN class, so
+  // an older outcome can't override it. A non-chosen / non-target row still
+  // falls through to an older one (preserves prior behavior; delayDays=0 is a
+  // no-op so existing spas are byte-identical).
+  const decided = new Set<string>();
+  const graceFloorMs = pol.delayDays > 0 ? pol.delayDays * 86_400_000 : 0;
   for (const a of appts) {
-    if (!a.patient_node_id || byPatient.has(a.patient_node_id)) continue;
+    if (!a.patient_node_id || decided.has(a.patient_node_id)) continue;
     const res = classifyAppointmentOutcome({
       status: a.status,
       scheduledAt: a.scheduled_at,
@@ -277,6 +292,19 @@ async function computeRescheduleTargets(
     else continue; // rescheduled / attended — not a target
     if (kind === "cancel" && !pol.targetCancels) continue;
     if (kind === "no_show" && !pol.targetNoshows) continue;
+    // The patient's most-recent outcome in a chosen class → it decides them.
+    decided.add(a.patient_node_id);
+    outcomeSchedAt.set(a.patient_node_id, a.scheduled_at);
+    if (graceFloorMs > 0) {
+      // Anchor the grace window on WHEN the outcome happened: the cancel time
+      // if known, else the appointment time (a no-show is anchored to the appt
+      // time; an untimed CSV cancel falls back to scheduled_at).
+      const outcomeAtMs = Date.parse(a.cancelled_at ?? a.scheduled_at);
+      if (Number.isFinite(outcomeAtMs) && Date.now() - outcomeAtMs < graceFloorMs) {
+        graceHeld.add(a.patient_node_id); // still in the grace window — hold
+        continue;
+      }
+    }
     byPatient.set(a.patient_node_id, {
       patientNodeId: a.patient_node_id,
       name: "",
@@ -292,7 +320,10 @@ async function computeRescheduleTargets(
     });
   }
   let ids = [...byPatient.keys()];
-  if (ids.length === 0) return [];
+  // The opted-out / already-returned facts are needed for nudge candidates AND
+  // grace-held patients (so the held count excludes anyone who already came back).
+  const factIds = [...new Set([...ids, ...graceHeld])];
+  if (factIds.length === 0) return { targets: [], heldInGrace: 0 };
 
   // Nudged map: patient → most recent nudge time in-window. We KEEP nudged
   // patients (shown greyed for continuity) rather than hiding them — the draft
@@ -323,7 +354,7 @@ async function computeRescheduleTargets(
         .eq("user_id", userId)
         .eq("state", "opted_out")
         .in("patient_node_id", slice),
-    ids,
+    factIds,
   );
 
   // "Already rescheduled" = the patient has a REAL appointment (anything that
@@ -332,13 +363,13 @@ async function computeRescheduleTargets(
   // attended. Either way they've come back; don't nudge. (This subsumes the old
   // future-only "rebooked" check, which missed people who already returned.)
   const goodMaxByPatient = new Map<string, string>();
-  for (let i = 0; i < ids.length; i += CHUNK) {
+  for (let i = 0; i < factIds.length; i += CHUNK) {
     const { data } = await any
       .from("emma_appointments")
       .select("patient_node_id, scheduled_at")
       .eq("user_id", userId)
       .in("status", ["scheduled", "confirmed", "showed", "rescheduled"])
-      .in("patient_node_id", ids.slice(i, i + CHUNK));
+      .in("patient_node_id", factIds.slice(i, i + CHUNK));
     for (const r of (data ?? []) as Array<{
       patient_node_id: string | null;
       scheduled_at: string;
@@ -350,14 +381,20 @@ async function computeRescheduleTargets(
   }
   const hasReturned = (id: string): boolean => {
     const latestGood = goodMaxByPatient.get(id);
-    const outcome = byPatient.get(id);
+    const outcomeAt = outcomeSchedAt.get(id);
     // ISO timestamps compare lexicographically = chronologically.
-    return Boolean(latestGood && outcome && latestGood > outcome.scheduledAt);
+    return Boolean(latestGood && outcomeAt && latestGood > outcomeAt);
   };
+
+  // Honest count of patients waiting in the grace window — excluding any who
+  // since opted out or already rebooked (those aren't "waiting", they're done).
+  const heldInGrace = [...graceHeld].filter(
+    (id) => !opted.has(id) && !hasReturned(id),
+  ).length;
 
   // Drop opted-out + already-returned (resolved); KEEP nudged (shown greyed).
   ids = ids.filter((id) => !opted.has(id) && !hasReturned(id));
-  if (ids.length === 0) return [];
+  if (ids.length === 0) return { targets: [], heldInGrace };
 
   // Resolve contact from the patient node (emma_appointments has no denormalized
   // contact — only patient_node_id).
@@ -397,7 +434,7 @@ async function computeRescheduleTargets(
     if (!a.nudgedAt !== !b.nudgedAt) return a.nudgedAt ? 1 : -1;
     return a.scheduledAt < b.scheduledAt ? 1 : -1;
   });
-  return out;
+  return { targets: out, heldInGrace };
 }
 
 const accessOnly = z.object({
@@ -411,9 +448,13 @@ export type RescheduleTargetsResult = {
   targetNoshows: boolean;
   noticeHours: number;
   lookbackDays: number;
+  delayDays: number;
   hasProxyEmail: boolean;
   sendingPaused: boolean;
   reachable: number;
+  /** Patients whose cancel/no-show is still inside the grace window — held back
+   *  (not yet nudged) to give them a chance to self-rebook. Shown for honesty. */
+  heldInGrace: number;
   targets: RescheduleTarget[];
 };
 
@@ -426,18 +467,24 @@ export const listRescheduleTargets = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const pol = await loadReschedulePolicy(sb, effectiveUserId);
-    const targets = await computeRescheduleTargets(sb, effectiveUserId, pol);
+    const { targets, heldInGrace } = await computeRescheduleTargets(
+      sb,
+      effectiveUserId,
+      pol,
+    );
     return {
       enabled: pol.enabled,
       targetCancels: pol.targetCancels,
       targetNoshows: pol.targetNoshows,
       noticeHours: pol.noticeHours,
       lookbackDays: pol.lookbackDays,
+      delayDays: pol.delayDays,
       hasProxyEmail: Boolean(pol.proxyEmail),
       sendingPaused: pol.sendingPaused,
       // Reachable = fresh (not-yet-nudged) patients with a phone — the count the
       // Draft button acts on. Already-nudged ones are shown but not re-drafted.
       reachable: targets.filter((t) => !t.nudgedAt && (t.phone ?? "").trim()).length,
+      heldInGrace,
       targets,
     };
   });
@@ -489,7 +536,7 @@ export const draftRescheduleNudges = createServerFn({ method: "POST" })
         "Set your iMessage proxy email first (Refill → no-show settings) so drafts have somewhere to land.",
       );
 
-    const targets = await computeRescheduleTargets(sb, effectiveUserId, pol);
+    const { targets } = await computeRescheduleTargets(sb, effectiveUserId, pol);
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
     const spaName = await resolveSpaName(
       sb as unknown as Parameters<typeof resolveSpaName>[0],

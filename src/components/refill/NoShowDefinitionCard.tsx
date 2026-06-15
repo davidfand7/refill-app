@@ -71,6 +71,7 @@ export function NoShowDefinitionCard({
   const [policy, setPolicy] = useState<NoShowPolicy | null>(null);
   const [preview, setPreview] = useState<RescheduleClassificationPreview | null>(null);
   const [hoursInput, setHoursInput] = useState<string>("24");
+  const [delayInput, setDelayInput] = useState<string>("0");
   const [saving, setSaving] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -96,6 +97,7 @@ export function NoShowDefinitionCard({
         const pol = await getNoShowPolicy({ data: { accessToken, viewAsUserId } });
         setPolicy(pol);
         setHoursInput(String(pol.noshowNoticeHours));
+        setDelayInput(String(pol.rescheduleDelayDays));
       } catch {
         /* leave card empty on error */
       }
@@ -121,6 +123,7 @@ export function NoShowDefinitionCard({
           const pol = await getNoShowPolicy({ data: { accessToken, viewAsUserId } });
           setPolicy(pol);
           setHoursInput(String(pol.noshowNoticeHours));
+          setDelayInput(String(pol.rescheduleDelayDays));
         } catch {
           /* ignore */
         }
@@ -151,6 +154,15 @@ export function NoShowDefinitionCard({
       void persist({ noshowNoticeHours: n });
     }
     void loadPreview(n);
+  }
+
+  function onDelayBlur() {
+    const n = parseInt(delayInput, 10);
+    const v = Number.isFinite(n) ? Math.min(60, Math.max(0, n)) : 0;
+    setDelayInput(String(v));
+    if (policy && v !== policy.rescheduleDelayDays) {
+      void persist({ rescheduleDelayDays: v });
+    }
   }
 
   if (!policy) {
@@ -256,6 +268,42 @@ export function NoShowDefinitionCard({
             }
           />
         </div>
+      </div>
+
+      {/* Grace window — wait before nudging (v2.44.0 timing knob) */}
+      <div
+        className={cn(
+          "mt-3 rounded-lg border border-rule bg-white p-4 transition",
+          !enabled && "opacity-50 pointer-events-none",
+        )}
+        aria-disabled={!enabled}
+      >
+        <label className="block text-[10px] font-semibold uppercase tracking-wider text-ink-soft mb-1.5">
+          Grace window before nudging
+        </label>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm text-ink">Give patients</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={60}
+            value={delayInput}
+            disabled={saving || !enabled}
+            onChange={(e) => setDelayInput(e.target.value)}
+            onBlur={onDelayBlur}
+            className="w-16 rounded border border-rule bg-white px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-emerald/30"
+          />
+          <span className="text-sm text-ink">
+            day{delayInput === "1" ? "" : "s"} to rebook on their own first.
+          </span>
+        </div>
+        <p className="mt-1.5 text-[11px] text-ink-faint leading-relaxed">
+          We only nudge patients who <em>still</em> haven&rsquo;t rebooked after this
+          wait — so you never chase someone who would have come back on their own. A
+          longer wait means fewer nudges (and fewer recovered visits).{" "}
+          <strong>0</strong> = nudge as soon as they&rsquo;re eligible.
+        </p>
       </div>
 
       {/* Spa-wide opt-in: apply the rule to reliability scoring too (v2.39.0) */}

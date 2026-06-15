@@ -141,6 +141,9 @@ export type NoShowPolicy = {
   rescheduleTargetNoshows: boolean;
   /** How far back the sweep looks for un-followed-up outcomes (days). */
   rescheduleLookbackDays: number;
+  /** Grace window (days): wait this long after a cancel/no-show before a nudge
+   *  is eligible, giving the patient time to self-rebook first. 0 = off. */
+  rescheduleDelayDays: number;
   /** Opt-in: apply the no-show rule (a late cancel = a no-show) to reliability
    *  scoring too, not just Reschedule Reminders. Default false. */
   noshowRuleAppliesReliability: boolean;
@@ -234,6 +237,7 @@ const policyUpdateInput = z.object({
       rescheduleTargetCancels: z.boolean().optional(),
       rescheduleTargetNoshows: z.boolean().optional(),
       rescheduleLookbackDays: z.number().int().min(1).max(90).optional(),
+      rescheduleDelayDays: z.number().int().min(0).max(60).optional(),
       noshowRuleAppliesReliability: z.boolean().optional(),
     })
     .strict(),
@@ -436,6 +440,7 @@ const POLICY_DEFAULTS: NoShowPolicy = {
   rescheduleTargetCancels: true,
   rescheduleTargetNoshows: true,
   rescheduleLookbackDays: 14,
+  rescheduleDelayDays: 0,
   noshowRuleAppliesReliability: false,
 };
 
@@ -470,6 +475,7 @@ function rowToPolicy(
         reschedule_target_cancels?: boolean | null;
         reschedule_target_noshows?: boolean | null;
         reschedule_lookback_days?: number | null;
+        reschedule_delay_days?: number | null;
         noshow_rule_applies_reliability?: boolean | null;
       };
       return {
@@ -478,6 +484,7 @@ function rowToPolicy(
         rescheduleTargetCancels: r.reschedule_target_cancels ?? true,
         rescheduleTargetNoshows: r.reschedule_target_noshows ?? true,
         rescheduleLookbackDays: r.reschedule_lookback_days ?? 14,
+        rescheduleDelayDays: r.reschedule_delay_days ?? 0,
         noshowRuleAppliesReliability: r.noshow_rule_applies_reliability ?? false,
       };
     })(),
@@ -926,6 +933,8 @@ export const updateNoShowPolicy = createServerFn({ method: "POST" })
       extPatch.reschedule_target_noshows = data.patch.rescheduleTargetNoshows;
     if (data.patch.rescheduleLookbackDays !== undefined)
       extPatch.reschedule_lookback_days = data.patch.rescheduleLookbackDays;
+    if (data.patch.rescheduleDelayDays !== undefined)
+      extPatch.reschedule_delay_days = data.patch.rescheduleDelayDays;
     if (data.patch.noshowRuleAppliesReliability !== undefined)
       extPatch.noshow_rule_applies_reliability = data.patch.noshowRuleAppliesReliability;
 

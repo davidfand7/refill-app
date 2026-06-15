@@ -150,6 +150,7 @@ function ReschedulePage() {
                   : data.targetNoshows
                     ? "no-shows only"
                     : "no classes selected"}
+              {data.delayDays > 0 && <> · {data.delayDays}-day grace</>}
             </span>
             <Link
               to="/app/refill/recovery/preshow"
@@ -195,6 +196,12 @@ function ReschedulePage() {
                 <strong>{fresh.length}</strong> patient{fresh.length === 1 ? "" : "s"} to win back
                 {data && data.reachable !== fresh.length && (
                   <span className="text-ink-faint"> · {data.reachable} reachable by text</span>
+                )}
+                {data && data.heldInGrace > 0 && (
+                  <span className="text-ink-faint">
+                    {" "}
+                    · {data.heldInGrace} still in their grace window
+                  </span>
                 )}
               </>
             )}
