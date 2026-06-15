@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.56.2",
+    date: "June 2026",
+    items: [
+      "<strong>v2.56.2 &mdash; Schedule cards: no more mashing or clipped text.</strong> Fixes two real bugs in the day &amp; week grids. <strong>(1) Mashed cards</strong> &mdash; a card's height and the side-by-side overlap check were computed from two different sources, so a card could render taller than the gap to its neighbour and sit <em>on top</em> of it. Both now use the same rendered span, so any two cards that would visually collide are placed <strong>side-by-side</strong> instead of overlapping. <strong>(2) Clipped info</strong> &mdash; every card is now guaranteed enough height to show its full info (patient name + time) without the text being cut off at the edge. Longer appointments still grow with their duration. <strong>Touched</strong>: <code>schedule/shared.ts</code> (lane packer uses the content-floored span), <code>schedule/grids.tsx</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.56.1",
     date: "June 2026",
     items: [

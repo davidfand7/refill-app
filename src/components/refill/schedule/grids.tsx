@@ -132,7 +132,9 @@ export function DayGrid({
       const mins = win.start + (e.clientY - rect.top) / pxPerMin;
       onBook(day.dateIso, minToHHMM(snap5(mins, win)), solo?.id);
     }
-    const soloLanes = assignApptLanes(day.appointments, tz);
+    const soloLanes = assignApptLanes(day.appointments, tz, {
+      minDurMin: MIN_DAY_CARD_PX / pxPerMin,
+    });
     return (
       <div className="rounded-xl border border-rule bg-white p-4">
         {!band.isOpen && <div className="mb-3 text-[12px] text-ink-faint">Closed this day (per business hours).</div>}
@@ -199,7 +201,9 @@ export function DayGrid({
           {providers.map((p) => {
             const band = day.openByProvider[p.id] ?? { isOpen: false, openMin: 9 * 60, closeMin: 17 * 60 };
             const colAppts = day.appointments.filter((a) => a.providerId === p.id);
-            const colLanes = assignApptLanes(colAppts, tz);
+            const colLanes = assignApptLanes(colAppts, tz, {
+              minDurMin: MIN_DAY_CARD_PX / pxPerMin,
+            });
             // Provider-specific blocks + whole-practice (null) blocks.
             const colBlocks = day.blocks.filter((b) => b.providerId === p.id || b.providerId === null);
             return (
@@ -408,7 +412,10 @@ export function WeekGrid({
             const dow = new Date(`${d}T12:00:00Z`).getUTCDay();
             const h = hoursByDow.get(dow);
             const dayAppts = apptsByDay.get(d) ?? [];
-            const dayLanes = assignApptLanes(dayAppts, tz, MAX_WEEK_LANES);
+            const dayLanes = assignApptLanes(dayAppts, tz, {
+              minDurMin: MIN_WEEK_CARD_PX / pxPerMin,
+              maxLanes: MAX_WEEK_LANES,
+            });
             const dayBlocks = blocksByDay.get(d) ?? [];
             return (
               <div

@@ -23,11 +23,14 @@ export type ServiceLite = {
 export const ZOOM_LEVELS = [0.7, 1.0, 1.4, 2.0, 2.8];
 export const DEFAULT_ZOOM_IDX = 3; // 2.0 px/min — more vertical breathing room (v2.56.1)
 export const ZOOM_KEY = "refill.schedule.zoom";
-// Minimum card heights — a small readability floor only. Kept LOW (was 40) so a
-// short appointment sizes honestly to its real duration instead of inflating and
-// overflowing into the next card below it (the v2.56.0 "mushed stack" bug).
-export const MIN_DAY_CARD_PX = 22;
-export const MIN_WEEK_CARD_PX = 22;
+// Minimum card heights — every card must be tall enough to show its full info
+// (patient name + time) WITHOUT clipping. A card never renders shorter than this.
+// Crucially, the lane packer is told this same floor (as minutes) so a card that
+// gets inflated to fit its content is also treated as "occupying that space" for
+// overlap — which is what pushes a colliding neighbour SIDE-BY-SIDE instead of
+// letting it mash on top (the bug behind the v2.56.x "stacked blob").
+export const MIN_DAY_CARD_PX = 44;
+export const MIN_WEEK_CARD_PX = 44;
 // Week view caps how many overlapping cards it shows side-by-side before
 // collapsing the rest into a "+N more" pill (click → that day in Day view),
 // so a busy column never slices into unreadable slivers.
@@ -117,17 +120,23 @@ export type LaneLayout = {
 export function assignApptLanes(
   appts: DayAppointment[],
   tz: string,
-  maxLanes = Infinity,
+  opts: { minDurMin?: number; maxLanes?: number } = {},
 ): LaneLayout {
+  const { minDurMin = 0, maxLanes = Infinity } = opts;
   const laneOf = new Map<string, { lane: number; lanes: number }>();
   const overflow: LaneLayout["overflow"] = [];
   if (appts.length === 0) return { laneOf, overflow };
 
+  // Each card's RENDERED span (minutes) = its real duration floored to the
+  // content-min (minDurMin = the min card height converted to minutes), exactly
+  // matching how the card height is computed. Using this for overlap means a
+  // card inflated to fit its text correctly bumps its neighbour into a new lane
+  // instead of being silently overlapped.
   const items = appts
     .map((a) => {
       const start = localMinutes(a.startIso, tz);
-      const end = Math.max(start + 5, localMinutes(a.endIso, tz));
-      return { id: a.id, start, end };
+      const dur = Math.max(5, a.durationMin || 0, minDurMin);
+      return { id: a.id, start, end: start + dur };
     })
     .sort((x, y) => x.start - y.start || x.end - y.end);
 
