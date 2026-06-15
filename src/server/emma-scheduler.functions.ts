@@ -1298,6 +1298,149 @@ export async function backfillAcuityAppointments(args: {
   };
 }
 
+// ─── reconcileAcuityForConnection (the self-healing backstop, v2.41.0) ────────
+//
+// The realtime webhook is the primary path; this is the safety net. A few-hour
+// cron (api.cron.acuity-reconcile) re-pulls a RECENT window and upserts
+// idempotently on (user_id, external_id, source) — so a webhook the realtime
+// path dropped is caught and the calendar can never go SILENTLY stale (the #1
+// trust risk per the Connection-Health doctrine). It fires the SAME trigger
+// graph as the webhook (rescue + reliability) but ONLY on a genuine status
+// TRANSITION vs. the stored row, so it never double-acts on a change the
+// webhook already handled (idempotent by construction). A narrow window keeps
+// each run cheap; far-future drift is covered by the webhook + on-connect
+// backfill.
+const RECONCILE_DAYS_BACK = 7;
+const RECONCILE_DAYS_FORWARD = 45;
+
+export async function reconcileAcuityForConnection(args: {
+  sb: SupabaseAdmin;
+  userId: string;
+  accessToken: string;
+}): Promise<{
+  pulled: number;
+  changed: number;
+  rescued: number;
+  reliabilityRecomputed: number;
+}> {
+  const { sb, userId, accessToken } = args;
+  const now = new Date();
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const minDate = fmt(new Date(now.getTime() - RECONCILE_DAYS_BACK * 86400000));
+  const maxDate = fmt(new Date(now.getTime() + RECONCILE_DAYS_FORWARD * 86400000));
+
+  const [active, canceled] = await Promise.all([
+    listAcuityAppointments(accessToken, { minDate, maxDate, max: 1000, canceled: false }),
+    listAcuityAppointments(accessToken, { minDate, maxDate, max: 1000, canceled: true }),
+  ]);
+  const all = [...active, ...canceled];
+  if (all.length === 0) {
+    return { pulled: 0, changed: 0, rescued: 0, reliabilityRecomputed: 0 };
+  }
+
+  // Bulk-load the stored state for the pulled external ids (chunked .in()),
+  // so transition detection is one query per 200 instead of one per appt.
+  const ids = all.map((a) => String(a.id));
+  const prior = new Map<
+    string,
+    { id: string; status: string; patient_node_id: string | null; scheduled_at: string }
+  >();
+  const CHUNK = 200;
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const { data } = await sb
+      .from("emma_appointments")
+      .select("id, external_id, status, patient_node_id, scheduled_at")
+      .eq("user_id", userId)
+      .eq("source", "acuity")
+      .in("external_id", ids.slice(i, i + CHUNK));
+    for (const r of data ?? []) {
+      if (r.external_id) {
+        prior.set(r.external_id, {
+          id: r.id,
+          status: r.status,
+          patient_node_id: r.patient_node_id,
+          scheduled_at: r.scheduled_at,
+        });
+      }
+    }
+  }
+
+  const patientIndex = await buildPatientIndex(sb, userId);
+
+  let changed = 0;
+  let rescued = 0;
+  let reliabilityRecomputed = 0;
+
+  for (const apt of all) {
+    const p = prior.get(String(apt.id));
+    const patientNodeId =
+      p?.patient_node_id ??
+      matchPatientFromIndex(
+        {
+          patientFirstName: apt.firstName || null,
+          patientLastName: apt.lastName || null,
+          patientPhone: apt.phone || null,
+          patientEmail: apt.email || null,
+        },
+        patientIndex,
+      );
+
+    const row = acuityAppointmentToRow(apt, userId, patientNodeId);
+    const { data: upserted } = await sb
+      .from("emma_appointments")
+      .upsert(row, { onConflict: "user_id,external_id,source" })
+      .select("id, status, patient_node_id, scheduled_at")
+      .single();
+    if (!upserted) continue;
+
+    const priorStatus = p?.status ?? null;
+    if (priorStatus === upserted.status) continue; // no transition → webhook already handled (or unchanged)
+    changed++;
+
+    await sb.from("emma_appointment_status_events").insert({
+      user_id: userId,
+      appointment_id: upserted.id,
+      from_status: priorStatus ?? "scheduled",
+      to_status: upserted.status,
+      triggered_by: "acuity-reconcile",
+      reason: `acuity:reconcile:${apt.canceled ? "canceled" : apt.noShow ? "noshow" : "scheduled"}`,
+    });
+
+    const future = new Date(upserted.scheduled_at).getTime() > Date.now();
+    if ((upserted.status === "cancelled" || upserted.status === "no_show") && future) {
+      try {
+        const { dispatchRescueAttempt } = await import("@/server/emma-rescue.functions");
+        await dispatchRescueAttempt({ sb, userId, appointmentId: upserted.id });
+        rescued++;
+      } catch (e) {
+        console.error("[acuity-reconcile] rescue dispatch failed:", e instanceof Error ? e.message : e);
+      }
+    }
+    if (
+      upserted.patient_node_id &&
+      ["showed", "no_show", "cancelled"].includes(upserted.status)
+    ) {
+      try {
+        const { recomputeReliabilityForPatient } = await import("@/server/emma-reliability.functions");
+        await recomputeReliabilityForPatient({ sb, userId, patientNodeId: upserted.patient_node_id });
+        reliabilityRecomputed++;
+      } catch (e) {
+        console.error("[acuity-reconcile] reliability recompute failed:", e instanceof Error ? e.message : e);
+      }
+    }
+  }
+
+  // Stamp the connection's freshness pulse (so Connection Health sees the
+  // reconcile heartbeat even during a webhook outage).
+  await sb
+    .from("emma_scheduler_connections")
+    .update({ last_sync_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .eq("platform", "acuity");
+
+  return { pulled: all.length, changed, rescued, reliabilityRecomputed };
+}
+
 function acuityAppointmentToRow(
   apt: AcuityAppointment,
   userId: string,

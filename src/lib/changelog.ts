@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.41.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.41.0 &mdash; Your synced calendar now heals itself: a reconcile sweep so a dropped update can&rsquo;t leave it silently stale.</strong> SmartSpa mirrors your booking calendar (Acuity) in real time over a webhook &mdash; every booking, cancel, and no-show flows in the instant it happens. But a webhook can be missed (your calendar&rsquo;s servers hiccup, ours restarts), and a <em>silently</em> stale calendar is the worst kind of broken &mdash; everything looks fine while you quietly miss a cancellation. This release adds the safety net: a background sweep that, every few hours, re-pulls a recent window of your real calendar and reconciles it against what SmartSpa has &mdash; catching anything the live feed dropped. It&rsquo;s idempotent (re-checking the same appointment changes nothing) and it only acts on a <em>genuine</em> change versus what&rsquo;s stored, so it never double-handles something the live feed already caught &mdash; but if it finds a cancellation the webhook missed, it still kicks off the same rescue and reliability updates, so a missed cancel still becomes a filled slot. Your calendar goes from &ldquo;hope the webhook fired&rdquo; to &ldquo;guaranteed to catch up.&rdquo; <strong>New</strong>: <code>reconcileAcuityForConnection</code> (reuses the existing Acuity pull + upsert + patient match) and the secret-gated <code>/api/cron/acuity-reconcile</code> sweep (a new fleet job). <strong>Touched</strong>: <code>emma-scheduler.functions</code>.",
+    ],
+  },
+  {
     version: "v2.40.0",
     date: "June 2026",
     items: [
