@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.55.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.55.1 &mdash; Provider rename now shows on the calendar grid too (fix).</strong> v2.55.0 let you rename a calendar column and it stuck in the Providers dialog &mdash; but the schedule grid&rsquo;s column header still showed the original calendar name, because the grid loads its columns through a different path. The day, week, and month grids now use your renamed label, matching the dialog and the booking page. The patient booking-confirmation email uses it as well. <strong>Touched</strong>: <code>scheduling-owner.functions</code> (the owner-calendar provider loader + confirmation email now resolve display_name ?? name). No migration.",
+    ],
+  },
+  {
     version: "v2.55.0",
     date: "June 2026",
     items: [

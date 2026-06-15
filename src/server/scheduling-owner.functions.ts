@@ -174,14 +174,23 @@ async function loadActiveProviders(
   sb: ReturnType<typeof admin>,
   tenantId: string,
 ): Promise<ProviderLite[]> {
-  const { data } = await sb
+  // display_name (sticky owner rename, v2.55.0) isn't in generated types yet →
+  // loose-cast. Effective column label = display_name override ?? Acuity name,
+  // so a rename shows on the schedule grid (it already shows in the manage dialog).
+  const anySb = sb as unknown as { from(t: string): ReturnType<typeof sb.from> };
+  const { data } = await anySb
     .from("scheduling_providers")
-    .select("id, name, created_at")
+    .select("id, name, display_name, created_at")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .is("hidden_at", null)
     .order("created_at", { ascending: true });
-  return (data ?? []).map((p) => ({ id: p.id, name: p.name }));
+  const rows = (data ?? []) as unknown as Array<{
+    id: string;
+    name: string;
+    display_name: string | null;
+  }>;
+  return rows.map((p) => ({ id: p.id, name: p.display_name?.trim() || p.name }));
 }
 
 /** How many active providers the owner has hidden from the grid — drives the
@@ -775,8 +784,14 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
       const [{ data: t }, { data: st }, { data: prov }] = await Promise.all([
         sb.from("tenants").select("name").eq("id", tenantId).maybeSingle(),
         sb.from("scheduling_settings").select("timezone").eq("tenant_id", tenantId).maybeSingle(),
-        sb.from("scheduling_providers").select("name").eq("id", providerId).maybeSingle(),
+        // loose-cast: display_name (sticky rename) isn't in generated types yet.
+        (sb as unknown as { from(t: string): ReturnType<typeof sb.from> })
+          .from("scheduling_providers")
+          .select("name, display_name")
+          .eq("id", providerId)
+          .maybeSingle(),
       ]);
+      const provRow = prov as { name?: string; display_name?: string | null } | null;
       try {
         await sendBookingConfirmation({
           to: data.patientEmail,
@@ -784,7 +799,7 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
           startIso: data.startIso,
           timezone: st?.timezone ?? "America/Los_Angeles",
           serviceName: svc.name,
-          providerName: prov?.name ?? null,
+          providerName: provRow?.display_name?.trim() || provRow?.name || null,
           durationMin: effectiveDuration,
           addOns: chosenAddons.map((a) => ({ name: a.name, durationMin: a.durationMin })),
         });
