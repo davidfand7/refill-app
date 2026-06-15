@@ -9,6 +9,9 @@
  * "rolling 6mo window passed a no-show" passive transitions.
  *
  * Auth: SCHEDULER_SECRET (same secret v356 + v360 use).
+ * Scope: optional ?userId= to recompute a single tenant (v2.51.0 — matches the
+ *   reconcile/provider-relink crons; lets a manual run target one spa instead
+ *   of recomputing every tenant + emitting collateral pattern_alerts).
  *
  * Established 2026-05-17 (Promotions Engine v362).
  */
@@ -44,12 +47,14 @@ export const Route = createFileRoute("/api/cron/emma-reliability-sweep")({
           auth: { persistSession: false, autoRefreshToken: false },
         });
 
+        // Optional single-tenant scope (v2.51.0).
+        const onlyUserId = new URL(request.url).searchParams.get("userId");
+
         // Pull every spa with at least one appointment. The reliability
         // engine only matters for spas using v360 appointment data.
-        const { data: spas, error } = await sb
-          .from("emma_appointments")
-          .select("user_id")
-          .limit(10000);
+        let spaQ = sb.from("emma_appointments").select("user_id").limit(10000);
+        if (onlyUserId) spaQ = spaQ.eq("user_id", onlyUserId);
+        const { data: spas, error } = await spaQ;
         if (error) return jsonResp(500, { error: `pull spas: ${error.message}` });
         const userIds = Array.from(
           new Set((spas ?? []).map((s) => s.user_id)),

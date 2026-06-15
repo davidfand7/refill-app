@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.51.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.51.0 &mdash; Reliability recompute can now target a single spa.</strong> The nightly reliability recompute can be pointed at one account (<code>?userId=</code>) instead of always sweeping every tenant &mdash; matching how the calendar reconcile and provider-relink jobs already work. Internal operability only (no behavior change to the scheduled nightly run): it makes a targeted recompute safe to run for one spa without recomputing everyone or emitting unrelated alerts.",
+    ],
+  },
+  {
     version: "v2.50.0",
     date: "June 2026",
     items: [
