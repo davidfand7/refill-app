@@ -21,12 +21,17 @@ export type ServiceLite = {
 // Zoom = pixels-per-minute for the positioned grids. Default is "comfortable"
 // so a 30-min appt is tall enough to show name + time without clipping.
 export const ZOOM_LEVELS = [0.7, 1.0, 1.4, 2.0, 2.8];
-export const DEFAULT_ZOOM_IDX = 2; // 1.4 px/min
+export const DEFAULT_ZOOM_IDX = 3; // 2.0 px/min — more vertical breathing room (v2.56.1)
 export const ZOOM_KEY = "refill.schedule.zoom";
-// Minimum card heights so a short appointment is still tall enough to show
-// name + time without clipping (longer appts size by their real duration).
-export const MIN_DAY_CARD_PX = 40;
-export const MIN_WEEK_CARD_PX = 40;
+// Minimum card heights — a small readability floor only. Kept LOW (was 40) so a
+// short appointment sizes honestly to its real duration instead of inflating and
+// overflowing into the next card below it (the v2.56.0 "mushed stack" bug).
+export const MIN_DAY_CARD_PX = 22;
+export const MIN_WEEK_CARD_PX = 22;
+// Week view caps how many overlapping cards it shows side-by-side before
+// collapsing the rest into a "+N more" pill (click → that day in Day view),
+// so a busy column never slices into unreadable slivers.
+export const MAX_WEEK_LANES = 3;
 export const WD_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 // Per-provider header accent dot (cards/bands stay emerald — the column + name
 // identify the provider; this is a small additive touch, not a restyle).
@@ -100,12 +105,23 @@ export function groupBlocksByDay(blocks: DayBlock[], tz: string): Map<string, Da
  * Pure; works off real start/end minutes in the given tz. A zero/negative span
  * is floored to 5 min so a same-instant pair still registers as overlapping.
  */
+export type LaneLayout = {
+  /** id -> {lane, lanes}. Cards that overflow the `maxLanes` cap are omitted
+   *  here and represented by an `overflow` pill instead. */
+  laneOf: Map<string, { lane: number; lanes: number }>;
+  /** One entry per cluster that exceeded the cap: a "+count more" pill spanning
+   *  [topMin, bottomMin] in the reserved last lane. Empty when uncapped. */
+  overflow: Array<{ topMin: number; bottomMin: number; count: number }>;
+};
+
 export function assignApptLanes(
   appts: DayAppointment[],
   tz: string,
-): Map<string, { lane: number; lanes: number }> {
-  const out = new Map<string, { lane: number; lanes: number }>();
-  if (appts.length === 0) return out;
+  maxLanes = Infinity,
+): LaneLayout {
+  const laneOf = new Map<string, { lane: number; lanes: number }>();
+  const overflow: LaneLayout["overflow"] = [];
+  if (appts.length === 0) return { laneOf, overflow };
 
   const items = appts
     .map((a) => {
@@ -118,12 +134,31 @@ export function assignApptLanes(
   // Walk start-ordered, breaking into clusters of transitively-overlapping
   // intervals. Within a cluster, greedily take the lowest lane free at this
   // start; the cluster's divisor is the max lane used + 1.
-  let cluster: { id: string; end: number; lane: number }[] = [];
+  let cluster: { id: string; start: number; end: number; lane: number }[] = [];
   let clusterEnd = -1;
   const flush = () => {
     if (cluster.length === 0) return;
-    const lanes = Math.max(...cluster.map((c) => c.lane)) + 1;
-    for (const c of cluster) out.set(c.id, { lane: c.lane, lanes });
+    const clusterMax = Math.max(...cluster.map((c) => c.lane)) + 1;
+    if (clusterMax <= maxLanes) {
+      for (const c of cluster) laneOf.set(c.id, { lane: c.lane, lanes: clusterMax });
+    } else {
+      // Too many overlaps to show: keep the first (maxLanes-1) as cards and
+      // collapse the rest into a single "+N more" pill in the last lane.
+      const cardLanes = maxLanes - 1;
+      let count = 0;
+      let topMin = Infinity;
+      let bottomMin = -Infinity;
+      for (const c of cluster) {
+        if (c.lane < cardLanes) {
+          laneOf.set(c.id, { lane: c.lane, lanes: maxLanes });
+        } else {
+          count++;
+          topMin = Math.min(topMin, c.start);
+          bottomMin = Math.max(bottomMin, c.end);
+        }
+      }
+      if (count > 0) overflow.push({ topMin, bottomMin, count });
+    }
     cluster = [];
     clusterEnd = -1;
   };
@@ -132,11 +167,11 @@ export function assignApptLanes(
     const taken = new Set(cluster.filter((c) => c.end > it.start).map((c) => c.lane));
     let lane = 0;
     while (taken.has(lane)) lane++;
-    cluster.push({ id: it.id, end: it.end, lane });
+    cluster.push({ id: it.id, start: it.start, end: it.end, lane });
     clusterEnd = Math.max(clusterEnd, it.end);
   }
   flush();
-  return out;
+  return { laneOf, overflow };
 }
 
 export function snap5(mins: number, win: { start: number; end: number }): number {

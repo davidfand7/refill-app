@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.56.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.56.1 &mdash; Day &amp; week schedule: clearer, less cramped.</strong> Four refinements to the positioned calendar. <strong>(1) Honest card heights</strong> &mdash; appointments now size to their real duration instead of being inflated to a tall minimum, so a short visit no longer overflows and merges into the one below it; a hairline gap keeps back-to-back bookings visually distinct. <strong>(2) More breathing room</strong> &mdash; the default zoom is taller, so a typical day reads comfortably (zoom out anytime). <strong>(3) Week &ldquo;+N more&rdquo;</strong> &mdash; when a day has more simultaneous appointments than fit side-by-side, the extras collapse into a <em>+N more</em> pill (tap it to open that day) instead of slicing into unreadable slivers. <strong>(4) Wider columns</strong> &mdash; the week grid and multi-provider day columns are wider so names stop truncating to &ldquo;Barb&hellip;&rdquo;. Month is unchanged. <strong>Touched</strong>: <code>schedule/shared.ts</code> (lane cap + min/zoom constants), <code>schedule/grids.tsx</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.56.0",
     date: "June 2026",
     items: [
