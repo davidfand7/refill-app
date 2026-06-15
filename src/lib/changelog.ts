@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.52.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.52.0 &mdash; Reliability recompute now covers every patient at larger spas (bug fix).</strong> The rule-aware nightly recompute added in v2.50.0 gathered its patient list in a single query, which the database silently caps at 1,000 rows &mdash; so at a spa with thousands of appointments, only the patients appearing in that first page were recomputed and the rest kept stale scores. Caught on real data (a spa with 695 patients was only recomputing 174). Now it pages through the full appointment history so <em>every</em> patient is recomputed. Affects only spas that opted the no-show rule into reliability scoring.",
+    ],
+  },
+  {
     version: "v2.51.0",
     date: "June 2026",
     items: [

@@ -638,18 +638,30 @@ async function recomputeReliabilityRuleAware(args: {
   const { sb, userId, trigger } = args;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const looseSb = sb as unknown as { from(t: string): any };
-  const { data: patientRows } = await looseSb
-    .from("emma_appointments")
-    .select("patient_node_id")
-    .eq("user_id", userId)
-    .not("patient_node_id", "is", null);
-  const ids = [
-    ...new Set(
-      ((patientRows ?? []) as Array<{ patient_node_id: string | null }>)
-        .map((r) => r.patient_node_id)
-        .filter((x): x is string => Boolean(x)),
-    ),
-  ];
+  // Collect the COMPLETE distinct patient set by paging through appointment
+  // rows. A single .select() is silently capped at PostgREST's 1000-row
+  // default — a spa with thousands of appointments would only surface the
+  // patients in the first page, leaving the rest stale (the v2.52.0 bug a real
+  // sweep on Rejuv exposed: 695 patients, but only 174 recomputed). Page until
+  // a short page signals the end.
+  const idSet = new Set<string>();
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await looseSb
+      .from("emma_appointments")
+      .select("patient_node_id")
+      .eq("user_id", userId)
+      .not("patient_node_id", "is", null)
+      .range(from, from + PAGE - 1);
+    if (error) {
+      console.error("[reliability-sweep] patient page failed:", error.message);
+      break;
+    }
+    const rows = (data ?? []) as Array<{ patient_node_id: string | null }>;
+    for (const r of rows) if (r.patient_node_id) idSet.add(r.patient_node_id);
+    if (rows.length < PAGE) break;
+  }
+  const ids = [...idSet];
 
   let transitions = 0;
   for (const patientNodeId of ids) {
