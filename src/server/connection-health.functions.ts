@@ -155,6 +155,38 @@ function schedulerDetail(
   }
 }
 
+/**
+ * Appointment-FLOW freshness (S3): a DISTINCT signal from the connection pulse
+ * the scheduler rows above measure. The reconcile cron (api.cron.acuity-reconcile,
+ * every 2h) keeps emma_scheduler_connections.last_sync_at fresh forever — so a
+ * connected calendar reads "Healthy" indefinitely even if appointment DATA has
+ * silently stopped arriving (a dead webhook + an empty reconcile window throw
+ * nothing — the worst failure mode is an absence, not an error). This row
+ * measures the honest thing: when the newest booking actually LANDED in our DB.
+ * Realtime tier — a genuinely quiet calendar is legitimate, so we soft-flag
+ * after a week and NEVER hard-break on silence (don't cry wolf) — but the
+ * freshness clock is appointment arrival, not the sync pulse.
+ */
+function appointmentDetail(
+  name: string,
+  verdict: HealthVerdict,
+  ageLabel: string,
+): string {
+  switch (verdict) {
+    case "healthy":
+      return `New ${name} bookings are flowing — the most recent landed ${ageLabel}.`;
+    case "stale":
+      return `No new ${name} appointments have arrived in a while (last ${ageLabel}). Often just a quiet calendar — but if you expected bookings, the live feed may have stopped even though the connection still reads healthy. ${BOUNDARY}`;
+    case "setup":
+      return `Connected to ${name} — waiting for the first appointment to arrive.`;
+    case "broken":
+      // Unreachable on realtime (no hard-break on silence); switch stays exhaustive.
+      return `New ${name} appointments aren't arriving — check the connection. ${BOUNDARY}`;
+    case "unconfigured":
+      return `${name} isn't connected.`;
+  }
+}
+
 function portalDetail(
   name: string,
   verdict: HealthVerdict,
@@ -383,6 +415,62 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
         cta: { label: verdict === "healthy" ? "Manage" : "Reconnect", to: CONNECTIONS_ROUTE },
       };
     });
+
+    // ── Appointment-FLOW freshness (S3) — the silent feed-stop the pulse hides ──
+    // The scheduler rows above score last_sync_at, which the reconcile cron keeps
+    // fresh every 2h → a connected calendar reads "Healthy" forever even if no
+    // appointment DATA is actually arriving. This adds a distinct per-connected-
+    // scheduler row scored on the newest booking's arrival time (emma_appointments
+    // .created_at). Only emitted for a CONNECTED scheduler that has EVER received
+    // an appointment — we don't invent a flow row for a calendar with none yet
+    // (the connection row's setup/healthy state already covers that case).
+    const connectedSchedulers = ((schedRows ?? []) as SchedulerRow[]).filter(
+      (r) => r.status === "connected",
+    );
+    const appointmentItems: ConnectionHealthItem[] = (
+      await Promise.all(
+        connectedSchedulers.map(async (row): Promise<ConnectionHealthItem | null> => {
+          const { data: latestApt } = await sb
+            .from("emma_appointments")
+            .select("created_at")
+            .eq("user_id", effectiveUserId)
+            .eq("source", row.platform)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const lastEventAtMs = parseTs(
+            (latestApt as { created_at: string | null } | null)?.created_at ?? null,
+          );
+          if (lastEventAtMs == null) return null; // no appointments yet → no flow row
+          const name = SCHEDULER_DISPLAY[row.platform] ?? titleCase(row.platform);
+          const { verdict, severity } = computeVerdict({
+            tier: "realtime",
+            connected: true,
+            lastEventAtMs,
+            nowMs,
+          });
+          const ageLabel = formatAge(Math.max(0, nowMs - lastEventAtMs));
+          return {
+            key: `scheduler:${row.platform}:appointments`,
+            kind: "scheduler",
+            displayName: `${name} appointments`,
+            subLabel: "New bookings",
+            tier: "realtime",
+            tierLabel: "Live · bookings as they're made",
+            verdict,
+            severity,
+            statusLabel: verdictLabel(verdict),
+            detail: appointmentDetail(name, verdict, ageLabel),
+            lastEventAtMs,
+            lastEventLabel: ageLabel,
+            cta: {
+              label: verdict === "healthy" ? "View calendar" : "Check connection",
+              to: CONNECTIONS_ROUTE,
+            },
+          };
+        }),
+      )
+    ).filter((x): x is ConnectionHealthItem => x !== null);
 
     // ── Expected scheduler/PMS connections — the silent-calendar-outage gate ──
     // A scheduler row exists from the OAuth handshake, so "connected but never
@@ -677,6 +765,7 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
     };
     const items = [
       ...schedulerItems,
+      ...appointmentItems,
       ...expectedSchedulerItems,
       ...portalItems,
       ...deliveryItems,

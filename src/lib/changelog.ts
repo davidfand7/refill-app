@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.43.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.43.0 &mdash; Connection Health now watches your <em>appointments</em>, not just your connection.</strong> Your synced calendar (Acuity) has a self-healing sweep that re-checks it every couple of hours &mdash; which is great, except it means the connection always reads &ldquo;Healthy,&rdquo; even in the rare case where the connection is fine but new bookings have quietly stopped reaching SmartSpa. A healthy <em>pipe</em> with nothing flowing through it is exactly the silent failure this dashboard exists to catch. So Connection Health now shows a second, honest row per calendar &mdash; <strong>&ldquo;Acuity appointments&rdquo;</strong> &mdash; that tracks when your <em>newest booking</em> actually landed, separately from the connection&rsquo;s heartbeat. If bookings keep flowing it stays green (&ldquo;most recent landed 2 hours ago&rdquo;); if nothing new has arrived in a while it gently flags &mdash; &ldquo;often just a quiet calendar, but if you expected bookings, the live feed may have stopped even though the connection still reads healthy&rdquo; &mdash; with a next step. It never cries wolf: a quiet calendar is legitimate, so it only soft-flags after about a week and never hard-fails on silence alone. <strong>Touched</strong>: <code>connection-health.functions</code> (a new appointment-arrival row per connected scheduler, scored on the freshest <code>emma_appointments</code> timestamp through the same freshness engine). No schema change &mdash; it reads a timestamp that already exists; the page renders the new row automatically.",
+    ],
+  },
+  {
     version: "v2.42.0",
     date: "June 2026",
     items: [
