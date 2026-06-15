@@ -1520,6 +1520,7 @@ export type Database = {
           updated_at: string
           user_id: string
           webhook_secret: string
+          webhook_signature_verified_at: string | null
           webhook_subscription_id: string | null
         }
         Insert: {
@@ -1540,6 +1541,7 @@ export type Database = {
           updated_at?: string
           user_id: string
           webhook_secret?: string
+          webhook_signature_verified_at?: string | null
           webhook_subscription_id?: string | null
         }
         Update: {
@@ -1560,6 +1562,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
           webhook_secret?: string
+          webhook_signature_verified_at?: string | null
           webhook_subscription_id?: string | null
         }
         Relationships: []

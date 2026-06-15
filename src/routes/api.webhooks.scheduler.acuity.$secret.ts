@@ -25,9 +25,10 @@ import { createClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/integrations/supabase/types";
 import {
+  decideWebhookSignatureAction,
   getAcuityAppointment,
   parseAcuityWebhookBody,
-  verifyAcuityWebhookSignature,
+  probeAcuityWebhookSignature,
   type AcuityAppointment,
 } from "@/lib/schedulers/acuity";
 import {
@@ -55,6 +56,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
         const SUPABASE_URL = process.env.SUPABASE_URL;
         const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
         const ACUITY_CLIENT_SECRET = process.env.ACUITY_CLIENT_SECRET;
+        const ACUITY_CLIENT_ID = process.env.ACUITY_CLIENT_ID ?? null;
         if (!SUPABASE_URL || !SERVICE_KEY || !ACUITY_CLIENT_SECRET) {
           return jsonResp(500, { error: "Server not configured" });
         }
@@ -67,7 +69,9 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
         // ── Look up the connection
         const { data: connection } = await sbAny
           .from("emma_scheduler_connections")
-          .select("id, user_id, status, access_token")
+          .select(
+            "id, user_id, status, access_token, refresh_token, webhook_signature_verified_at",
+          )
           .eq("webhook_secret", secret)
           .maybeSingle();
 
@@ -85,26 +89,66 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
         const rawBody = await request.text();
         const signature = request.headers.get("x-acuity-signature");
 
-        // v381: signature verification is ADVISORY only.
-        // Acuity's docs are ambiguous on whether OAuth-registered
-        // ("dynamic") webhooks sign with the OAuth client_secret or
-        // with a per-account API key. We attempt verification with the
-        // client_secret; if it fails we still process the event but
-        // audit the mismatch so we can investigate. The per-spa
-        // webhook_secret in the URL path provides primary defense — a
-        // caller without that 48-char hex secret can't reach this
-        // handler. Once we observe a real Acuity webhook in production
-        // and can compare its header to multiple candidate keys, we
-        // tighten this to a hard reject.
-        const sigOk = await verifyAcuityWebhookSignature({
+        // v2.47.0: signature verification is SELF-CALIBRATING.
+        // Acuity's docs say dynamic (OAuth) webhooks are signed with the
+        // *account API key* — which an OAuth integration doesn't hold — and
+        // real deliveries don't validate against our OAuth client_secret
+        // (production confirmed 772/772 fail). So we probe every credential we
+        // DO possess against the live signature and record which scheme
+        // matched, letting one real delivery reveal Acuity's actual signing
+        // key in the audit trail. Until a connection has produced ≥1 valid
+        // signature we stay ADVISORY (the 48-char path secret is the gate);
+        // once proven, an invalid signature on that connection is a forgery
+        // and is hard-rejected. This can never silently drop a working feed.
+        const probe = await probeAcuityWebhookSignature({
           rawBody,
           signatureHeader: signature,
-          clientSecret: ACUITY_CLIENT_SECRET,
+          candidates: [
+            { keyName: "access_token", key: connection.access_token },
+            { keyName: "client_secret", key: ACUITY_CLIENT_SECRET },
+            { keyName: "refresh_token", key: connection.refresh_token },
+            { keyName: "client_id", key: ACUITY_CLIENT_ID },
+          ],
         });
+        const sigOk = probe.matched;
+        const alreadyVerified = Boolean(connection.webhook_signature_verified_at);
+        const sigDecision = decideWebhookSignatureAction({ sigOk, alreadyVerified });
+
+        // First proof of this connection's signing key — latch it on so future
+        // invalid signatures become rejectable forgeries.
+        if (sigDecision.stampVerified) {
+          await sbAny
+            .from("emma_scheduler_connections")
+            .update({ webhook_signature_verified_at: new Date().toISOString() })
+            .eq("id", connection.id);
+          console.warn(
+            `[acuity-webhook] signature scheme proven for connection ${connection.id}: ${probe.scheme}`,
+          );
+        }
+
+        // Key is proven for this connection and this body's signature is bad →
+        // forgery. Reject loudly (audit row + 401) WITHOUT advancing
+        // last_sync_at, so a real key-rotation break surfaces via S3
+        // appointment-freshness rather than passing silently.
+        if (sigDecision.reject) {
+          await sbAny.from("emma_scheduler_webhook_events").insert({
+            connection_id: connection.id,
+            user_id: connection.user_id,
+            platform: "acuity",
+            event_type: "signature_rejected",
+            raw_payload: {
+              signature_header_present: Boolean(signature),
+              rawBody: rawBody.slice(0, 500),
+            },
+            error:
+              "HMAC signature invalid on a connection whose signing key was previously proven — rejected as forgery",
+          });
+          return jsonResp(401, { error: "invalid_signature" });
+        }
 
         if (!sigOk) {
           console.warn(
-            `[acuity-webhook] signature mismatch on connection ${connection.id}; continuing in advisory mode`,
+            `[acuity-webhook] signature unverified on connection ${connection.id}; continuing in advisory mode (no scheme matched yet)`,
           );
         }
 
@@ -137,6 +181,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
               calendarID: payload.calendarId,
               appointmentTypeID: payload.appointmentTypeId,
               signature_ok: sigOk,
+              signature_scheme: probe.scheme,
               signature_header_present: Boolean(signature),
             },
           })
@@ -341,6 +386,8 @@ type SbScheduleAny = {
             user_id: string;
             status: string;
             access_token: string | null;
+            refresh_token: string | null;
+            webhook_signature_verified_at: string | null;
           } | null;
           error: { message: string } | null;
         }>;

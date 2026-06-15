@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.47.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.47.0 &mdash; Calendar security: your Acuity webhook feed now verifies who&rsquo;s really sending it.</strong> When your calendar (Acuity) tells SmartSpa that an appointment was booked, changed, or cancelled, it signs that message so we can prove it genuinely came from Acuity and not an impostor. We checked our live feed and found the signatures weren&rsquo;t matching the key we used to verify them &mdash; so the check was effectively decorative (every real update still arrived safely, because the unguessable 48-character address in the webhook URL is the real lock). Rather than guess, SmartSpa now <strong>learns the correct signing key from your own live feed</strong>: on each incoming update it tries every credential we hold and records which one matches. The moment a real signature checks out, that connection is marked <strong>verified</strong> &mdash; and from then on any update with a bad signature is rejected as a forgery. Until a connection is proven, we keep accepting updates exactly as before, so a working calendar can never go silently dark. <strong>New</strong>: <code>webhook_signature_verified_at</code> latch on <code>emma_scheduler_connections</code>, a multi-candidate signature probe, and per-connection hard-reject of forged webhooks once the key is proven. One small migration (a new nullable column).",
+    ],
+  },
+  {
     version: "v2.46.0",
     date: "June 2026",
     items: [

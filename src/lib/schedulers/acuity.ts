@@ -499,6 +499,85 @@ export async function verifyAcuityWebhookSignature(args: {
   return constantTimeEquals(computed, args.signatureHeader);
 }
 
+/**
+ * Decide what to do with an inbound webhook given its signature result and
+ * whether this connection's signing key has ever been proven (v2.47.0).
+ *
+ * Self-calibrating enforcement that can never silently drop a legitimate feed:
+ *   - First valid signature on a connection → STAMP it proven (latch on).
+ *   - Invalid signature on an ALREADY-proven connection → REJECT (forgery: we
+ *     know the right key for this account and this body wasn't signed with it).
+ *   - Otherwise (valid+proven, or invalid-but-never-proven) → process. An
+ *     unproven connection stays advisory because we can't yet distinguish a
+ *     forgery from Acuity signing with a key other than our client_secret; the
+ *     48-char path secret remains the primary gate until the key is proven.
+ *
+ * Pure + side-effect-free so the policy can be unit-verified directly.
+ */
+export type WebhookSignatureDecision = {
+  /** Hard-reject the request (401) — forgery on a key-proven connection. */
+  reject: boolean;
+  /** Stamp webhook_signature_verified_at = now() (first proof of the key). */
+  stampVerified: boolean;
+};
+
+export function decideWebhookSignatureAction(args: {
+  sigOk: boolean;
+  alreadyVerified: boolean;
+}): WebhookSignatureDecision {
+  if (args.sigOk && !args.alreadyVerified) {
+    return { reject: false, stampVerified: true };
+  }
+  if (!args.sigOk && args.alreadyVerified) {
+    return { reject: true, stampVerified: false };
+  }
+  return { reject: false, stampVerified: false };
+}
+
+/**
+ * Discover which key + encoding Acuity actually signs this account's webhooks
+ * with (v2.47.0). Acuity's docs say dynamic (OAuth) webhooks are signed with
+ * the *account API key* — which an OAuth integration doesn't hold — and real
+ * deliveries don't validate against our OAuth client_secret (confirmed: 772/772
+ * fail). Rather than keep guessing, probe every credential we DO possess on a
+ * live delivery and report which scheme matched, so a single real webhook
+ * reveals the truth in the audit trail. Once known, verification hardens to the
+ * one proven scheme and the enforcement latch arms.
+ *
+ * Returns the matching scheme as "<keyName>:<encoding>" (e.g. "access_token:base64")
+ * or null when no candidate matches.
+ */
+export type AcuitySignatureCandidate = { keyName: string; key: string | null };
+export type AcuitySignatureProbe = { matched: boolean; scheme: string | null };
+
+export async function probeAcuityWebhookSignature(args: {
+  rawBody: string;
+  signatureHeader: string | null;
+  candidates: AcuitySignatureCandidate[];
+}): Promise<AcuitySignatureProbe> {
+  if (!args.signatureHeader) return { matched: false, scheme: null };
+  const encoder = new TextEncoder();
+  const bodyData = encoder.encode(args.rawBody);
+  for (const cand of args.candidates) {
+    if (!cand.key) continue;
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(cand.key),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const sigBuf = await crypto.subtle.sign("HMAC", key, bodyData);
+    if (constantTimeEquals(base64FromBuffer(sigBuf), args.signatureHeader)) {
+      return { matched: true, scheme: `${cand.keyName}:base64` };
+    }
+    if (constantTimeEquals(hexFromBuffer(sigBuf), args.signatureHeader)) {
+      return { matched: true, scheme: `${cand.keyName}:hex` };
+    }
+  }
+  return { matched: false, scheme: null };
+}
+
 function base64FromBuffer(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
   let str = "";
@@ -506,6 +585,15 @@ function base64FromBuffer(buf: ArrayBuffer): string {
     str += String.fromCharCode(bytes[i]);
   }
   return btoa(str);
+}
+
+function hexFromBuffer(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let str = "";
+  for (let i = 0; i < bytes.byteLength; i++) {
+    str += bytes[i].toString(16).padStart(2, "0");
+  }
+  return str;
 }
 
 function constantTimeEquals(a: string, b: string): boolean {
