@@ -552,19 +552,29 @@ export const removeSkill = createServerFn({ method: "POST" })
 type MiningSignals = {
   hasDefaultProfile: boolean;
   rescueEnabled: boolean;
+  rescheduleEnabled: boolean;
   upcomingAppts: number;
   waitlistSize: number;
+  recentMissedVisits: number;
 };
+
+// Mining window for the "recent cancels/no-shows" signal. Fixed (not the
+// operator's reschedule_lookback_days) so the count query can run in parallel
+// with the policy read — mining only needs to detect a gap, not match the page.
+const MINING_MISSED_DAYS = 30;
 
 async function loadMiningSignals(
   sb: SupabaseAdmin,
   userId: string,
 ): Promise<MiningSignals> {
-  const nowIso = new Date().toISOString();
-  const [policy, apptRes, waitRes, profileRes] = await Promise.all([
-    sb
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const missedSinceIso = new Date(now - MINING_MISSED_DAYS * 86400000).toISOString();
+  // reschedule_enabled isn't in generated types yet → loose-read the policy.
+  const [policyRes, apptRes, waitRes, profileRes, missedRes] = await Promise.all([
+    loose(sb)
       .from("emma_noshow_policies")
-      .select("rescue_enabled")
+      .select("rescue_enabled, reschedule_enabled")
       .eq("user_id", userId)
       .maybeSingle(),
     sb
@@ -584,12 +594,21 @@ async function loadMiningSignals(
       .eq("user_id", userId)
       .eq("is_default", true)
       .maybeSingle(),
+    sb
+      .from("emma_appointments")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .gte("scheduled_at", missedSinceIso)
+      .in("status", ["cancelled", "no_show"]),
   ]);
+  const p = (policyRes.data ?? {}) as Record<string, unknown>;
   return {
     hasDefaultProfile: Boolean(profileRes.data),
-    rescueEnabled: policy.data?.rescue_enabled ?? false,
+    rescueEnabled: (p.rescue_enabled as boolean) ?? false,
+    rescheduleEnabled: (p.reschedule_enabled as boolean) ?? false,
     upcomingAppts: apptRes.count ?? 0,
     waitlistSize: waitRes.count ?? 0,
+    recentMissedVisits: missedRes.count ?? 0,
   };
 }
 
@@ -622,6 +641,23 @@ function evaluateMiningRules(sig: MiningSignals): SuggestedSkill[] {
         label: t.label,
         solution: t.solution,
         reason: `${n} patient${n === 1 ? " is" : "s are"} on your waitlist and Waitlist Auto-Fill isn't on yet — a cancellation could become a kept slot.`,
+        source: "mined",
+      });
+    }
+  }
+
+  // Reschedule Reminders: recent cancels/no-shows are piling up and aren't
+  // being won back. (Complementary to rescue — this brings the SAME patient
+  // back; rescue fills the freed slot with someone else.)
+  if (!sig.rescheduleEnabled && sig.recentMissedVisits >= 3) {
+    const t = findSkillInCatalog("reschedule_reminders");
+    if (t && t.status === "live") {
+      const n = sig.recentMissedVisits;
+      out.push({
+        templateKey: t.key,
+        label: t.label,
+        solution: t.solution,
+        reason: `${n} patient${n === 1 ? "" : "s"} cancelled or didn't show in the last ${MINING_MISSED_DAYS} days — Reschedule Reminders would nudge them to rebook.`,
         source: "mined",
       });
     }

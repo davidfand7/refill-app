@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.54.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.54.0 &mdash; SmartSpa now suggests Reschedule Reminders when you&rsquo;re leaving rebookings on the table.</strong> The &ldquo;Suggested for you&rdquo; strip on your Skills page already nudges you toward Pre-Visit Reminders and Waitlist Auto-Fill when it spots an unfilled gap. This adds the third rule: if you haven&rsquo;t turned on <em>Reschedule Reminders</em> and you&rsquo;ve had several cancellations or no-shows in the last 30 days, SmartSpa now surfaces it &mdash; &ldquo;N patients cancelled or didn&rsquo;t show in the last 30 days &mdash; Reschedule Reminders would nudge them to rebook&rdquo; &mdash; with one-tap Add or Dismiss. It&rsquo;s honest by construction: it only appears for a real gap, so a spa that already has Reschedule Reminders on (or has dismissed it) sees nothing. Read-only over data you already have; nothing is sent. <strong>Touched</strong>: <code>skills.functions</code> (mining rule + signal). No migration.",
+    ],
+  },
+  {
     version: "v2.53.0",
     date: "June 2026",
     items: [
