@@ -87,6 +87,7 @@ import { Route as ApiCronEmmaRecommendationsRouteImport } from './routes/api.cro
 import { Route as ApiCronEmmaPreshowSweepRouteImport } from './routes/api.cron.emma-preshow-sweep'
 import { Route as ApiCronEmmaInvoiceRouteImport } from './routes/api.cron.emma-invoice'
 import { Route as ApiCronAcuityReconcileRouteImport } from './routes/api.cron.acuity-reconcile'
+import { Route as ApiCronAcuityProviderRelinkRouteImport } from './routes/api.cron.acuity-provider-relink'
 import { Route as AppRefillRecoveryIndexRouteImport } from './routes/app.refill.recovery.index'
 import { Route as AppRefillPatientsIndexRouteImport } from './routes/app.refill.patients.index'
 import { Route as AppRefillCampaignsIndexRouteImport } from './routes/app.refill.campaigns.index'
@@ -554,6 +555,12 @@ const ApiCronAcuityReconcileRoute = ApiCronAcuityReconcileRouteImport.update({
   path: '/api/cron/acuity-reconcile',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCronAcuityProviderRelinkRoute =
+  ApiCronAcuityProviderRelinkRouteImport.update({
+    id: '/api/cron/acuity-provider-relink',
+    path: '/api/cron/acuity-provider-relink',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AppRefillRecoveryIndexRoute = AppRefillRecoveryIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -998,6 +1005,7 @@ export interface FileRoutesByFullPath {
   '/r/$slug': typeof RSlugRoute
   '/report/$token': typeof ReportTokenRoute
   '/s/$slug': typeof SSlugRoute
+  '/api/cron/acuity-provider-relink': typeof ApiCronAcuityProviderRelinkRoute
   '/api/cron/acuity-reconcile': typeof ApiCronAcuityReconcileRoute
   '/api/cron/emma-invoice': typeof ApiCronEmmaInvoiceRoute
   '/api/cron/emma-preshow-sweep': typeof ApiCronEmmaPreshowSweepRoute
@@ -1148,6 +1156,7 @@ export interface FileRoutesByTo {
   '/r/$slug': typeof RSlugRoute
   '/report/$token': typeof ReportTokenRoute
   '/s/$slug': typeof SSlugRoute
+  '/api/cron/acuity-provider-relink': typeof ApiCronAcuityProviderRelinkRoute
   '/api/cron/acuity-reconcile': typeof ApiCronAcuityReconcileRoute
   '/api/cron/emma-invoice': typeof ApiCronEmmaInvoiceRoute
   '/api/cron/emma-preshow-sweep': typeof ApiCronEmmaPreshowSweepRoute
@@ -1297,6 +1306,7 @@ export interface FileRoutesById {
   '/r/$slug': typeof RSlugRoute
   '/report/$token': typeof ReportTokenRoute
   '/s/$slug': typeof SSlugRoute
+  '/api/cron/acuity-provider-relink': typeof ApiCronAcuityProviderRelinkRoute
   '/api/cron/acuity-reconcile': typeof ApiCronAcuityReconcileRoute
   '/api/cron/emma-invoice': typeof ApiCronEmmaInvoiceRoute
   '/api/cron/emma-preshow-sweep': typeof ApiCronEmmaPreshowSweepRoute
@@ -1452,6 +1462,7 @@ export interface FileRouteTypes {
     | '/r/$slug'
     | '/report/$token'
     | '/s/$slug'
+    | '/api/cron/acuity-provider-relink'
     | '/api/cron/acuity-reconcile'
     | '/api/cron/emma-invoice'
     | '/api/cron/emma-preshow-sweep'
@@ -1602,6 +1613,7 @@ export interface FileRouteTypes {
     | '/r/$slug'
     | '/report/$token'
     | '/s/$slug'
+    | '/api/cron/acuity-provider-relink'
     | '/api/cron/acuity-reconcile'
     | '/api/cron/emma-invoice'
     | '/api/cron/emma-preshow-sweep'
@@ -1750,6 +1762,7 @@ export interface FileRouteTypes {
     | '/r/$slug'
     | '/report/$token'
     | '/s/$slug'
+    | '/api/cron/acuity-provider-relink'
     | '/api/cron/acuity-reconcile'
     | '/api/cron/emma-invoice'
     | '/api/cron/emma-preshow-sweep'
@@ -1901,6 +1914,7 @@ export interface RootRouteChildren {
   RSlugRoute: typeof RSlugRoute
   ReportTokenRoute: typeof ReportTokenRoute
   SSlugRoute: typeof SSlugRoute
+  ApiCronAcuityProviderRelinkRoute: typeof ApiCronAcuityProviderRelinkRoute
   ApiCronAcuityReconcileRoute: typeof ApiCronAcuityReconcileRoute
   ApiCronEmmaInvoiceRoute: typeof ApiCronEmmaInvoiceRoute
   ApiCronEmmaPreshowSweepRoute: typeof ApiCronEmmaPreshowSweepRoute
@@ -2489,6 +2503,13 @@ declare module '@tanstack/react-router' {
       path: '/api/cron/acuity-reconcile'
       fullPath: '/api/cron/acuity-reconcile'
       preLoaderRoute: typeof ApiCronAcuityReconcileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/cron/acuity-provider-relink': {
+      id: '/api/cron/acuity-provider-relink'
+      path: '/api/cron/acuity-provider-relink'
+      fullPath: '/api/cron/acuity-provider-relink'
+      preLoaderRoute: typeof ApiCronAcuityProviderRelinkRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/app/refill/recovery/': {
@@ -3301,6 +3322,7 @@ const rootRouteChildren: RootRouteChildren = {
   RSlugRoute: RSlugRoute,
   ReportTokenRoute: ReportTokenRoute,
   SSlugRoute: SSlugRoute,
+  ApiCronAcuityProviderRelinkRoute: ApiCronAcuityProviderRelinkRoute,
   ApiCronAcuityReconcileRoute: ApiCronAcuityReconcileRoute,
   ApiCronEmmaInvoiceRoute: ApiCronEmmaInvoiceRoute,
   ApiCronEmmaPreshowSweepRoute: ApiCronEmmaPreshowSweepRoute,

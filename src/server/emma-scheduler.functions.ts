@@ -1480,6 +1480,101 @@ export async function buildAcuityProviderIndex(
   return m;
 }
 
+// ─── wideRelinkAcuityProviders (one-time historical backlink, v2.47.0) ────────
+//
+// The reconcile cron only re-pulls a RECENT window (7d back / 45d fwd), so
+// historical appointments beyond it keep whatever provider_id the one-shot
+// staging mirror could resolve BY NAME — structurally weaker than calendarID
+// linking (emma_appointments stores provider_name, not calendarID; only a live
+// Acuity pull carries calendarID — see the S2 finding: calendarID linked +172
+// rows exact name-match physically can't). This is the one-time / on-demand
+// WIDE pass that closes that gap for any spa with deep history.
+//
+// It deliberately does NOT reuse the full reconcile: acuityAppointmentToRow
+// force-sets status from Acuity flags, which over deep history would revert
+// in-app `showed`/`rescheduled` markings back to `scheduled` and corrupt the
+// reliability signal. So this is SURGICAL — it re-pulls the wide window purely
+// to learn each appointment's external_id → calendarID, then updates
+// provider_id and NOTHING else (no status, no patient links). calendarID is
+// authoritative, so it fills nulls AND overwrites weaker name-matched links.
+// Idempotent (only rows whose provider_id actually changes are written).
+const WIDE_RELINK_DAYS_BACK = 730;
+const WIDE_RELINK_DAYS_FORWARD = 365;
+
+export async function wideRelinkAcuityProviders(args: {
+  sb: SupabaseAdmin;
+  userId: string;
+  accessToken: string;
+  daysBack?: number;
+  daysForward?: number;
+}): Promise<{
+  pulled: number;
+  resolvable: number;
+  relinked: number;
+  apiCapHit: boolean;
+}> {
+  const { sb, userId, accessToken } = args;
+  const daysBack = args.daysBack ?? WIDE_RELINK_DAYS_BACK;
+  const daysForward = args.daysForward ?? WIDE_RELINK_DAYS_FORWARD;
+  const now = new Date();
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const minDate = fmt(new Date(now.getTime() - daysBack * 86400000));
+  const maxDate = fmt(new Date(now.getTime() + daysForward * 86400000));
+
+  const API_MAX = 1000;
+  const [active, canceled] = await Promise.all([
+    listAcuityAppointments(accessToken, { minDate, maxDate, max: API_MAX, canceled: false }),
+    listAcuityAppointments(accessToken, { minDate, maxDate, max: API_MAX, canceled: true }),
+  ]);
+  // Acuity caps a single pull at `max`; hitting it means the window holds more
+  // than one page and the relink is partial — surface it, never silently truncate.
+  const apiCapHit = active.length >= API_MAX || canceled.length >= API_MAX;
+  const all = [...active, ...canceled];
+  if (all.length === 0) {
+    return { pulled: 0, resolvable: 0, relinked: 0, apiCapHit };
+  }
+
+  const providerIndex = await buildAcuityProviderIndex(sb, userId);
+
+  // Group external_ids by their calendarID-resolved provider_id so we relink
+  // with one UPDATE per provider group instead of one per row.
+  const byProvider = new Map<string, string[]>();
+  let resolvable = 0;
+  for (const apt of all) {
+    const providerId = providerIndex.get(String(apt.calendarID));
+    if (!providerId) continue;
+    resolvable++;
+    const list = byProvider.get(providerId) ?? [];
+    list.push(String(apt.id));
+    byProvider.set(providerId, list);
+  }
+
+  let relinked = 0;
+  const CHUNK = 200;
+  for (const [providerId, extIds] of byProvider) {
+    for (let i = 0; i < extIds.length; i += CHUNK) {
+      const slice = extIds.slice(i, i + CHUNK);
+      // Only touch rows whose provider_id is null or different → honest count,
+      // idempotent, never a no-op write.
+      const { data, error } = await sb
+        .from("emma_appointments")
+        .update({ provider_id: providerId, updated_at: new Date().toISOString() })
+        .eq("user_id", userId)
+        .eq("source", "acuity")
+        .in("external_id", slice)
+        .or(`provider_id.is.null,provider_id.neq.${providerId}`)
+        .select("id");
+      if (error) {
+        console.error("[acuity-wide-relink] update failed:", error.message);
+        continue;
+      }
+      relinked += data?.length ?? 0;
+    }
+  }
+
+  return { pulled: all.length, resolvable, relinked, apiCapHit };
+}
+
 function acuityAppointmentToRow(
   apt: AcuityAppointment,
   userId: string,

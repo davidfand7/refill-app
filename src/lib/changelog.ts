@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.48.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.48.0 &mdash; Calendar: older imported appointments now sit in the right provider&rsquo;s column.</strong> When your Acuity history first came in, appointments could only be matched to a provider by <em>name</em> &mdash; which often missed, so older bookings landed unattributed or in the wrong column. The ongoing sync already fixes this for recent appointments by using Acuity&rsquo;s own calendar id (the reliable link), but anything older than the sync window kept its weaker name-match. This adds a <strong>one-time &ldquo;wide relink&rdquo;</strong> that re-reads your full Acuity history just long enough to learn each appointment&rsquo;s real calendar and corrects its provider column &mdash; and <em>only</em> the provider column: it never touches an appointment&rsquo;s status (so a visit you marked <em>showed</em> stays <em>showed</em>) or its patient. Safe to run more than once. <strong>New</strong>: <code>wideRelinkAcuityProviders</code> (surgical provider_id-only backlink over a deep window, idempotent, flags if Acuity&rsquo;s page cap is hit so a partial pass is never mistaken for complete) and a secret-gated <code>/api/cron/acuity-provider-relink</code> fire-once endpoint. No migration.",
+    ],
+  },
+  {
     version: "v2.47.0",
     date: "June 2026",
     items: [
