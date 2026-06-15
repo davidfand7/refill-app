@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Ban, Plus, ChevronDown, Check, CalendarClock, CalendarRange, Pencil, Eye, EyeOff } from "lucide-react";
+import { Loader2, Ban, Plus, ChevronDown, Check, CalendarClock, CalendarRange, Pencil, Eye, EyeOff, X } from "lucide-react";
 import { zonedWallClockToUtc } from "@/lib/scheduling-slots";
 import { categoryLabel, categoryRank } from "@/lib/service-categories";
 import { listAvailableSlots, type PublicSlot } from "@/server/scheduling.functions";
@@ -26,6 +26,7 @@ import {
   ownerCancelAppointmentFn,
   listManagedProvidersFn,
   setProviderVisibilityFn,
+  setProviderDisplayNameFn,
   type DayAppointment,
   type ProviderLite,
   type ManagedProvider,
@@ -850,6 +851,8 @@ export function ManageProvidersDialog({
 }) {
   const [rows, setRows] = useState<ManagedProvider[] | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
 
   async function load() {
     setRows(null);
@@ -891,6 +894,34 @@ export function ManageProvidersDialog({
     }
   }
 
+  function startRename(p: ManagedProvider) {
+    setEditingId(p.id);
+    setDraft(p.displayName ?? p.name);
+  }
+
+  async function saveRename(p: ManagedProvider) {
+    setBusyId(p.id);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Not signed in.");
+      const r = await setProviderDisplayNameFn({
+        data: { accessToken: token, viewAsUserId, providerId: p.id, displayName: draft },
+      });
+      if (!r.ok) {
+        toast.error(r.reason);
+        return;
+      }
+      setEditingId(null);
+      await load();
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't rename.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   const visibleCount = (rows ?? []).filter((r) => !r.hidden).length;
 
   return (
@@ -899,8 +930,10 @@ export function ManageProvidersDialog({
         <DialogHeader>
           <DialogTitle>Calendar providers</DialogTitle>
           <DialogDescription>
-            Choose which columns show on your calendar. Imported calendars that aren&rsquo;t real
-            providers — like a business or shared calendar — can be hidden here.
+            Choose which columns show on your calendar, and rename them. An imported calendar
+            named after your business can be renamed (e.g. to the provider who works it) or
+            hidden — your rename sticks even when the calendar re-syncs. Clear a name to go back
+            to the calendar&rsquo;s own.
           </DialogDescription>
         </DialogHeader>
         {rows === null ? (
@@ -911,40 +944,98 @@ export function ManageProvidersDialog({
           <p className="py-6 text-[13px] text-ink-soft">No providers yet.</p>
         ) : (
           <ul className="divide-y divide-rule -my-1">
-            {rows.map((p) => (
-              <li key={p.id} className="flex items-center justify-between gap-3 py-2.5">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-[14px] font-medium text-ink">
-                    <span className={`truncate ${p.hidden ? "text-ink-soft line-through" : ""}`}>{p.name}</span>
-                    {p.isPrimary && <ProviderTag>Primary</ProviderTag>}
-                    {p.isMirrored && <ProviderTag>Acuity</ProviderTag>}
+            {rows.map((p) => {
+              const effName = p.displayName ?? p.name;
+              const renamed = p.displayName != null && p.displayName !== p.name;
+              if (editingId === p.id) {
+                return (
+                  <li key={p.id} className="flex items-center gap-2 py-2.5">
+                    <input
+                      autoFocus
+                      value={draft}
+                      maxLength={80}
+                      placeholder={p.name}
+                      onChange={(e) => setDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void saveRename(p);
+                        } else if (e.key === "Escape") {
+                          setEditingId(null);
+                        }
+                      }}
+                      className="min-w-0 flex-1 rounded-md border border-rule bg-white px-2.5 py-1.5 text-[13.5px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+                    />
+                    <button
+                      type="button"
+                      disabled={busyId === p.id}
+                      onClick={() => void saveRename(p)}
+                      title="Save name"
+                      className="inline-flex items-center justify-center rounded-lg border border-emerald/40 bg-emerald/10 p-1.5 text-emerald hover:bg-emerald/20 transition disabled:opacity-40 shrink-0"
+                    >
+                      {busyId === p.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Check className="h-4 w-4" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingId(null)}
+                      title="Cancel"
+                      className="inline-flex items-center justify-center rounded-lg border border-rule bg-white p-1.5 text-ink-soft hover:bg-rule-soft transition shrink-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </li>
+                );
+              }
+              return (
+                <li key={p.id} className="flex items-center justify-between gap-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-[14px] font-medium text-ink">
+                      <span className={`truncate ${p.hidden ? "text-ink-soft line-through" : ""}`}>{effName}</span>
+                      {p.isPrimary && <ProviderTag>Primary</ProviderTag>}
+                      {p.isMirrored && <ProviderTag>Acuity</ProviderTag>}
+                    </div>
+                    <div className="text-[11.5px] text-ink-soft">
+                      {renamed && <span>Calendar: {p.name} · </span>}
+                      {p.apptCount} {p.apptCount === 1 ? "appointment" : "appointments"}
+                      {p.hidden
+                        ? " · hidden from calendar"
+                        : p.apptCount > 0
+                          ? " · hiding also hides these"
+                          : ""}
+                    </div>
                   </div>
-                  <div className="text-[11.5px] text-ink-soft">
-                    {p.apptCount} {p.apptCount === 1 ? "appointment" : "appointments"}
-                    {p.hidden
-                      ? " · hidden from calendar"
-                      : p.apptCount > 0
-                        ? " · hiding also hides these"
-                        : ""}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => startRename(p)}
+                      title="Rename column"
+                      className="inline-flex items-center justify-center rounded-lg border border-rule bg-white p-1.5 text-ink-soft hover:bg-rule-soft transition"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busyId === p.id}
+                      onClick={() => void toggle(p)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-[12.5px] font-medium text-ink-soft hover:bg-rule-soft transition disabled:opacity-40"
+                    >
+                      {busyId === p.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : p.hidden ? (
+                        <Eye className="h-3.5 w-3.5" />
+                      ) : (
+                        <EyeOff className="h-3.5 w-3.5" />
+                      )}
+                      {p.hidden ? "Show" : "Hide"}
+                    </button>
                   </div>
-                </div>
-                <button
-                  type="button"
-                  disabled={busyId === p.id}
-                  onClick={() => void toggle(p)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-[12.5px] font-medium text-ink-soft hover:bg-rule-soft transition disabled:opacity-40 shrink-0"
-                >
-                  {busyId === p.id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : p.hidden ? (
-                    <Eye className="h-3.5 w-3.5" />
-                  ) : (
-                    <EyeOff className="h-3.5 w-3.5" />
-                  )}
-                  {p.hidden ? "Show" : "Hide"}
-                </button>
-              </li>
-            ))}
+                </li>
+              );
+            })}
           </ul>
         )}
         {rows && rows.length > 0 && visibleCount === 0 && (

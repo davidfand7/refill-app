@@ -990,7 +990,11 @@ export const ownerCancelAppointmentFn = createServerFn({ method: "POST" })
 
 export interface ManagedProvider {
   id: string;
+  /** The canonical name — for a mirrored provider this tracks the Acuity
+   *  calendar name (kept synced by the mirror). */
   name: string;
+  /** Owner's sticky rename override (survives re-mirror), or null to use `name`. */
+  displayName: string | null;
   /** Hidden from the calendar grid (owner choice or the empty-business smart default). */
   hidden: boolean;
   /** Non-cancelled appointments on this provider — the honest consequence of hiding. */
@@ -1019,13 +1023,14 @@ export const listManagedProvidersFn = createServerFn({ method: "POST" })
     const anySb = sb as unknown as { from(t: string): ReturnType<typeof sb.from> };
     const { data: rows } = await anySb
       .from("scheduling_providers")
-      .select("id, name, hidden_at, user_id, external_source, created_at")
+      .select("id, name, display_name, hidden_at, user_id, external_source, created_at")
       .eq("tenant_id", tenantId)
       .eq("is_active", true)
       .order("created_at", { ascending: true });
     const provs = (rows ?? []) as unknown as Array<{
       id: string;
       name: string;
+      display_name: string | null;
       hidden_at: string | null;
       user_id: string | null;
       external_source: string | null;
@@ -1047,6 +1052,7 @@ export const listManagedProvidersFn = createServerFn({ method: "POST" })
     return provs.map((p, i) => ({
       id: p.id,
       name: p.name,
+      displayName: p.display_name?.trim() || null,
       hidden: p.hidden_at != null,
       apptCount: counts[i],
       isMirrored: p.external_source === "acuity",
@@ -1087,5 +1093,48 @@ export const setProviderVisibilityFn = createServerFn({ method: "POST" })
       .update({ hidden_at: data.hidden ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
       .eq("id", data.providerId);
     if (error) return { ok: false, reason: `Couldn't update: ${error.message}` };
+    return { ok: true };
+  });
+
+// Sticky rename: an owner override on the column label that survives a
+// re-mirror. The Acuity mirror keeps `name` synced to the calendar (and matches
+// appointments on it), so the rename lives in a DISTINCT `display_name` column
+// the mirror never touches — mirroring the hidden_at pattern. Empty/blank =
+// clear the override (revert to the Acuity name).
+export const setProviderDisplayNameFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) =>
+    z
+      .object({
+        accessToken: z.string().min(10),
+        viewAsUserId: z.string().uuid().optional(),
+        providerId: z.string().uuid(),
+        displayName: z.string().max(80),
+      })
+      .parse(raw),
+  )
+  .handler(async ({ data }): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+
+    // Ownership guard: the provider must belong to this tenant.
+    const { data: prov } = await sb
+      .from("scheduling_providers")
+      .select("id")
+      .eq("id", data.providerId)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (!prov) return { ok: false, reason: "That provider isn't part of this spa." };
+
+    const trimmed = data.displayName.trim();
+    const anySb = sb as unknown as { from(t: string): ReturnType<typeof sb.from> };
+    const { error } = await anySb
+      .from("scheduling_providers")
+      .update({ display_name: trimmed || null, updated_at: new Date().toISOString() })
+      .eq("id", data.providerId);
+    if (error) return { ok: false, reason: `Couldn't rename: ${error.message}` };
     return { ok: true };
   });

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.55.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.55.0 &mdash; Rename a calendar column &mdash; and it sticks.</strong> When SmartSpa mirrors your Acuity calendars, each one becomes a column on your schedule named exactly as it is in Acuity. If a calendar is named after your business but is really one provider&rsquo;s column (e.g. &ldquo;Rejuv Skin Spa&rdquo; that&rsquo;s actually Karen&rsquo;s), you can now <strong>rename it</strong> right from the <em>Providers</em> button on the schedule &mdash; tap the pencil, type the real name, save. The rename shows everywhere the provider appears (your grid and the patient booking page) and, crucially, <strong>survives re-syncing</strong>: the background sync keeps the underlying Acuity link intact but never overwrites your chosen label. Clear the name to go back to the calendar&rsquo;s own. The Providers dialog also shows the original calendar name underneath a rename so the link is never a mystery. <strong>New</strong>: <code>scheduling_providers.display_name</code> (a distinct override, like the hide toggle &mdash; the mirror leaves it alone), <code>setProviderDisplayNameFn</code>, inline rename in <code>ManageProvidersDialog</code>. Migration: <code>v2_55_0_provider_display_name</code>.",
+    ],
+  },
+  {
     version: "v2.54.0",
     date: "June 2026",
     items: [

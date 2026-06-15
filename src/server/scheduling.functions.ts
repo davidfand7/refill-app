@@ -152,13 +152,26 @@ interface ActiveProvider {
  *  provider offers every online-bookable service; per-service opt-out is a later
  *  refinement.) */
 async function loadActiveProviders(sb: Sb, tenantId: string): Promise<ActiveProvider[]> {
-  const { data } = await sb
+  // display_name (sticky owner rename, v2.55.0) isn't in generated types yet →
+  // loose-cast the select. Effective label = display_name override ?? Acuity name.
+  const anySb = sb as unknown as { from(t: string): ReturnType<typeof sb.from> };
+  const { data } = await anySb
     .from("scheduling_providers")
-    .select("id, name, user_id, created_at")
+    .select("id, name, display_name, user_id, created_at")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .order("created_at", { ascending: true });
-  return (data ?? []).map((p) => ({ id: p.id, name: p.name, userId: p.user_id }));
+  const rows = (data ?? []) as unknown as Array<{
+    id: string;
+    name: string;
+    display_name: string | null;
+    user_id: string | null;
+  }>;
+  return rows.map((p) => ({
+    id: p.id,
+    name: p.display_name?.trim() || p.name,
+    userId: p.user_id,
+  }));
 }
 
 type Override = {
