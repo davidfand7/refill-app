@@ -46,6 +46,7 @@ import {
   fmtTime,
   dayKey,
   localMinutes,
+  assignApptLanes,
 } from "@/components/refill/schedule/shared";
 
 // ── Day grid (positioned, single column) ─────────────────────────────────────
@@ -130,6 +131,7 @@ export function DayGrid({
       const mins = win.start + (e.clientY - rect.top) / pxPerMin;
       onBook(day.dateIso, minToHHMM(snap5(mins, win)), solo?.id);
     }
+    const soloLanes = assignApptLanes(day.appointments, tz);
     return (
       <div className="rounded-xl border border-rule bg-white p-4">
         {!band.isOpen && <div className="mb-3 text-[12px] text-ink-faint">Closed this day (per business hours).</div>}
@@ -153,9 +155,12 @@ export function DayGrid({
           {day.blocks.map((b) => (
             <BlockBand key={b.id} left="left-14" top={top(b.startIso)} height={Math.max(14, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} />
           ))}
-          {day.appointments.map((a) => (
-            <ApptCard key={a.id} a={a} tz={tz} left="left-14" top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit} onDragStartAppt={setDragged} />
-          ))}
+          {day.appointments.map((a) => {
+            const ln = soloLanes.get(a.id);
+            return (
+              <ApptCard key={a.id} a={a} tz={tz} basePx={56} lane={ln?.lane ?? 0} lanes={ln?.lanes ?? 1} top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit} onDragStartAppt={setDragged} />
+            );
+          })}
           {day.appointments.length === 0 && day.blocks.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center text-[13px] text-ink-faint pointer-events-none">No bookings this day.</div>
           )}
@@ -193,6 +198,7 @@ export function DayGrid({
           {providers.map((p) => {
             const band = day.openByProvider[p.id] ?? { isOpen: false, openMin: 9 * 60, closeMin: 17 * 60 };
             const colAppts = day.appointments.filter((a) => a.providerId === p.id);
+            const colLanes = assignApptLanes(colAppts, tz);
             // Provider-specific blocks + whole-practice (null) blocks.
             const colBlocks = day.blocks.filter((b) => b.providerId === p.id || b.providerId === null);
             return (
@@ -217,9 +223,12 @@ export function DayGrid({
                 {colBlocks.map((b) => (
                   <BlockBand key={b.id} left="left-0" top={top(b.startIso)} height={Math.max(10, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} compact />
                 ))}
-                {colAppts.map((a) => (
-                  <ApptCard key={a.id} a={a} tz={tz} left="left-0" top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit} onDragStartAppt={setDragged} compact={compact} />
-                ))}
+                {colAppts.map((a) => {
+                  const ln = colLanes.get(a.id);
+                  return (
+                    <ApptCard key={a.id} a={a} tz={tz} basePx={0} lane={ln?.lane ?? 0} lanes={ln?.lanes ?? 1} top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit} onDragStartAppt={setDragged} compact={compact} />
+                  );
+                })}
               </div>
             );
           })}
@@ -398,6 +407,7 @@ export function WeekGrid({
             const dow = new Date(`${d}T12:00:00Z`).getUTCDay();
             const h = hoursByDow.get(dow);
             const dayAppts = apptsByDay.get(d) ?? [];
+            const dayLanes = assignApptLanes(dayAppts, tz);
             const dayBlocks = blocksByDay.get(d) ?? [];
             return (
               <div
@@ -421,9 +431,12 @@ export function WeekGrid({
                 {dayBlocks.map((b) => (
                   <BlockBand key={b.id} left="left-0" top={top(b.startIso)} height={Math.max(10, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} compact />
                 ))}
-                {dayAppts.map((a) => (
-                  <ApptCard key={a.id} a={a} tz={tz} left="left-0" top={top(a.startIso)} height={Math.max(MIN_WEEK_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit} onDragStartAppt={setDragged} compact />
-                ))}
+                {dayAppts.map((a) => {
+                  const ln = dayLanes.get(a.id);
+                  return (
+                    <ApptCard key={a.id} a={a} tz={tz} basePx={0} lane={ln?.lane ?? 0} lanes={ln?.lanes ?? 1} top={top(a.startIso)} height={Math.max(MIN_WEEK_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit} onDragStartAppt={setDragged} compact />
+                  );
+                })}
               </div>
             );
           })}
@@ -501,7 +514,9 @@ export function MonthGrid({
 export function ApptCard({
   a,
   tz,
-  left,
+  basePx,
+  lane = 0,
+  lanes = 1,
   top,
   height,
   onCancel,
@@ -511,7 +526,12 @@ export function ApptCard({
 }: {
   a: DayAppointment;
   tz: string;
-  left: string;
+  /** Left gutter to clear (the hour rail) before the lane area begins, in px. */
+  basePx: number;
+  /** This card's 0-indexed sub-column among overlapping appts. */
+  lane?: number;
+  /** Width divisor = peak concurrency of the overlap cluster. */
+  lanes?: number;
   top: number;
   height: number;
   onCancel: (a: DayAppointment) => void;
@@ -520,15 +540,21 @@ export function ApptCard({
   compact?: boolean;
 }) {
   const held = a.status === "held";
+  // Side-by-side lane layout: each card occupies 1/lanes of the content width
+  // (the column minus the rail gutter), offset by its lane. A small gap keeps
+  // overlapping cards visually distinct. lanes=1 → effectively full width.
+  const GAP_PX = lanes > 1 ? 3 : 0;
+  const frac = lane / lanes;
+  const left = `calc(${basePx}px + ${frac} * (100% - ${basePx}px))`;
+  const width = `calc(${1 / lanes} * (100% - ${basePx}px) - ${GAP_PX}px)`;
   return (
     <div
       draggable={!held}
       className={cn(
-        "absolute right-0 rounded-md border px-2 py-0.5 shadow-sm overflow-hidden group cursor-pointer",
-        left,
+        "absolute rounded-md border px-2 py-0.5 shadow-sm overflow-hidden group cursor-pointer",
         held ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200",
       )}
-      style={{ top, height }}
+      style={{ top, height, left, width }}
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => {
         e.stopPropagation();

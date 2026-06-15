@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.56.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.56.0 &mdash; Overlapping appointments now sit side-by-side instead of hiding each other.</strong> On the schedule, two or more bookings at the same time used to stack directly on top of one another &mdash; so a busy 11 AM looked like a single block and the appointments underneath were invisible. They now lay out <strong>side-by-side in columns</strong> (the way Google Calendar does it): a slot with two simultaneous appointments splits into two, three splits into three, and so on, each still sized to its real duration. Back-to-back appointments keep the full width, and a run of staggered overlaps packs in tightly and reuses space as earlier appointments end &mdash; so nothing is hidden and the day reads at a glance. Applies to the day grid (single and multi-provider) and the week grid. <strong>Touched</strong>: <code>schedule/shared.ts</code> (new <code>assignApptLanes</code> overlap-packer), <code>schedule/grids.tsx</code> (<code>ApptCard</code> lane layout). No migration.",
+    ],
+  },
+  {
     version: "v2.55.1",
     date: "June 2026",
     items: [

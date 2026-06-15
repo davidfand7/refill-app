@@ -89,6 +89,56 @@ export function groupBlocksByDay(blocks: DayBlock[], tz: string): Map<string, Da
   return m;
 }
 
+/**
+ * Lane-pack overlapping appointments into side-by-side columns (Google-Calendar
+ * style) so simultaneous bookings sit beside each other instead of stacking on
+ * top of one another and hiding the ones underneath. Returns id -> {lane, lanes}
+ * where `lane` is the 0-indexed sub-column and `lanes` is the width divisor (the
+ * peak concurrency of that appointment's overlap cluster, so every member of a
+ * cluster divides the column by the same amount and the widths line up).
+ *
+ * Pure; works off real start/end minutes in the given tz. A zero/negative span
+ * is floored to 5 min so a same-instant pair still registers as overlapping.
+ */
+export function assignApptLanes(
+  appts: DayAppointment[],
+  tz: string,
+): Map<string, { lane: number; lanes: number }> {
+  const out = new Map<string, { lane: number; lanes: number }>();
+  if (appts.length === 0) return out;
+
+  const items = appts
+    .map((a) => {
+      const start = localMinutes(a.startIso, tz);
+      const end = Math.max(start + 5, localMinutes(a.endIso, tz));
+      return { id: a.id, start, end };
+    })
+    .sort((x, y) => x.start - y.start || x.end - y.end);
+
+  // Walk start-ordered, breaking into clusters of transitively-overlapping
+  // intervals. Within a cluster, greedily take the lowest lane free at this
+  // start; the cluster's divisor is the max lane used + 1.
+  let cluster: { id: string; end: number; lane: number }[] = [];
+  let clusterEnd = -1;
+  const flush = () => {
+    if (cluster.length === 0) return;
+    const lanes = Math.max(...cluster.map((c) => c.lane)) + 1;
+    for (const c of cluster) out.set(c.id, { lane: c.lane, lanes });
+    cluster = [];
+    clusterEnd = -1;
+  };
+  for (const it of items) {
+    if (cluster.length > 0 && it.start >= clusterEnd) flush();
+    const taken = new Set(cluster.filter((c) => c.end > it.start).map((c) => c.lane));
+    let lane = 0;
+    while (taken.has(lane)) lane++;
+    cluster.push({ id: it.id, end: it.end, lane });
+    clusterEnd = Math.max(clusterEnd, it.end);
+  }
+  flush();
+  return out;
+}
+
 export function snap5(mins: number, win: { start: number; end: number }): number {
   const snapped = Math.round(mins / 5) * 5;
   return Math.max(win.start, Math.min(win.end - 5, snapped));
