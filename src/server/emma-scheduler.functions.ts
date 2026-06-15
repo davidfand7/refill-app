@@ -26,6 +26,7 @@ import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
 import { verifyAuth } from "@/server/auth-helpers";
+import { getTenantIdForUser } from "@/server/scheduling-settings.functions";
 import {
   buildAcuityAuthorizeUrl,
   listAcuityAppointments,
@@ -1263,8 +1264,9 @@ export async function backfillAcuityAppointments(args: {
     .eq("user_id", userId)
     .eq("source", "csv-acuity");
 
-  // Build the patient index ONCE for the whole batch.
+  // Build the patient + provider indexes ONCE for the whole batch.
   const patientIndex = await buildPatientIndex(sb, userId);
+  const providerIndex = await buildAcuityProviderIndex(sb, userId);
 
   let resolvedPatientNames = 0;
   const rows = all.map((apt) => {
@@ -1278,7 +1280,12 @@ export async function backfillAcuityAppointments(args: {
       patientIndex,
     );
     if (patientNodeId) resolvedPatientNames++;
-    return acuityAppointmentToRow(apt, userId, patientNodeId);
+    return acuityAppointmentToRow(
+      apt,
+      userId,
+      patientNodeId,
+      providerIndex.get(String(apt.calendarID)) ?? null,
+    );
   });
 
   const BATCH = 200;
@@ -1366,6 +1373,7 @@ export async function reconcileAcuityForConnection(args: {
   }
 
   const patientIndex = await buildPatientIndex(sb, userId);
+  const providerIndex = await buildAcuityProviderIndex(sb, userId);
 
   let changed = 0;
   let rescued = 0;
@@ -1385,7 +1393,12 @@ export async function reconcileAcuityForConnection(args: {
         patientIndex,
       );
 
-    const row = acuityAppointmentToRow(apt, userId, patientNodeId);
+    const row = acuityAppointmentToRow(
+      apt,
+      userId,
+      patientNodeId,
+      providerIndex.get(String(apt.calendarID)) ?? null,
+    );
     const { data: upserted } = await sb
       .from("emma_appointments")
       .upsert(row, { onConflict: "user_id,external_id,source" })
@@ -1441,10 +1454,37 @@ export async function reconcileAcuityForConnection(args: {
   return { pulled: all.length, changed, rescued, reliabilityRecomputed };
 }
 
+/**
+ * Build the Acuity calendar-id → native provider_id index for a spa (v2.42.0).
+ * The staging mirror anchors each scheduling_providers row by external_id =
+ * the Acuity calendar id (external_source='acuity'). Resolving provider_id at
+ * INGEST from the appointment's calendarID means new appointments are linked
+ * continuously — no dependence on re-running the one-shot staging mirror.
+ * external_source/external_id aren't in generated types yet → loose view.
+ */
+export async function buildAcuityProviderIndex(
+  sb: SupabaseAdmin,
+  userId: string,
+): Promise<Map<string, string>> {
+  const m = new Map<string, string>();
+  const tenantId = await getTenantIdForUser(sb, userId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data } = await (sb as unknown as { from(t: string): any })
+    .from("scheduling_providers")
+    .select("id, external_id")
+    .eq("tenant_id", tenantId)
+    .eq("external_source", "acuity");
+  for (const r of (data ?? []) as Array<{ id: string; external_id: string | null }>) {
+    if (r.external_id) m.set(r.external_id, r.id);
+  }
+  return m;
+}
+
 function acuityAppointmentToRow(
   apt: AcuityAppointment,
   userId: string,
   patientNodeId: string | null,
+  providerId: string | null = null,
 ): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
   // v1.4.3: parse Acuity's timezone-aware datetime properly. The old
   // regex .replace(/[+-]\d{4}$/, "Z") STRIPPED the offset without
@@ -1474,6 +1514,9 @@ function acuityAppointmentToRow(
   };
   if (patientNodeId) {
     base.patient_node_id = patientNodeId;
+  }
+  if (providerId) {
+    base.provider_id = providerId;
   }
   return base;
 }

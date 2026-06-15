@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.42.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.42.0 &mdash; Synced appointments now link to the right provider automatically.</strong> When an appointment flows in from your booking calendar (Acuity), SmartSpa now connects it to the matching provider in your SmartSpa calendar on the spot &mdash; instead of leaving it unlinked until you re-ran the one-time setup mirror by hand. It resolves the provider from the appointment&rsquo;s own calendar, every time it ingests &mdash; live webhooks, the on-connect backfill, and the new reconcile sweep all do it now. So your provider columns, per-provider filtering, and the calendar grid stay correct continuously, with no manual step. Best-effort and non-breaking: an appointment on a calendar you haven&rsquo;t mapped simply keeps its provider name and waits, exactly as before. <strong>New</strong>: <code>buildAcuityProviderIndex</code> (calendar-id → provider lookup). <strong>Touched</strong>: <code>emma-scheduler</code> (backfill + reconcile resolve provider_id), the Acuity webhook handler (resolves it per event). No schema change &mdash; it uses the provider link that already existed.",
+    ],
+  },
+  {
     version: "v2.41.0",
     date: "June 2026",
     items: [

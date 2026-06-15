@@ -34,6 +34,7 @@ import {
   buildPatientIndex,
   matchPatientFromIndex,
 } from "@/server/emma-appointments.functions";
+import { buildAcuityProviderIndex } from "@/server/emma-scheduler.functions";
 
 function jsonResp(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -195,11 +196,23 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
           patientIndex,
         );
 
-        // ── Upsert into emma_appointments
+        // ── Upsert into emma_appointments. Resolve provider_id continuously
+        // from the Acuity calendarID → the mirrored provider's external_id, so
+        // the appointment is linked to its native provider without waiting for
+        // a manual staging-mirror re-run (v2.42.0). Best-effort: an unmapped
+        // calendar just leaves provider_id null (provider_name still set).
+        let providerId: string | null = null;
+        try {
+          const providerIndex = await buildAcuityProviderIndex(sb, connection.user_id);
+          providerId = providerIndex.get(String(acuityApt.calendarID)) ?? null;
+        } catch (e) {
+          console.error("[acuity/webhook] provider resolve failed:", e instanceof Error ? e.message : e);
+        }
         const row = acuityAppointmentToInsert(
           acuityApt,
           connection.user_id,
           resolvedPatientNodeId,
+          providerId,
         );
         const { data: upserted, error: upsertErr } = await sb
           .from("emma_appointments")
@@ -360,6 +373,7 @@ function acuityAppointmentToInsert(
   apt: AcuityAppointment,
   userId: string,
   patientNodeId: string | null,
+  providerId: string | null = null,
 ): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
   // v1.4.3: parse Acuity's timezone-aware datetime properly. See twin
   // helper in src/server/emma-scheduler.functions.ts for the war story.
@@ -385,6 +399,9 @@ function acuityAppointmentToInsert(
   // on the row when our match misses on a re-delivery.
   if (patientNodeId) {
     base.patient_node_id = patientNodeId;
+  }
+  if (providerId) {
+    base.provider_id = providerId;
   }
   return base;
 }
