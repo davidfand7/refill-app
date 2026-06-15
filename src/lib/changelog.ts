@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.56.3",
+    date: "June 2026",
+    items: [
+      "<strong>v2.56.3 &mdash; Day &amp; week now stack appointments cleanly instead of fanning them out sideways.</strong> Replaced the side-by-side overlap layout (which fanned close appointments into an awkward staircase) with a <strong>stacked, full-width list</strong> &mdash; the same readable style as the Month view. Each appointment shows at its real time when the day is open, and when bookings are too close together to fit, the later one is pushed down to sit just below the previous one (full width, in time order, never overlapping). An open morning keeps real time-of-day spacing; a packed afternoon stacks into a clean column that grows as needed. <strong>Touched</strong>: <code>schedule/shared.ts</code> (new <code>stackApptCards</code> push-down layout, replaced the lane packer), <code>schedule/grids.tsx</code> (day single + multi + week). No migration.",
+    ],
+  },
+  {
     version: "v2.56.2",
     date: "June 2026",
     items: [

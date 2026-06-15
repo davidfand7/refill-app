@@ -24,7 +24,6 @@ import {
   ZOOM_KEY,
   MIN_DAY_CARD_PX,
   MIN_WEEK_CARD_PX,
-  MAX_WEEK_LANES,
   WD_SHORT,
   PROVIDER_DOTS,
   providerDot,
@@ -47,7 +46,7 @@ import {
   fmtTime,
   dayKey,
   localMinutes,
-  assignApptLanes,
+  stackApptCards,
 } from "@/components/refill/schedule/shared";
 
 // ── Day grid (positioned, single column) ─────────────────────────────────────
@@ -132,15 +131,14 @@ export function DayGrid({
       const mins = win.start + (e.clientY - rect.top) / pxPerMin;
       onBook(day.dateIso, minToHHMM(snap5(mins, win)), solo?.id);
     }
-    const soloLanes = assignApptLanes(day.appointments, tz, {
-      minDurMin: MIN_DAY_CARD_PX / pxPerMin,
-    });
+    const soloStack = stackApptCards(day.appointments, tz, pxPerMin, MIN_DAY_CARD_PX, win.start);
+    const gridHeight = Math.max(height, soloStack.contentBottom);
     return (
       <div className="rounded-xl border border-rule bg-white p-4">
         {!band.isOpen && <div className="mb-3 text-[12px] text-ink-faint">Closed this day (per business hours).</div>}
         <div
           className="relative cursor-pointer"
-          style={{ height }}
+          style={{ height: gridHeight }}
           onClick={bgClick}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => dropAt(e, solo?.id)}
@@ -158,12 +156,9 @@ export function DayGrid({
           {day.blocks.map((b) => (
             <BlockBand key={b.id} left="left-14" top={top(b.startIso)} height={Math.max(14, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} />
           ))}
-          {day.appointments.map((a) => {
-            const ln = soloLanes.laneOf.get(a.id);
-            return (
-              <ApptCard key={a.id} a={a} tz={tz} basePx={56} lane={ln?.lane ?? 0} lanes={ln?.lanes ?? 1} top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit} onDragStartAppt={setDragged} />
-            );
-          })}
+          {day.appointments.map((a) => (
+            <ApptCard key={a.id} a={a} tz={tz} basePx={56} lane={0} lanes={1} top={soloStack.topOf.get(a.id) ?? top(a.startIso)} height={soloStack.heightOf.get(a.id) ?? MIN_DAY_CARD_PX} onCancel={onCancel} onEdit={onEdit} onDragStartAppt={setDragged} />
+          ))}
           {day.appointments.length === 0 && day.blocks.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center text-[13px] text-ink-faint pointer-events-none">No bookings this day.</div>
           )}
@@ -175,6 +170,16 @@ export function DayGrid({
   // ── Multiple providers: one column per provider, sharing the time axis. ──
   const compact = providers.length >= 3;
   const colMinPx = 150;
+  // Pre-stack each column so the shared grid height fits the tallest column.
+  const colData = providers.map((p) => {
+    const band = day.openByProvider[p.id] ?? { isOpen: false, openMin: 9 * 60, closeMin: 17 * 60 };
+    const colAppts = day.appointments.filter((a) => a.providerId === p.id);
+    // Provider-specific blocks + whole-practice (null) blocks.
+    const colBlocks = day.blocks.filter((b) => b.providerId === p.id || b.providerId === null);
+    const stack = stackApptCards(colAppts, tz, pxPerMin, MIN_DAY_CARD_PX, win.start);
+    return { p, band, colAppts, colBlocks, stack };
+  });
+  const gridHeight = Math.max(height, ...colData.map((c) => c.stack.contentBottom));
   return (
     <div className="rounded-xl border border-rule bg-white p-3 overflow-x-auto">
       <div style={{ minWidth: 48 + providers.length * colMinPx }}>
@@ -189,7 +194,7 @@ export function DayGrid({
           ))}
         </div>
         {/* Grid body */}
-        <div className="relative grid" style={{ gridTemplateColumns: `48px repeat(${providers.length}, 1fr)`, height }}>
+        <div className="relative grid" style={{ gridTemplateColumns: `48px repeat(${providers.length}, 1fr)`, height: gridHeight }}>
           {/* hour rail */}
           <div className="relative">
             {hourMarks(win).map((m) => (
@@ -198,14 +203,7 @@ export function DayGrid({
               </div>
             ))}
           </div>
-          {providers.map((p) => {
-            const band = day.openByProvider[p.id] ?? { isOpen: false, openMin: 9 * 60, closeMin: 17 * 60 };
-            const colAppts = day.appointments.filter((a) => a.providerId === p.id);
-            const colLanes = assignApptLanes(colAppts, tz, {
-              minDurMin: MIN_DAY_CARD_PX / pxPerMin,
-            });
-            // Provider-specific blocks + whole-practice (null) blocks.
-            const colBlocks = day.blocks.filter((b) => b.providerId === p.id || b.providerId === null);
+          {colData.map(({ p, band, colAppts, colBlocks, stack }) => {
             return (
               <div
                 key={p.id}
@@ -228,12 +226,9 @@ export function DayGrid({
                 {colBlocks.map((b) => (
                   <BlockBand key={b.id} left="left-0" top={top(b.startIso)} height={Math.max(10, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} compact />
                 ))}
-                {colAppts.map((a) => {
-                  const ln = colLanes.laneOf.get(a.id);
-                  return (
-                    <ApptCard key={a.id} a={a} tz={tz} basePx={0} lane={ln?.lane ?? 0} lanes={ln?.lanes ?? 1} top={top(a.startIso)} height={Math.max(MIN_DAY_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit} onDragStartAppt={setDragged} compact={compact} />
-                  );
-                })}
+                {colAppts.map((a) => (
+                  <ApptCard key={a.id} a={a} tz={tz} basePx={0} lane={0} lanes={1} top={stack.topOf.get(a.id) ?? top(a.startIso)} height={stack.heightOf.get(a.id) ?? MIN_DAY_CARD_PX} onCancel={onCancel} onEdit={onEdit} onDragStartAppt={setDragged} compact={compact} />
+                ))}
               </div>
             );
           })}
@@ -348,6 +343,17 @@ export function WeekGrid({
     dragged.current = a;
   };
 
+  // Pre-stack each day so the shared grid height fits the busiest column.
+  const weekData = days.map((d) => {
+    const dow = new Date(`${d}T12:00:00Z`).getUTCDay();
+    const h = hoursByDow.get(dow);
+    const dayAppts = apptsByDay.get(d) ?? [];
+    const dayBlocks = blocksByDay.get(d) ?? [];
+    const stack = stackApptCards(dayAppts, tz, pxPerMin, MIN_WEEK_CARD_PX, win.start);
+    return { d, dow, h, dayAppts, dayBlocks, stack };
+  });
+  const weekGridHeight = Math.max(height, ...weekData.map((w) => w.stack.contentBottom));
+
   return (
     <div>
       {providers.length > 1 && (
@@ -399,7 +405,7 @@ export function WeekGrid({
           })}
         </div>
         {/* Grid body */}
-        <div className="relative grid" style={{ gridTemplateColumns: `48px repeat(7, 1fr)`, height }}>
+        <div className="relative grid" style={{ gridTemplateColumns: `48px repeat(7, 1fr)`, height: weekGridHeight }}>
           {/* hour rail */}
           <div className="relative">
             {hourMarks(win).map((m) => (
@@ -408,15 +414,7 @@ export function WeekGrid({
               </div>
             ))}
           </div>
-          {days.map((d) => {
-            const dow = new Date(`${d}T12:00:00Z`).getUTCDay();
-            const h = hoursByDow.get(dow);
-            const dayAppts = apptsByDay.get(d) ?? [];
-            const dayLanes = assignApptLanes(dayAppts, tz, {
-              minDurMin: MIN_WEEK_CARD_PX / pxPerMin,
-              maxLanes: MAX_WEEK_LANES,
-            });
-            const dayBlocks = blocksByDay.get(d) ?? [];
+          {weekData.map(({ d, h, dayAppts, dayBlocks, stack }) => {
             return (
               <div
                 key={d}
@@ -439,33 +437,9 @@ export function WeekGrid({
                 {dayBlocks.map((b) => (
                   <BlockBand key={b.id} left="left-0" top={top(b.startIso)} height={Math.max(10, (localMinutes(b.endIso, tz) - localMinutes(b.startIso, tz)) * pxPerMin)} reason={b.reason} compact />
                 ))}
-                {dayAppts.map((a) => {
-                  const ln = dayLanes.laneOf.get(a.id);
-                  if (!ln) return null; // collapsed into a "+N more" pill below
-                  return (
-                    <ApptCard key={a.id} a={a} tz={tz} basePx={0} lane={ln.lane} lanes={ln.lanes} top={top(a.startIso)} height={Math.max(MIN_WEEK_CARD_PX, a.durationMin * pxPerMin)} onCancel={onCancel} onEdit={onEdit} onDragStartAppt={setDragged} compact />
-                  );
-                })}
-                {dayLanes.overflow.map((o, i) => {
-                  const frac = (MAX_WEEK_LANES - 1) / MAX_WEEK_LANES;
-                  return (
-                    <button
-                      key={`ov-${d}-${i}`}
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); onPickDay(d); }}
-                      title={`${o.count} more appointment${o.count === 1 ? "" : "s"} — open this day`}
-                      className="absolute rounded-md border border-emerald/40 bg-emerald-soft/70 text-emerald text-[10px] font-semibold flex items-center justify-center hover:bg-emerald-soft transition"
-                      style={{
-                        top: (o.topMin - win.start) * pxPerMin,
-                        height: Math.max(18, (o.bottomMin - o.topMin) * pxPerMin - 1),
-                        left: `calc(${frac} * 100%)`,
-                        width: `calc(${1 / MAX_WEEK_LANES} * 100% - 3px)`,
-                      }}
-                    >
-                      +{o.count}
-                    </button>
-                  );
-                })}
+                {dayAppts.map((a) => (
+                  <ApptCard key={a.id} a={a} tz={tz} basePx={0} lane={0} lanes={1} top={stack.topOf.get(a.id) ?? top(a.startIso)} height={stack.heightOf.get(a.id) ?? MIN_WEEK_CARD_PX} onCancel={onCancel} onEdit={onEdit} onDragStartAppt={setDragged} compact />
+                ))}
               </div>
             );
           })}

@@ -25,16 +25,8 @@ export const DEFAULT_ZOOM_IDX = 3; // 2.0 px/min — more vertical breathing roo
 export const ZOOM_KEY = "refill.schedule.zoom";
 // Minimum card heights — every card must be tall enough to show its full info
 // (patient name + time) WITHOUT clipping. A card never renders shorter than this.
-// Crucially, the lane packer is told this same floor (as minutes) so a card that
-// gets inflated to fit its content is also treated as "occupying that space" for
-// overlap — which is what pushes a colliding neighbour SIDE-BY-SIDE instead of
-// letting it mash on top (the bug behind the v2.56.x "stacked blob").
 export const MIN_DAY_CARD_PX = 44;
 export const MIN_WEEK_CARD_PX = 44;
-// Week view caps how many overlapping cards it shows side-by-side before
-// collapsing the rest into a "+N more" pill (click → that day in Day view),
-// so a busy column never slices into unreadable slivers.
-export const MAX_WEEK_LANES = 3;
 export const WD_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 // Per-provider header accent dot (cards/bands stay emerald — the column + name
 // identify the provider; this is a small additive touch, not a restyle).
@@ -108,79 +100,47 @@ export function groupBlocksByDay(blocks: DayBlock[], tz: string): Map<string, Da
  * Pure; works off real start/end minutes in the given tz. A zero/negative span
  * is floored to 5 min so a same-instant pair still registers as overlapping.
  */
-export type LaneLayout = {
-  /** id -> {lane, lanes}. Cards that overflow the `maxLanes` cap are omitted
-   *  here and represented by an `overflow` pill instead. */
-  laneOf: Map<string, { lane: number; lanes: number }>;
-  /** One entry per cluster that exceeded the cap: a "+count more" pill spanning
-   *  [topMin, bottomMin] in the reserved last lane. Empty when uncapped. */
-  overflow: Array<{ topMin: number; bottomMin: number; count: number }>;
+export type StackLayout = {
+  /** id -> pixel top within the column (pushed down to avoid overlap). */
+  topOf: Map<string, number>;
+  /** id -> pixel height (real duration, floored to the content-min). */
+  heightOf: Map<string, number>;
+  /** Pixel bottom of the lowest card — the column must be at least this tall. */
+  contentBottom: number;
 };
 
-export function assignApptLanes(
+/**
+ * Stacked "push-down" layout (v2.56.3) — the day/week model the spa actually
+ * wants (matches the Month list, not Google's side-by-side lanes). Every card is
+ * FULL WIDTH and time-ordered: it sits at its real start time when there's room,
+ * and when it would collide with the card above it, it's pushed down to sit just
+ * below (a small gap between). So an open morning keeps real time-of-day
+ * positioning, and a packed afternoon stacks into a clean readable list. The
+ * column grows to `contentBottom` so nothing clips.
+ */
+export function stackApptCards(
   appts: DayAppointment[],
   tz: string,
-  opts: { minDurMin?: number; maxLanes?: number } = {},
-): LaneLayout {
-  const { minDurMin = 0, maxLanes = Infinity } = opts;
-  const laneOf = new Map<string, { lane: number; lanes: number }>();
-  const overflow: LaneLayout["overflow"] = [];
-  if (appts.length === 0) return { laneOf, overflow };
-
-  // Each card's RENDERED span (minutes) = its real duration floored to the
-  // content-min (minDurMin = the min card height converted to minutes), exactly
-  // matching how the card height is computed. Using this for overlap means a
-  // card inflated to fit its text correctly bumps its neighbour into a new lane
-  // instead of being silently overlapped.
-  const items = appts
-    .map((a) => {
-      const start = localMinutes(a.startIso, tz);
-      const dur = Math.max(5, a.durationMin || 0, minDurMin);
-      return { id: a.id, start, end: start + dur };
-    })
-    .sort((x, y) => x.start - y.start || x.end - y.end);
-
-  // Walk start-ordered, breaking into clusters of transitively-overlapping
-  // intervals. Within a cluster, greedily take the lowest lane free at this
-  // start; the cluster's divisor is the max lane used + 1.
-  let cluster: { id: string; start: number; end: number; lane: number }[] = [];
-  let clusterEnd = -1;
-  const flush = () => {
-    if (cluster.length === 0) return;
-    const clusterMax = Math.max(...cluster.map((c) => c.lane)) + 1;
-    if (clusterMax <= maxLanes) {
-      for (const c of cluster) laneOf.set(c.id, { lane: c.lane, lanes: clusterMax });
-    } else {
-      // Too many overlaps to show: keep the first (maxLanes-1) as cards and
-      // collapse the rest into a single "+N more" pill in the last lane.
-      const cardLanes = maxLanes - 1;
-      let count = 0;
-      let topMin = Infinity;
-      let bottomMin = -Infinity;
-      for (const c of cluster) {
-        if (c.lane < cardLanes) {
-          laneOf.set(c.id, { lane: c.lane, lanes: maxLanes });
-        } else {
-          count++;
-          topMin = Math.min(topMin, c.start);
-          bottomMin = Math.max(bottomMin, c.end);
-        }
-      }
-      if (count > 0) overflow.push({ topMin, bottomMin, count });
-    }
-    cluster = [];
-    clusterEnd = -1;
-  };
-  for (const it of items) {
-    if (cluster.length > 0 && it.start >= clusterEnd) flush();
-    const taken = new Set(cluster.filter((c) => c.end > it.start).map((c) => c.lane));
-    let lane = 0;
-    while (taken.has(lane)) lane++;
-    cluster.push({ id: it.id, start: it.start, end: it.end, lane });
-    clusterEnd = Math.max(clusterEnd, it.end);
+  pxPerMin: number,
+  minPx: number,
+  winStart: number,
+): StackLayout {
+  const GAP = 2;
+  const topOf = new Map<string, number>();
+  const heightOf = new Map<string, number>();
+  const sorted = appts
+    .map((a) => ({ a, start: localMinutes(a.startIso, tz) }))
+    .sort((x, y) => x.start - y.start);
+  let cursor = -Infinity; // bottom of the last placed card
+  for (const { a, start } of sorted) {
+    const timeTop = (start - winStart) * pxPerMin;
+    const height = Math.max(minPx, (a.durationMin || 0) * pxPerMin);
+    const top = cursor === -Infinity ? timeTop : Math.max(timeTop, cursor + GAP);
+    topOf.set(a.id, top);
+    heightOf.set(a.id, height);
+    cursor = top + height;
   }
-  flush();
-  return { laneOf, overflow };
+  return { topOf, heightOf, contentBottom: cursor === -Infinity ? 0 : cursor };
 }
 
 export function snap5(mins: number, win: { start: number; end: number }): number {
