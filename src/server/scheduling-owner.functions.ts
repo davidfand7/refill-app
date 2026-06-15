@@ -141,8 +141,10 @@ export interface DaySchedule {
   tenantId: string;
   timezone: string;
   dateIso: string;
-  /** Active providers, ordered by created_at (the day-view columns). */
+  /** Active, VISIBLE providers, ordered by created_at (the day-view columns). */
   providers: ProviderLite[];
+  /** How many active providers are hidden from the grid (for the review note). */
+  hiddenProviderCount: number;
   /** providerId → that provider's open band for this weekday. */
   openByProvider: Record<string, DayBand>;
   appointments: DayAppointment[];
@@ -163,7 +165,11 @@ type ApptRow = {
   patient_node_id: string | null;
 };
 
-/** Active providers for a tenant, ordered by created_at (column order). */
+/**
+ * Active, VISIBLE providers for a tenant, ordered by created_at (column order).
+ * Hidden providers (hidden_at set — an owner choice or the empty-business-calendar
+ * smart default from the mirror) are excluded from the grid columns. v2.46.0.
+ */
 async function loadActiveProviders(
   sb: ReturnType<typeof admin>,
   tenantId: string,
@@ -173,8 +179,24 @@ async function loadActiveProviders(
     .select("id, name, created_at")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
+    .is("hidden_at", null)
     .order("created_at", { ascending: true });
   return (data ?? []).map((p) => ({ id: p.id, name: p.name }));
+}
+
+/** How many active providers the owner has hidden from the grid — drives the
+ *  "N hidden — review" note so a hidden column is never a silent drop. */
+async function countHiddenProviders(
+  sb: ReturnType<typeof admin>,
+  tenantId: string,
+): Promise<number> {
+  const { count } = await sb
+    .from("scheduling_providers")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true)
+    .not("hidden_at", "is", null);
+  return count ?? 0;
 }
 
 /**
@@ -435,6 +457,7 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
       timezone,
       dateIso: data.dateIso,
       providers,
+      hiddenProviderCount: await countHiddenProviders(sb, tenantId),
       openByProvider,
       appointments,
       blocks,
@@ -463,8 +486,10 @@ export interface WeeklyHoursRow {
 export interface RangeSchedule {
   tenantId: string;
   timezone: string;
-  /** Active providers, ordered by created_at. */
+  /** Active, VISIBLE providers, ordered by created_at. */
   providers: ProviderLite[];
+  /** How many active providers are hidden from the grid (for the review note). */
+  hiddenProviderCount: number;
   appointments: DayAppointment[];
   blocks: DayBlock[];
   /** providerId → that provider's weekly availability pattern (0..6). */
@@ -581,6 +606,7 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
       tenantId,
       timezone,
       providers,
+      hiddenProviderCount: await countHiddenProviders(sb, tenantId),
       appointments,
       blocks,
       weeklyHoursByProvider,
@@ -950,5 +976,116 @@ export const ownerCancelAppointmentFn = createServerFn({ method: "POST" })
         tenantProviderIds.length ? tenantProviderIds : ["00000000-0000-0000-0000-000000000000"],
       );
     if (error) return { ok: false, reason: `Couldn't cancel: ${error.message}` };
+    return { ok: true };
+  });
+
+// ── Provider visibility (manage which columns show) — v2.46.0 ─────────────────
+//
+// The Acuity mirror materializes a provider for every calendar, including the
+// business/shared one. The owner — not a fragile auto-rule — decides which
+// columns are real providers. listManagedProvidersFn shows ALL active providers
+// (visible + hidden) with each one's appointment count, so hiding is informed
+// (hiding a column hides its appointments too). setProviderVisibilityFn flips
+// the hidden_at override (distinct from is_active so it survives a re-mirror).
+
+export interface ManagedProvider {
+  id: string;
+  name: string;
+  /** Hidden from the calendar grid (owner choice or the empty-business smart default). */
+  hidden: boolean;
+  /** Non-cancelled appointments on this provider — the honest consequence of hiding. */
+  apptCount: number;
+  /** Mirrored from an external scheduler (Acuity) vs a native provider. */
+  isMirrored: boolean;
+  /** The native primary (a login row) — hiding it removes the native booking column. */
+  isPrimary: boolean;
+}
+
+export const listManagedProvidersFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) =>
+    z
+      .object({ accessToken: z.string().min(10), viewAsUserId: z.string().uuid().optional() })
+      .parse(raw),
+  )
+  .handler(async ({ data }): Promise<ManagedProvider[]> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+
+    // external_source isn't in the generated types yet → loose-cast the select.
+    const anySb = sb as unknown as { from(t: string): ReturnType<typeof sb.from> };
+    const { data: rows } = await anySb
+      .from("scheduling_providers")
+      .select("id, name, hidden_at, user_id, external_source, created_at")
+      .eq("tenant_id", tenantId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true });
+    const provs = (rows ?? []) as unknown as Array<{
+      id: string;
+      name: string;
+      hidden_at: string | null;
+      user_id: string | null;
+      external_source: string | null;
+    }>;
+
+    // Appointment count per provider (non-cancelled). Small N of providers, so
+    // per-provider head counts in parallel are fine.
+    const counts = await Promise.all(
+      provs.map(async (p) => {
+        const { count } = await sb
+          .from("emma_appointments")
+          .select("id", { count: "exact", head: true })
+          .eq("provider_id", p.id)
+          .neq("status", "cancelled");
+        return count ?? 0;
+      }),
+    );
+
+    return provs.map((p, i) => ({
+      id: p.id,
+      name: p.name,
+      hidden: p.hidden_at != null,
+      apptCount: counts[i],
+      isMirrored: p.external_source === "acuity",
+      isPrimary: p.user_id != null,
+    }));
+  });
+
+export const setProviderVisibilityFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) =>
+    z
+      .object({
+        accessToken: z.string().min(10),
+        viewAsUserId: z.string().uuid().optional(),
+        providerId: z.string().uuid(),
+        hidden: z.boolean(),
+      })
+      .parse(raw),
+  )
+  .handler(async ({ data }): Promise<{ ok: true } | { ok: false; reason: string }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+
+    // Ownership guard: the provider must belong to this tenant.
+    const { data: prov } = await sb
+      .from("scheduling_providers")
+      .select("id")
+      .eq("id", data.providerId)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (!prov) return { ok: false, reason: "That provider isn't part of this spa." };
+
+    const { error } = await sb
+      .from("scheduling_providers")
+      .update({ hidden_at: data.hidden ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
+      .eq("id", data.providerId);
+    if (error) return { ok: false, reason: `Couldn't update: ${error.message}` };
     return { ok: true };
   });

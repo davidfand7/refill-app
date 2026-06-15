@@ -1512,6 +1512,15 @@ function acuityAppointmentToRow(
     status,
     notes: apt.notes || null,
   };
+  // v2.46.0: persist the patient's identity from the Acuity payload so the
+  // calendar shows a name even when the patient hasn't matched a knowledge_node
+  // yet (the old behavior left every unmatched import nameless). Conditional
+  // (omit-when-absent) follows the same upsert-preserve idiom as patient_node_id
+  // below — a re-delivery missing a field never wipes a value already on the row.
+  const fullName = `${apt.firstName ?? ""} ${apt.lastName ?? ""}`.trim();
+  if (fullName) base.booking_name = fullName;
+  if (apt.email) base.booking_email = apt.email;
+  if (apt.phone) base.booking_phone = apt.phone;
   if (patientNodeId) {
     base.patient_node_id = patientNodeId;
   }

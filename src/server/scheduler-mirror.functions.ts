@@ -53,6 +53,8 @@ export interface MirrorReport {
     fromAcuity: number;
     created: number;
     matched: number;
+    /** Newly-created business-named calendars auto-hidden from the grid (empty only). */
+    autoHidden: number;
     unmappable: string[];
   };
   services: {
@@ -97,6 +99,23 @@ type Sb = ReturnType<typeof admin>;
 
 const norm = (s: string | null | undefined): string =>
   (s ?? "").trim().toLowerCase();
+
+/** Like norm but also drops a trailing parenthetical ("Rejuv Skin Spa (Demo)" →
+ *  "rejuv skin spa") so a business calendar still matches the spa name across a
+ *  "(Demo)"/"(Main)" suffix. */
+const normBusiness = (s: string | null | undefined): string =>
+  norm(s).replace(/\s*\([^)]*\)\s*$/, "").trim();
+
+/** A mirrored Acuity calendar "looks like the business" when its name matches the
+ *  tenant name (ignoring a trailing parenthetical / on a contains either way).
+ *  Used ONLY to choose a smart DEFAULT for column visibility — never a hard
+ *  filter; the owner always overrides, and we only auto-hide EMPTY ones. */
+function looksLikeBusinessCalendar(calName: string, businessName: string): boolean {
+  const c = normBusiness(calName);
+  const b = normBusiness(businessName);
+  if (!c || !b) return false;
+  return c === b || c.includes(b) || b.includes(c);
+}
 
 /**
  * Seed sensible default weekly hours (Mon–Fri 9–5, weekend closed) for a
@@ -246,10 +265,23 @@ export const stageAcuityMirrorFn = createServerFn({ method: "POST" })
       }
     }
 
+    // The spa name drives the smart-default visibility for a business-named
+    // calendar (only applied to NEW, empty mirrored providers below).
+    const { data: tenantRow } = await anySb
+      .from("tenants")
+      .select("name")
+      .eq("id", tenantId)
+      .maybeSingle();
+    const businessName: string = (tenantRow as { name?: string } | null)?.name ?? "";
+    // Newly-created providers whose name looks like the business — candidates for
+    // the empty-only smart-default hide (decided AFTER appointment-linking below).
+    const businessMatchCreated: { id: string; name: string }[] = [];
+
     const provReport = {
       fromAcuity: calendars.length,
       created: 0,
       matched: 0,
+      autoHidden: 0,
       unmappable: [] as string[],
     };
     const createdProviderIds: string[] = [];
@@ -302,6 +334,9 @@ export const stageAcuityMirrorFn = createServerFn({ method: "POST" })
       provByName.set(key, newId);
       provByExtId.set(extId, { id: newId, name: cal.name });
       createdProviderIds.push(newId);
+      if (looksLikeBusinessCalendar(cal.name, businessName)) {
+        businessMatchCreated.push({ id: newId, name: cal.name });
+      }
       provReport.created += 1;
     }
     // Give every freshly-mirrored provider default hours so the staged
@@ -414,6 +449,30 @@ export const stageAcuityMirrorFn = createServerFn({ method: "POST" })
       .select("id", { count: "exact", head: true })
       .eq("user_id", effectiveUserId)
       .is("provider_id", null);
+
+    // ── Smart default: hide an EMPTY business-named mirrored calendar ──
+    // Newly-mirrored calendars that look like the business get hidden from the
+    // grid BY DEFAULT — but only when they carry no appointments, so we never
+    // make real bookings disappear. Anything with appts stays shown; the owner
+    // can hide it from the manage-providers list (where the appt count is shown,
+    // so the choice is informed). Surfaced honestly via the "N hidden — review"
+    // note on the schedule — never a silent drop (connection-health doctrine).
+    let hiddenByDefault = 0;
+    for (const c of businessMatchCreated) {
+      const { count: apptCount } = await sb
+        .from("emma_appointments")
+        .select("id", { count: "exact", head: true })
+        .eq("provider_id", c.id)
+        .neq("status", "cancelled");
+      if ((apptCount ?? 0) === 0) {
+        await anySb
+          .from("scheduling_providers")
+          .update({ hidden_at: new Date().toISOString() })
+          .eq("id", c.id);
+        hiddenByDefault += 1;
+      }
+    }
+    provReport.autoHidden = hiddenByDefault;
 
     return {
       ranAtMs: Date.now(),

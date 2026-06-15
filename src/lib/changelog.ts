@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.46.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.46.0 &mdash; Calendar import: imported appointments now show the patient&rsquo;s name, and you control which calendars appear as columns.</strong> Two fixes to how your Acuity calendar comes in. <strong>(1) Names.</strong> Imported appointments were landing without a patient name unless we&rsquo;d already met that patient &mdash; the import was throwing the name away. Now every imported appointment carries the patient&rsquo;s name (and email/phone) straight from Acuity, so the calendar and the edit dialog show <em>who</em> it is. <strong>(2) Provider columns.</strong> The importer used to make a column for <em>every</em> Acuity calendar &mdash; including your business/shared calendar, which isn&rsquo;t a real provider &mdash; so the grid had spurious columns. There&rsquo;s no way for Acuity to tell us which calendar is a person, so instead of guessing silently we put you in control: a new <strong>&ldquo;Providers&rdquo;</strong> button on the Schedule lets you show or hide any column, and the list shows each one&rsquo;s appointment count so you know what hiding it affects (hiding a column hides its appointments too). Smart default: an imported business-named calendar that has <em>no</em> appointments is hidden for you automatically &mdash; but never one that carries bookings, so nothing real ever disappears. And it&rsquo;s never silent: a <strong>&ldquo;N calendars hidden &mdash; review&rdquo;</strong> note sits right on the calendar. Your choices survive future syncs. <strong>New</strong>: <code>booking_name/email/phone</code> populated in both Acuity converters (webhook + reconcile), <code>hidden_at</code> on <code>scheduling_providers</code> (a visibility override distinct from active/bookable), the empty-business-calendar smart default in the mirror, and a manage-providers dialog. One small migration (a new nullable column).",
+    ],
+  },
+  {
     version: "v2.45.0",
     date: "June 2026",
     items: [

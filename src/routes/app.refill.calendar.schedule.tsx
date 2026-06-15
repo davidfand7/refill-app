@@ -10,7 +10,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, Ban, ZoomIn, ZoomOut } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, Ban, ZoomIn, ZoomOut, Users, EyeOff } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { CalendarTabs } from "@/components/refill/CalendarTabs";
@@ -46,6 +46,7 @@ import {
   BlockDialog,
   CancelDialog,
   EditDialog,
+  ManageProvidersDialog,
 } from "@/components/refill/schedule/dialogs";
 
 export const Route = createFileRoute("/app/refill/calendar/schedule")({
@@ -68,6 +69,7 @@ function SchedulePage() {
   // Week view provider filter ("all" or a providerId).
   const [weekProviderId, setWeekProviderId] = useState<string>("all");
   const [blockOpen, setBlockOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<DayAppointment | null>(null);
   const [editTarget, setEditTarget] = useState<DayAppointment | null>(null);
   const [zoomIdx, setZoomIdx] = useState<number>(() => {
@@ -124,6 +126,8 @@ function SchedulePage() {
   const providerUnoffered: Record<string, string[]> =
     (view === "day" ? day?.providerUnoffered : range?.providerUnoffered) ?? {};
   const tenantId = (view === "day" ? day?.tenantId : range?.tenantId) ?? "";
+  const hiddenProviderCount =
+    (view === "day" ? day?.hiddenProviderCount : range?.hiddenProviderCount) ?? 0;
 
   /** Drag-to-move: reschedule (and, in multi-column day, reassign provider). */
   async function onMove(appt: DayAppointment, startIso: string, providerId?: string) {
@@ -221,6 +225,9 @@ function SchedulePage() {
                 </button>
               ))}
             </div>
+            <button type="button" onClick={() => setManageOpen(true)} className="inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-2 text-[13px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition">
+              <Users className="h-3.5 w-3.5" /> Providers
+            </button>
             <button type="button" onClick={() => setBlockOpen(true)} className="inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-2 text-[13px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition">
               <Ban className="h-3.5 w-3.5" /> Block
             </button>
@@ -230,6 +237,20 @@ function SchedulePage() {
           </div>
         </div>
 
+        {!loading && hiddenProviderCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setManageOpen(true)}
+            className="mb-3 flex w-full items-center gap-2 rounded-md border border-rule bg-paper/40 px-3 py-2 text-left text-[12.5px] text-ink-soft hover:border-emerald/40 hover:text-ink transition"
+          >
+            <EyeOff className="h-3.5 w-3.5 shrink-0" />
+            <span>
+              <span className="font-medium text-ink">{hiddenProviderCount}</span>{" "}
+              {hiddenProviderCount === 1 ? "calendar is" : "calendars are"} hidden from this view —
+              review
+            </span>
+          </button>
+        )}
         {loading ? (
           <div className="flex items-center gap-2 text-[14px] text-ink-soft py-16">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading schedule…
@@ -283,6 +304,7 @@ function SchedulePage() {
 
       <BookDialog open={!!bookSeed} initialDate={bookSeed?.date ?? dateIso} initialTime={bookSeed?.time ?? "09:00"} initialProviderId={bookSeed?.providerId} providers={providers} onClose={() => setBookSeed(null)} services={services} providerUnoffered={providerUnoffered} tenantId={tenantId} timezone={tz} viewAsUserId={viewAsUserId} onBooked={() => { setBookSeed(null); void load(); }} />
       <BlockDialog open={blockOpen} onClose={() => setBlockOpen(false)} timezone={tz} dateIso={dateIso} viewAsUserId={viewAsUserId} onBlocked={() => { setBlockOpen(false); void load(); }} />
+      <ManageProvidersDialog open={manageOpen} viewAsUserId={viewAsUserId} onClose={() => setManageOpen(false)} onChanged={() => void load()} />
       <CancelDialog appt={cancelTarget} tz={tz} viewAsUserId={viewAsUserId} onClose={() => setCancelTarget(null)} onCancelled={() => { setCancelTarget(null); void load(); }} />
       <EditDialog appt={editTarget} tz={tz} providers={providers} viewAsUserId={viewAsUserId} onClose={() => setEditTarget(null)} onSaved={() => { setEditTarget(null); void load(); }} onCancelAppt={(a) => { setEditTarget(null); setCancelTarget(a); }} />
     </div>

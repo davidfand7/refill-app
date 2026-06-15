@@ -394,6 +394,13 @@ function acuityAppointmentToInsert(
     status,
     notes: apt.notes || null,
   };
+  // v2.46.0: persist the patient's identity from the Acuity payload so the
+  // calendar shows a name even before a knowledge_node match. Same upsert-
+  // preserve idiom as patient_node_id (omit-when-absent → never wipe on re-delivery).
+  const fullName = `${apt.firstName ?? ""} ${apt.lastName ?? ""}`.trim();
+  if (fullName) base.booking_name = fullName;
+  if (apt.email) base.booking_email = apt.email;
+  if (apt.phone) base.booking_phone = apt.phone;
   // Only attach patient_node_id when we have a confident match — omitting
   // the key (vs. setting null) lets the upsert preserve any existing link
   // on the row when our match misses on a re-delivery.

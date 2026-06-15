@@ -5,7 +5,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Ban, Plus, ChevronDown, Check, CalendarClock, CalendarRange, Pencil } from "lucide-react";
+import { Loader2, Ban, Plus, ChevronDown, Check, CalendarClock, CalendarRange, Pencil, Eye, EyeOff } from "lucide-react";
 import { zonedWallClockToUtc } from "@/lib/scheduling-slots";
 import { categoryLabel, categoryRank } from "@/lib/service-categories";
 import { listAvailableSlots, type PublicSlot } from "@/server/scheduling.functions";
@@ -24,8 +24,11 @@ import {
   ownerUpdateAppointmentFn,
   ownerCreateBlockFn,
   ownerCancelAppointmentFn,
+  listManagedProvidersFn,
+  setProviderVisibilityFn,
   type DayAppointment,
   type ProviderLite,
+  type ManagedProvider,
 } from "@/server/scheduling-owner.functions";
 import { recordRecallBookingFn } from "@/server/refill-recall.functions";
 import {
@@ -829,6 +832,141 @@ export function EditDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ── Manage providers (which columns show on the calendar) — v2.46.0 ──────────
+
+export function ManageProvidersDialog({
+  open,
+  viewAsUserId,
+  onClose,
+  onChanged,
+}: {
+  open: boolean;
+  viewAsUserId?: string;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const [rows, setRows] = useState<ManagedProvider[] | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function load() {
+    setRows(null);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Not signed in.");
+      setRows(await listManagedProvidersFn({ data: { accessToken: token, viewAsUserId } }));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't load providers.");
+      setRows([]);
+    }
+  }
+
+  useEffect(() => {
+    if (open) void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  async function toggle(p: ManagedProvider) {
+    setBusyId(p.id);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Not signed in.");
+      const r = await setProviderVisibilityFn({
+        data: { accessToken: token, viewAsUserId, providerId: p.id, hidden: !p.hidden },
+      });
+      if (!r.ok) {
+        toast.error(r.reason);
+        return;
+      }
+      await load();
+      onChanged();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't update.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const visibleCount = (rows ?? []).filter((r) => !r.hidden).length;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Calendar providers</DialogTitle>
+          <DialogDescription>
+            Choose which columns show on your calendar. Imported calendars that aren&rsquo;t real
+            providers — like a business or shared calendar — can be hidden here.
+          </DialogDescription>
+        </DialogHeader>
+        {rows === null ? (
+          <div className="flex items-center gap-2 py-8 text-[13px] text-ink-soft">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+          </div>
+        ) : rows.length === 0 ? (
+          <p className="py-6 text-[13px] text-ink-soft">No providers yet.</p>
+        ) : (
+          <ul className="divide-y divide-rule -my-1">
+            {rows.map((p) => (
+              <li key={p.id} className="flex items-center justify-between gap-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-[14px] font-medium text-ink">
+                    <span className={`truncate ${p.hidden ? "text-ink-soft line-through" : ""}`}>{p.name}</span>
+                    {p.isPrimary && <ProviderTag>Primary</ProviderTag>}
+                    {p.isMirrored && <ProviderTag>Acuity</ProviderTag>}
+                  </div>
+                  <div className="text-[11.5px] text-ink-soft">
+                    {p.apptCount} {p.apptCount === 1 ? "appointment" : "appointments"}
+                    {p.hidden
+                      ? " · hidden from calendar"
+                      : p.apptCount > 0
+                        ? " · hiding also hides these"
+                        : ""}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={busyId === p.id}
+                  onClick={() => void toggle(p)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-[12.5px] font-medium text-ink-soft hover:bg-rule-soft transition disabled:opacity-40 shrink-0"
+                >
+                  {busyId === p.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : p.hidden ? (
+                    <Eye className="h-3.5 w-3.5" />
+                  ) : (
+                    <EyeOff className="h-3.5 w-3.5" />
+                  )}
+                  {p.hidden ? "Show" : "Hide"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {rows && rows.length > 0 && visibleCount === 0 && (
+          <p className="text-[12px] text-amber">
+            Every provider is hidden — your calendar grid will be empty until you show one.
+          </p>
+        )}
+        <DialogFooter>
+          <button type="button" onClick={onClose} className={btnGhost}>
+            Done
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ProviderTag({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center rounded-full bg-rule-soft px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-ink-soft shrink-0">
+      {children}
+    </span>
   );
 }
 
