@@ -52,6 +52,7 @@ import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
 import { DIRECT_COMMISSION_RATE, formatRate } from "@/lib/rep-economics";
+import { selectAllRows } from "@/lib/supabase-paginate";
 import { requireRepOrAdmin } from "@/server/auth-helpers";
 
 // ─── service-role admin client (module-private) ──────────────────────────
@@ -230,14 +231,19 @@ async function loadRepStatsForPlaceholders(
 }> {
   // Direct downstream count (Tier-1 only — the number Kelly can credibly
   // claim as "reps I personally recruited").
-  const { data: affilRows } = await sb
-    .from("rep_affiliations")
-    .select("rep_id")
-    .eq("parent_rep_id", repUserId)
-    .eq("tier_level", 1)
-    .eq("active", true);
+  const affilRows = await selectAllRows<{ rep_id: string }>(
+    (from, to) =>
+      sb
+        .from("rep_affiliations")
+        .select("rep_id")
+        .eq("parent_rep_id", repUserId)
+        .eq("tier_level", 1)
+        .eq("active", true)
+        .range(from, to),
+    { label: "rep_affiliations downstream count" },
+  );
 
-  const downstream = (affilRows ?? []).length;
+  const downstream = affilRows.length;
 
   // Trailing-30-day commission, summing Tier-1 + Tier-2 ledger rows. Reads
   // the rep_commission_ledger directly (admin client bypasses RLS). Filters
@@ -245,14 +251,19 @@ async function loadRepStatsForPlaceholders(
   // bucketed and 30 days could span 2 periods so we sum any row created in
   // the window.
   const sinceIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: ledgerRows } = await sb
-    .from("rep_commission_ledger")
-    .select("commission_usd")
-    .eq("rep_id", repUserId)
-    .neq("status", "voided")
-    .gte("created_at", sinceIso);
+  const ledgerRows = await selectAllRows<{ commission_usd: number | null }>(
+    (from, to) =>
+      sb
+        .from("rep_commission_ledger")
+        .select("commission_usd")
+        .eq("rep_id", repUserId)
+        .neq("status", "voided")
+        .gte("created_at", sinceIso)
+        .range(from, to),
+    { label: "rep_commission_ledger 30d earnings" },
+  );
 
-  const monthEarnings = (ledgerRows ?? []).reduce(
+  const monthEarnings = ledgerRows.reduce(
     (sum, r) => sum + Number(r.commission_usd ?? 0),
     0,
   );

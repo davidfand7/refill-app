@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.53.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.53.0 &mdash; Large-spa data-integrity hardening: bulk reads now page through everything, so nothing is silently dropped.</strong> The database returns at most 1,000 rows per read unless you explicitly page &mdash; and a read that doesn&rsquo;t page gets <em>silently</em> capped, with no error, so the code treats a partial answer as the whole. That same class of bug surfaced three times recently (the reliability recompute fixed in v2.52.0 was one). This release closes the rest of it and makes it impossible to reintroduce. <strong>Calendar:</strong> the Acuity history backfill, the self-healing reconcile sweep, and the wide provider-relink now page through your <em>entire</em> date window instead of stopping at the first 1,000 appointments &mdash; so a busy spa&rsquo;s calendar can no longer be quietly half-synced (and if a single day ever exceeds the cap, that&rsquo;s now reported rather than hidden). <strong>Rep program:</strong> a rep&rsquo;s recruit-page earnings, downstream-recruit count, and full commission ledger now page completely, so a long-tenured rep&rsquo;s numbers can&rsquo;t under-report. <strong>And permanently:</strong> a new deploy guard (a &ldquo;truncation tripwire&rdquo;) scans every ship and blocks it if anyone adds an unpaginated bulk read &mdash; the same way the type-error tripwire already works &mdash; so this class of silent data loss can&rsquo;t come back. <strong>New</strong>: <code>selectAllRows</code> (shared pagination helper), <code>listAllAcuityAppointmentsInWindow</code> (date-window paging for Acuity), <code>scripts/truncation-tripwire.mjs</code> (baselined, wired into <code>npm run deploy</code>). No migration.",
+    ],
+  },
+  {
     version: "v2.52.0",
     date: "June 2026",
     items: [

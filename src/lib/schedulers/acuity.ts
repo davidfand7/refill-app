@@ -291,6 +291,66 @@ export async function listAcuityAppointments(
   );
 }
 
+/**
+ * Pull EVERY appointment in a date window, paging past Acuity's per-request
+ * `max` cap — the truncation-safe replacement for a raw `listAcuityAppointments`
+ * with a fixed `max`.
+ *
+ * Acuity's GET /appointments has NO offset/page/cursor parameter (verified
+ * against developers.acuityscheduling.com 2026-06-15 — only `max` plus the
+ * minDate/maxDate date filters). So a window holding more than one page can
+ * ONLY be paged by SUBDIVIDING the date range: if a pull comes back full
+ * (length >= pageMax), we split [minDate, maxDate] in half and recurse on each
+ * half until every sub-window returns a short (= complete) page. The halves are
+ * disjoint ([min, mid] + [mid+1, max]) so no double-count; we also dedupe by id
+ * defensively.
+ *
+ * Cost: the common case is ONE request per call (a normal spa's window holds
+ * < pageMax → no split), so it pays nothing extra; only high-volume windows
+ * subdivide. The floor is a single day — if ONE day still returns >= pageMax we
+ * cannot split further, so `hitFloor=true` reports that honestly rather than
+ * pretend completeness (Connection-Health doctrine: never silently truncate).
+ * >1000 appts in a single day is implausible for a med spa, but we surface it.
+ */
+export async function listAllAcuityAppointmentsInWindow(
+  accessToken: string,
+  args: { minDate: string; maxDate: string; canceled: boolean; pageMax?: number },
+): Promise<{ appointments: AcuityAppointment[]; hitFloor: boolean }> {
+  const pageMax = args.pageMax ?? 1000;
+  const dayMs = 86400000;
+  const toMs = (s: string) => new Date(`${s}T00:00:00.000Z`).getTime();
+  const fmt = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+  const byId = new Map<number, AcuityAppointment>();
+  let hitFloor = false;
+
+  async function pull(minDate: string, maxDate: string): Promise<void> {
+    const page = await listAcuityAppointments(accessToken, {
+      minDate,
+      maxDate,
+      max: pageMax,
+      canceled: args.canceled,
+    });
+    for (const a of page) byId.set(a.id, a);
+    if (page.length < pageMax) return; // short page = window fully drained
+
+    const minMs = toMs(minDate);
+    const maxMs = toMs(maxDate);
+    if (minMs >= maxMs) {
+      // Single day (date-only granularity) — cannot subdivide further. This is
+      // the only place a true cap survives; report it instead of dropping rows.
+      hitFloor = true;
+      return;
+    }
+    const midMs = minMs + Math.floor((maxMs - minMs) / 2 / dayMs) * dayMs;
+    await pull(minDate, fmt(midMs));
+    await pull(fmt(midMs + dayMs), maxDate);
+  }
+
+  await pull(args.minDate, args.maxDate);
+  return { appointments: [...byId.values()], hitFloor };
+}
+
 export async function getAcuityAppointment(
   accessToken: string,
   appointmentId: string | number,

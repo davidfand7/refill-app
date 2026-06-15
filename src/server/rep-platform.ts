@@ -19,6 +19,7 @@ import { z } from "zod";
 
 import type { Database, Json } from "@/integrations/supabase/types";
 import { DIRECT_COMMISSION_RATE } from "@/lib/rep-economics";
+import { selectAllRows } from "@/lib/supabase-paginate";
 import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 import { mintReferralToken } from "@/server/referral-tokens";
 
@@ -774,19 +775,35 @@ export const getMyLedger = createServerFn({ method: "POST" })
       });
       const sb = admin();
 
-      const { data: dbRows, error } = await sb
-        .from("rep_commission_ledger")
-        .select(
-          "id, period_month, tier_level, commission_split, source_revenue_usd, commission_usd, status, paid_at, source_tenant_id, notes",
-        )
-        .eq("rep_id", effectiveUserId)
-        .order("period_month", { ascending: false })
-        .order("tier_level", { ascending: true });
-      if (error) {
-        throw new Error(`Couldn't load your commission ledger: ${error.message}`);
-      }
+      // Paginate the full per-rep ledger — a long-tenured rep can exceed
+      // PostgREST's 1000-row cap (monthly × tiers × many source tenants), and an
+      // unpaginated read would silently under-report their lifetime earnings.
+      const dbRows = await selectAllRows<{
+        id: string;
+        period_month: string;
+        tier_level: number;
+        commission_split: number | string;
+        source_revenue_usd: number | string;
+        commission_usd: number | string;
+        status: string;
+        paid_at: string | null;
+        source_tenant_id: string | null;
+        notes: string | null;
+      }>(
+        (from, to) =>
+          sb
+            .from("rep_commission_ledger")
+            .select(
+              "id, period_month, tier_level, commission_split, source_revenue_usd, commission_usd, status, paid_at, source_tenant_id, notes",
+            )
+            .eq("rep_id", effectiveUserId)
+            .order("period_month", { ascending: false })
+            .order("tier_level", { ascending: true })
+            .range(from, to),
+        { label: "rep_commission_ledger full history" },
+      );
 
-      const rows: LedgerRow[] = (dbRows ?? []).map((r) => ({
+      const rows: LedgerRow[] = dbRows.map((r) => ({
         id: r.id,
         periodMonth: r.period_month,
         tierLevel: r.tier_level as LedgerRow["tierLevel"],

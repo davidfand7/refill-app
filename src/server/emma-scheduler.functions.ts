@@ -29,7 +29,7 @@ import { verifyAuth } from "@/server/auth-helpers";
 import { getTenantIdForUser } from "@/server/scheduling-settings.functions";
 import {
   buildAcuityAuthorizeUrl,
-  listAcuityAppointments,
+  listAllAcuityAppointmentsInWindow,
   listAcuityClients,
   tearDownAcuityWebhooksForTarget,
   type AcuityAppointment,
@@ -1223,7 +1223,11 @@ export async function backfillAcuityAppointments(args: {
   sb: SupabaseAdmin;
   userId: string;
   accessToken: string;
-}): Promise<{ totalAppointments: number; resolvedPatientNames: number }> {
+}): Promise<{
+  totalAppointments: number;
+  resolvedPatientNames: number;
+  windowCapHit: boolean;
+}> {
   const { sb, userId, accessToken } = args;
 
   const now = new Date();
@@ -1231,22 +1235,28 @@ export async function backfillAcuityAppointments(args: {
   const maxDate = new Date(now.getTime() + BACKFILL_DAYS_FORWARD * 86400000);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
+  // Date-window paged pull (not a raw max:1000) so a spa with >1000 appts in
+  // the backfill window doesn't silently lose half its history on connect.
   const [active, canceled] = await Promise.all([
-    listAcuityAppointments(accessToken, {
+    listAllAcuityAppointmentsInWindow(accessToken, {
       minDate: fmt(minDate),
       maxDate: fmt(maxDate),
-      max: 1000,
       canceled: false,
     }),
-    listAcuityAppointments(accessToken, {
+    listAllAcuityAppointmentsInWindow(accessToken, {
       minDate: fmt(minDate),
       maxDate: fmt(maxDate),
-      max: 1000,
       canceled: true,
     }),
   ]);
+  const windowCapHit = active.hitFloor || canceled.hitFloor;
+  if (windowCapHit) {
+    console.warn(
+      `[acuity-backfill] single-day cap hit for user ${userId} — backfill may be partial (>1000 appts in one day).`,
+    );
+  }
 
-  const all = [...active, ...canceled];
+  const all = [...active.appointments, ...canceled.appointments];
 
   // Pre-migrate any leftover csv-acuity-sourced rows so the upsert
   // dedupes correctly on the (user_id, external_id, source) composite.
@@ -1302,6 +1312,7 @@ export async function backfillAcuityAppointments(args: {
   return {
     totalAppointments: rows.length,
     resolvedPatientNames,
+    windowCapHit,
   };
 }
 
@@ -1329,6 +1340,7 @@ export async function reconcileAcuityForConnection(args: {
   changed: number;
   rescued: number;
   reliabilityRecomputed: number;
+  windowCapHit: boolean;
 }> {
   const { sb, userId, accessToken } = args;
   const now = new Date();
@@ -1336,13 +1348,22 @@ export async function reconcileAcuityForConnection(args: {
   const minDate = fmt(new Date(now.getTime() - RECONCILE_DAYS_BACK * 86400000));
   const maxDate = fmt(new Date(now.getTime() + RECONCILE_DAYS_FORWARD * 86400000));
 
+  // Date-window paged pull (not a raw max:1000). This is the calendar-trust
+  // KEYSTONE cron — a high-volume spa silently capped at 1000 would mean the
+  // self-healing reconcile sweep quietly stops covering its own window.
   const [active, canceled] = await Promise.all([
-    listAcuityAppointments(accessToken, { minDate, maxDate, max: 1000, canceled: false }),
-    listAcuityAppointments(accessToken, { minDate, maxDate, max: 1000, canceled: true }),
+    listAllAcuityAppointmentsInWindow(accessToken, { minDate, maxDate, canceled: false }),
+    listAllAcuityAppointmentsInWindow(accessToken, { minDate, maxDate, canceled: true }),
   ]);
-  const all = [...active, ...canceled];
+  const windowCapHit = active.hitFloor || canceled.hitFloor;
+  if (windowCapHit) {
+    console.warn(
+      `[acuity-reconcile] single-day cap hit for user ${userId} — reconcile window may be partial (>1000 appts in one day).`,
+    );
+  }
+  const all = [...active.appointments, ...canceled.appointments];
   if (all.length === 0) {
-    return { pulled: 0, changed: 0, rescued: 0, reliabilityRecomputed: 0 };
+    return { pulled: 0, changed: 0, rescued: 0, reliabilityRecomputed: 0, windowCapHit };
   }
 
   // Bulk-load the stored state for the pulled external ids (chunked .in()),
@@ -1451,7 +1472,7 @@ export async function reconcileAcuityForConnection(args: {
     .eq("user_id", userId)
     .eq("platform", "acuity");
 
-  return { pulled: all.length, changed, rescued, reliabilityRecomputed };
+  return { pulled: all.length, changed, rescued, reliabilityRecomputed, windowCapHit };
 }
 
 /**
@@ -1521,15 +1542,15 @@ export async function wideRelinkAcuityProviders(args: {
   const minDate = fmt(new Date(now.getTime() - daysBack * 86400000));
   const maxDate = fmt(new Date(now.getTime() + daysForward * 86400000));
 
-  const API_MAX = 1000;
+  // Date-window paged pull — the wide window (730d back / 365d fwd) is exactly
+  // where a deep-history spa exceeds one page, so this PAGES it rather than just
+  // flagging the cap. `apiCapHit` now means the unrecoverable single-day floor.
   const [active, canceled] = await Promise.all([
-    listAcuityAppointments(accessToken, { minDate, maxDate, max: API_MAX, canceled: false }),
-    listAcuityAppointments(accessToken, { minDate, maxDate, max: API_MAX, canceled: true }),
+    listAllAcuityAppointmentsInWindow(accessToken, { minDate, maxDate, canceled: false }),
+    listAllAcuityAppointmentsInWindow(accessToken, { minDate, maxDate, canceled: true }),
   ]);
-  // Acuity caps a single pull at `max`; hitting it means the window holds more
-  // than one page and the relink is partial — surface it, never silently truncate.
-  const apiCapHit = active.length >= API_MAX || canceled.length >= API_MAX;
-  const all = [...active, ...canceled];
+  const apiCapHit = active.hitFloor || canceled.hitFloor;
+  const all = [...active.appointments, ...canceled.appointments];
   if (all.length === 0) {
     return { pulled: 0, resolvable: 0, relinked: 0, apiCapHit };
   }

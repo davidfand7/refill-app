@@ -7,9 +7,11 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "deploy": "node scripts/tsc-tripwire.mjs && vite build && wrangler deploy",
+    "deploy": "node scripts/tsc-tripwire.mjs && node scripts/truncation-tripwire.mjs && vite build && wrangler deploy",
     "tsc:check": "node scripts/tsc-tripwire.mjs",
     "tsc:baseline": "node scripts/tsc-tripwire.mjs --update",
+    "truncation:check": "node scripts/truncation-tripwire.mjs",
+    "truncation:baseline": "node scripts/truncation-tripwire.mjs --update",
     "build-log": "bun run scripts/build-history.ts"
   },
   "dependencies": {

@@ -68,6 +68,7 @@ export const Route = createFileRoute("/api/cron/acuity-reconcile")({
         let reliabilityRecomputed = 0;
         let reconciled = 0;
         let failed = 0;
+        let windowCapHit = 0;
         for (const conn of connections) {
           if (!conn.access_token) continue;
           try {
@@ -81,6 +82,7 @@ export const Route = createFileRoute("/api/cron/acuity-reconcile")({
             changed += r.changed;
             rescued += r.rescued;
             reliabilityRecomputed += r.reliabilityRecomputed;
+            if (r.windowCapHit) windowCapHit++;
           } catch (e) {
             failed++;
             console.error(
@@ -95,6 +97,7 @@ export const Route = createFileRoute("/api/cron/acuity-reconcile")({
           connections: connections.length,
           reconciled,
           failed,
+          windowCapHit,
           pulled,
           changed,
           rescued,
