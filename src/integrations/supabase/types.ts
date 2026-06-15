@@ -35,6 +35,8 @@ export type Database = {
       billing_fee_rules: {
         Row: {
           amount: number
+          cap_period: string | null
+          cap_usd: number | null
           enabled: boolean
           id: string
           metric_key: string
@@ -44,6 +46,8 @@ export type Database = {
         }
         Insert: {
           amount?: number
+          cap_period?: string | null
+          cap_usd?: number | null
           enabled?: boolean
           id?: string
           metric_key: string
@@ -53,6 +57,8 @@ export type Database = {
         }
         Update: {
           amount?: number
+          cap_period?: string | null
+          cap_usd?: number | null
           enabled?: boolean
           id?: string
           metric_key?: string

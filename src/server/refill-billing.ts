@@ -56,6 +56,7 @@ import {
   loadEffectiveFeeConfig,
   aggregateMetricsForTenant,
   computeInvoiceTotal,
+  loadPriorChargedThisYear,
   type LedgerLine,
 } from "@/server/billing-fee-core";
 
@@ -468,7 +469,10 @@ export async function generateMonthlyInvoiceForTenant(args: {
   // rate-source; refill_pricing_plans is kept only for historical snapshots.
   const cfg = await loadEffectiveFeeConfig(sb, tenantId);
   const agg = await aggregateMetricsForTenant({ sb, tenantId, periodStart, periodEnd });
-  const { totalDueUsd, lines } = computeInvoiceTotal(cfg, agg);
+  // Annual caps need YTD-already-charged for this metric (from closed invoices
+  // earlier this calendar year). Strictly-before periodStart → idempotent.
+  const priorChargedThisYearByMetric = await loadPriorChargedThisYear(sb, tenantId, periodStart);
+  const { totalDueUsd, lines } = computeInvoiceTotal(cfg, agg, { priorChargedThisYearByMetric });
 
   // Back-compat rollups for the legacy invoice columns + the metric-charge
   // subtotal (total minus the monthly base).
@@ -814,7 +818,8 @@ export const getInvoicePreview = createServerFn({ method: "POST" })
     // so the dashboard preview can never drift from what we actually bill.
     const cfg = await loadEffectiveFeeConfig(sb, tenantId);
     const agg = await aggregateMetricsForTenant({ sb, tenantId, periodStart, periodEnd });
-    const { totalDueUsd, lines } = computeInvoiceTotal(cfg, agg);
+    const priorChargedThisYearByMetric = await loadPriorChargedThisYear(sb, tenantId, periodStart);
+    const { totalDueUsd, lines } = computeInvoiceTotal(cfg, agg, { priorChargedThisYearByMetric });
     let mtdRecoveredUsd = 0;
     let mtdRecoveredCount = 0;
     for (const a of agg.values()) {

@@ -42,6 +42,7 @@ import {
   type BillingLedger,
 } from "@/server/refill-fee-rules.functions";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
+import { describeCap, type CapPeriod } from "@/lib/billing-metrics";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/billing/")({
@@ -434,7 +435,7 @@ function ScoreboardCard({ ledger }: { ledger: BillingLedger | null }) {
                   key={l.metricKey}
                   label={`${l.label} · ${l.count} ${l.count === 1 ? "win" : "wins"}${
                     l.mode === "percent" ? ` (${money(l.revenueUsd)})` : ""
-                  }`}
+                  }${l.capped ? ` · ${describeCap(l.capUsd, l.capPeriod) ?? "capped"} reached` : ""}`}
                   value={money(l.charge)}
                 />
               ))}
@@ -530,7 +531,8 @@ function FeeRulesPanel({
       <p className="text-xs text-ink-soft mb-3 max-w-2xl">
         Free by default. Set a fee per win for each thing Refill does for you — a flat
         dollar amount, or a percentage of the revenue that win created. Turn any metric
-        off and it never bills.
+        off and it never bills — or cap one so it never charges more than a set amount
+        per year, no matter how many wins it creates.
       </p>
 
       <div className="rounded-xl border border-border bg-card divide-y divide-border">
@@ -587,18 +589,38 @@ function FeeRuleRow({
   // In percent mode the stored amount is a fraction (0.12); show it as 12.
   const display = rule.mode === "percent" ? rule.amount * 100 : rule.amount;
   const [amountInput, setAmountInput] = useState(String(display));
+  const [capInput, setCapInput] = useState(rule.capUsd == null ? "" : String(rule.capUsd));
   const [saving, setSaving] = useState(false);
 
-  async function save(next: { mode?: "flat" | "percent"; amount?: number; enabled?: boolean }) {
+  async function save(next: {
+    mode?: "flat" | "percent";
+    amount?: number;
+    enabled?: boolean;
+    // capUsd: undefined = keep current, null = clear, number = set. The upsert
+    // replaces the row, so every save MUST carry the cap or it would be wiped.
+    capUsd?: number | null;
+    capPeriod?: CapPeriod;
+  }) {
     const mode = next.mode ?? rule.mode;
     let amount = next.amount ?? (mode === "percent" ? rule.amount * 100 : rule.amount);
     // Convert the displayed value back to storage units.
     amount = mode === "percent" ? +(amount / 100).toFixed(4) : +amount.toFixed(2);
     const enabled = next.enabled ?? rule.enabled;
+    const capUsd = next.capUsd !== undefined ? next.capUsd : rule.capUsd;
+    const capPeriod = next.capPeriod ?? rule.capPeriod ?? "annual";
     setSaving(true);
     try {
       await updateFeeRule({
-        data: { accessToken, viewAsUserId, metricKey: rule.metricKey, mode, amount, enabled },
+        data: {
+          accessToken,
+          viewAsUserId,
+          metricKey: rule.metricKey,
+          mode,
+          amount,
+          enabled,
+          capUsd,
+          capPeriod,
+        },
       });
       onChanged();
     } catch (e) {
@@ -608,64 +630,125 @@ function FeeRuleRow({
     }
   }
 
+  // Commit the cap input: empty / 0 / invalid → clear the cap; a positive
+  // number → set an annual cap (the v1 surface).
+  function commitCap() {
+    const trimmed = capInput.trim();
+    if (trimmed === "") {
+      if (rule.capUsd != null) void save({ capUsd: null });
+      return;
+    }
+    const v = Number(trimmed);
+    if (!Number.isFinite(v) || v <= 0) {
+      if (rule.capUsd != null) void save({ capUsd: null });
+      setCapInput("");
+      return;
+    }
+    const rounded = +v.toFixed(2);
+    if (rounded === rule.capUsd) return;
+    void save({ capUsd: rounded, capPeriod: "annual" });
+  }
+
+  const capReached = rule.capUsd != null && rule.ytdBilledUsd >= rule.capUsd - 1e-9;
+
   return (
-    <div className="flex items-center justify-between gap-3 px-4 py-3">
-      <div className="min-w-0">
-        <div className="text-sm font-medium text-foreground flex items-center gap-2">
-          {rule.label}
-          {!rule.live && (
-            <span className="inline-flex items-center rounded-full bg-muted/50 text-ink-soft px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
-              Coming soon
-            </span>
-          )}
+    <div className="px-4 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-medium text-foreground flex items-center gap-2">
+            {rule.label}
+            {!rule.live && (
+              <span className="inline-flex items-center rounded-full bg-muted/50 text-ink-soft px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
+                Coming soon
+              </span>
+            )}
+          </div>
+          <div className="text-[11px] text-ink-soft">{rule.description}</div>
         </div>
-        <div className="text-[11px] text-ink-soft">{rule.description}</div>
+        <div className="flex items-center gap-2 shrink-0">
+          <select
+            value={rule.mode}
+            onChange={(e) => void save({ mode: e.target.value as "flat" | "percent" })}
+            disabled={saving}
+            className="rounded border border-border bg-background px-1.5 py-1.5 text-[12px] focus:outline-none focus:ring-2 focus:ring-emerald/30"
+          >
+            <option value="flat">$ / win</option>
+            <option value="percent">% of revenue</option>
+          </select>
+          <div className="flex items-center gap-1">
+            {rule.mode === "flat" && <span className="text-ink-soft text-sm">$</span>}
+            <input
+              type="number"
+              min={0}
+              step={rule.mode === "percent" ? "0.5" : "1"}
+              value={amountInput}
+              onChange={(e) => setAmountInput(e.target.value)}
+              onBlur={() => {
+                const v = Number(amountInput);
+                if (Number.isFinite(v) && v >= 0) void save({ amount: v });
+              }}
+              className="w-20 rounded border border-border bg-background px-2 py-1.5 text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald/30"
+            />
+            {rule.mode === "percent" && <span className="text-ink-soft text-sm">%</span>}
+          </div>
+          <button
+            type="button"
+            onClick={() => void save({ enabled: !rule.enabled })}
+            disabled={saving}
+            aria-pressed={rule.enabled}
+            className={cn(
+              "relative h-5 w-9 rounded-full transition shrink-0",
+              rule.enabled ? "bg-emerald" : "bg-muted",
+            )}
+            title={rule.enabled ? "Billing on" : "Billing off"}
+          >
+            <span
+              className={cn(
+                "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all",
+                rule.enabled ? "left-[18px]" : "left-0.5",
+              )}
+            />
+          </button>
+          {saving && <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-soft" />}
+        </div>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <select
-          value={rule.mode}
-          onChange={(e) => void save({ mode: e.target.value as "flat" | "percent" })}
+
+      {/* Per-feature annual cap (opt-in) + live real-data preview. */}
+      <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]">
+        <span className="text-ink-soft">Cap this feature at</span>
+        <span className="text-ink-soft">$</span>
+        <input
+          type="number"
+          min={0}
+          step="50"
+          placeholder="no cap"
+          value={capInput}
+          onChange={(e) => setCapInput(e.target.value)}
+          onBlur={commitCap}
           disabled={saving}
-          className="rounded border border-border bg-background px-1.5 py-1.5 text-[12px] focus:outline-none focus:ring-2 focus:ring-emerald/30"
-        >
-          <option value="flat">$ / win</option>
-          <option value="percent">% of revenue</option>
-        </select>
-        <div className="flex items-center gap-1">
-          {rule.mode === "flat" && <span className="text-ink-soft text-sm">$</span>}
-          <input
-            type="number"
-            min={0}
-            step={rule.mode === "percent" ? "0.5" : "1"}
-            value={amountInput}
-            onChange={(e) => setAmountInput(e.target.value)}
-            onBlur={() => {
-              const v = Number(amountInput);
-              if (Number.isFinite(v) && v >= 0) void save({ amount: v });
-            }}
-            className="w-20 rounded border border-border bg-background px-2 py-1.5 text-sm text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald/30"
-          />
-          {rule.mode === "percent" && <span className="text-ink-soft text-sm">%</span>}
-        </div>
-        <button
-          type="button"
-          onClick={() => void save({ enabled: !rule.enabled })}
-          disabled={saving}
-          aria-pressed={rule.enabled}
-          className={cn(
-            "relative h-5 w-9 rounded-full transition shrink-0",
-            rule.enabled ? "bg-emerald" : "bg-muted",
-          )}
-          title={rule.enabled ? "Billing on" : "Billing off"}
-        >
+          className="w-24 rounded border border-border bg-background px-2 py-1 text-[12px] text-right tabular-nums focus:outline-none focus:ring-2 focus:ring-emerald/30"
+        />
+        <span className="text-ink-soft">/ year</span>
+
+        {rule.capUsd != null ? (
           <span
             className={cn(
-              "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all",
-              rule.enabled ? "left-[18px]" : "left-0.5",
+              "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10.5px] font-medium",
+              capReached ? "bg-emerald-soft text-emerald" : "bg-muted/50 text-ink-soft",
             )}
-          />
-        </button>
-        {saving && <Loader2 className="h-3.5 w-3.5 animate-spin text-ink-soft" />}
+            title={describeCap(rule.capUsd, rule.capPeriod) ?? undefined}
+          >
+            {capReached
+              ? `Cap reached — free for the rest of ${new Date().getUTCFullYear()}`
+              : `${money(rule.ytdBilledUsd)} of ${money(rule.capUsd)} used this year`}
+          </span>
+        ) : (
+          rule.last90BilledUsd > 0 && (
+            <span className="text-ink-soft">
+              · billed {money(rule.last90BilledUsd)} over your last 90 days
+            </span>
+          )
+        )}
       </div>
     </div>
   );

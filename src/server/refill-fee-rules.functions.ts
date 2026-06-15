@@ -31,6 +31,8 @@ import {
   loadEffectiveFeeConfig,
   aggregateMetricsForTenant,
   computeInvoiceTotal,
+  loadPriorChargedThisYear,
+  applyCap,
   type LedgerLine,
 } from "@/server/billing-fee-core";
 import {
@@ -38,6 +40,7 @@ import {
   DEFAULT_FEE_MODE,
   priceMetric,
   type BillableMetricKey,
+  type CapPeriod,
   type FeeMode,
 } from "@/lib/billing-metrics";
 
@@ -62,6 +65,15 @@ export type FeeRuleView = {
   mode: FeeMode;
   amount: number;
   enabled: boolean;
+  /** Per-feature cap (null = uncapped). The v1 surface only sets annual. */
+  capUsd: number | null;
+  capPeriod: CapPeriod | null;
+  /** Live preview, real data: charged for THIS metric so far this calendar
+   *  year (closed invoices + the open month, capped) — "how close to the cap." */
+  ytdBilledUsd: number;
+  /** Live preview, real data: this metric's nominal (uncapped) charges over
+   *  the trailing 90 days — "would a cap of $X bite?" */
+  last90BilledUsd: number;
 };
 
 export type BillingSettings = {
@@ -111,10 +123,38 @@ export const getBillingSettings = createServerFn({ method: "POST" })
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
     const cfg = await loadEffectiveFeeConfig(sb, tenantId);
+
+    // ── Live cap-preview figures (real data) ────────────────────────────────
+    // YTD billed per metric = closed invoices this year + the open month's
+    // capped charge. 90-day billed = nominal (uncapped) charges over the
+    // trailing window — the "would a cap of $X bite?" gauge. Both reuse the
+    // exact billing math so the preview can never drift from the invoice.
+    const now = new Date();
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    const monthEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
+    const window90Start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+
+    const [priorYtd, openAgg, agg90] = await Promise.all([
+      loadPriorChargedThisYear(sb, tenantId, monthStart),
+      aggregateMetricsForTenant({ sb, tenantId, periodStart: monthStart, periodEnd: monthEnd }),
+      aggregateMetricsForTenant({ sb, tenantId, periodStart: window90Start, periodEnd: now }),
+    ]);
+    const { lines: openLines } = computeInvoiceTotal(cfg, openAgg, {
+      priorChargedThisYearByMetric: priorYtd,
+    });
+    const openChargeByMetric = new Map(openLines.map((l) => [l.metricKey as string, l.charge]));
+
     return {
       monthlyBaseUsd: cfg.monthlyBaseUsd,
       rules: BILLABLE_METRICS.map((m) => {
         const r = cfg.rules.get(m.key)!;
+        const a90 = agg90.get(m.key) ?? { count: 0, revenueUsd: 0 };
+        const last90BilledUsd = r.enabled
+          ? priceMetric(r.mode, r.amount, a90.count, +a90.revenueUsd.toFixed(2))
+          : 0;
+        const ytdBilledUsd = +(
+          (priorYtd.get(m.key) ?? 0) + (openChargeByMetric.get(m.key) ?? 0)
+        ).toFixed(2);
         return {
           metricKey: m.key,
           label: m.label,
@@ -123,6 +163,10 @@ export const getBillingSettings = createServerFn({ method: "POST" })
           mode: r.mode,
           amount: r.amount,
           enabled: r.enabled,
+          capUsd: r.capUsd,
+          capPeriod: r.capPeriod,
+          ytdBilledUsd,
+          last90BilledUsd,
         };
       }),
     };
@@ -168,6 +212,10 @@ export const updateFeeRule = createServerFn({ method: "POST" })
         mode: z.enum(["flat", "percent"]),
         amount: z.number().min(0).max(100000),
         enabled: z.boolean(),
+        // Per-feature cap. null = uncapped (the default). Sending a number
+        // with capPeriod sets the cap; null clears it.
+        capUsd: z.number().min(0).max(10000000).nullable().optional(),
+        capPeriod: z.enum(["annual", "monthly"]).nullable().optional(),
       })
       .parse(i),
   )
@@ -178,6 +226,10 @@ export const updateFeeRule = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    // Normalize: a cap exists only when an amount is set. Clearing the amount
+    // (or sending null) also clears the period, so the two never disagree.
+    const capUsd = data.capUsd ?? null;
+    const capPeriod = capUsd == null ? null : (data.capPeriod ?? "annual");
     const { error } = await sb.from("billing_fee_rules").upsert(
       {
         tenant_id: tenantId,
@@ -185,6 +237,8 @@ export const updateFeeRule = createServerFn({ method: "POST" })
         mode: data.mode,
         amount: data.amount,
         enabled: data.enabled,
+        cap_usd: capUsd,
+        cap_period: capPeriod,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "tenant_id,metric_key" },
@@ -212,7 +266,25 @@ export const getBillingLedger = createServerFn({ method: "POST" })
 
     const cfg = await loadEffectiveFeeConfig(sb, tenantId);
     const agg = await aggregateMetricsForTenant({ sb, tenantId, periodStart, periodEnd });
-    const { totalDueUsd, lines } = computeInvoiceTotal(cfg, agg);
+    const priorYtd = await loadPriorChargedThisYear(sb, tenantId, periodStart);
+    const { totalDueUsd, lines } = computeInvoiceTotal(cfg, agg, {
+      priorChargedThisYearByMetric: priorYtd,
+    });
+
+    // Headroom each capped metric has left for THIS open period — so the
+    // per-win charges below consume the cap earliest-first and the win list
+    // always sums to the capped line total (no audit mismatch). Uncapped
+    // metrics get Infinity (no ceiling).
+    const capRemaining = new Map<string, number>();
+    for (const m of BILLABLE_METRICS) {
+      const r = cfg.rules.get(m.key)!;
+      if (r.capUsd == null) {
+        capRemaining.set(m.key, Infinity);
+      } else {
+        const prior = r.capPeriod === "annual" ? (priorYtd.get(m.key) ?? 0) : 0;
+        capRemaining.set(m.key, Math.max(0, +(r.capUsd - prior).toFixed(2)));
+      }
+    }
 
     // Recent individual wins for the counterfactual ledger.
     const { data: memberships } = await sb
@@ -266,11 +338,26 @@ export const getBillingLedger = createServerFn({ method: "POST" })
         const { data: nodes } = await sb.from("knowledge_nodes").select("id, title").in("id", slice);
         for (const n of nodes ?? []) nameByNode.set(n.id, n.title ?? "");
       }
+      // Assign each win its charge, consuming any cap earliest-first (evs is
+      // verified_at DESC; walk a chronological copy so the OLDEST wins fill the
+      // cap and later ones go free once it's hit — mirrors how the month bills).
+      const chargeByWinId = new Map<string, number>();
+      const remaining = new Map(capRemaining);
+      for (const e of [...evs].sort((a, b) => (a.verified_at ?? "").localeCompare(b.verified_at ?? ""))) {
+        const key = e.metric_key || "slot_fill";
+        const rule =
+          cfg.rules.get(key) ??
+          { mode: DEFAULT_FEE_MODE, amount: 0, enabled: false, capUsd: null, capPeriod: null };
+        const rev = Number(e.attributed_revenue_usd ?? 0);
+        const nominal = rule.enabled ? priceMetric(rule.mode, rule.amount, 1, rev) : 0;
+        const rem = remaining.get(key) ?? Infinity;
+        const charged = rem === Infinity ? nominal : +Math.min(nominal, rem).toFixed(2);
+        if (rem !== Infinity) remaining.set(key, +(rem - charged).toFixed(2));
+        chargeByWinId.set(e.id, charged);
+      }
       for (const e of evs) {
         const key = e.metric_key || "slot_fill";
-        const rule = cfg.rules.get(key) ?? { mode: DEFAULT_FEE_MODE, amount: 0, enabled: false };
         const rev = Number(e.attributed_revenue_usd ?? 0);
-        const charge = rule.enabled ? priceMetric(rule.mode, rule.amount, 1, rev) : 0;
         wins.push({
           id: e.id,
           date: e.verified_at ?? "",
@@ -278,7 +365,7 @@ export const getBillingLedger = createServerFn({ method: "POST" })
           metricKey: key,
           label: BILLABLE_METRICS.find((m) => m.key === key)?.label ?? key,
           revenueUsd: +rev.toFixed(2),
-          charge,
+          charge: chargeByWinId.get(e.id) ?? 0,
         });
       }
     }

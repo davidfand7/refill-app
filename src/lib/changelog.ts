@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.45.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.45.0 &mdash; Billing: cap any feature so it never bills more than you choose per year.</strong> The pricing twin of v2.44.0&rsquo;s grace window. Metered &ldquo;$5 per win&rdquo; is fair &mdash; you only pay on value created &mdash; but some owners want a known ceiling. So in <em>Settings → Billing → How you&rsquo;re billed</em>, every metric now has an optional <strong>&ldquo;Cap this feature at $___ / year.&rdquo;</strong> Set one and that feature keeps working at full strength, but once its charges reach your cap for the calendar year, it bills <strong>$0</strong> for the rest of the year &mdash; it never flips to a flat subscription and never over-charges you for a feature you barely use (the manufacturer-style misalignment we&rsquo;re built against). It&rsquo;s pure progressive disclosure: <strong>default is no cap</strong>, so nothing changes unless you set one. And it&rsquo;s legible &mdash; each metric shows, from your real data, how much it&rsquo;s billed so far this year (vs the cap) and what it billed over your last 90 days, so you can size a cap before you commit. The cap is enforced everywhere the same way &mdash; the monthly invoice, the live scoreboard, and the dashboard preview &mdash; and individual wins reconcile to the capped total so the audit CSV always adds up. <strong>New</strong>: <code>cap_usd</code> + <code>cap_period</code> on <code>billing_fee_rules</code>, an <code>applyCap</code> primitive threaded through <code>computeInvoiceTotal</code>, and annual headroom derived from prior invoices (no new ledger table). <strong>Touched</strong>: <code>billing-fee-core</code>, <code>refill-billing</code>, <code>refill-fee-rules.functions</code>, the billing settings page. One small migration (two new nullable columns).",
+    ],
+  },
+  {
     version: "v2.44.0",
     date: "June 2026",
     items: [

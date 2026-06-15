@@ -23,6 +23,14 @@ export type BillableMetricKey =
 
 export type FeeMode = "flat" | "percent";
 
+/**
+ * Per-feature price-cap period. A cap bounds how much one metric can bill
+ * before it stops charging — 'annual' resets each calendar year (the v1
+ * surface), 'monthly' each calendar month (carried for the future). null
+ * cap = no cap = the default "Free + $5/win" with zero new decisions.
+ */
+export type CapPeriod = "annual" | "monthly";
+
 export type BillableMetricDef = {
   key: BillableMetricKey;
   label: string;
@@ -113,4 +121,11 @@ export function priceMetric(
 export function describeRate(mode: FeeMode | string, amount: number): string {
   if (mode === "percent") return `${+(amount * 100).toFixed(2)}% of revenue`;
   return `$${amount.toFixed(2)} / win`;
+}
+
+/** Human-readable cap, e.g. "max $250 / year". null = uncapped. */
+export function describeCap(capUsd: number | null, capPeriod: CapPeriod | null): string | null {
+  if (capUsd == null || capUsd < 0) return null;
+  const per = capPeriod === "monthly" ? "month" : "year";
+  return `max $${capUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })} / ${per}`;
 }
