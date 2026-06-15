@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.50.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.50.0 &mdash; Reliability scoring: your no-show rule now sticks, everywhere, consistently.</strong> If you&rsquo;ve turned on <em>&ldquo;apply the no-show rule to reliability scoring&rdquo;</em> (so a late cancel counts as a no-show when scoring a patient), two rough edges are now smoothed. <strong>(1) The nightly recompute no longer reverts it.</strong> Live status changes already scored late cancels correctly, but the once-a-night full recompute used a faster shortcut that couldn&rsquo;t see your notice-window rule &mdash; so it quietly overwrote those scores with raw ones each night. Now, for spas that opted in, the nightly pass uses the exact same rule-aware calculation as the live path, so a patient&rsquo;s score means the same thing at 2pm and at 2am. <strong>(2) No double penalty on grace credits.</strong> When a late cancel is treated as a no-show, it no longer <em>also</em> spends one of the patient&rsquo;s grace credits &mdash; grace forgives fair-notice cancellations only, and a late cancel takes the no-show penalty instead of forgiveness. Spas that haven&rsquo;t opted in see no change at all. <strong>New</strong>: rule-aware bulk recompute path (delegates to the canonical per-patient calculation so there&rsquo;s one source of truth), grace credits computed from honored cancels only. No migration.",
+    ],
+  },
+  {
     version: "v2.49.0",
     date: "June 2026",
     items: [

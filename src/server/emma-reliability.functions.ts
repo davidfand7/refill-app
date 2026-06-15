@@ -267,6 +267,7 @@ export async function recomputeReliabilityForPatient(args: {
   let noShows6mo = 0;
   let totalVisits = 0;
   let cancellations6mo = 0;
+  let graceCancellations6mo = 0;
   let noShowsLifetime = 0;
   let cancellationsLifetime = 0;
   let lastActivityAt: string | null = null;
@@ -293,7 +294,15 @@ export async function recomputeReliabilityForPatient(args: {
     if (a.status === "cancelled") cancellationsLifetime++;
     if (a.scheduled_at >= windowStart) {
       if (countsAsNoShow) noShows6mo++;
-      if (a.status === "cancelled") cancellations6mo++;
+      if (a.status === "cancelled") {
+        cancellations6mo++;
+        // v2.50.0: grace forgives FAIR-NOTICE cancels only. A late cancel that
+        // the rule reclassifies as a no-show (countsAsNoShow) is penalized on
+        // the tier and does NOT also consume a grace credit — no double jeopardy.
+        // When the rule is off, countsAsNoShow is never true for a cancel, so
+        // this is byte-identical to the old raw cancellation count.
+        if (!countsAsNoShow) graceCancellations6mo++;
+      }
     }
     const activity = a.updated_at ?? a.scheduled_at;
     if (activity && (!lastActivityAt || activity > lastActivityAt)) {
@@ -326,7 +335,7 @@ export async function recomputeReliabilityForPatient(args: {
         cancellations_6mo: cancellations6mo,
         no_shows_lifetime: noShowsLifetime,
         cancellations_lifetime: cancellationsLifetime,
-        grace_credits_used: cancellations6mo, // For v362, grace = cancellation count in window
+        grace_credits_used: graceCancellations6mo, // v2.50.0: honored cancels only when rule on; raw count otherwise
         last_activity_at: lastActivityAt,
         recomputed_at: nowIso,
       },
@@ -408,6 +417,26 @@ export async function recomputeReliabilityForUser(args: {
   completedAt: string;
 }> {
   const { sb, userId, trigger = "manual" } = args;
+
+  // v2.50.0: when the spa has opted the no-show rule INTO reliability scoring,
+  // the raw-status SQL RPC (Step 1) would under-count — a late cancel must also
+  // count as a no-show, and a grace credit must NOT be spent on it. The RPC
+  // can't see the notice-window rule, so the nightly sweep would silently
+  // CLOBBER the rule-aware counts the per-status trigger path writes. To keep
+  // ONE source of truth (the canonical classifier) and guarantee the sweep
+  // agrees with the trigger path byte-for-byte, opted-in spas recompute via
+  // recomputeReliabilityForPatient per patient. The default path (rule off)
+  // keeps the fast RPC below, untouched — zero behavior change.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const looseRule = sb as unknown as { from(t: string): any };
+  const { data: rulePolicy } = await looseRule
+    .from("emma_noshow_policies")
+    .select("noshow_rule_applies_reliability")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (rulePolicy?.noshow_rule_applies_reliability === true) {
+    return recomputeReliabilityRuleAware({ sb, userId, trigger });
+  }
 
   // Step 0 (v1.26.11): snapshot patient_node_ids that ALREADY have a
   // reliability row before the RPC runs. Anything NOT in this set is being
@@ -589,6 +618,61 @@ export async function recomputeReliabilityForUser(args: {
     transitions: alertRows.length,
     completedAt,
   };
+}
+
+// v2.50.0 — rule-aware bulk recompute for spas that opted the no-show rule into
+// reliability scoring. Delegates to recomputeReliabilityForPatient (the same
+// rule-aware path the status trigger uses) for every patient, so the nightly
+// sweep produces identical counts/tier/grace to the live trigger — no clobber,
+// one source of truth. recomputeReliabilityForPatient handles its own
+// transition alerts and naturally suppresses first-time assignments (prior tier
+// is genuinely null for a never-tiered patient), so this path sidesteps the
+// RPC path's fake-promotion hazard entirely. Sequential by design: per-patient
+// recompute is several DB round-trips each, and correctness beats wall-clock on
+// a nightly cron that only opted-in spas take.
+async function recomputeReliabilityRuleAware(args: {
+  sb: SupabaseAdmin;
+  userId: string;
+  trigger: "cron" | "manual";
+}): Promise<{ patientsRecomputed: number; transitions: number; completedAt: string }> {
+  const { sb, userId, trigger } = args;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const looseSb = sb as unknown as { from(t: string): any };
+  const { data: patientRows } = await looseSb
+    .from("emma_appointments")
+    .select("patient_node_id")
+    .eq("user_id", userId)
+    .not("patient_node_id", "is", null);
+  const ids = [
+    ...new Set(
+      ((patientRows ?? []) as Array<{ patient_node_id: string | null }>)
+        .map((r) => r.patient_node_id)
+        .filter((x): x is string => Boolean(x)),
+    ),
+  ];
+
+  let transitions = 0;
+  for (const patientNodeId of ids) {
+    try {
+      const r = await recomputeReliabilityForPatient({ sb, userId, patientNodeId });
+      if (r.transitioned) transitions++;
+    } catch (e) {
+      console.error(
+        "[reliability-sweep] rule-aware per-patient recompute failed:",
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+
+  const completedAt = new Date().toISOString();
+  await logReliabilityRun(sb, {
+    userId,
+    completedAt,
+    patientsRecomputed: ids.length,
+    transitions,
+    trigger,
+  });
+  return { patientsRecomputed: ids.length, transitions, completedAt };
 }
 
 // v1.26.10 — best-effort insert into the runs log. A failure here is
