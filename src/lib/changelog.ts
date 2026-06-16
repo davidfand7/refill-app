@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.58.2",
+    date: "June 2026",
+    items: [
+      "<strong>v2.58.2 &mdash; Rotate your local agent's secret in one click.</strong> The Local delivery agent has a private secret the Mac uses to check in; if it ever leaks (caught in a screenshot, say), you can now hit <strong>Rotate</strong> on the card to generate a fresh one &mdash; the old value stops working instantly, and you re-run the install command on the Mac. The new secret is shown only in the app, so it never has to travel through email or chat. <strong>Touched</strong>: Connection health page + a rotate server function. No migration.",
+    ],
+  },
+  {
     version: "v2.58.1",
     date: "June 2026",
     items: [

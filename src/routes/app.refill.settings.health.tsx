@@ -43,6 +43,7 @@ import {
   getConnectionHealthFn,
   getLocalAgentFn,
   provisionLocalAgentFn,
+  rotateLocalAgentSecretFn,
   type ConnectionHealthReport,
   type ConnectionHealthItem,
   type LocalAgentInfo,
@@ -284,6 +285,32 @@ function LocalAgentSection({
     }
   }, [accessToken, viewAsUserId, onChanged]);
 
+  const rotate = useCallback(async () => {
+    if (!accessToken) return;
+    if (
+      !window.confirm(
+        "Generate a new secret? The current one stops working immediately — you'll need to re-run the install command on the relay Mac.",
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      const r = await rotateLocalAgentSecretFn({ data: { accessToken, viewAsUserId } });
+      setInfo(r);
+      setRevealed(true);
+      onChanged();
+      toast.success(
+        "New secret generated. Re-run the install command on the relay Mac — the old secret is now dead.",
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Couldn't rotate the secret.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [accessToken, viewAsUserId, onChanged]);
+
   const copy = useCallback((text: string, which: "secret" | "install") => {
     void navigator.clipboard.writeText(text).then(() => {
       setCopied(which);
@@ -382,12 +409,23 @@ function LocalAgentSection({
                     {copied === "secret" ? "Copied" : "Copy"}
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => void rotate()}
+                  disabled={busy}
+                  className="inline-flex items-center gap-1 text-ink-faint hover:text-ink disabled:opacity-60"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  Rotate
+                </button>
               </div>
               <p className="text-[11px] text-ink-faint leading-relaxed">
                 Keep this secret private — it's the key the Mac uses to check in.
                 The status card above turns{" "}
                 <span className="font-semibold">Live</span> within a few minutes
-                of running the command.
+                of running the command. If it ever leaks (e.g. caught in a
+                screenshot), <span className="font-semibold">Rotate</span> it and
+                re-run the installer.
               </p>
             </div>
           )}

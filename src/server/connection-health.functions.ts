@@ -1211,3 +1211,36 @@ export const provisionLocalAgentFn = createServerFn({ method: "POST" })
       installCommand: buildInstallCommand(secret),
     };
   });
+
+/** UI: rotate the spa's agent secret. The OLD secret stops working immediately
+ *  (any pinger still using it 401s until re-installed), so this returns the new
+ *  install command to re-run on the relay Mac. Use after a leak (e.g. a secret
+ *  caught in a screenshot). The new value is returned to the IN-APP card only —
+ *  it never needs to travel through chat/support. */
+export const rotateLocalAgentSecretFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => localAgentSchema.parse(raw))
+  .handler(async ({ data }): Promise<LocalAgentInfo> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const endpoint = `${PUBLIC_ORIGIN}/api/agent/heartbeat`;
+    const secret = genAgentSecret();
+    const { data: row, error } = await localAgentTbl(sb)
+      .update({ secret, updated_at: new Date().toISOString() })
+      .eq("user_id", effectiveUserId)
+      .select("secret, label, last_seen_at")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!row) throw new Error("No local agent to rotate — set one up first.");
+    const r = row as { secret: string; label: string | null; last_seen_at: string | null };
+    return {
+      provisioned: true,
+      secret: r.secret,
+      label: r.label,
+      lastSeenAtMs: parseTs(r.last_seen_at),
+      endpoint,
+      installCommand: buildInstallCommand(r.secret),
+    };
+  });
