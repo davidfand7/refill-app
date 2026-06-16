@@ -145,6 +145,43 @@ export function anchorApptCards(
   return { topOf, heightOf };
 }
 
+// ── Treatment color-coding (v2.56.6, matches Acuity's per-type coloring) ──────
+// Soft pastel fills so a packed day is scannable by treatment at a glance.
+// Common med-spa treatments are PINNED to a sensible hue; anything else gets a
+// stable color hashed from its name (same treatment → same color every time).
+const TREATMENT_PALETTE: Array<{ bg: string; border: string }> = [
+  { bg: "#efe9fe", border: "#c4b5fd" }, // 0 violet
+  { bg: "#fce7f3", border: "#f9a8d4" }, // 1 pink
+  { bg: "#dcfce7", border: "#86efac" }, // 2 green
+  { bg: "#dbeafe", border: "#93c5fd" }, // 3 blue
+  { bg: "#fef3c7", border: "#fcd34d" }, // 4 amber
+  { bg: "#ccfbf1", border: "#5eead4" }, // 5 teal
+  { bg: "#e0e7ff", border: "#a5b4fc" }, // 6 indigo
+  { bg: "#ffedd5", border: "#fdba74" }, // 7 orange
+  { bg: "#fae8ff", border: "#e9b8f5" }, // 8 fuchsia
+  { bg: "#cffafe", border: "#67e8f9" }, // 9 cyan
+];
+const TREATMENT_PINS: Array<[RegExp, number]> = [
+  [/\b(tox|botox|dysport|jeuveau|xeomin|daxxify|neurotox)/i, 0], // violet
+  [/\b(filler|juvederm|restylane|rha|versa|lip)/i, 1], // pink
+  [/(sculptra|radiesse|collagen|biostim)/i, 2], // green
+  [/(laser|thulium|ipl|bbl|co2|moxi|halo|clear)/i, 3], // blue
+  [/(peel|chemical)/i, 4], // amber
+  [/(facial|hydra|dermaplan)/i, 5], // teal
+  [/(microneedl|morpheus|\brf\b|skinpen)/i, 6], // indigo
+  [/(consult|follow|review|new patient|membership)/i, 8], // fuchsia
+  [/(weight|semaglutide|tirzep|\biv\b|wellness|inject|b12|vitamin)/i, 9], // cyan
+];
+
+/** Stable soft-pastel {bg, border} for a treatment type (pinned or hashed). */
+export function treatmentColor(treatment: string): { bg: string; border: string } {
+  const t = treatment.trim();
+  for (const [re, idx] of TREATMENT_PINS) if (re.test(t)) return TREATMENT_PALETTE[idx];
+  let h = 0;
+  for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0;
+  return TREATMENT_PALETTE[h % TREATMENT_PALETTE.length];
+}
+
 export function snap5(mins: number, win: { start: number; end: number }): number {
   const snapped = Math.round(mins / 5) * 5;
   return Math.max(win.start, Math.min(win.end - 5, snapped));

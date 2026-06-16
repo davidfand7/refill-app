@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.56.6",
+    date: "June 2026",
+    items: [
+      "<strong>v2.56.6 &mdash; Week view now has the same roomy spacing as the day, and cards are color-coded by treatment.</strong> <strong>(1) Week spacing</strong> &mdash; the week grid was running at a compressed vertical scale, so busy days crammed together; it now uses the <em>same</em> scale as the day view, so stacking and spacing read identically across both. <strong>(2) Color by treatment</strong> &mdash; appointment cards are now tinted by treatment type (Tox, Filler, Sculptra, Laser, Peel&hellip;) so a packed day is scannable at a glance, just like Acuity. Common treatments get a sensible fixed color; anything else gets a stable color derived from its name (same treatment → same color every time). Applies to day &amp; week. <strong>Touched</strong>: <code>calendar.schedule</code> (week scale), <code>schedule/shared.ts</code> (<code>treatmentColor</code>), <code>schedule/grids.tsx</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.56.5",
     date: "June 2026",
     items: [

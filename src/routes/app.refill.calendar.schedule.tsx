@@ -83,7 +83,9 @@ function SchedulePage() {
     if (typeof window !== "undefined") window.localStorage.setItem(ZOOM_KEY, String(clamped));
   }
   const dayPpm = ZOOM_LEVELS[zoomIdx];
-  const weekPpm = ZOOM_LEVELS[zoomIdx] * 0.7;
+  // Week runs at the SAME vertical scale as the day so its stacking/spacing
+  // matches (was 0.7× → cramped columns vs the day's breathing room).
+  const weekPpm = ZOOM_LEVELS[zoomIdx];
 
   // The visible date span (for week/month range loads).
   const span = useMemo(() => computeSpan(view, dateIso), [view, dateIso]);

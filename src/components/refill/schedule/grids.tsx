@@ -47,6 +47,7 @@ import {
   dayKey,
   localMinutes,
   anchorApptCards,
+  treatmentColor,
 } from "@/components/refill/schedule/shared";
 
 // ── Day grid (positioned, single column) ─────────────────────────────────────
@@ -554,14 +555,17 @@ export function ApptCard({
   // Tall enough for a 2nd line (name + "time · treatment"); otherwise the
   // treatment rides inline on the name line and time is implied by position.
   const twoLine = height >= 36;
+  // Color-code by treatment (Acuity-style). Held slots stay amber; an appt with
+  // no treatment falls back to the house emerald.
+  const color = !held && treatment ? treatmentColor(treatment) : null;
   return (
     <div
       draggable={!held}
       className={cn(
         "absolute rounded-md border px-2 py-0.5 shadow-sm overflow-hidden group cursor-pointer",
-        held ? "bg-amber-50 border-amber-200" : "bg-emerald-50 border-emerald-200",
+        held ? "bg-amber-50 border-amber-200" : color ? "" : "bg-emerald-50 border-emerald-200",
       )}
-      style={{ top, height: drawnHeight, left, width }}
+      style={{ top, height: drawnHeight, left, width, ...(color ? { backgroundColor: color.bg, borderColor: color.border } : {}) }}
       onClick={(e) => e.stopPropagation()}
       onDoubleClick={(e) => {
         e.stopPropagation();
