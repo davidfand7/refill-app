@@ -4,10 +4,10 @@
  * byte-identical to the former inline section.
  */
 
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronsDownUp, ChevronsUpDown, Copy, DoorOpen, ExternalLink, Globe, GripVertical, Link2, Loader2, Pencil, Plus, Search, Sparkles, Trash2, Users, X } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, ChevronDown, ChevronsDownUp, ChevronsUpDown, Clock, Copy, DoorOpen, ExternalLink, Globe, GripVertical, Link2, Loader2, Pencil, Plus, Search, Sparkles, Trash2, Users, X } from "lucide-react";
 import { CategoryCombobox } from "@/components/refill/CategoryCombobox";
 import { BufferSelect, DurationField, SectionSaveChip, Toggle, TriCheckbox } from "@/components/refill/booking/fields";
 import { categoryLabel, categoryRank } from "@/lib/service-categories";
@@ -36,8 +36,28 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
     draggedCatRef, onReorderCategory,
     servicesDirty, saving, onSave,
   } = bk;
-  if (!draft) return null;
+  // v2.64.3 — category duration quick-fill local state (which category's
+  // "set all times" input is open, and its value). Kept local: it's a
+  // transient UI affordance, not part of the saved draft.
+  const [bulkDurCat, setBulkDurCat] = useState<string | null>(null);
+  const [bulkDurVal, setBulkDurVal] = useState("");
   const { open, toggle } = useSectionCollapse("services");
+  if (!draft) return null;
+  const draftServices = draft.services;
+  // Apply one duration to every service in a category (incl. inactive ones, so
+  // "set all Tox to 15" really means all). CSV import leaves durations at the
+  // 30-min default; Smart Slot-Fill's duration gate needs them real. Uses the
+  // same batched patchService → Save flow as the per-row Duration field.
+  const applyBulkDuration = (cat: string) => {
+    const n = Math.round(Number(bulkDurVal));
+    if (Number.isFinite(n) && n >= 5) {
+      for (const s of draftServices.filter((x) => svcCat(x) === cat)) {
+        if (s.durationMin !== n) patchService(s.id, { durationMin: n });
+      }
+    }
+    setBulkDurCat(null);
+    setBulkDurVal("");
+  };
   return (
             <section className="rounded-xl border border-rule bg-white px-5 py-4">
               <div className="flex items-center justify-between gap-2 mb-1">
@@ -403,6 +423,65 @@ export function BookableServicesSection({ bk }: { bk: BookingSettings }) {
                               </span>
                             )}
                             <span className="flex-1 border-t border-rule/40 ml-1" />
+                            {/* v2.64.3 — category duration quick-fill: set every
+                                service in this category to one duration in two taps. */}
+                            {bulkDurCat === cat ? (
+                              <span className="flex items-center gap-1 shrink-0">
+                                <input
+                                  type="number"
+                                  min={5}
+                                  max={1440}
+                                  autoFocus
+                                  value={bulkDurVal}
+                                  onChange={(e) => setBulkDurVal(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      applyBulkDuration(cat);
+                                    } else if (e.key === "Escape") {
+                                      setBulkDurCat(null);
+                                      setBulkDurVal("");
+                                    }
+                                  }}
+                                  placeholder="min"
+                                  className="w-14 rounded-md border border-emerald bg-white px-1.5 py-0.5 text-[12px] text-ink text-right outline-none focus:ring-2 focus:ring-emerald/30 tabular-nums"
+                                />
+                                <span className="text-[11px] text-ink-faint">min</span>
+                                <button
+                                  type="button"
+                                  onClick={() => applyBulkDuration(cat)}
+                                  className="shrink-0 text-emerald hover:opacity-80 transition"
+                                  aria-label="Set every service in this category to this duration"
+                                  title={`Set all ${categoryLabel(cat)} services to this duration`}
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setBulkDurCat(null);
+                                    setBulkDurVal("");
+                                  }}
+                                  className="shrink-0 text-ink-faint hover:text-ink transition"
+                                  aria-label="Cancel"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setBulkDurCat(cat);
+                                  setBulkDurVal("");
+                                }}
+                                className="shrink-0 inline-flex items-center gap-1 text-[11px] font-medium text-ink-faint hover:text-emerald transition pr-1"
+                                title={`Set the same duration for every ${categoryLabel(cat)} service at once`}
+                              >
+                                <Clock className="h-3 w-3" />
+                                <span className="hidden sm:inline">Set all times</span>
+                              </button>
+                            )}
                             <label
                               className="flex items-center gap-1.5 text-[11px] font-medium text-ink-soft cursor-pointer shrink-0 pr-0.5"
                               title={

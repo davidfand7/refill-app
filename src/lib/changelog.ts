@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.64.3",
+    date: "June 2026",
+    items: [
+      "<strong>v2.64.3 &mdash; Set service durations for a whole category at once.</strong> Accurate durations are what make Smart Slot-Fill safe (a 45-min filler patient should never be offered a 15-min slot) &mdash; but CSV-imported services all land at the 30-min default, and fixing them one by one is tedious. Each category header in <strong>Booking Settings &rarr; Bookable services</strong> now has a <strong>&ldquo;Set all times&rdquo;</strong> control: type one number and every service in that category (e.g. all Tox &rarr; 15, all Filler &rarr; 45) is set in a couple taps, then Save. Per-service and per-provider duration overrides still work as before for the exceptions. <strong>Touched</strong>: <code>BookableServicesSection</code> (category quick-fill).",
+    ],
+  },
+  {
     version: "v2.64.2",
     date: "June 2026",
     items: [
