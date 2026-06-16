@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.64.2",
+    date: "June 2026",
+    items: [
+      "<strong>v2.64.2 &mdash; Smart Slot-Fill copy fix: no more double provider names.</strong> Some spas bake the provider into the service name itself (&ldquo;Tox w/ Karen&rdquo;). When Smart Slot-Fill named that service in an offer, it collided with the &ldquo;&hellip;with Karen&rdquo; clause the message already adds &mdash; reading &ldquo;opening with Karen for Tox w/ Karen.&rdquo; Now the provider baked into the service name is stripped everywhere it&rsquo;s shown (the rescue SMS, the proxy email drafts, and the claim page), so it reads cleanly: &ldquo;opening with Karen for Tox.&rdquo; Also: the &ldquo;Simulate a cancellation&rdquo; harness now picks the provider whose name matches your practice owner, so the test reads the way a real solo-practitioner cancellation would. <strong>Touched</strong>: <code>composeRescueSms</code> / <code>composeProxyEmail</code> / <code>getRescueOfferPayload</code> (strip baked-in provider from the per-offer service label), <code>simulateRescueDispatchFn</code> (owner-matching provider pick).",
+    ],
+  },
+  {
     version: "v2.64.1",
     date: "June 2026",
     items: [

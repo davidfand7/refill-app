@@ -593,7 +593,14 @@ function composeRescueSms(args: {
     minute: "2-digit",
     timeZone: "America/Denver",
   });
-  const override = args.treatmentOverride?.trim();
+  // Cross-service fill names the patient's own service. Strip any provider
+  // baked into the catalog name ("Tox w/ Karen" → "Tox") so it doesn't collide
+  // with the " with <provider>" clause below (which names the provider once).
+  const override = stripProviderFromTreatment(
+    args.treatmentOverride ?? null,
+    args.providerName,
+    args.ownerDisplayName,
+  )?.trim();
   const cleanedTreatment = stripProviderFromTreatment(
     args.treatmentType,
     args.providerName,
@@ -707,7 +714,14 @@ function composeProxyEmail(args: {
 
   const draftLines = args.offers
     .map((o) => {
-      const offerTreatment = o.treatmentLabel?.trim() || treatment;
+      // Strip any provider baked into the catalog name ("Filler w/ Karen" →
+      // "Filler"); the provider clause already names the provider once.
+      const offerTreatment =
+        stripProviderFromTreatment(
+          o.treatmentLabel ?? null,
+          args.providerName,
+          args.ownerDisplayName,
+        )?.trim() || treatment;
       const courtesy = `Hi ${o.firstName}! Last-minute opening at ${args.spaName} ${when}${provider} for ${offerTreatment}. Tap to grab if you want it: ${o.claimUrl}`;
       const spendStr = o.lifetimeSpend > 0
         ? `, lifetime $${Math.round(o.lifetimeSpend).toLocaleString()}`
@@ -743,7 +757,14 @@ function composeProxyEmail(args: {
   // for the drafts so iMessage-style copy/paste preserves intent.
   const draftBlocks = args.offers
     .map((o) => {
-      const offerTreatment = o.treatmentLabel?.trim() || treatment;
+      // Strip any provider baked into the catalog name ("Filler w/ Karen" →
+      // "Filler"); the provider clause already names the provider once.
+      const offerTreatment =
+        stripProviderFromTreatment(
+          o.treatmentLabel ?? null,
+          args.providerName,
+          args.ownerDisplayName,
+        )?.trim() || treatment;
       const courtesy = `Hi ${o.firstName}! Last-minute opening at ${args.spaName} ${when}${provider} for ${offerTreatment}. Tap to grab if you want it: ${o.claimUrl}`;
       const spendStr = o.lifetimeSpend > 0
         ? `, lifetime $${Math.round(o.lifetimeSpend).toLocaleString()}`
@@ -1495,13 +1516,14 @@ export const getRescueOfferPayload = createServerFn({ method: "POST" })
       spaName: spa?.title?.trim() || "your spa",
       patientFirstName: extractFirstName(patient?.title ?? null),
       status,
-      treatmentType:
-        offerServiceName ??
-        stripProviderFromTreatment(
-          apt.treatment_type,
-          apt.provider_name,
-          resolvedOwnerDisplayName,
-        ),
+      // Strip any provider baked into the name ("Tox w/ Karen" → "Tox") — the
+      // claim page renders the provider on its own row, so leaving it in would
+      // double up.
+      treatmentType: stripProviderFromTreatment(
+        offerServiceName ?? apt.treatment_type,
+        apt.provider_name,
+        resolvedOwnerDisplayName,
+      ),
       providerName: apt.provider_name,
       ownerDisplayName: resolvedOwnerDisplayName,
       scheduledAt: apt.scheduled_at,
@@ -3139,22 +3161,18 @@ export const simulateRescueDispatchFn = createServerFn({ method: "POST" })
 
       // v2.64.0 — link the test slot to a scheduling provider so the Smart
       // Slot-Fill qualification matrix actually runs (an unlinked slot degrades
-      // to the legacy matcher). Auto-pick the tenant's primary active provider
-      // unless the caller passed one (or explicitly passed null for legacy).
+      // to the legacy matcher). Auto-pick a provider unless the caller passed
+      // one (or explicitly passed null for legacy). Prefer the provider whose
+      // name matches the spa's owner-display-name so the sim reads coherently
+      // for a solo practitioner (Rejuv's services bake "w/ Karen" into the
+      // name — picking the oldest provider "Michelle" would read as a conflict);
+      // fall back to the primary active provider.
       let providerId: string | null = data.providerId ?? null;
       let providerName: string | null = null;
       if (data.providerId !== null) {
         try {
           const { getTenantIdForUser } = await import("@/server/refill-catalog");
           const tenantId = await getTenantIdForUser(sb, effectiveUserId);
-          const { data: prov } = await sb
-            .from("scheduling_providers")
-            .select("id, name")
-            .eq("tenant_id", tenantId)
-            .eq("is_active", true)
-            .order("created_at", { ascending: true })
-            .limit(1)
-            .maybeSingle();
           if (data.providerId) {
             const { data: named } = await sb
               .from("scheduling_providers")
@@ -3162,9 +3180,28 @@ export const simulateRescueDispatchFn = createServerFn({ method: "POST" })
               .eq("id", data.providerId)
               .maybeSingle();
             providerName = named?.name ?? null;
-          } else if (prov) {
-            providerId = prov.id;
-            providerName = prov.name;
+          } else {
+            const { data: provs } = await sb
+              .from("scheduling_providers")
+              .select("id, name, created_at")
+              .eq("tenant_id", tenantId)
+              .eq("is_active", true)
+              .order("created_at", { ascending: true })
+              // A tenant has a handful of providers; bound keeps the read
+              // provably truncation-safe (sim harness, not a hot path).
+              .limit(200);
+            const ownerName = (await resolveOwnerDisplayName(sb, effectiveUserId))?.trim();
+            const ownerMatch =
+              ownerName != null
+                ? (provs ?? []).find(
+                    (p) => p.name.trim().toLowerCase() === ownerName.toLowerCase(),
+                  )
+                : undefined;
+            const pick = ownerMatch ?? (provs ?? [])[0];
+            if (pick) {
+              providerId = pick.id;
+              providerName = pick.name;
+            }
           }
         } catch (e) {
           console.error("[rescue-sim] provider link failed; running unlinked:", e);
