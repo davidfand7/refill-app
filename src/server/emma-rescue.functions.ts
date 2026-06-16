@@ -3181,15 +3181,15 @@ export const simulateRescueDispatchFn = createServerFn({ method: "POST" })
               .maybeSingle();
             providerName = named?.name ?? null;
           } else {
+            // .limit bounds the read (a tenant has a handful of providers) so
+            // it's provably truncation-safe (sim harness, not a hot path).
             const { data: provs } = await sb
               .from("scheduling_providers")
               .select("id, name, created_at")
               .eq("tenant_id", tenantId)
               .eq("is_active", true)
-              .order("created_at", { ascending: true })
-              // A tenant has a handful of providers; bound keeps the read
-              // provably truncation-safe (sim harness, not a hot path).
-              .limit(200);
+              .limit(200)
+              .order("created_at", { ascending: true });
             const ownerName = (await resolveOwnerDisplayName(sb, effectiveUserId))?.trim();
             const ownerMatch =
               ownerName != null
