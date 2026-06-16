@@ -84,11 +84,17 @@ type SupabaseAdmin = ReturnType<typeof admin>;
 
 /**
  * Build the canonical opt-in URL for a per-patient token. Centralized so
- * the host string is one source of truth — the Worker fronts both
- * agentiport.com and emma.agentiport.com; either works for public links.
+ * the host string is one source of truth.
+ *
+ * v2.61.0: was hardcoded to the legacy openagenticv4 host
+ * https://emma.agentiport.com — the same dead-host bug the rescue claim URL
+ * had (fixed v1.4.5). Patient opt-in links must resolve on getrefill.app where
+ * the /waitlist/optin/$token route lives (src/routes/waitlist.optin.$token.tsx).
+ * Mirrors buildRescueClaimUrl.
  */
 export function buildWaitlistOptInUrl(token: string): string {
-  return `https://emma.agentiport.com/waitlist/optin/${token}`;
+  const base = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://getrefill.app").replace(/\/+$/, "");
+  return `${base}/waitlist/optin/${token}`;
 }
 
 // ─── Internal helper — mint or fetch a token ──────────────────────────────

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.61.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.61.0 &mdash; Fixed waitlist opt-in links pointing at the wrong domain.</strong> The “join the waitlist” link patients tap was still built against an old domain (<code>emma.agentiport.com</code>) instead of <strong>getrefill.app</strong> &mdash; the same dead-host bug the rescue claim link had fixed long ago, which the opt-in builder never got. Opt-in links now resolve on getrefill.app. <strong>Touched</strong>: <code>buildWaitlistOptInUrl</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.60.2",
     date: "June 2026",
     items: [
