@@ -76,10 +76,15 @@ function ConnectionHealthPage() {
   const [report, setReport] = useState<ConnectionHealthReport | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
 
+  // "initial" = first paint (full spinner) · "manual" = Recheck button (button
+  // spinner) · "silent" = the background auto-refresh (no spinner, no error
+  // toast — it just swaps the report in so the live-presence card stays honest
+  // without a click).
   const load = useCallback(
-    async (isManual: boolean) => {
+    async (mode: "initial" | "manual" | "silent") => {
       if (membership.status !== "tenant") return;
-      isManual ? setRefreshing(true) : setLoading(true);
+      if (mode === "manual") setRefreshing(true);
+      else if (mode === "initial") setLoading(true);
       try {
         const { data: sess } = await supabase.auth.getSession();
         const token = sess.session?.access_token;
@@ -90,20 +95,36 @@ function ConnectionHealthPage() {
         });
         setReport(result);
       } catch (err) {
-        toast.error(
-          err instanceof Error ? err.message : "Couldn't load connection health.",
-        );
+        // A background poll that fails shouldn't nag — the last good report
+        // stays on screen and the next tick retries. Only foreground loads toast.
+        if (mode !== "silent") {
+          toast.error(
+            err instanceof Error ? err.message : "Couldn't load connection health.",
+          );
+        }
       } finally {
-        setLoading(false);
-        setRefreshing(false);
+        if (mode === "manual") setRefreshing(false);
+        else if (mode === "initial") setLoading(false);
       }
     },
     [membership.status, viewAsUserId],
   );
 
   useEffect(() => {
-    void load(false);
+    void load("initial");
   }, [load]);
+
+  // Gentle auto-refresh: a "Connection Health" page that needs a manual Recheck
+  // to reflect a LIVE presence isn't honest. Re-poll silently every 45s so the
+  // Local delivery agent card flips Live/Quiet/Silent on its own. Paused while a
+  // manual Recheck is in flight to avoid a double fetch.
+  useEffect(() => {
+    if (membership.status !== "tenant") return;
+    const id = setInterval(() => {
+      if (!refreshing) void load("silent");
+    }, 45_000);
+    return () => clearInterval(id);
+  }, [membership.status, refreshing, load]);
 
   const attention = report?.summary.attention ?? 0;
   const total = report?.summary.total ?? 0;
@@ -116,7 +137,7 @@ function ConnectionHealthPage() {
         actions={
           <button
             type="button"
-            onClick={() => void load(true)}
+            onClick={() => void load("manual")}
             disabled={loading || refreshing}
             className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-ink transition disabled:opacity-60"
           >
@@ -175,7 +196,7 @@ function ConnectionHealthPage() {
             watchingVerb="isn't connected"
             accessToken={accessToken}
             viewAsUserId={viewAsUserId}
-            onChanged={() => void load(true)}
+            onChanged={() => void load("manual")}
           />
         )}
 
@@ -193,7 +214,7 @@ function ConnectionHealthPage() {
             watchingVerb="goes quiet"
             accessToken={accessToken}
             viewAsUserId={viewAsUserId}
-            onChanged={() => void load(true)}
+            onChanged={() => void load("manual")}
           />
         )}
 
@@ -205,7 +226,7 @@ function ConnectionHealthPage() {
           <LocalAgentSection
             accessToken={accessToken}
             viewAsUserId={viewAsUserId}
-            onChanged={() => void load(true)}
+            onChanged={() => void load("manual")}
           />
         )}
       </div>

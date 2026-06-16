@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.58.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.58.1 &mdash; Connection health now updates itself.</strong> The page used to only refresh when you clicked <em>Recheck</em>, so a connection that had just come back (like the local delivery agent checking in) could sit looking stale until you noticed. It now <strong>quietly re-checks every 45 seconds on its own</strong> &mdash; the status cards flip to Live / Quiet / Silent in near-real-time with no click. <strong>Touched</strong>: the Connection health page only. No migration.",
+    ],
+  },
+  {
     version: "v2.58.0",
     date: "June 2026",
     items: [
