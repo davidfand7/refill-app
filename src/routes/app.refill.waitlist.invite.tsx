@@ -371,15 +371,21 @@ function WaitlistInvitePage() {
         data: { accessToken, viewAsUserId },
       });
       if (r.updated > 0) {
+        const fromHist =
+          r.fromInferred > 0
+            ? ` (${r.fromInferred} inferred from visit history)`
+            : "";
         toast.success(
-          `Linked ${r.updated} waitlist ${r.updated === 1 ? "patient" : "patients"} to your service catalog.${r.stillUnresolved > 0 ? ` ${r.stillUnresolved} still free-text (no catalog match).` : ""}`,
+          `Linked ${r.updated} waitlist ${r.updated === 1 ? "patient" : "patients"} to your service catalog${fromHist}.`,
         );
-      } else if (r.stillUnresolved > 0) {
+      } else if (r.alreadyLinked > 0 && r.noDesire === 0) {
+        toast.message("Already linked — every waitlist patient maps to your catalog.");
+      } else if (r.noDesire > 0) {
         toast.message(
-          `Nothing to link — ${r.stillUnresolved} ${r.stillUnresolved === 1 ? "row" : "rows"} have desires that don't match a catalog service yet.`,
+          `No catalog match for ${r.noDesire} ${r.noDesire === 1 ? "patient" : "patients"} — no stated preference and no visit history to infer from yet. They stay on the free-text path.`,
         );
       } else {
-        toast.message("Already linked — every waitlist desire maps to your catalog.");
+        toast.message("Nothing on the waitlist to link yet.");
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Backfill failed.");

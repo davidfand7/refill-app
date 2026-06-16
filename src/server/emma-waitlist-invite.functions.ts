@@ -688,11 +688,21 @@ export const getSmartInviteCohortFn = createServerFn({ method: "POST" })
 //
 // New invites (Smart Invite) and patient opt-ins now populate
 // desired_service_ids at write time. This one-shot (idempotent, re-runnable
-// after catalog edits) resolves EXISTING rows' free-text treatment_types onto
-// the catalog, but only rows that don't already carry a catalog link — so it
-// never clobbers a resolved row. Rows whose free-text matches nothing are
-// reported as `stillUnresolved` (they keep working via the legacy free-text
-// matcher; not an error).
+// after catalog edits) resolves EXISTING rows onto the catalog — only rows that
+// don't already carry a catalog link, so it never clobbers a resolved row.
+//
+// Desire source per row, in order:
+//   1. The row's free-text treatment_types, if any.
+//   2. Otherwise INFER from the patient's visit history (most-recent appointment
+//      treatment_type) — "infer, don't ask". Most real opt-ins came in via the
+//      footer link with NO stated preference, so without this the backfill would
+//      no-op on exactly the rows that need it. When we infer, we also seed the
+//      inferred label into the (empty) treatment_types so display + the legacy
+//      free-text matcher benefit too.
+//
+// Honest accounting: `fromInferred` counts history-derived links; `noDesire`
+// counts rows we couldn't resolve OR infer anything for (kept on the free-text
+// path — not an error, just nothing to link yet).
 
 const backfillInput = z.object({
   accessToken: z.string().min(1),
@@ -701,8 +711,14 @@ const backfillInput = z.object({
 
 export type BackfillServiceLinksResult = {
   scanned: number;
+  /** Rows that already carried a catalog link (left untouched). */
+  alreadyLinked: number;
+  /** Newly linked this run. */
   updated: number;
-  stillUnresolved: number;
+  /** Of `updated`, how many were derived from visit history vs. stated desire. */
+  fromInferred: number;
+  /** Rows with no stated desire AND no inferable history → still bare. */
+  noDesire: number;
 };
 
 export const backfillWaitlistServiceLinksFn = createServerFn({ method: "POST" })
@@ -717,38 +733,82 @@ export const backfillWaitlistServiceLinksFn = createServerFn({ method: "POST" })
 
     const rows = await selectAllRows<{
       id: string;
+      patient_node_id: string;
       treatment_types: string[];
       desired_service_ids: string[];
     }>(
       (from, to) =>
         sb
           .from("emma_waitlist")
-          .select("id, treatment_types, desired_service_ids")
+          .select("id, patient_node_id, treatment_types, desired_service_ids")
           .eq("user_id", effectiveUserId)
           .range(from, to),
       { label: "waitlist service-link backfill" },
     );
 
+    // Most-recent appointment treatment_type per patient (scheduled_at DESC →
+    // first non-null seen per patient is the latest). Same inference Smart
+    // Invite uses for the prefill.
+    const inferredByPatient = new Map<string, string>();
+    const appts = await selectAllRows<{
+      patient_node_id: string | null;
+      treatment_type: string | null;
+    }>(
+      (from, to) =>
+        sb
+          .from("emma_appointments")
+          .select("patient_node_id, treatment_type, scheduled_at")
+          .eq("user_id", effectiveUserId)
+          .order("scheduled_at", { ascending: false })
+          .range(from, to),
+      { label: "backfill inference appts" },
+    );
+    for (const a of appts) {
+      const pid = a.patient_node_id;
+      const t = a.treatment_type?.trim();
+      if (pid && t && !inferredByPatient.has(pid)) inferredByPatient.set(pid, t);
+    }
+
+    let alreadyLinked = 0;
     let updated = 0;
-    let stillUnresolved = 0;
+    let fromInferred = 0;
+    let noDesire = 0;
+
     for (const r of rows) {
-      if (r.desired_service_ids && r.desired_service_ids.length > 0) continue;
-      if (!r.treatment_types || r.treatment_types.length === 0) continue;
-      const { serviceIds } = resolveTreatmentsToServiceIds(
-        r.treatment_types,
-        catalog,
-      );
-      if (serviceIds.length === 0) {
-        stillUnresolved++;
+      if (r.desired_service_ids && r.desired_service_ids.length > 0) {
+        alreadyLinked++;
         continue;
       }
+
+      const hasStated = r.treatment_types && r.treatment_types.length > 0;
+      const inferred = inferredByPatient.get(r.patient_node_id) ?? null;
+      const labels = hasStated ? r.treatment_types : inferred ? [inferred] : [];
+      if (labels.length === 0) {
+        noDesire++;
+        continue;
+      }
+
+      const { serviceIds } = resolveTreatmentsToServiceIds(labels, catalog);
+      if (serviceIds.length === 0) {
+        noDesire++;
+        continue;
+      }
+
+      const patch: Database["public"]["Tables"]["emma_waitlist"]["Update"] = {
+        desired_service_ids: serviceIds,
+      };
+      // Seed the inferred label as free-text too, so display + legacy matcher
+      // gain it — but never clobber a stated preference.
+      if (!hasStated && inferred) patch.treatment_types = [inferred];
+
       const { error } = await sb
         .from("emma_waitlist")
-        .update({ desired_service_ids: serviceIds })
+        .update(patch)
         .eq("id", r.id);
       if (error) throw new Error(error.message);
       updated++;
+      if (!hasStated) fromInferred++;
     }
 
-    return { scanned: rows.length, updated, stillUnresolved };
+    return { scanned: rows.length, alreadyLinked, updated, fromInferred, noDesire };
   });

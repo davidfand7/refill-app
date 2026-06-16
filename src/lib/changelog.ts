@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.63.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.63.1 &mdash; &ldquo;Link existing waitlist to catalog&rdquo; now actually links the people who never stated a preference.</strong> Most patients joined the waitlist via the footer link without picking a service, so the first version of the backfill had nothing to resolve and (worse) reported a cheery &ldquo;already linked&rdquo; when really nothing was linked. Fixed both: when a waitlist patient has no stated desire, the backfill now <strong>infers their usual service from visit history</strong> (the same &ldquo;infer, don&rsquo;t ask&rdquo; the Smart Invite uses) and links that — and the toast tells the honest truth (&ldquo;Linked N (M inferred from visit history)&rdquo;, or &ldquo;no history to infer from yet&rdquo;, never a false success). <strong>Touched</strong>: <code>backfillWaitlistServiceLinksFn</code> (history inference + honest counts), invite-page toast copy.",
+    ],
+  },
+  {
     version: "v2.63.0",
     date: "June 2026",
     items: [
