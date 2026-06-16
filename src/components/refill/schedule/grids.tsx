@@ -146,7 +146,7 @@ export function DayGrid({
         >
           <div className="absolute inset-0 left-14 hover:bg-emerald-soft/10 transition-colors" />
           {hourMarks(win).map((m) => (
-            <div key={m} className="absolute left-0 right-0 border-t border-rule/60" style={{ top: (m - win.start) * pxPerMin }}>
+            <div key={m} className="absolute left-0 right-0 border-t border-ink/10" style={{ top: (m - win.start) * pxPerMin }}>
               <span className="absolute -top-2 left-0 text-[11px] text-ink-faint tabular-nums bg-white pr-1">{fmtHour(m)}</span>
             </div>
           ))}
@@ -217,7 +217,7 @@ export function DayGrid({
                 onDrop={(e) => dropAt(e, p.id)}
               >
                 {hourMarks(win).map((m) => (
-                  <div key={m} className="absolute left-0 right-0 border-t border-rule/40" style={{ top: (m - win.start) * pxPerMin }} />
+                  <div key={m} className="absolute left-0 right-0 border-t border-ink/10" style={{ top: (m - win.start) * pxPerMin }} />
                 ))}
                 {band.isOpen && (
                   <div className="absolute left-0 right-0 bg-emerald-soft/30" style={{ top: (band.openMin - win.start) * pxPerMin, height: (band.closeMin - band.openMin) * pxPerMin }} />
@@ -427,7 +427,7 @@ export function WeekGrid({
                 onDrop={(e) => dropAt(e, d)}
               >
                 {hourMarks(win).map((m) => (
-                  <div key={m} className="absolute left-0 right-0 border-t border-rule/40" style={{ top: (m - win.start) * pxPerMin }} />
+                  <div key={m} className="absolute left-0 right-0 border-t border-ink/10" style={{ top: (m - win.start) * pxPerMin }} />
                 ))}
                 {h && !h.isClosed && (
                   <div className="absolute left-0 right-0 bg-emerald-soft/30" style={{ top: (h.openMin - win.start) * pxPerMin, height: (h.closeMin - h.openMin) * pxPerMin }} />

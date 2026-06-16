@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.56.10",
+    date: "June 2026",
+    items: [
+      "<strong>v2.56.10 &mdash; Clearer hour lines on the day &amp; week calendar.</strong> The hourly gridlines were very faint; they&rsquo;re now a clean, slightly stronger line so you can actually see where each hour breaks at a glance. <strong>Touched</strong>: <code>schedule/grids.tsx</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.56.9",
     date: "June 2026",
     items: [
