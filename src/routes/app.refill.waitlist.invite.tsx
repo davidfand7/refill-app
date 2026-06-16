@@ -19,7 +19,9 @@ import { toast } from "sonner";
 import {
   AlertCircle,
   ArrowLeft,
+  CalendarClock,
   CheckCircle2,
+  Clock,
   HeartHandshake,
   Loader2,
   Search,
@@ -48,8 +50,10 @@ import {
 } from "@/server/emma-reliability.functions";
 import {
   getInviteCopyTemplateFn,
+  getSmartInviteCohortFn,
   sendOptInInviteBatchFn,
   type InviteBatchResult,
+  type SmartInviteSignal,
 } from "@/server/emma-waitlist-invite.functions";
 import { setSpaProfileLookupKeyFn } from "@/server/spa-profile.functions";
 
@@ -67,6 +71,26 @@ function firstNameOf(displayName: string | null | undefined): string {
   return parts[0] || "there";
 }
 
+// ─── Smart-Invite cohorts (v2.62.0 — Waitlist Slice 1) ──────────────────────
+type Cohort = "scheduled" | "due_soon" | "alist";
+type Candidate = {
+  p: PatientListRow;
+  sig: SmartInviteSignal | null;
+  cohort: Cohort;
+};
+const COHORT_RANK: Record<Cohort, number> = {
+  scheduled: 0,
+  due_soon: 1,
+  alist: 2,
+};
+
+function formatShortDate(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 function WaitlistInvitePage() {
   const membership = useTenantMembership();
   const viewAsUserId =
@@ -81,6 +105,7 @@ function WaitlistInvitePage() {
   const [reliabilityFlags, setReliabilityFlags] = useState<ReliabilityFlag[]>(
     [],
   );
+  const [signals, setSignals] = useState<SmartInviteSignal[]>([]);
 
   const [serverTemplate, setServerTemplate] = useState<string>("");
   const [serverTemplateIsDefault, setServerTemplateIsDefault] = useState(true);
@@ -108,7 +133,7 @@ function WaitlistInvitePage() {
           if (!cancelled) setErrorMessage("Please sign in to send invites.");
           return;
         }
-        const [pp, rr, flags, tpl] = await Promise.all([
+        const [pp, rr, flags, tpl, cohort] = await Promise.all([
           listPatients({
             data: { accessToken: token, viewAsUserId, limit: 5000 },
           }),
@@ -117,6 +142,9 @@ function WaitlistInvitePage() {
             data: { accessToken: token, viewAsUserId },
           }),
           getInviteCopyTemplateFn({
+            data: { accessToken: token, viewAsUserId },
+          }),
+          getSmartInviteCohortFn({
             data: { accessToken: token, viewAsUserId },
           }),
         ]);
@@ -128,6 +156,7 @@ function WaitlistInvitePage() {
         setServerTemplate(tpl.template);
         setServerTemplateIsDefault(tpl.isDefault);
         setInviteBody(tpl.template);
+        setSignals(cohort.signals);
       } catch (e) {
         if (!cancelled) {
           setErrorMessage(
@@ -156,34 +185,70 @@ function WaitlistInvitePage() {
     [reliabilityFlags],
   );
 
-  const candidates = useMemo(() => {
+  const signalById = useMemo(() => {
+    const m = new Map<string, SmartInviteSignal>();
+    for (const s of signals) m.set(s.patientNodeId, s);
+    return m;
+  }, [signals]);
+
+  // A-list candidates enriched with their Smart-Invite cohort + signal, with
+  // already-opted (active waitlist) patients excluded, sorted cohort-first
+  // (On the schedule → Due for a touch-up → A-list) then by lifetime spend.
+  const candidates = useMemo<Candidate[]>(() => {
     const todayMs = Date.now();
-    return patients
+    const enriched: Candidate[] = patients
       .filter((p) => p.phone && p.phone.trim().length > 0)
       .filter((p) => matchesAListRules(p, rules, todayMs, unreliableIds))
-      .sort((a, b) => b.lifetimeSpendUsd - a.lifetimeSpendUsd);
-  }, [patients, rules, unreliableIds]);
+      .map((p) => {
+        const sig = signalById.get(p.id) ?? null;
+        let cohort: Cohort = "alist";
+        if (sig?.futureApptAt) cohort = "scheduled";
+        else if (sig?.daysOverdue != null) cohort = "due_soon";
+        return { p, sig, cohort };
+      })
+      // Already on the active waitlist → they're already in. Don't re-surface.
+      .filter((c) => c.sig?.waitlistStatus !== "active");
+    enriched.sort((a, b) => {
+      const r = COHORT_RANK[a.cohort] - COHORT_RANK[b.cohort];
+      if (r !== 0) return r;
+      return b.p.lifetimeSpendUsd - a.p.lifetimeSpendUsd;
+    });
+    return enriched;
+  }, [patients, rules, unreliableIds, signalById]);
 
-  // Default-select top 5 once on first non-empty candidates load
+  const scheduledCohort = useMemo(
+    () => candidates.filter((c) => c.cohort === "scheduled"),
+    [candidates],
+  );
+  const dueSoonCohort = useMemo(
+    () => candidates.filter((c) => c.cohort === "due_soon"),
+    [candidates],
+  );
+
+  // Default-select the quick-win cohort (patients on the schedule now). If
+  // none, fall back to the top 5 A-listers.
   useEffect(() => {
     if (didAutoSelect || loading || result) return;
     if (candidates.length === 0) return;
-    setSelectedIds(new Set(candidates.slice(0, 5).map((p) => p.id)));
+    const pick =
+      scheduledCohort.length > 0 ? scheduledCohort : candidates.slice(0, 5);
+    setSelectedIds(new Set(pick.map((c) => c.p.id)));
     setDidAutoSelect(true);
-  }, [candidates, loading, result, didAutoSelect]);
+  }, [candidates, scheduledCohort, loading, result, didAutoSelect]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return candidates;
-    return candidates.filter((p) => {
-      const hay = `${p.displayName ?? ""} ${p.phone ?? ""}`.toLowerCase();
+    return candidates.filter((c) => {
+      const hay =
+        `${c.p.displayName ?? ""} ${c.p.phone ?? ""}`.toLowerCase();
       return hay.includes(q);
     });
   }, [candidates, query]);
 
   const previewBody = useMemo(() => {
     if (!inviteBody) return "";
-    const firstSelected = candidates.find((p) => selectedIds.has(p.id));
+    const firstSelected = candidates.find((c) => selectedIds.has(c.p.id))?.p;
     const firstName = firstNameOf(firstSelected?.displayName);
     return inviteBody
       .replace(/\{first_name\}/g, firstName)
@@ -214,10 +279,14 @@ function WaitlistInvitePage() {
 
   const handleSelectTopN = useCallback(
     (n: number) => {
-      setSelectedIds(new Set(candidates.slice(0, n).map((p) => p.id)));
+      setSelectedIds(new Set(candidates.slice(0, n).map((c) => c.p.id)));
     },
     [candidates],
   );
+
+  const handleSelectCohort = useCallback((cohort: Candidate[]) => {
+    setSelectedIds(new Set(cohort.map((c) => c.p.id)));
+  }, []);
 
   const handleClear = useCallback(() => setSelectedIds(new Set()), []);
 
@@ -255,12 +324,20 @@ function WaitlistInvitePage() {
     if (!canSend || !accessToken) return;
     setSending(true);
     try {
+      // Prefill each selected patient's inferred desired-service onto the
+      // paused waitlist row ("infer, don't ask").
+      const inferredTreatmentByPatient: Record<string, string> = {};
+      for (const id of selectedIds) {
+        const inferred = signalById.get(id)?.inferredTreatment;
+        if (inferred) inferredTreatmentByPatient[id] = inferred;
+      }
       const r = await sendOptInInviteBatchFn({
         data: {
           accessToken,
           viewAsUserId,
           patientNodeIds: Array.from(selectedIds),
           inviteBody,
+          inferredTreatmentByPatient,
         },
       });
       setResult(r);
@@ -276,7 +353,7 @@ function WaitlistInvitePage() {
     } finally {
       setSending(false);
     }
-  }, [canSend, accessToken, selectedIds, inviteBody, viewAsUserId]);
+  }, [canSend, accessToken, selectedIds, inviteBody, viewAsUserId, signalById]);
 
   const handleNewBatch = useCallback(() => {
     setResult(null);
@@ -421,20 +498,32 @@ function WaitlistInvitePage() {
                       {selectedIds.size} of {candidates.length} selected
                     </div>
                     <div className="text-xs text-ink-soft">
-                      A-list patients with a phone number on file, sorted by
-                      lifetime spend.
+                      A-listers with a phone, prioritized: on the schedule now,
+                      then due for a touch-up, then by lifetime spend.
                     </div>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleSelectTopN(5)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 text-xs font-medium hover:bg-emerald-100 transition"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    Top 5
-                  </button>
+                  {scheduledCohort.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleSelectCohort(scheduledCohort)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-violet-50 border border-violet-200 text-violet-800 px-3 py-1.5 text-xs font-medium hover:bg-violet-100 transition"
+                    >
+                      <CalendarClock className="h-3.5 w-3.5" />
+                      On the schedule ({scheduledCohort.length})
+                    </button>
+                  )}
+                  {dueSoonCohort.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleSelectCohort(dueSoonCohort)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 px-3 py-1.5 text-xs font-medium hover:bg-amber-100 transition"
+                    >
+                      <Clock className="h-3.5 w-3.5" />
+                      Due soon ({dueSoonCohort.length})
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleSelectTopN(10)}
@@ -442,14 +531,6 @@ function WaitlistInvitePage() {
                   >
                     <Sparkles className="h-3.5 w-3.5" />
                     Top 10
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSelectTopN(20)}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 text-xs font-medium hover:bg-emerald-100 transition"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" />
-                    Top 20
                   </button>
                   {selectedIds.size > 0 && (
                     <button
@@ -496,8 +577,10 @@ function WaitlistInvitePage() {
                 </div>
               ) : (
                 <ul className="divide-y divide-rule max-h-[420px] overflow-y-auto">
-                  {visible.map((p) => {
+                  {visible.map((c) => {
+                    const p = c.p;
                     const selected = selectedIds.has(p.id);
+                    const inferred = c.sig?.inferredTreatment ?? null;
                     return (
                       <li key={p.id}>
                         <label className="flex items-center gap-3 px-5 py-2.5 hover:bg-rule-soft/40 cursor-pointer transition">
@@ -508,11 +591,20 @@ function WaitlistInvitePage() {
                             className="rounded border-rule shrink-0"
                           />
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-ink truncate">
-                              {p.displayName}
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-sm font-medium text-ink truncate">
+                                {p.displayName}
+                              </span>
+                              <CohortBadge candidate={c} />
                             </div>
                             <div className="text-xs text-ink-soft truncate">
                               {p.phone || "(no phone)"}
+                              {inferred && (
+                                <span className="text-ink-faint">
+                                  {" · usually "}
+                                  {inferred}
+                                </span>
+                              )}
                             </div>
                           </div>
                           {p.lifetimeSpendUsd > 0 && (
@@ -644,6 +736,37 @@ function WaitlistInvitePage() {
 }
 
 // ─── Subcomponents ────────────────────────────────────────────────────────
+
+function CohortBadge({ candidate }: { candidate: Candidate }) {
+  const { cohort, sig } = candidate;
+  if (cohort === "scheduled") {
+    const when = formatShortDate(sig?.futureApptAt ?? null);
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-violet-100 text-violet-800 px-2 py-0.5 text-[10px] font-medium shrink-0">
+        <CalendarClock className="h-3 w-3" />
+        {when ? `Booked ${when}` : "On the schedule"}
+      </span>
+    );
+  }
+  if (cohort === "due_soon") {
+    const d = sig?.daysOverdue ?? 0;
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-medium shrink-0">
+        <Clock className="h-3 w-3" />
+        {d > 0 ? `Due ${d}d` : "Due soon"}
+      </span>
+    );
+  }
+  // Plain A-list: badge only if previously invited but not yet tapped (paused).
+  if (sig?.waitlistStatus === "paused") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-ink/5 text-ink-soft px-2 py-0.5 text-[10px] font-medium shrink-0">
+        Invited
+      </span>
+    );
+  }
+  return null;
+}
 
 function StatusChip({
   status,

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.62.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.62.0 &mdash; Smart Invite: the waitlist invite composer now prioritizes who to ask first.</strong> The “Invite to waitlist” page used to show a flat list of A-listers by lifetime spend. It now ranks them by the moment that matters: <strong>patients on the schedule right now</strong> (a live upcoming booking &mdash; already engaged, the quick win) float to the top with a <em>“Booked Jun 20”</em> chip, then <strong>patients due for a touch-up</strong> (Recall’s overdue engine) with a <em>“Due 45d”</em> chip, then the rest by spend. Patients already on the active waitlist are filtered out automatically &mdash; no more inviting people who are already in. One-tap selects: <strong>On the schedule (N)</strong> and <strong>Due soon (N)</strong>, and the on-schedule cohort is pre-selected for you. Each patient’s usual service is <strong>inferred from their history and pre-filled</strong> onto their waitlist row when the invite goes out &mdash; so when a slot frees up, the matcher already knows what they’d want, without anyone having to ask. <strong>Touched</strong>: <code>getSmartInviteCohortFn</code> (new &mdash; future-booking + Recall-overdue + waitlist-status + inferred-service signals, all paginated), <code>sendOptInInviteBatchFn</code> (seeds inferred desired-service onto the paused row, never clobbering a patient’s own pick), <code>app.refill.waitlist.invite</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.61.0",
     date: "June 2026",
     items: [

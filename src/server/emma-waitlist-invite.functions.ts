@@ -36,6 +36,8 @@ import {
   resolveOwnerDisplayName,
 } from "@/server/emma-spa-profile";
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
+import { doListOverdue } from "@/server/patient-ingest.functions";
+import { selectAllRows } from "@/lib/supabase-paginate";
 
 const PUBLIC_REFILL_ORIGIN =
   process.env.PUBLIC_REFILL_URL ?? "https://getrefill.app";
@@ -201,6 +203,15 @@ const sendInput = z.object({
   viewAsUserId: z.string().uuid().optional(),
   patientNodeIds: z.array(z.string().uuid()).min(1).max(50),
   inviteBody: z.string().min(20).max(2000),
+  /**
+   * v2.62.0 (Smart Invite Slice 1): optional inferred desired-service per
+   * patient, keyed by patient_node_id. Seeded onto the paused waitlist row's
+   * `treatment_types` so the rescue matcher has a desire to match BEFORE the
+   * patient taps — "infer, don't ask" ([[feedback_human_first_design]]). Never
+   * clobbers a patient's own picks: only written when the row's current
+   * treatment_types is empty. Omit → behaves exactly as pre-Slice-1 (empty []).
+   */
+  inferredTreatmentByPatient: z.record(z.string()).optional(),
 });
 
 export const sendOptInInviteBatchFn = createServerFn({ method: "POST" })
@@ -287,10 +298,14 @@ export const sendOptInInviteBatchFn = createServerFn({ method: "POST" })
         continue;
       }
 
+      // v2.62.0: inferred desired-service for this patient (Smart Invite).
+      const inferred =
+        data.inferredTreatmentByPatient?.[patientNodeId]?.trim() || null;
+
       try {
         const { data: existing } = await sb
           .from("emma_waitlist")
-          .select("id, status")
+          .select("id, status, treatment_types")
           .eq("user_id", effectiveUserId)
           .eq("patient_node_id", patientNodeId)
           .maybeSingle();
@@ -307,13 +322,23 @@ export const sendOptInInviteBatchFn = createServerFn({ method: "POST" })
         }
 
         if (existing) {
-          const { error: updateErr } = await sb
-            .from("emma_waitlist")
-            .update({
+          // Re-invite (paused/revoked → paused). Seed the inferred desire only
+          // if the row has no treatment_types yet — never clobber a prior pick.
+          const updatePatch: Database["public"]["Tables"]["emma_waitlist"]["Update"] =
+            {
               status: "paused",
               opt_in_source: "spa-manual",
               revoked_at: null,
-            })
+            };
+          if (
+            inferred &&
+            (!existing.treatment_types || existing.treatment_types.length === 0)
+          ) {
+            updatePatch.treatment_types = [inferred];
+          }
+          const { error: updateErr } = await sb
+            .from("emma_waitlist")
+            .update(updatePatch)
             .eq("id", existing.id);
           if (updateErr) throw new Error(updateErr.message);
         } else {
@@ -325,7 +350,7 @@ export const sendOptInInviteBatchFn = createServerFn({ method: "POST" })
               status: "paused",
               opt_in_source: "spa-manual",
               intent_type: "catchall",
-              treatment_types: [],
+              treatment_types: inferred ? [inferred] : [],
             });
           if (insertErr) throw new Error(insertErr.message);
         }
@@ -465,4 +490,180 @@ export const getInviteCopyTemplateFn = createServerFn({ method: "POST" })
       return { template: override, isDefault: false };
     }
     return { template: DEFAULT_INVITE_TEMPLATE, isDefault: true };
+  });
+
+// ════════════════════════════════════════════════════════════════════════════
+//  Smart Invite cohort signals (v2.62.0 — Waitlist Slice 1)
+// ════════════════════════════════════════════════════════════════════════════
+//
+// The waitlist-invite composer already loads the A-list (matchesAListRules +
+// listPatients, sorted by lifetime spend). This fn returns the THREE extra
+// per-patient signals the composer can't derive from PatientListRow alone, so
+// it can PRIORITIZE the cohort instead of showing a flat A-list:
+//
+//   1. futureAppt    — patient has a live upcoming booking ⇒ "On the schedule"
+//                      cohort (the quick-win: already engaged + on the books).
+//   2. overdue       — Recall's daysOverdue ([[doListOverdue]]) ⇒ "Due for a
+//                      touch-up" cohort (the soft re-engagement tickler).
+//   3. waitlistStatus — already-active ⇒ EXCLUDE (they're already on the list).
+//
+// Plus `inferredTreatment` (most-recent appointment treatment_type) so the
+// composer can prefill desired-service — "infer, don't ask".
+//
+// Keyed by patient_node_id; returns a signal only for patients that have at
+// least one of these signals. Patients absent from the map = plain A-list,
+// no exclusion, no inferred service.
+
+// Appointment statuses that are NOT a live future booking.
+const DEAD_APPT_STATUSES = new Set([
+  "cancelled",
+  "canceled",
+  "no_show",
+  "noshow",
+  "completed",
+]);
+
+export type SmartInviteSignal = {
+  patientNodeId: string;
+  /** Earliest live upcoming appointment (ISO), or null. Drives the "On the schedule" cohort. */
+  futureApptAt: string | null;
+  /** treatment_type of that upcoming appointment, if any. */
+  futureApptTreatment: string | null;
+  /** Recall days-overdue (> 0), or null. Drives the "Due for a touch-up" cohort. */
+  daysOverdue: number | null;
+  /** Product kind that triggered the overdue (e.g. "toxin"), if any. */
+  overdueKind: string | null;
+  /** Current waitlist status, or null if never invited. "active" = exclude. */
+  waitlistStatus: "active" | "paused" | "revoked" | null;
+  /** Most-recent appointment treatment_type — prefill for desired-service. */
+  inferredTreatment: string | null;
+};
+
+export type SmartInviteCohortResult = {
+  signals: SmartInviteSignal[];
+  generatedAt: string;
+};
+
+const cohortInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+});
+
+export const getSmartInviteCohortFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => cohortInput.parse(raw))
+  .handler(async ({ data }): Promise<SmartInviteCohortResult> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const nowMs = Date.now();
+
+    // ── 1. Appointment scan (paginated): future bookings + inferred service ──
+    type ApptRow = {
+      patient_node_id: string | null;
+      scheduled_at: string;
+      treatment_type: string | null;
+      status: string;
+    };
+    const appts = await selectAllRows<ApptRow>(
+      (from, to) =>
+        sb
+          .from("emma_appointments")
+          .select("patient_node_id, scheduled_at, treatment_type, status")
+          .eq("user_id", effectiveUserId)
+          .order("scheduled_at", { ascending: false })
+          .range(from, to),
+      { label: "smart-invite appts" },
+    );
+
+    // earliest live future appt + most-recent appt-with-treatment, per patient
+    const futureByPatient = new Map<
+      string,
+      { at: string; treatment: string | null }
+    >();
+    const inferredByPatient = new Map<string, string>();
+    for (const a of appts) {
+      const pid = a.patient_node_id;
+      if (!pid) continue;
+      // Inferred service = most-recent appt's treatment (rows are scheduled_at
+      // DESC, so first non-null treatment seen per patient is the latest).
+      const t = a.treatment_type?.trim();
+      if (t && !inferredByPatient.has(pid)) inferredByPatient.set(pid, t);
+      // Live future booking?
+      if (DEAD_APPT_STATUSES.has(a.status?.toLowerCase?.() ?? "")) continue;
+      if (new Date(a.scheduled_at).getTime() <= nowMs) continue;
+      const prev = futureByPatient.get(pid);
+      // Keep the EARLIEST upcoming (rows are DESC → later one seen first; the
+      // last future row we see for a patient is the soonest).
+      if (!prev || new Date(a.scheduled_at).getTime() < new Date(prev.at).getTime()) {
+        futureByPatient.set(pid, {
+          at: a.scheduled_at,
+          treatment: a.treatment_type?.trim() || null,
+        });
+      }
+    }
+
+    // ── 2. Waitlist statuses (exclude already-opted) ─────────────────────────
+    const waitlistRows = await selectAllRows<{
+      patient_node_id: string;
+      status: string;
+    }>(
+      (from, to) =>
+        sb
+          .from("emma_waitlist")
+          .select("patient_node_id, status")
+          .eq("user_id", effectiveUserId)
+          .range(from, to),
+      { label: "smart-invite waitlist" },
+    );
+    const waitlistByPatient = new Map<string, "active" | "paused" | "revoked">();
+    for (const w of waitlistRows) {
+      waitlistByPatient.set(
+        w.patient_node_id,
+        w.status as "active" | "paused" | "revoked",
+      );
+    }
+
+    // ── 3. Recall due-soon (the second cohort) ───────────────────────────────
+    const overdue = await doListOverdue(sb, effectiveUserId, 5000, null);
+    const overdueByPatient = new Map<
+      string,
+      { daysOverdue: number; kind: string }
+    >();
+    for (const o of overdue) {
+      // doListOverdue is sorted most-overdue first; keep that (first wins).
+      if (!overdueByPatient.has(o.patientId)) {
+        overdueByPatient.set(o.patientId, {
+          daysOverdue: o.daysOverdue,
+          kind: o.kind,
+        });
+      }
+    }
+
+    // ── 4. Merge into per-patient signals ────────────────────────────────────
+    const allIds = new Set<string>([
+      ...futureByPatient.keys(),
+      ...inferredByPatient.keys(),
+      ...waitlistByPatient.keys(),
+      ...overdueByPatient.keys(),
+    ]);
+    const signals: SmartInviteSignal[] = [];
+    for (const pid of allIds) {
+      const future = futureByPatient.get(pid);
+      const od = overdueByPatient.get(pid);
+      signals.push({
+        patientNodeId: pid,
+        futureApptAt: future?.at ?? null,
+        futureApptTreatment: future?.treatment ?? null,
+        daysOverdue: od?.daysOverdue ?? null,
+        overdueKind: od?.kind ?? null,
+        waitlistStatus: waitlistByPatient.get(pid) ?? null,
+        // Prefill: prefer the upcoming appt's treatment, else most-recent.
+        inferredTreatment:
+          future?.treatment ?? inferredByPatient.get(pid) ?? null,
+      });
+    }
+
+    return { signals, generatedAt: new Date(nowMs).toISOString() };
   });
