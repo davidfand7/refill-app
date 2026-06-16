@@ -67,7 +67,7 @@ function BookingSettingsPage() {
   if (membership.status !== "tenant") {
     return (
       <div>
-        <PageHeader title="Online booking" description="Set up your native scheduler." />
+        <PageHeader title="Booking Settings" description="Set up your native scheduler." />
         <CalendarTabs active="booking" />
         <div className="px-6 lg:px-10 py-10 max-w-md">
           <div className="rounded-xl border border-dashed border-rule bg-paper/40 px-5 py-6">
@@ -86,7 +86,7 @@ function BookingSettingsPage() {
   return (
     <div>
       <PageHeader
-        title="Online booking"
+        title="Booking Settings"
         description="Turn on patient self-booking, set your hours, and choose which services are bookable online."
       />
       <CalendarTabs active="booking" />

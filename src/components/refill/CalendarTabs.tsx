@@ -27,7 +27,7 @@ const TABS: Array<{
 }> = [
   { key: "schedule", to: "/app/refill/calendar/schedule", label: "Schedule", Icon: CalendarDays },
   { key: "appointments", to: "/app/refill/calendar/appointments", label: "Appointments", Icon: ListChecks },
-  { key: "booking", to: "/app/refill/calendar/booking", label: "Online booking", Icon: Globe },
+  { key: "booking", to: "/app/refill/calendar/booking", label: "Booking Settings", Icon: Globe },
   { key: "offers", to: "/app/refill/calendar/offers", label: "Cross-sell", Icon: Tag },
   { key: "connections", to: "/app/refill/calendar/connections", label: "Connections", Icon: Plug },
   { key: "staging", to: "/app/refill/calendar/staging", label: "Staging", Icon: Columns2 },

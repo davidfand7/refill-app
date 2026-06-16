@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.60.2",
+    date: "June 2026",
+    items: [
+      "<strong>v2.60.2 &mdash; Renamed the Calendar tab “Online booking” to “Booking Settings.”</strong> The tab is where you configure providers, hours, and which services each provider offers &mdash; “Booking Settings” describes that better than “Online booking” (which sounded like just the on/off switch). <strong>Touched</strong>: Calendar tab + page title. No migration.",
+    ],
+  },
+  {
     version: "v2.60.1",
     date: "June 2026",
     items: [
