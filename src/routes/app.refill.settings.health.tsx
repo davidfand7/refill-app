@@ -23,8 +23,11 @@ import {
   AlertTriangle,
   ArrowRight,
   CalendarClock,
+  Check,
   CheckCircle2,
+  Copy,
   Gift,
+  Laptop,
   Loader2,
   MessageSquare,
   PlugZap,
@@ -38,8 +41,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
   getConnectionHealthFn,
+  getLocalAgentFn,
+  provisionLocalAgentFn,
   type ConnectionHealthReport,
   type ConnectionHealthItem,
+  type LocalAgentInfo,
 } from "@/server/connection-health.functions";
 import type { HealthSeverity } from "@/lib/connection-health";
 import { cn } from "@/lib/utils";
@@ -190,8 +196,183 @@ function ConnectionHealthPage() {
             onChanged={() => void load(true)}
           />
         )}
+
+        {/* The LOCAL relay agent: the one delivery leg with no server signal —
+            the Mac that relays rescue texts via iMessage. Provisioning mints a
+            per-spa secret + a one-paste installer; once it checks in, the
+            'presence' card above goes Live/Quiet/Silent. */}
+        {!loading && (
+          <LocalAgentSection
+            accessToken={accessToken}
+            viewAsUserId={viewAsUserId}
+            onChanged={() => void load(true)}
+          />
+        )}
       </div>
     </div>
+  );
+}
+
+function LocalAgentSection({
+  accessToken,
+  viewAsUserId,
+  onChanged,
+}: {
+  accessToken: string | null;
+  viewAsUserId: string | undefined;
+  onChanged: () => void;
+}) {
+  const [info, setInfo] = useState<LocalAgentInfo | null>(null);
+  const [hidden, setHidden] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const [copied, setCopied] = useState<"secret" | "install" | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!accessToken) return;
+      try {
+        const r = await getLocalAgentFn({ data: { accessToken, viewAsUserId } });
+        if (!cancelled) setInfo(r);
+      } catch {
+        // Self-hide on any read failure (e.g. migration not yet applied) so the
+        // rest of the trust page stays load-bearing.
+        if (!cancelled) setHidden(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, viewAsUserId]);
+
+  const provision = useCallback(async () => {
+    if (!accessToken) return;
+    setBusy(true);
+    try {
+      const r = await provisionLocalAgentFn({ data: { accessToken, viewAsUserId } });
+      setInfo(r);
+      setRevealed(true);
+      onChanged();
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Couldn't set up the local agent.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }, [accessToken, viewAsUserId, onChanged]);
+
+  const copy = useCallback((text: string, which: "secret" | "install") => {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(which);
+      setTimeout(() => setCopied(null), 1800);
+    });
+  }, []);
+
+  if (hidden) return null;
+
+  return (
+    <section className="rounded-xl border border-rule bg-white px-5 py-4">
+      <div className="flex items-start gap-3">
+        <div className="rounded-full p-2 shrink-0 bg-[#f3f0e7]">
+          <Laptop className="h-4 w-4 text-ink-soft" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-[14px] font-semibold text-ink">
+            Local delivery agent
+          </h3>
+          <p className="text-[12px] text-ink-soft mt-1 leading-relaxed">
+            The Mac that relays rescue texts over iMessage is the one delivery
+            step SmartSpa can't see on its own. Set up a tiny check-in on that
+            Mac and this page will tell you, live, whether your texts can
+            actually go out — or whether the relay has gone quiet.
+          </p>
+
+          {!info?.provisioned ? (
+            <button
+              type="button"
+              onClick={() => void provision()}
+              disabled={busy || !accessToken}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-emerald px-3.5 py-2 text-[12px] font-semibold text-paper hover:opacity-95 transition disabled:opacity-60"
+            >
+              {busy ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Laptop className="h-3.5 w-3.5" />
+              )}
+              Set up the local agent
+            </button>
+          ) : (
+            <div className="mt-3 space-y-3">
+              <div>
+                <div className="text-[11px] font-semibold text-ink-soft mb-1">
+                  Run this once on the relay Mac
+                </div>
+                <p className="text-[11px] text-ink-faint mb-1.5 leading-relaxed">
+                  Open Terminal on the Mac that has Messages signed in, paste
+                  this, and press Return. It installs a check-in that runs every
+                  5 minutes (and survives restarts).
+                </p>
+                <div className="relative">
+                  <pre className="text-[10.5px] leading-relaxed bg-[#1d2127] text-[#e6e1d3] rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-all">
+                    {info.installCommand}
+                  </pre>
+                  <button
+                    type="button"
+                    onClick={() => copy(info.installCommand ?? "", "install")}
+                    className="absolute top-2 right-2 inline-flex items-center gap-1 rounded-md bg-white/10 px-2 py-1 text-[10px] font-semibold text-white hover:bg-white/20 transition"
+                  >
+                    {copied === "install" ? (
+                      <Check className="h-3 w-3" />
+                    ) : (
+                      <Copy className="h-3 w-3" />
+                    )}
+                    {copied === "install" ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px]">
+                <span className="font-semibold text-ink-soft">Agent secret</span>
+                <code className="rounded bg-[#f3f0e7] px-2 py-0.5 text-ink-soft break-all">
+                  {revealed
+                    ? info.secret
+                    : "•".repeat(12) + " (hidden)"}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => setRevealed((v) => !v)}
+                  className="text-emerald font-semibold hover:underline"
+                >
+                  {revealed ? "Hide" : "Reveal"}
+                </button>
+                {revealed && (
+                  <button
+                    type="button"
+                    onClick={() => copy(info.secret ?? "", "secret")}
+                    className="inline-flex items-center gap-1 text-ink-soft hover:text-ink"
+                  >
+                    {copied === "secret" ? (
+                      <Check className="h-3 w-3" />
+                    ) : (
+                      <Copy className="h-3 w-3" />
+                    )}
+                    {copied === "secret" ? "Copied" : "Copy"}
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-ink-faint leading-relaxed">
+                Keep this secret private — it's the key the Mac uses to check in.
+                The status card above turns{" "}
+                <span className="font-semibold">Live</span> within a few minutes
+                of running the command.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -230,8 +411,11 @@ function HealthCard({ item }: { item: ConnectionHealthItem }) {
       ? CalendarClock
       : item.kind === "delivery"
         ? MessageSquare
-        : Gift;
+        : item.kind === "presence"
+          ? Laptop
+          : Gift;
   const needsAction = item.severity === "error" || item.severity === "warn";
+  const lastLabel = item.kind === "presence" ? "Last check-in" : "Last activity";
   return (
     <section className="rounded-xl border border-rule bg-white px-5 py-4">
       <div className="flex items-start gap-3">
@@ -263,7 +447,9 @@ function HealthCard({ item }: { item: ConnectionHealthItem }) {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[11px] text-ink-faint">
             <span>{item.tierLabel}</span>
             <span aria-hidden>·</span>
-            <span>Last activity {item.lastEventLabel}</span>
+            <span>
+              {lastLabel} {item.lastEventLabel}
+            </span>
           </div>
         </div>
         <Link

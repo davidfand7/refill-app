@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.58.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.58.0 &mdash; Connection health now watches the Mac that relays your rescue texts.</strong> The no-show rescue loop runs itself right up to the email&nbsp;&mdash;&nbsp;the last step, relaying that to the patient by text, happens on your Mac through iMessage, and SmartSpa couldn&rsquo;t see whether it was actually online. Now it can: a tiny check-in runs on that Mac every few minutes, and <strong>Settings → Connection health</strong> shows a new <strong>Local delivery agent</strong> card that reads <em>Live</em>, <em>Quiet</em>, or <em>Silent</em>&nbsp;&mdash;&nbsp;so if the Mac sleeps or Messages closes, you find out here instead of wondering why texts stopped. Set it up in one paste from that page. <strong>Touched</strong>: new <code>local_agents</code> table + <code>/api/agent/heartbeat</code>, a <code>presence</code> tier in connection-health, the health page, and <code>scripts/local-agent/</code>. <em>Migration: local_agents.</em>",
+    ],
+  },
+  {
     version: "v2.57.1",
     date: "June 2026",
     items: [

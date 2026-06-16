@@ -42,7 +42,7 @@ import {
 export interface ConnectionHealthItem {
   /** Stable key, e.g. "scheduler:acuity" / "portal:abbvie" / "delivery:sms". */
   key: string;
-  kind: "scheduler" | "portal" | "delivery";
+  kind: "scheduler" | "portal" | "delivery" | "presence";
   displayName: string;
   /** Secondary line — connected account email, or manufacturer brand. */
   subLabel: string | null;
@@ -84,6 +84,7 @@ function admin() {
 const CONNECTIONS_ROUTE = "/app/refill/calendar/connections";
 const REWARDS_ROUTE = "/app/refill/recognition/rewards";
 const RECOVERY_ROUTE = "/app/refill/recovery";
+const HEALTH_ROUTE = "/app/refill/settings/health";
 
 /** The two outbound channels SmartSpa sends patients on (patient_outreach.channel).
  *  source_key matches the channel value verbatim. */
@@ -260,6 +261,48 @@ function deliveryDetail(
       // Unreachable on the delivery tier (no hard-break on silence), but the
       // switch must be exhaustive.
       return `${name} sending reports a problem. ${BOUNDARY}`;
+  }
+}
+
+/**
+ * Local delivery agent (presence tier). The freshness verdict comes from the
+ * heartbeat age, but a fresh agent can still be UNABLE to relay — Messages.app
+ * isn't running — which `capReason` carries. When present, the capability
+ * problem overrides the copy even though the agent is checking in fine.
+ */
+function presenceDetail(
+  name: string,
+  verdict: HealthVerdict,
+  ageLabel: string,
+  ctx?: { neverSeen?: boolean; capReason?: string | null },
+): string {
+  // Fresh check-ins but a capability the relay needs is down → say THAT, not
+  // "all good". The agent is alive; the relay is not.
+  if (ctx?.capReason) {
+    return `${name} is checking in (last ${ageLabel}), but ${ctx.capReason} — rescue texts can't relay until that's fixed. ${BOUNDARY}`;
+  }
+  if (ctx?.neverSeen) {
+    switch (verdict) {
+      case "setup":
+        return `${name} is set up — waiting for its first check-in. Run the installer on the Mac that relays your texts.`;
+      case "stale":
+      case "broken":
+        return `${name} was set up but has never checked in — the pinger may not be installed or running on the Mac. ${BOUNDARY}`;
+      default:
+        break;
+    }
+  }
+  switch (verdict) {
+    case "healthy":
+      return `Online and standing by — last checked in ${ageLabel}. Rescue texts can relay through this Mac.`;
+    case "stale":
+      return `${name} hasn't checked in for a bit (last ${ageLabel}) — the Mac may be asleep or Claude Desktop closed. Rescue texts won't relay until it's back. ${BOUNDARY}`;
+    case "broken":
+      return `${name} has gone silent (last check-in ${ageLabel}) — the Mac is offline or the relay agent stopped. Rescue texts can't go out until it reconnects. ${BOUNDARY}`;
+    case "setup":
+      return `${name} is set up — waiting for its first check-in.`;
+    case "unconfigured":
+      return `No local relay agent is set up.`;
   }
 }
 
@@ -756,6 +799,79 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
       },
     );
 
+    // ── Local delivery agent (presence) — the iMessage relay's blind leg ──
+    // The rescue loop is autonomous up to the proxy email; the final hop is the
+    // owner's Mac (Claude Desktop + iMessage MCP) relaying the text — a leg with
+    // ZERO server signal until now. The pinger on that Mac (scripts/local-agent)
+    // POSTs /api/agent/heartbeat every ~5 min; we age the last check-in into a
+    // Live/Quiet/Silent verdict. Only emitted once a spa has PROVISIONED an
+    // agent (a local_agents row) — provisioning IS the "we use this relay"
+    // declaration, so no expect-gate is needed. Degrades gracefully (try/catch)
+    // so a not-yet-applied migration can't break the trust page.
+    const presenceItems: ConnectionHealthItem[] = [];
+    try {
+      type AgentRow = {
+        label: string | null;
+        last_seen_at: string | null;
+        capabilities: Record<string, unknown> | null;
+      };
+      const { data, error } = await (sb as unknown as { from(t: string): any })
+        .from("local_agents")
+        .select("label, last_seen_at, capabilities")
+        .eq("user_id", effectiveUserId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      const agent = data as AgentRow | null;
+      if (agent) {
+        const name = agent.label ?? "Local delivery agent";
+        const lastEventAtMs = parseTs(agent.last_seen_at);
+        const neverSeen = lastEventAtMs == null;
+        const freshness = computeVerdict({
+          tier: "presence",
+          connected: true, // provisioned → it exists; freshness carries the signal
+          lastEventAtMs,
+          nowMs,
+        });
+        // A fresh agent that reports a relay-blocking capability as explicitly
+        // false is online but USELESS for relaying — override to broken with the
+        // specific reason. Absent capability keys = "unknown" → never cry wolf.
+        const caps = agent.capabilities ?? {};
+        let capReason: string | null = null;
+        if (!neverSeen && caps.messages_app === false) {
+          capReason = "the Messages app isn't running on that Mac";
+        }
+        const verdict: HealthVerdict = capReason ? "broken" : freshness.verdict;
+        const severity: HealthSeverity = capReason ? "error" : freshness.severity;
+        const ageLabel = formatAge(
+          lastEventAtMs == null ? null : Math.max(0, nowMs - lastEventAtMs),
+        );
+        const needsAction = severity === "error" || severity === "warn";
+        presenceItems.push({
+          key: "presence:local-agent",
+          kind: "presence",
+          displayName: name,
+          subLabel: "iMessage relay",
+          tier: "presence",
+          tierLabel: tierLabelOf("presence"),
+          verdict,
+          severity,
+          statusLabel: verdictLabel(verdict),
+          detail: presenceDetail(name, verdict, ageLabel, { neverSeen, capReason }),
+          lastEventAtMs,
+          lastEventLabel: ageLabel,
+          cta: {
+            label: neverSeen ? "Finish setup" : needsAction ? "Reconnect" : "Manage",
+            to: HEALTH_ROUTE,
+          },
+        });
+      }
+    } catch (err) {
+      console.error(
+        "[connection-health] local_agents read failed (degrading):",
+        err,
+      );
+    }
+
     // Sort worst-first so anything needing attention floats to the top.
     const sevRank: Record<HealthSeverity, number> = {
       error: 0,
@@ -769,6 +885,7 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
       ...expectedSchedulerItems,
       ...portalItems,
       ...deliveryItems,
+      ...presenceItems,
     ].sort((a, b) => sevRank[a.severity] - sevRank[b.severity]);
 
     const attention = items.filter(
@@ -923,4 +1040,174 @@ export const setExpectedSourceFn = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
     }
     return { ok: true };
+  });
+
+// ─── Local delivery agent provisioning (presence tier) ───────────────────────
+//
+// The spa-facing half of the heartbeat: mint (or read) the per-spa secret the
+// pinger on the relay Mac presents, and hand back a ready-to-run install
+// command (secret embedded). One row per spa (unique user_id) — provisioning is
+// idempotent: calling it twice returns the SAME secret, never rotates it out
+// from under a running pinger.
+
+const PUBLIC_ORIGIN =
+  process.env.REFILL_PUBLIC_ORIGIN ?? "https://getrefill.app";
+
+function localAgentTbl(sb: ReturnType<typeof admin>) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (sb as unknown as { from(t: string): any }).from("local_agents");
+}
+
+/** 48-hex random token — the same shape as the webhook path-secrets we trust as
+ *  the real gate. crypto is a global on Workers + Node 18+. */
+function genAgentSecret(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** The self-contained installer the owner runs ON THE RELAY MAC. Writes a tiny
+ *  pinger + a launchd job that runs it every 5 minutes, then starts it. Secret
+ *  is embedded so it's a single copy-paste with nothing else to fill in. Mirrors
+ *  scripts/local-agent/install.sh (the committed source of truth). */
+function buildInstallCommand(secret: string): string {
+  const endpoint = `${PUBLIC_ORIGIN}/api/agent/heartbeat`;
+  return `mkdir -p ~/.smartspa && cat > ~/.smartspa/pinger.sh <<'PINGER'
+#!/bin/bash
+# SmartSpa local delivery agent — heartbeat pinger
+ENDPOINT="${endpoint}"
+SECRET="${secret}"
+MSG=false; pgrep -x Messages >/dev/null 2>&1 && MSG=true
+curl -fsS -m 15 -X POST "$ENDPOINT" \\
+  -H "x-agent-secret: $SECRET" -H "Content-Type: application/json" \\
+  -d "{\\"version\\":\\"pinger-1.0\\",\\"status\\":\\"ok\\",\\"capabilities\\":{\\"messages_app\\":$MSG}}" >/dev/null 2>&1
+PINGER
+chmod +x ~/.smartspa/pinger.sh && cat > ~/Library/LaunchAgents/com.smartspa.localagent.plist <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.smartspa.localagent</string>
+  <key>ProgramArguments</key><array><string>/bin/bash</string><string>$HOME/.smartspa/pinger.sh</string></array>
+  <key>StartInterval</key><integer>300</integer>
+  <key>RunAtLoad</key><true/>
+</dict></plist>
+PLIST
+launchctl unload ~/Library/LaunchAgents/com.smartspa.localagent.plist 2>/dev/null; launchctl load ~/Library/LaunchAgents/com.smartspa.localagent.plist && bash ~/.smartspa/pinger.sh && echo "SmartSpa local agent installed and checked in."`;
+}
+
+export interface LocalAgentInfo {
+  provisioned: boolean;
+  secret: string | null;
+  label: string | null;
+  lastSeenAtMs: number | null;
+  endpoint: string;
+  installCommand: string | null;
+}
+
+const localAgentSchema = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().optional(),
+});
+
+/** UI: read the spa's local agent (if any) — secret + last check-in + the
+ *  ready-to-run installer. Returns provisioned:false when none exists yet. */
+export const getLocalAgentFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => localAgentSchema.parse(raw))
+  .handler(async ({ data }): Promise<LocalAgentInfo> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const endpoint = `${PUBLIC_ORIGIN}/api/agent/heartbeat`;
+    const { data: row, error } = await localAgentTbl(sb)
+      .select("secret, label, last_seen_at")
+      .eq("user_id", effectiveUserId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!row) {
+      return {
+        provisioned: false,
+        secret: null,
+        label: null,
+        lastSeenAtMs: null,
+        endpoint,
+        installCommand: null,
+      };
+    }
+    const r = row as { secret: string; label: string | null; last_seen_at: string | null };
+    return {
+      provisioned: true,
+      secret: r.secret,
+      label: r.label,
+      lastSeenAtMs: parseTs(r.last_seen_at),
+      endpoint,
+      installCommand: buildInstallCommand(r.secret),
+    };
+  });
+
+const provisionLocalAgentSchema = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().optional(),
+  label: z.string().max(80).optional(),
+});
+
+/** UI: get-or-create the spa's local agent. Idempotent — never rotates an
+ *  existing secret (a running pinger keeps working). Returns the installer. */
+export const provisionLocalAgentFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => provisionLocalAgentSchema.parse(raw))
+  .handler(async ({ data }): Promise<LocalAgentInfo> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const endpoint = `${PUBLIC_ORIGIN}/api/agent/heartbeat`;
+
+    const { data: existing, error: readErr } = await localAgentTbl(sb)
+      .select("secret, label, last_seen_at")
+      .eq("user_id", effectiveUserId)
+      .maybeSingle();
+    if (readErr) throw new Error(readErr.message);
+    if (existing) {
+      const e = existing as {
+        secret: string;
+        label: string | null;
+        last_seen_at: string | null;
+      };
+      // Allow setting/updating a friendly label without rotating the secret.
+      if (data.label && data.label !== e.label) {
+        await localAgentTbl(sb)
+          .update({ label: data.label, updated_at: new Date().toISOString() })
+          .eq("user_id", effectiveUserId);
+      }
+      return {
+        provisioned: true,
+        secret: e.secret,
+        label: data.label ?? e.label,
+        lastSeenAtMs: parseTs(e.last_seen_at),
+        endpoint,
+        installCommand: buildInstallCommand(e.secret),
+      };
+    }
+
+    const secret = genAgentSecret();
+    const nowIso = new Date().toISOString();
+    const { error: insErr } = await localAgentTbl(sb).insert({
+      user_id: effectiveUserId,
+      secret,
+      label: data.label ?? null,
+      capabilities: {},
+      created_at: nowIso,
+      updated_at: nowIso,
+    });
+    if (insErr) throw new Error(insErr.message);
+    return {
+      provisioned: true,
+      secret,
+      label: data.label ?? null,
+      lastSeenAtMs: null,
+      endpoint,
+      installCommand: buildInstallCommand(secret),
+    };
   });
