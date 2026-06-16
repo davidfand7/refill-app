@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.60.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.60.1 &mdash; Fixed misleading Rescue copy.</strong> The Eligible Treatments card said an empty list meant Rescue would “skip every cancellation” &mdash; the opposite of what actually happens. With no treatments listed, Rescue fires for <strong>every</strong> cancellation; you add treatments only to <em>narrow</em> it. The copy now says so. <strong>Touched</strong>: Rescue page. No migration, no behavior change.",
+    ],
+  },
+  {
     version: "v2.60.0",
     date: "June 2026",
     items: [

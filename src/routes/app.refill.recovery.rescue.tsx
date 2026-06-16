@@ -355,14 +355,16 @@ function RescueAgentPage() {
                   Eligible treatments
                 </div>
                 <div className="ml-auto text-[10px] text-ink-faint italic">
-                  Only these appointments trigger rescue offers
+                  Empty = every cancellation is eligible
                 </div>
               </header>
               <div className="px-5 py-4 space-y-3">
                 <div className="flex flex-wrap gap-2">
                   {policy.eligibleTreatments.length === 0 && (
                     <span className="text-[11px] text-ink-faint italic">
-                      No eligible treatments yet — Rescue will skip every cancellation.
+                      No restrictions — Rescue fires for every cancelled
+                      appointment. Add treatments only to limit it to specific
+                      ones.
                     </span>
                   )}
                   {policy.eligibleTreatments.map((t) => (
