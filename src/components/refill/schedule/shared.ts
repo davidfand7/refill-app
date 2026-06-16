@@ -100,47 +100,49 @@ export function groupBlocksByDay(blocks: DayBlock[], tz: string): Map<string, Da
  * Pure; works off real start/end minutes in the given tz. A zero/negative span
  * is floored to 5 min so a same-instant pair still registers as overlapping.
  */
-export type StackLayout = {
-  /** id -> pixel top within the column (pushed down to avoid overlap). */
+export type AnchorLayout = {
+  /** id -> pixel top = its real start time on the rail (always). */
   topOf: Map<string, number>;
-  /** id -> pixel height (real duration, floored to the content-min). */
+  /** id -> pixel height: its real duration, but SHRUNK to the gap before the
+   *  next appointment so cards never overlap. Tightly-packed appts get compact
+   *  (the card content adapts), but every card's TOP stays on its true time. */
   heightOf: Map<string, number>;
-  /** Pixel bottom of the lowest card — the column must be at least this tall. */
-  contentBottom: number;
 };
 
 /**
- * Stacked "push-down" layout (v2.56.3) — the day/week model the spa actually
- * wants (matches the Month list, not Google's side-by-side lanes). Every card is
- * FULL WIDTH and time-ordered: it sits at its real start time when there's room,
- * and when it would collide with the card above it, it's pushed down to sit just
- * below (a small gap between). So an open morning keeps real time-of-day
- * positioning, and a packed afternoon stacks into a clean readable list. The
- * column grows to `contentBottom` so nothing clips.
+ * Anchor-to-time + shrink-to-fit layout (v2.56.4 — Grasshopper's call, matching
+ * Acuity). Every card's top sits exactly on its start-time line, so a 1:00 PM
+ * card is always at 1:00 and columns line up across the rail. A card is as tall
+ * as its real duration, but never taller than the gap to the next appointment —
+ * so a packed run compresses into snug, non-overlapping cards (content trims via
+ * the card itself) while an open stretch shows true durations and real gaps.
  */
-export function stackApptCards(
+export function anchorApptCards(
   appts: DayAppointment[],
   tz: string,
   pxPerMin: number,
-  minPx: number,
   winStart: number,
-): StackLayout {
+): AnchorLayout {
   const GAP = 2;
+  const MIN_VIS = 15; // a card never collapses below this (stays clickable)
   const topOf = new Map<string, number>();
   const heightOf = new Map<string, number>();
   const sorted = appts
     .map((a) => ({ a, start: localMinutes(a.startIso, tz) }))
-    .sort((x, y) => x.start - y.start);
-  let cursor = -Infinity; // bottom of the last placed card
-  for (const { a, start } of sorted) {
-    const timeTop = (start - winStart) * pxPerMin;
-    const height = Math.max(minPx, (a.durationMin || 0) * pxPerMin);
-    const top = cursor === -Infinity ? timeTop : Math.max(timeTop, cursor + GAP);
+    .sort((x, y) => x.start - y.start || (y.a.durationMin || 0) - (x.a.durationMin || 0));
+  for (let i = 0; i < sorted.length; i++) {
+    const { a, start } = sorted[i];
+    const top = (start - winStart) * pxPerMin;
+    const desired = Math.max(MIN_VIS, (a.durationMin || 0) * pxPerMin);
+    const nextStart = i + 1 < sorted.length ? sorted[i + 1].start : null;
+    const height =
+      nextStart == null
+        ? desired
+        : Math.max(MIN_VIS, Math.min(desired, (nextStart - start) * pxPerMin - GAP));
     topOf.set(a.id, top);
     heightOf.set(a.id, height);
-    cursor = top + height;
   }
-  return { topOf, heightOf, contentBottom: cursor === -Infinity ? 0 : cursor };
+  return { topOf, heightOf };
 }
 
 export function snap5(mins: number, win: { start: number; end: number }): number {

@@ -46,7 +46,7 @@ import {
   fmtTime,
   dayKey,
   localMinutes,
-  stackApptCards,
+  anchorApptCards,
 } from "@/components/refill/schedule/shared";
 
 // ── Day grid (positioned, single column) ─────────────────────────────────────
@@ -131,14 +131,13 @@ export function DayGrid({
       const mins = win.start + (e.clientY - rect.top) / pxPerMin;
       onBook(day.dateIso, minToHHMM(snap5(mins, win)), solo?.id);
     }
-    const soloStack = stackApptCards(day.appointments, tz, pxPerMin, MIN_DAY_CARD_PX, win.start);
-    const gridHeight = Math.max(height, soloStack.contentBottom);
+    const soloStack = anchorApptCards(day.appointments, tz, pxPerMin, win.start);
     return (
       <div className="rounded-xl border border-rule bg-white p-4">
         {!band.isOpen && <div className="mb-3 text-[12px] text-ink-faint">Closed this day (per business hours).</div>}
         <div
           className="relative cursor-pointer"
-          style={{ height: gridHeight }}
+          style={{ height }}
           onClick={bgClick}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => dropAt(e, solo?.id)}
@@ -176,10 +175,9 @@ export function DayGrid({
     const colAppts = day.appointments.filter((a) => a.providerId === p.id);
     // Provider-specific blocks + whole-practice (null) blocks.
     const colBlocks = day.blocks.filter((b) => b.providerId === p.id || b.providerId === null);
-    const stack = stackApptCards(colAppts, tz, pxPerMin, MIN_DAY_CARD_PX, win.start);
+    const stack = anchorApptCards(colAppts, tz, pxPerMin, win.start);
     return { p, band, colAppts, colBlocks, stack };
   });
-  const gridHeight = Math.max(height, ...colData.map((c) => c.stack.contentBottom));
   return (
     <div className="rounded-xl border border-rule bg-white p-3 overflow-x-auto">
       <div style={{ minWidth: 48 + providers.length * colMinPx }}>
@@ -194,7 +192,7 @@ export function DayGrid({
           ))}
         </div>
         {/* Grid body */}
-        <div className="relative grid" style={{ gridTemplateColumns: `48px repeat(${providers.length}, 1fr)`, height: gridHeight }}>
+        <div className="relative grid" style={{ gridTemplateColumns: `48px repeat(${providers.length}, 1fr)`, height }}>
           {/* hour rail */}
           <div className="relative">
             {hourMarks(win).map((m) => (
@@ -349,10 +347,9 @@ export function WeekGrid({
     const h = hoursByDow.get(dow);
     const dayAppts = apptsByDay.get(d) ?? [];
     const dayBlocks = blocksByDay.get(d) ?? [];
-    const stack = stackApptCards(dayAppts, tz, pxPerMin, MIN_WEEK_CARD_PX, win.start);
+    const stack = anchorApptCards(dayAppts, tz, pxPerMin, win.start);
     return { d, dow, h, dayAppts, dayBlocks, stack };
   });
-  const weekGridHeight = Math.max(height, ...weekData.map((w) => w.stack.contentBottom));
 
   return (
     <div>
@@ -405,7 +402,7 @@ export function WeekGrid({
           })}
         </div>
         {/* Grid body */}
-        <div className="relative grid" style={{ gridTemplateColumns: `48px repeat(7, 1fr)`, height: weekGridHeight }}>
+        <div className="relative grid" style={{ gridTemplateColumns: `48px repeat(7, 1fr)`, height }}>
           {/* hour rail */}
           <div className="relative">
             {hourMarks(win).map((m) => (
@@ -553,6 +550,10 @@ export function ApptCard({
   // 1px hairline gap below each card so vertically-adjacent (back-to-back)
   // bookings read as distinct instead of merging into one block.
   const drawnHeight = Math.max(14, height - 1);
+  const treatment = a.treatment?.trim() || null;
+  // Tall enough for a 2nd line (name + "time · treatment"); otherwise the
+  // treatment rides inline on the name line and time is implied by position.
+  const twoLine = height >= 36;
   return (
     <div
       draggable={!held}
@@ -577,10 +578,16 @@ export function ApptCard({
         <div className="min-w-0">
           <div className={cn("font-semibold text-ink truncate leading-tight", compact ? "text-[11px]" : "text-[12px]")}>
             {a.patientName ?? (held ? "Hold" : "Booked")}
+            {!twoLine && treatment && (
+              <span className="font-normal text-ink-soft"> · {treatment}</span>
+            )}
           </div>
-          {height >= 30 && (
-            <div className="text-[11px] text-ink-soft tabular-nums leading-tight truncate">
-              {compact ? fmtTime(a.startIso, tz) : `${fmtTime(a.startIso, tz)}–${fmtTime(a.endIso, tz)}`}
+          {twoLine && (
+            <div className="text-[11px] text-ink-soft leading-tight truncate">
+              <span className="tabular-nums">
+                {compact ? fmtTime(a.startIso, tz) : `${fmtTime(a.startIso, tz)}–${fmtTime(a.endIso, tz)}`}
+              </span>
+              {treatment && ` · ${treatment}`}
               {held && " · holding"}
             </div>
           )}

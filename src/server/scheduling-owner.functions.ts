@@ -123,6 +123,9 @@ export interface DayAppointment {
   durationMin: number;
   status: string;
   patientName: string | null;
+  /** Treatment / appointment type (e.g. Acuity appointment type), for an
+   *  abbreviated label on the calendar card. */
+  treatment: string | null;
   source: string;
   /** Add-ons chosen for this appointment (snapshot), if any. */
   addOns: ApptAddon[];
@@ -309,6 +312,7 @@ async function hydrateAppointments(
     durationMin: a.duration_min,
     status: a.status,
     patientName: a.booking_name ?? (a.patient_node_id ? titleById.get(a.patient_node_id) ?? null : null),
+    treatment: (a as { treatment_type?: string | null }).treatment_type ?? null,
     source: a.source,
     addOns: addonsByAppt.get(a.id) ?? [],
   }));
@@ -387,7 +391,7 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
         sb
           .from("emma_appointments")
           .select(
-            "id, provider_id, scheduled_at, duration_min, status, source, booking_name, patient_node_id",
+            "id, provider_id, scheduled_at, duration_min, status, source, booking_name, patient_node_id, treatment_type",
           )
           .in("provider_id", idFilter)
           .neq("status", "cancelled")
@@ -544,7 +548,7 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
         sb
           .from("emma_appointments")
           .select(
-            "id, provider_id, scheduled_at, duration_min, status, source, booking_name, patient_node_id",
+            "id, provider_id, scheduled_at, duration_min, status, source, booking_name, patient_node_id, treatment_type",
           )
           .in("provider_id", idFilter)
           .neq("status", "cancelled")

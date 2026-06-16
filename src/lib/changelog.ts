@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.56.4",
+    date: "June 2026",
+    items: [
+      "<strong>v2.56.4 &mdash; Schedule cards now line up with the clock and show the treatment.</strong> Two upgrades to day &amp; week, matching how Acuity reads. <strong>(1) Times match the rail</strong> &mdash; every card now sits exactly on its start-time line, so a 1:00 PM appointment is always at 1:00 and the provider columns line up with each other. When appointments are packed tighter than a full card, each one trims to the gap before the next (staying snug and non-overlapping) rather than drifting below its real time. <strong>(2) Treatment shown</strong> &mdash; each card now shows its treatment (e.g. <em>Tox</em>, <em>Filler</em>, <em>Sculptra</em>) next to the patient name &mdash; inline on compact cards, on its own line with the time on taller ones. <strong>Touched</strong>: <code>scheduling-owner.functions</code> (carry <code>treatment_type</code> through to the calendar), <code>schedule/shared.ts</code> (anchor-to-time + shrink-to-fit layout), <code>schedule/grids.tsx</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.56.3",
     date: "June 2026",
     items: [
