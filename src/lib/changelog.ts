@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.57.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.57.0 &mdash; Reschedule nudges can now reach patients whose profile has no phone on file.</strong> The win-back nudge for a cancelled/no-showed patient looked up their phone/email only on their patient record &mdash; so if that record had no contact (common), they were silently unreachable even though the appointment itself carried their number. It now <strong>falls back to the contact captured on the appointment</strong> (<code>booking_phone</code>/<code>booking_email</code>), so more cancellers can actually be nudged. <strong>Touched</strong>: <code>reschedule.functions</code>. No migration. <em>(Follow-up: brand-new patients with no profile at all are still out of scope — a separate change.)</em>",
+    ],
+  },
+  {
     version: "v2.56.10",
     date: "June 2026",
     items: [

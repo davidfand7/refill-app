@@ -250,11 +250,13 @@ async function computeRescheduleTargets(
     status: string;
     cancelled_at: string | null;
     treatment_type: string | null;
+    booking_phone: string | null;
+    booking_email: string | null;
   };
   const appts = await fetchAllRows<ApptRow>((from, to) =>
     any
       .from("emma_appointments")
-      .select("id, patient_node_id, scheduled_at, status, cancelled_at, treatment_type")
+      .select("id, patient_node_id, scheduled_at, status, cancelled_at, treatment_type, booking_phone, booking_email")
       .eq("user_id", userId)
       .in("status", ["cancelled", "no_show"])
       .gte("scheduled_at", sinceIso)
@@ -265,6 +267,12 @@ async function computeRescheduleTargets(
   // Classify, filter to the chosen classes, dedupe to one row per patient
   // (the most recent, since the rows are ordered newest-first).
   const byPatient = new Map<string, RescheduleTarget>();
+  // Gap-A fallback (v2.57): the appointment carries the patient's contact
+  // (booking_phone/email, v2.46.0) even when their patient-node has none. Capture
+  // the deciding appt's contact so a matched-but-contactless patient is still
+  // reachable. (Truly unmatched cancellers — no patient_node — are a separate,
+  // bigger follow-up since the whole pipeline keys on patient_node_id.)
+  const bookingContact = new Map<string, { phone: string | null; email: string | null }>();
   // Patients whose most-recent chosen outcome is still inside the operator's
   // grace window — held back (give them time to self-rebook first), but counted
   // so the page shows them honestly instead of the list silently shrinking.
@@ -305,6 +313,10 @@ async function computeRescheduleTargets(
         continue;
       }
     }
+    bookingContact.set(a.patient_node_id, {
+      phone: (a.booking_phone ?? "").trim() || null,
+      email: (a.booking_email ?? "").trim() || null,
+    });
     byPatient.set(a.patient_node_id, {
       patientNodeId: a.patient_node_id,
       name: "",
@@ -396,8 +408,9 @@ async function computeRescheduleTargets(
   ids = ids.filter((id) => !opted.has(id) && !hasReturned(id));
   if (ids.length === 0) return { targets: [], heldInGrace };
 
-  // Resolve contact from the patient node (emma_appointments has no denormalized
-  // contact — only patient_node_id).
+  // Resolve contact from the patient node, then fall back to the appointment's
+  // own booking_phone/email (v2.46.0) so a patient whose node has no contact is
+  // still reachable (Gap-A).
   const contact = new Map<string, { name: string; phone: string | null; email: string | null }>();
   for (let i = 0; i < ids.length; i += CHUNK) {
     const { data } = await any
@@ -421,11 +434,12 @@ async function computeRescheduleTargets(
   const out: RescheduleTarget[] = ids.map((id) => {
     const t = byPatient.get(id)!;
     const c = contact.get(id);
+    const bc = bookingContact.get(id);
     return {
       ...t,
       name: c?.name ?? "",
-      phone: c?.phone ?? null,
-      email: c?.email ?? null,
+      phone: (c?.phone ?? "").trim() || bc?.phone || null,
+      email: (c?.email ?? "").trim() || bc?.email || null,
       nudgedAt: nudgedAt.get(id) ?? null,
     };
   });
