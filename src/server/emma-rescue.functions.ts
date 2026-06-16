@@ -58,6 +58,8 @@ import {
   resolveSpaFromNumber,
   resolveSpaName,
 } from "@/server/emma-spa-profile";
+import { loadServiceCatalogForUser } from "@/server/refill-catalog";
+import { resolveTreatmentsToServiceIds } from "@/lib/treatment-catalog-resolver";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -142,7 +144,34 @@ type WaitlistRow = {
   id: string;
   patient_node_id: string;
   treatment_types: string[];
+  // v2.64.0 — catalog-linked desires (Slice 2 spine). Smart Slot-Fill matches
+  // these against the freed provider's qualifications. Null/empty = no stated
+  // catalog desire → this row falls through to the legacy free-text matcher.
+  desired_service_ids: string[] | null;
 };
+
+/** Smart Slot-Fill context for one freed slot (v2.64.0). Built by the
+ *  dispatcher only when the freed appointment is linked to a scheduling
+ *  provider (emma_appointments.provider_id) — that's the join into the
+ *  qualification matrix. Null when the slot is unlinked OR the matrix is
+ *  unavailable, in which case selectFitPatients degrades to the legacy
+ *  free-text matcher unchanged. */
+export type SlotFillContext = {
+  /** The freed slot's own treatment resolved to catalog service ids. */
+  freedServiceIds: Set<string>;
+  /** Services the freed provider is qualified for AND that fit ≤ slot duration. */
+  qualifiedFitServiceIds: Set<string>;
+  /** services.id → display name (for offer copy + claim surfaces). */
+  serviceNameById: Map<string, string>;
+};
+
+/** How a fit-patient was matched — drives ranking and offer framing.
+ *   "exact"  = patient's stated desire IS the freed slot's service (qualified+fits).
+ *   "cross"  = patient wants a DIFFERENT service the provider is qualified for
+ *              and that fits the freed duration (the Smart Slot-Fill unlock).
+ *   "legacy" = matched by the free-text treatment path (no catalog desire, or
+ *              the slot/provider wasn't linked) — pre-v2.64.0 behavior. */
+export type RescueMatchKind = "exact" | "cross" | "legacy";
 
 /** Confidence tier of a rescue fit — the gate signal for the autonomous send.
  *  "explicit" = the patient's own waitlist treatment matched the freed slot.
@@ -169,6 +198,9 @@ async function selectFitPatients(
   // the waitlist. Null = skip the filter (e.g. provider_name absent,
   // or matches spa name — caller handles that gate).
   appointmentProvider: string | null,
+  // v2.64.0 — Smart Slot-Fill context. Non-null only when the freed slot is
+  // linked to a scheduling provider; null degrades to the legacy matcher.
+  slotFill: SlotFillContext | null = null,
 ): Promise<
   Array<{
     waitlistId: string;
@@ -176,6 +208,11 @@ async function selectFitPatients(
     phone: string;
     lifetimeSpend: number;
     matchTier: RescueMatchTier;
+    matchKind: RescueMatchKind;
+    // The catalog service this patient's offer should be framed around.
+    // null = legacy same-service (offer copy uses the freed slot's treatment).
+    offerServiceId: string | null;
+    offerServiceName: string | null;
   }>
 > {
   // Paginated: a capped read silently drops waitlist members past row 1,000,
@@ -184,7 +221,7 @@ async function selectFitPatients(
   const waitlist = await fetchAllRows<WaitlistRow>((from, to) =>
     sb
       .from("emma_waitlist")
-      .select("id, patient_node_id, treatment_types")
+      .select("id, patient_node_id, treatment_types, desired_service_ids")
       .eq("user_id", userId)
       .eq("status", "active")
       .order("id")
@@ -192,14 +229,62 @@ async function selectFitPatients(
   );
   if (waitlist.length === 0) return [];
 
-  // Treatment filter at the waitlist row level. Each kept candidate also gets
-  // a confidence tier: "explicit" when the patient's own waitlist treatment
-  // matches the freed slot, "open" when they're kept by a default (no
-  // preference, or the slot has no treatment) — the gate holds the "open" ones
-  // in direct mode (see dispatch step 6b).
+  // Per-candidate classification. Two layered paths:
+  //
+  //   1) Smart Slot-Fill catalog path (v2.64.0) — runs only when the freed slot
+  //      is provider-linked (slotFill != null). The patient's catalog-linked
+  //      desire (desired_service_ids) is matched against what the freed provider
+  //      is qualified for AND that fits the slot duration. An exact freed-service
+  //      desire → matchKind "exact"; a different-but-qualified-and-fitting desire
+  //      → matchKind "cross" (the headline unlock: a freed Tox-w/-Karen slot can
+  //      surface a Filler-wanting patient). Both are "explicit" tier — a stated
+  //      desire the provider can serve is nameable + consented, so it auto-texts.
+  //      desired_service_ids is a POSITIVE signal ONLY: a stated desire that
+  //      doesn't match this slot falls THROUGH to the legacy path (never a hard
+  //      exclude — catchall opt-ins carry inferred-soft desire, per Slice 2).
+  //
+  //   2) Legacy free-text matcher (pre-v2.64.0, byte-identical) — the fallback
+  //      for every row the catalog path didn't claim, and the ONLY path when the
+  //      slot is unlinked (slotFill == null). "explicit" when the patient's own
+  //      free-text treatment matches the freed slot, "open" when kept by a
+  //      default (no preference but the slot is typed), "blind" when the slot has
+  //      no treatment at all. The gate holds "open"/"blind" in direct mode.
+  //
+  // Net effect: a freed slot with no cross-service-qualified candidates behaves
+  // exactly as it did before v2.64.0.
   const trtLower = appointmentTreatment?.toLowerCase() ?? "";
-  const tierByWaitlistId = new Map<string, RescueMatchTier>();
+  type Classified = {
+    tier: RescueMatchTier;
+    matchKind: RescueMatchKind;
+    offerServiceId: string | null;
+  };
+  const classifyByWaitlistId = new Map<string, Classified>();
   const candidates: WaitlistRow[] = waitlist.filter((w) => {
+    // 1) Smart Slot-Fill catalog path.
+    if (slotFill) {
+      const desired = w.desired_service_ids ?? [];
+      const exact = desired.find((id) => slotFill.freedServiceIds.has(id));
+      if (exact) {
+        classifyByWaitlistId.set(w.id, {
+          tier: "explicit",
+          matchKind: "exact",
+          offerServiceId: exact,
+        });
+        return true;
+      }
+      const cross = desired.find((id) => slotFill.qualifiedFitServiceIds.has(id));
+      if (cross) {
+        classifyByWaitlistId.set(w.id, {
+          tier: "explicit",
+          matchKind: "cross",
+          offerServiceId: cross,
+        });
+        return true;
+      }
+      // No catalog match → fall through to the legacy free-text path below.
+    }
+
+    // 2) Legacy free-text matcher (unchanged).
     let tier: RescueMatchTier | null = null;
     if (!trtLower) {
       // The slot has no treatment set — we can't even name the opening, so
@@ -216,8 +301,11 @@ async function selectFitPatients(
     ) {
       tier = "explicit"; // the patient's own treatment matches the freed slot
     }
-    if (tier) tierByWaitlistId.set(w.id, tier);
-    return tier !== null;
+    if (tier) {
+      classifyByWaitlistId.set(w.id, { tier, matchKind: "legacy", offerServiceId: null });
+      return true;
+    }
+    return false;
   });
   if (candidates.length === 0) return [];
 
@@ -267,6 +355,9 @@ async function selectFitPatients(
     phone: string;
     lifetimeSpend: number;
     matchTier: RescueMatchTier;
+    matchKind: RescueMatchKind;
+    offerServiceId: string | null;
+    offerServiceName: string | null;
   }> = [];
   for (const c of candidates) {
     const p = patientById.get(c.patient_node_id);
@@ -275,12 +366,22 @@ async function selectFitPatients(
     // v1.34.9.6: skip soft-hidden patients. Hidden = Karen explicitly
     // removed this patient from active flows; rescue shouldn't text them.
     if (p.hidden) continue;
+    const cls = classifyByWaitlistId.get(c.id);
+    const offerServiceId = cls?.offerServiceId ?? null;
     fit.push({
       waitlistId: c.id,
       patientNodeId: c.patient_node_id,
       phone: p.phone,
       lifetimeSpend: p.lifetimeSpend,
-      matchTier: tierByWaitlistId.get(c.id) ?? "open",
+      matchTier: cls?.tier ?? "open",
+      matchKind: cls?.matchKind ?? "legacy",
+      offerServiceId,
+      // Resolve a display name for cross/exact offers; null for legacy (the
+      // copy layer falls back to the freed slot's treatment).
+      offerServiceName:
+        offerServiceId && slotFill
+          ? slotFill.serviceNameById.get(offerServiceId) ?? null
+          : null,
     });
   }
 
@@ -293,7 +394,12 @@ async function selectFitPatients(
   // so we never lose a fill-opportunity entirely. Skipped when
   // appointmentProvider is null (caller's job to gate spa-name-equals
   // suppression — see providerClause at line 245 for the pattern).
-  if (appointmentProvider && fit.length > 0) {
+  //
+  // v2.64.0 — LEGACY PATH ONLY. When Smart Slot-Fill context is present the
+  // real provider-qualification matrix (scheduling_provider_services) is a
+  // strictly better signal than most-frequent-prior-provider-by-name, so we
+  // skip the affinity heuristic and rank by match quality below instead.
+  if (!slotFill && appointmentProvider && fit.length > 0) {
     const targetProvider = appointmentProvider.trim().toLowerCase();
     const candidateIds = fit.map((f) => f.patientNodeId);
 
@@ -373,8 +479,27 @@ async function selectFitPatients(
     // Fall through to unfiltered fit[] below.
   }
 
-  // Sort by lifetime value desc; tie-break is stable.
-  fit.sort((a, b) => b.lifetimeSpend - a.lifetimeSpend);
+  // Ranking. Legacy mode (no slot-fill context) preserves pre-v2.64.0 behavior
+  // exactly: pure lifetime-value desc, tier ignored (tier only gates the
+  // direct-mode hold). Smart Slot-Fill mode ranks by MATCH QUALITY first —
+  // exact freed-service desire and legacy same-service matches share the top
+  // bucket, then cross-service qualified fills, then "open"/"blind" defaults —
+  // breaking ties by lifetime value within each bucket.
+  if (slotFill) {
+    const rankBucket = (f: (typeof fit)[number]): number => {
+      if (f.matchKind === "exact") return 0;
+      if (f.matchKind === "legacy" && f.matchTier === "explicit") return 0;
+      if (f.matchKind === "cross") return 1;
+      if (f.matchTier === "open") return 2;
+      return 3; // blind
+    };
+    fit.sort(
+      (a, b) => rankBucket(a) - rankBucket(b) || b.lifetimeSpend - a.lifetimeSpend,
+    );
+  } else {
+    // Sort by lifetime value desc; tie-break is stable.
+    fit.sort((a, b) => b.lifetimeSpend - a.lifetimeSpend);
+  }
   return fit.slice(0, maxConcurrent);
 }
 
@@ -451,6 +576,10 @@ function composeRescueSms(args: {
   ownerDisplayName: string | null;
   scheduledAt: string;
   claimUrl: string;
+  // v2.64.0 — when set (cross-service / exact catalog match), the message is
+  // framed around the opening and names THIS patient's service instead of the
+  // freed slot's treatment. Already a clean catalog name (no provider baked in).
+  treatmentOverride?: string | null;
 }): string {
   // timeZone:"UTC" pins rendering to the spa-intended clock the appointment
   // was imported with. See claim-page comment for the full TZ-naive-storage
@@ -464,12 +593,19 @@ function composeRescueSms(args: {
     minute: "2-digit",
     timeZone: "America/Denver",
   });
+  const override = args.treatmentOverride?.trim();
   const cleanedTreatment = stripProviderFromTreatment(
     args.treatmentType,
     args.providerName,
     args.ownerDisplayName,
   );
-  const treatment = cleanedTreatment ? ` for ${cleanedTreatment}` : "";
+  // Cross-service fill: name the patient's own service ("…for your Filler");
+  // otherwise the freed slot's treatment, as before.
+  const treatment = override
+    ? ` for ${override}`
+    : cleanedTreatment
+      ? ` for ${cleanedTreatment}`
+      : "";
   const provider = providerClause(
     args.spaName,
     args.providerName,
@@ -498,6 +634,10 @@ type ProxyOfferLine = {
   phone: string;
   lifetimeSpend: number;
   claimUrl: string;
+  // v2.64.0 — the service THIS patient's draft is framed around. Set for
+  // cross-service / exact catalog matches (Smart Slot-Fill); null = legacy
+  // same-service, in which case the draft uses the freed slot's treatment.
+  treatmentLabel?: string | null;
 };
 
 function formatRescueWhen(scheduledAt: string): string {
@@ -567,7 +707,8 @@ function composeProxyEmail(args: {
 
   const draftLines = args.offers
     .map((o) => {
-      const courtesy = `Hi ${o.firstName}! Last-minute opening at ${args.spaName} ${when}${provider} for ${treatment}. Tap to grab if you want it: ${o.claimUrl}`;
+      const offerTreatment = o.treatmentLabel?.trim() || treatment;
+      const courtesy = `Hi ${o.firstName}! Last-minute opening at ${args.spaName} ${when}${provider} for ${offerTreatment}. Tap to grab if you want it: ${o.claimUrl}`;
       const spendStr = o.lifetimeSpend > 0
         ? `, lifetime $${Math.round(o.lifetimeSpend).toLocaleString()}`
         : "";
@@ -602,7 +743,8 @@ function composeProxyEmail(args: {
   // for the drafts so iMessage-style copy/paste preserves intent.
   const draftBlocks = args.offers
     .map((o) => {
-      const courtesy = `Hi ${o.firstName}! Last-minute opening at ${args.spaName} ${when}${provider} for ${treatment}. Tap to grab if you want it: ${o.claimUrl}`;
+      const offerTreatment = o.treatmentLabel?.trim() || treatment;
+      const courtesy = `Hi ${o.firstName}! Last-minute opening at ${args.spaName} ${when}${provider} for ${offerTreatment}. Tap to grab if you want it: ${o.claimUrl}`;
       const spendStr = o.lifetimeSpend > 0
         ? `, lifetime $${Math.round(o.lifetimeSpend).toLocaleString()}`
         : "";
@@ -762,12 +904,78 @@ export async function dispatchRescueAttempt(args: {
       spaNameForProviderGate.trim().toLowerCase()
       ? apt.provider_name
       : null;
+
+  // v2.64.0 — Smart Slot-Fill context. The qualification matrix
+  // (scheduling_provider_services) keys on scheduling_providers.id, reachable
+  // only when this freed appointment is linked to a provider via provider_id
+  // (≈half of Acuity-imported appts are; the rest are name-matched only). When
+  // linked, resolve: the freed slot's own service, the set of services this
+  // provider is qualified for AND that fit ≤ the freed duration, and the
+  // service-name lookup. When NOT linked — or anything below throws — slotFill
+  // stays null and selectFitPatients degrades to the legacy free-text matcher.
+  let slotFill: SlotFillContext | null = null;
+  if (apt.provider_id) {
+    try {
+      const catalog = await loadServiceCatalogForUser(sb, userId);
+      if (catalog.length > 0) {
+        const serviceNameById = new Map(catalog.map((s) => [s.id, s.name]));
+        // Opt-out qualification: a row with offered=false EXCLUDES the service;
+        // no row at all means the provider offers it. A per-provider duration
+        // override (when set) wins over the service's default (effective dur).
+        // Paginated: a provider's qualification rows scale with the catalog
+        // size, so a capped read could silently mis-classify services past
+        // row 1,000 as offered (no row = offered) and skew the match pool.
+        const psRows = await fetchAllRows<{
+          service_id: string;
+          offered: boolean;
+          duration_min: number | null;
+        }>((from, to) =>
+          sb
+            .from("scheduling_provider_services")
+            .select("service_id, offered, duration_min")
+            .eq("provider_id", apt.provider_id as string)
+            .order("service_id")
+            .range(from, to),
+        );
+        const excluded = new Set<string>();
+        const overrideDuration = new Map<string, number>();
+        for (const r of psRows) {
+          if (r.offered === false) excluded.add(r.service_id);
+          if (r.duration_min != null) overrideDuration.set(r.service_id, r.duration_min);
+        }
+        const D = apt.duration_min;
+        const qualifiedFitServiceIds = new Set<string>();
+        for (const s of catalog) {
+          if (excluded.has(s.id)) continue;
+          const effDuration = overrideDuration.get(s.id) ?? s.durationMin;
+          if (effDuration <= D) qualifiedFitServiceIds.add(s.id);
+        }
+        const freed = resolveTreatmentsToServiceIds(
+          apt.treatment_type ? [apt.treatment_type] : [],
+          catalog,
+        );
+        slotFill = {
+          freedServiceIds: new Set(freed.serviceIds),
+          qualifiedFitServiceIds,
+          serviceNameById,
+        };
+      }
+    } catch (e) {
+      console.error(
+        "[rescue] slot-fill context build failed; falling back to legacy matcher:",
+        e,
+      );
+      slotFill = null;
+    }
+  }
+
   const fitPatients = await selectFitPatients(
     sb,
     userId,
     apt.treatment_type,
     policy.rescue_max_concurrent ?? 5,
     providerForMatch,
+    slotFill,
   );
   if (fitPatients.length === 0) {
     // Still record an attempt for the audit trail, marked closed_unfilled.
@@ -883,6 +1091,11 @@ export async function dispatchRescueAttempt(args: {
     lifetimeSpend: number;
     claimUrl: string;
     matchTier: RescueMatchTier;
+    // v2.64.0 — the service this offer is framed around. null = legacy
+    // same-service (copy uses the freed slot's treatment); a name = a
+    // cross-service or exact catalog match (copy names this service).
+    offerServiceId: string | null;
+    offerServiceName: string | null;
   };
   const collected: CollectedOffer[] = [];
   for (const fp of fitPatients) {
@@ -893,6 +1106,9 @@ export async function dispatchRescueAttempt(args: {
         rescue_attempt_id: attempt.id,
         appointment_id: appointmentId,
         patient_node_id: fp.patientNodeId,
+        // Persist what this offer was framed around so the claim page + Karen
+        // note name the right service even if the waitlist changes later.
+        offer_service_id: fp.offerServiceId,
       })
       .select("id, token")
       .single();
@@ -908,6 +1124,8 @@ export async function dispatchRescueAttempt(args: {
       lifetimeSpend: fp.lifetimeSpend,
       claimUrl: buildRescueClaimUrl(offer.token),
       matchTier: fp.matchTier,
+      offerServiceId: fp.offerServiceId,
+      offerServiceName: fp.offerServiceName,
     });
   }
 
@@ -939,6 +1157,7 @@ export async function dispatchRescueAttempt(args: {
         phone: c.phone,
         lifetimeSpend: c.lifetimeSpend,
         claimUrl: c.claimUrl,
+        treatmentLabel: c.offerServiceName,
       };
     });
 
@@ -1115,6 +1334,7 @@ export async function dispatchRescueAttempt(args: {
         ownerDisplayName,
         scheduledAt: apt.scheduled_at,
         claimUrl: c.claimUrl,
+        treatmentOverride: c.offerServiceName,
       });
       try {
         const resp = await sendSms({
@@ -1184,11 +1404,26 @@ export const getRescueOfferPayload = createServerFn({ method: "POST" })
     const { data: offer } = await sb
       .from("emma_rescue_offers")
       .select(
-        "id, user_id, appointment_id, patient_node_id, claimed_at, declined_at, expired_at",
+        "id, user_id, appointment_id, patient_node_id, claimed_at, declined_at, expired_at, offer_service_id",
       )
       .eq("token", data.token)
       .maybeSingle();
     if (!offer) return null;
+
+    // v2.64.0 — Smart Slot-Fill: when this offer was framed around a specific
+    // catalog service (a cross-service or exact match), the claim page must
+    // name THAT service ("for your Filler"), not the freed slot's original
+    // treatment. Resolve its name; null/missing falls back to the freed slot
+    // treatment below.
+    let offerServiceName: string | null = null;
+    if (offer.offer_service_id) {
+      const { data: svc } = await sb
+        .from("services")
+        .select("name")
+        .eq("id", offer.offer_service_id)
+        .maybeSingle();
+      offerServiceName = svc?.name?.trim() || null;
+    }
 
     const [
       { data: apt },
@@ -1260,11 +1495,13 @@ export const getRescueOfferPayload = createServerFn({ method: "POST" })
       spaName: spa?.title?.trim() || "your spa",
       patientFirstName: extractFirstName(patient?.title ?? null),
       status,
-      treatmentType: stripProviderFromTreatment(
-        apt.treatment_type,
-        apt.provider_name,
-        resolvedOwnerDisplayName,
-      ),
+      treatmentType:
+        offerServiceName ??
+        stripProviderFromTreatment(
+          apt.treatment_type,
+          apt.provider_name,
+          resolvedOwnerDisplayName,
+        ),
       providerName: apt.provider_name,
       ownerDisplayName: resolvedOwnerDisplayName,
       scheduledAt: apt.scheduled_at,
@@ -1283,7 +1520,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
     const { data: offer } = await sb
       .from("emma_rescue_offers")
       .select(
-        "id, user_id, appointment_id, patient_node_id, rescue_attempt_id, claimed_at",
+        "id, user_id, appointment_id, patient_node_id, rescue_attempt_id, claimed_at, offer_service_id",
       )
       .eq("token", data.token)
       .maybeSingle();
@@ -1331,7 +1568,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
       })
       .eq("id", offer.appointment_id)
       .in("status", ["cancelled", "no_show"])
-      .select("id, scheduled_at")
+      .select("id, scheduled_at, treatment_type")
       .maybeSingle();
 
     if (reassignErr || !reassigned) {
@@ -1354,6 +1591,40 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
       })
       .eq("id", offer.rescue_attempt_id)
       .eq("status", "active");
+
+    // 4b) v2.64.0 — cross-service fill honesty note. When the patient grabbed
+    //     this opening for a DIFFERENT service than the freed slot's original
+    //     (Smart Slot-Fill), the appointment row still carries the old
+    //     treatment_type (the PMS writeback is P3, not this slice). Rather than
+    //     silently leave it mislabeled, record a note on the attempt so the
+    //     owner knows to set the right type in their PMS. Skipped for exact /
+    //     same-service fills (resolved name == freed treatment) and best-effort
+    //     (the claim already succeeded — a note failure must not roll it back).
+    if (offer.offer_service_id) {
+      try {
+        const [{ data: svc }, { data: patientNode }] = await Promise.all([
+          sb.from("services").select("name").eq("id", offer.offer_service_id).maybeSingle(),
+          sb.from("knowledge_nodes").select("title").eq("id", offer.patient_node_id).maybeSingle(),
+        ]);
+        const svcName = svc?.name?.trim() || null;
+        const freedTreatment = reassigned.treatment_type?.trim() || null;
+        const isCrossService =
+          !!svcName &&
+          (!freedTreatment || svcName.toLowerCase() !== freedTreatment.toLowerCase());
+        if (isCrossService) {
+          const who = extractFirstName(patientNode?.title ?? null) ?? "A waitlist patient";
+          const note = `Cross-service fill: ${who} grabbed this opening for ${svcName}${
+            freedTreatment ? ` (the slot freed up was ${freedTreatment})` : ""
+          } — set the appointment type to ${svcName} in your booking calendar.`;
+          await sb
+            .from("emma_rescue_attempts")
+            .update({ notes: note })
+            .eq("id", offer.rescue_attempt_id);
+        }
+      } catch (e) {
+        console.error("[rescue] cross-service claim note failed (non-fatal):", e);
+      }
+    }
 
     // 5) v363: record a provisional recovery event. This is the
     //    [VERIFIED] receipt the spa owner bills against — verification
@@ -2593,10 +2864,11 @@ export const listHeldRescueOffers = createServerFn({ method: "POST" })
       patient_node_id: string;
       held_at: string;
       held_reason: string | null;
+      offer_service_id: string | null;
     }> = [];
     try {
       const res = await looseOffers(sb)
-        .select("id, appointment_id, patient_node_id, held_at, held_reason")
+        .select("id, appointment_id, patient_node_id, held_at, held_reason, offer_service_id")
         .eq("user_id", effectiveUserId)
         .not("held_at", "is", null)
         .is("message_id", null)
@@ -2626,14 +2898,35 @@ export const listHeldRescueOffers = createServerFn({ method: "POST" })
       (patients ?? []).map((p) => [p.id, p]),
     );
 
+    // v2.64.0 — resolve catalog names for any cross-service / exact offers so
+    // the held-review queue shows what the patient actually wants, not the
+    // freed slot's original treatment.
+    const offerServiceIds = Array.from(
+      new Set(rows.map((r) => r.offer_service_id).filter((id): id is string => !!id)),
+    );
+    const serviceNameById = new Map<string, string>();
+    if (offerServiceIds.length > 0) {
+      const { data: svcs } = await sb
+        .from("services")
+        .select("id, name")
+        .in("id", offerServiceIds)
+        // Bounded: offerServiceIds is deduped from the ≤200-row held queue, so
+        // one row per id — limit keeps the read provably truncation-safe.
+        .limit(offerServiceIds.length);
+      for (const s of svcs ?? []) serviceNameById.set(s.id, s.name);
+    }
+
     return rows.map((r) => {
       const apt = aptById.get(r.appointment_id);
       const p = patientById.get(r.patient_node_id);
       const spend = (p?.attachments as { lifetimeSpendUsd?: number } | null)?.lifetimeSpendUsd;
+      const offerServiceName = r.offer_service_id
+        ? serviceNameById.get(r.offer_service_id) ?? null
+        : null;
       return {
         offerId: r.id,
         patientName: (p?.title as string | null) ?? null,
-        treatmentType: apt?.treatment_type ?? null,
+        treatmentType: offerServiceName ?? apt?.treatment_type ?? null,
         scheduledAt: apt?.scheduled_at ?? "",
         heldReason: r.held_reason,
         heldAt: r.held_at,
@@ -2661,7 +2954,7 @@ export const sendHeldRescueOffer = createServerFn({ method: "POST" })
 
     const { data: offer } = await looseOffers(sb)
       .select(
-        "id, token, appointment_id, patient_node_id, rescue_attempt_id, held_at, message_id",
+        "id, token, appointment_id, patient_node_id, rescue_attempt_id, held_at, message_id, offer_service_id",
       )
       .eq("id", data.offerId)
       .eq("user_id", effectiveUserId)
@@ -2699,6 +2992,20 @@ export const sendHeldRescueOffer = createServerFn({ method: "POST" })
       throw new Error("Your spa has no SMS number set, so this can't be texted.");
     }
 
+    // v2.64.0 — if this held offer was framed around a specific service
+    // (cross-service / exact catalog match), name THAT service in the text
+    // rather than the freed slot's original treatment.
+    let offerServiceName: string | null = null;
+    const heldServiceId = (offer as { offer_service_id?: string | null }).offer_service_id;
+    if (heldServiceId) {
+      const { data: svc } = await sb
+        .from("services")
+        .select("name")
+        .eq("id", heldServiceId)
+        .maybeSingle();
+      offerServiceName = svc?.name?.trim() || null;
+    }
+
     const body = composeRescueSms({
       spaName,
       treatmentType: apt.treatment_type,
@@ -2706,6 +3013,7 @@ export const sendHeldRescueOffer = createServerFn({ method: "POST" })
       ownerDisplayName,
       scheduledAt: apt.scheduled_at,
       claimUrl: buildRescueClaimUrl(offer.token),
+      treatmentOverride: offerServiceName,
     });
 
     try {

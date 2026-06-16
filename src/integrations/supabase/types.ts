@@ -1440,6 +1440,7 @@ export type Database = {
           expired_at: string | null
           id: string
           message_id: string | null
+          offer_service_id: string | null
           patient_node_id: string
           rescue_attempt_id: string
           send_error: string | null
@@ -1455,6 +1456,7 @@ export type Database = {
           expired_at?: string | null
           id?: string
           message_id?: string | null
+          offer_service_id?: string | null
           patient_node_id: string
           rescue_attempt_id: string
           send_error?: string | null
@@ -1470,6 +1472,7 @@ export type Database = {
           expired_at?: string | null
           id?: string
           message_id?: string | null
+          offer_service_id?: string | null
           patient_node_id?: string
           rescue_attempt_id?: string
           send_error?: string | null

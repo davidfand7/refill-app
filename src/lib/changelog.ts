@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.64.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.64.0 &mdash; Smart Slot-Fill: a freed slot now finds the right patient, not just the same-service one.</strong> When an appointment cancels, the rescue matcher used to look only for waitlist patients who wanted the <em>exact same treatment</em>. Now it understands your business: a freed <strong>30-min opening with Karen</strong> can also reach a patient on the waitlist for a <strong>different</strong> service &mdash; as long as Karen is qualified for it (per your Booking Settings provider grid) and it fits the freed time. Same-service matches still rank first, then these cross-service fills, then everyone else, all by patient value. <strong>Honest by design</strong>: a cross-service offer is framed around the opening and names <em>that patient&rsquo;s</em> service (&ldquo;last-minute opening with Karen &mdash; grab it for your Filler&rdquo;), the claim page shows the right service, and when they grab it the rescue log tells you to set the matching appointment type in your calendar. Nothing changes for slots without a qualified cross-service match &mdash; they behave exactly as before. <strong>Touched</strong>: <code>selectFitPatients</code> (layered provider-qualification + duration matcher, reads <code>scheduling_provider_services</code> + the catalog-linked <code>desired_service_ids</code> spine), <code>dispatchRescueAttempt</code> (qualification context), the SMS/email/claim copy, held-offer queue + send, and a new <code>offer_service_id</code> column on <code>emma_rescue_offers</code>. Migration: <code>offer_service_id uuid</code> (additive, nullable).",
+    ],
+  },
+  {
     version: "v2.63.1",
     date: "June 2026",
     items: [
