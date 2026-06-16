@@ -455,21 +455,66 @@ export function MonthGrid({
   tz,
   monthAnchor,
   gridStart,
+  providerId,
+  onProviderChange,
   onPickDay,
 }: {
   range: RangeSchedule;
   tz: string;
   monthAnchor: string;
   gridStart: string;
+  providerId: string; // "all" or a providerId
+  onProviderChange: (id: string) => void;
   onPickDay: (iso: string) => void;
 }) {
   const cells = useMemo(() => Array.from({ length: 42 }, (_, i) => addDays(gridStart, i)), [gridStart]);
-  const apptsByDay = useMemo(() => groupByDay(range.appointments, tz), [range.appointments, tz]);
+  const providers = range.providers;
+  // Effective filter — fall back to "all" if the chosen provider is gone.
+  const filter = providerId !== "all" && providers.some((p) => p.id === providerId) ? providerId : "all";
+  const filteredAppts = useMemo(
+    () => (filter === "all" ? range.appointments : range.appointments.filter((a) => a.providerId === filter)),
+    [range.appointments, filter],
+  );
+  const apptsByDay = useMemo(() => groupByDay(filteredAppts, tz), [filteredAppts, tz]);
   const anchorMonth = monthAnchor.slice(0, 7);
   const today = todayIso();
 
   return (
-    <div className="rounded-xl border border-rule bg-white p-3">
+    <div>
+      {providers.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5 mb-3">
+          <span className="text-[12px] text-ink-soft mr-1">Provider:</span>
+          <button
+            type="button"
+            onClick={() => onProviderChange("all")}
+            className={cn(
+              "rounded-md border px-2.5 py-1 text-[12px] font-medium transition",
+              filter === "all"
+                ? "bg-emerald text-paper border-emerald"
+                : "border-rule text-ink-soft hover:text-ink hover:border-emerald/40",
+            )}
+          >
+            All
+          </button>
+          {providers.map((p, i) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => onProviderChange(p.id)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12px] font-medium transition",
+                filter === p.id
+                  ? "bg-emerald text-paper border-emerald"
+                  : "border-rule text-ink-soft hover:text-ink hover:border-emerald/40",
+              )}
+            >
+              <span className={cn("h-2 w-2 rounded-full shrink-0", providerDot(i))} />
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="rounded-xl border border-rule bg-white p-3">
       <div className="grid grid-cols-7 mb-1">
         {WD_SHORT.map((w, i) => (
           <div key={i} className="text-center text-[11px] uppercase tracking-wide text-ink-faint py-1">
@@ -519,6 +564,7 @@ export function MonthGrid({
             </button>
           );
         })}
+      </div>
       </div>
     </div>
   );

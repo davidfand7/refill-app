@@ -296,6 +296,8 @@ function SchedulePage() {
             tz={tz}
             monthAnchor={dateIso}
             gridStart={span.fromDate}
+            providerId={weekProviderId}
+            onProviderChange={setWeekProviderId}
             onPickDay={(iso) => {
               setDateIso(iso);
               setView("day");

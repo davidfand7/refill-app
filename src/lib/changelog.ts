@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.56.8",
+    date: "June 2026",
+    items: [
+      "<strong>v2.56.8 &mdash; Month view gets the provider filter too.</strong> The <em>All / per-provider</em> filter chips that week view has are now on month as well, so you can focus a month on one provider&rsquo;s appointments. The choice is shared with week, so switching views keeps your filter. <strong>Touched</strong>: <code>schedule/grids.tsx</code> (MonthGrid), <code>calendar.schedule</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.56.7",
     date: "June 2026",
     items: [
