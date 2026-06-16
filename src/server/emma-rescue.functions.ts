@@ -2785,3 +2785,69 @@ function extractFirstName(displayName: string | null): string | null {
   const parts = displayName.trim().split(/\s+/);
   return parts[0] || null;
 }
+
+// ─── Simulate a rescue (go-live test harness) ────────────────────────────────
+//
+// Fire a REAL rescue dispatch WITHOUT cancelling a live Acuity appointment. The
+// dispatch lives in the webhook handler (not a DB trigger), so a raw insert
+// won't trigger it — this server fn inserts a throwaway future-cancelled slot
+// (marked notes='rescue-sim' for one-line cleanup) and runs the exact
+// dispatchRescueAttempt path the webhook uses. The waitlist select, ranking,
+// composition, and proxy email are all real, so it's a true end-to-end rerun.
+// Admin/tenant-view only (gated in the UI); cleanup:
+//   delete from emma_appointments where user_id = '<spa>' and notes = 'rescue-sim';
+
+const simulateRescueInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  /** The freed slot's treatment (default Tox) — drives the waitlist match copy. */
+  treatmentType: z.string().max(120).optional(),
+});
+
+export const simulateRescueDispatchFn = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => simulateRescueInput.parse(input))
+  .handler(
+    async ({
+      data,
+    }): Promise<RescueDispatchResult & { testAppointmentId: string }> => {
+      const { resolveEffectiveUserId } = await import("@/server/auth-helpers");
+      const { effectiveUserId } = await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
+      const sb = admin();
+      const nowMs = Date.now();
+      // +2h so it's comfortably future (dispatch requires scheduled_at > now).
+      const scheduledAt = new Date(nowMs + 2 * 60 * 60 * 1000).toISOString();
+      // Loose cast: booking_name / cancelled_at landed in later migrations than
+      // the generated types know (same pattern the reschedule + ingest paths use).
+      const { data: inserted, error } = await (
+        sb as unknown as { from(t: string): any }
+      )
+        .from("emma_appointments")
+        .insert({
+          user_id: effectiveUserId,
+          scheduled_at: scheduledAt,
+          status: "cancelled",
+          cancelled_at: new Date(nowMs).toISOString(),
+          treatment_type: (data.treatmentType ?? "Tox").trim() || "Tox",
+          booking_name: "__Rescue Sim__",
+          source: "manual",
+          notes: "rescue-sim",
+        })
+        .select("id")
+        .single();
+      if (error || !inserted) {
+        throw new Error(
+          `Couldn't create the test slot: ${error?.message ?? "no row"}`,
+        );
+      }
+      const testAppointmentId = (inserted as { id: string }).id;
+      const result = await dispatchRescueAttempt({
+        sb,
+        userId: effectiveUserId,
+        appointmentId: testAppointmentId,
+      });
+      return { ...result, testAppointmentId };
+    },
+  );

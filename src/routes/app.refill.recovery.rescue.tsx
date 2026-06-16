@@ -45,6 +45,7 @@ import {
   type RescuePolicy,
   type RescueAgentMetrics,
 } from "@/server/refill-rescue-agent.functions";
+import { simulateRescueDispatchFn } from "@/server/emma-rescue.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/refill/recovery/rescue")({
@@ -69,6 +70,32 @@ function RescueAgentPage() {
   const [draftProxyPhone, setDraftProxyPhone] = useState("");
   const [draftProxyEmail, setDraftProxyEmail] = useState("");
   const [newTreatment, setNewTreatment] = useState("");
+  const [simulating, setSimulating] = useState(false);
+
+  // Admin-only go-live test: fire a REAL rescue (insert a throwaway cancelled
+  // slot + run the webhook's dispatch path) without cancelling a live Acuity
+  // appt. Only when an operator is viewing-as a spa (membership 'tenant').
+  const isAdminView = membership.status === "tenant";
+  const simulate = useCallback(async () => {
+    if (!accessToken) return;
+    setSimulating(true);
+    try {
+      const res = await simulateRescueDispatchFn({
+        data: { accessToken, viewAsUserId },
+      });
+      if (res.ok) {
+        toast.success(
+          `Rescue fired — ${res.offersSent} offer${res.offersSent === 1 ? "" : "s"} sent to the proxy inbox. (test slot ${res.testAppointmentId.slice(0, 8)})`,
+        );
+      } else {
+        toast.warning(`Rescue didn't send: ${res.reason ?? "unknown"}`);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't simulate a rescue.");
+    } finally {
+      setSimulating(false);
+    }
+  }, [accessToken, viewAsUserId]);
 
   const load = useCallback(async () => {
     try {
@@ -212,6 +239,24 @@ function RescueAgentPage() {
           { label: "Refill", to: "/app/refill/recovery" },
           { label: "Rescue" },
         ]}
+        actions={
+          isAdminView ? (
+            <button
+              type="button"
+              onClick={() => void simulate()}
+              disabled={simulating || !accessToken}
+              title="Insert a throwaway cancelled slot and fire the real rescue dispatch — no live Acuity cancellation needed."
+              className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-ink transition disabled:opacity-60"
+            >
+              {simulating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              Simulate a cancellation
+            </button>
+          ) : undefined
+        }
       />
       <RefillSolutionTabs active="rescue" />
 

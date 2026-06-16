@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.60.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.60.0 &mdash; A one-click way to test the rescue flow (operator tool).</strong> When the SmartSpa team is setting up or checking a spa, the Rescue page now has a <strong>Simulate a cancellation</strong> button that fires the real rescue end-to-end &mdash; it creates a throwaway cancelled slot, picks waitlist patients, and sends the offer to the proxy inbox &mdash; <em>without</em> touching a live calendar. Visible only when viewing a spa as the team (not to spa owners). <strong>Touched</strong>: <code>emma-rescue.functions</code> + the Rescue page. No migration. <em>(Cleanup of test slots: delete where notes='rescue-sim'.)</em>",
+    ],
+  },
+  {
     version: "v2.59.0",
     date: "June 2026",
     items: [
