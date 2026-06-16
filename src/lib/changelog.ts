@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.56.9",
+    date: "June 2026",
+    items: [
+      "<strong>v2.56.9 &mdash; Full-screen calendar.</strong> A new expand button (next to the view toggle) blows the schedule up edge-to-edge so you can run the whole day/week/month full-screen on a big monitor; press it again or hit Escape to come back. Toolbar and all controls come along. <strong>Touched</strong>: <code>calendar.schedule</code> (native Fullscreen API). No migration.",
+    ],
+  },
+  {
     version: "v2.56.8",
     date: "June 2026",
     items: [

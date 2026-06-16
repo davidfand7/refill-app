@@ -8,9 +8,9 @@
  */
 
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, Ban, ZoomIn, ZoomOut, Users, EyeOff } from "lucide-react";
+import { CalendarPlus, ChevronLeft, ChevronRight, Loader2, Ban, ZoomIn, ZoomOut, Users, EyeOff, Maximize2, Minimize2 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { CalendarTabs } from "@/components/refill/CalendarTabs";
@@ -86,6 +86,20 @@ function SchedulePage() {
   // Week runs at the SAME vertical scale as the day so its stacking/spacing
   // matches (was 0.7× → cramped columns vs the day's breathing room).
   const weekPpm = ZOOM_LEVELS[zoomIdx];
+
+  // Fullscreen ("pop out") — expand the calendar edge-to-edge via the native
+  // Fullscreen API. Movable/resizable floating-window variants deferred.
+  const scheduleRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const onFs = () => setIsFullscreen(document.fullscreenElement === scheduleRef.current);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+  function toggleFullscreen() {
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void scheduleRef.current?.requestFullscreen();
+  }
 
   // The visible date span (for week/month range loads).
   const span = useMemo(() => computeSpan(view, dateIso), [view, dateIso]);
@@ -184,7 +198,13 @@ function SchedulePage() {
       <PageHeader wide title="Schedule" description="Bookings, holds, and blocked time — day, week, or month." />
       <CalendarTabs active="schedule" />
 
-      <div className="px-6 lg:px-10 py-4 max-w-[1280px] w-full mx-auto">
+      <div
+        ref={scheduleRef}
+        className={cn(
+          "px-6 lg:px-10 py-4 w-full mx-auto",
+          isFullscreen ? "max-w-none h-screen overflow-auto bg-background" : "max-w-[1280px]",
+        )}
+      >
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-1.5">
@@ -227,6 +247,15 @@ function SchedulePage() {
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              onClick={toggleFullscreen}
+              className="rounded-md border border-rule p-2 text-ink-soft hover:text-ink hover:border-emerald/40 transition"
+              aria-label={isFullscreen ? "Exit full screen" : "Full screen"}
+              title={isFullscreen ? "Exit full screen" : "Full screen"}
+            >
+              {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+            </button>
             <button type="button" onClick={() => setManageOpen(true)} className="inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-2 text-[13px] font-medium text-ink-soft hover:text-ink hover:border-emerald/40 transition">
               <Users className="h-3.5 w-3.5" /> Providers
             </button>
