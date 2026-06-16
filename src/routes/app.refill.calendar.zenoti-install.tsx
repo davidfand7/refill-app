@@ -27,7 +27,7 @@ export const Route = createFileRoute("/app/refill/calendar/zenoti-install")({
 function ZenotiInstallPage() {
   const search = useSearch({ from: "/app/refill/calendar/zenoti-install" });
   const shell = useShell();
-  const brandHeader = shell === "refill" ? "Refill" : "Emma(OS)";
+  const brandHeader = shell === "refill" ? "Refill" : "SmartSpa";
   const brandName = shell === "refill" ? "Refill" : "Emma";
 
   const [centerId, setCenterId] = useState("");

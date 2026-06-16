@@ -105,7 +105,7 @@ function SharingPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Emma(OS) · Sharing"
+        eyebrow="SmartSpa · Sharing"
         title="Rep aggregates"
         description="Let specific reps see aggregate counts from your patient book. Patient names and details never leave your practice."
       />

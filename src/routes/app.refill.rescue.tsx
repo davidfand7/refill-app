@@ -250,11 +250,11 @@ function RescuePage() {
   return (
     <div className="min-h-screen bg-background">
       <PageHeader
-        eyebrow="Emma(OS)"
+        eyebrow="SmartSpa"
         title="Rescue"
         description="When a slot frees up, Emma offers it to your waitlist. First tap wins. Track every attempt + who's on the list."
         breadcrumbs={[
-          { label: "Emma(OS)", to: "/app/refill" },
+          { label: "SmartSpa", to: "/app/refill" },
           { label: "Rescue" },
         ]}
         actions={

@@ -108,7 +108,7 @@ function CampaignDetailPage() {
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <PageHeader
-        eyebrow="Emma(OS) · Campaign"
+        eyebrow="SmartSpa · Campaign"
         title={campaign?.title ?? (loading ? "Loading…" : "Campaign")}
         description={campaign?.description ?? undefined}
         breadcrumbs={[

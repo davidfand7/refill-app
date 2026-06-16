@@ -1,5 +1,5 @@
 /**
- * CohortEditor — Emma(OS) Promotions Engine Phase 2 cohort builder.
+ * CohortEditor — SmartSpa Promotions Engine Phase 2 cohort builder.
  *
  * Chip-based filter editor for the campaign detail page. Each chip is an
  * inline-editable filter (kind dropdown, manufacturer dropdown, number,

@@ -1,5 +1,5 @@
 /**
- * /app/refill — Emma(OS) layout shell (v341.3).
+ * /app/refill — SmartSpa layout shell (v341.3).
  *
  * Pure layout file. Renders only an <Outlet/> so child routes mount in place:
  *   - app.emma.index.tsx   → dashboard at /app/refill/
@@ -15,7 +15,7 @@
  * fix — split the dashboard into app.emma.index.tsx (route `/app/refill/`)
  * and turn this file into a 3-line shell.
  *
- * The Emma(OS) top-nav (Dashboard · Promos · Knowledge) lives in
+ * The SmartSpa top-nav (Dashboard · Promos · Knowledge) lives in
  * SpaOwnerShell, mounted by app.tsx — so no extra chrome belongs here.
  */
 import { createFileRoute, Outlet } from "@tanstack/react-router";

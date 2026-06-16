@@ -74,7 +74,7 @@ function NewCampaignPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Emma(OS) · Campaigns"
+        eyebrow="SmartSpa · Campaigns"
         title="Pick a starting point"
         description="Eight templates cover the workflows most spas run. Pick one to scaffold the cohort + offer + copy — you can edit everything before sending."
         breadcrumbs={[

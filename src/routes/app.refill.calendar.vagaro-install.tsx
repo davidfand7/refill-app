@@ -71,7 +71,7 @@ function VagaroInstallPage() {
   const search = useSearch({ from: "/app/refill/calendar/vagaro-install" });
   const shell = useShell();
   const isRefill = shell === "refill";
-  const brandHeader = isRefill ? "Refill" : "Emma(OS)";
+  const brandHeader = isRefill ? "Refill" : "SmartSpa";
   const brandName = isRefill ? "Refill" : "Emma";
 
   const [apiKey, setApiKey] = useState("");

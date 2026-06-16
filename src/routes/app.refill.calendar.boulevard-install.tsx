@@ -63,7 +63,7 @@ function BoulevardInstallPage() {
   });
   const shell = useShell();
   const isRefill = shell === "refill";
-  const brandHeader = isRefill ? "Refill" : "Emma(OS)";
+  const brandHeader = isRefill ? "Refill" : "SmartSpa";
   const brandName = isRefill ? "Refill" : "Emma";
 
   const [copied, setCopied] = useState(false);

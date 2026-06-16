@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.57.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.57.1 &mdash; Branding cleanup: the old &ldquo;Emma(OS)&rdquo; name is gone from the UI.</strong> A handful of pages (Campaigns, Sharing, and a few legacy headers) still showed the deprecated <em>Emma(OS)</em> name; every user-facing instance is now <strong>SmartSpa</strong>. (The recovery solution is still called <em>Refill</em> &mdash; that&rsquo;s intentional and unchanged.) <strong>Touched</strong>: user-facing strings across <code>src/routes</code> + <code>src/components</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.57.0",
     date: "June 2026",
     items: [

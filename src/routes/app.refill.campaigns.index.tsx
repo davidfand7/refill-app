@@ -86,7 +86,7 @@ function CampaignsPage() {
     return (
       <div>
         <PageHeader
-          eyebrow="Emma(OS) · Campaigns"
+          eyebrow="SmartSpa · Campaigns"
           title="Campaigns"
           description="Outreach you run to your own clients."
         />
@@ -102,7 +102,7 @@ function CampaignsPage() {
     return (
       <div>
         <PageHeader
-          eyebrow="Emma(OS) · Campaigns"
+          eyebrow="SmartSpa · Campaigns"
           title="Campaigns"
           description="Outreach you run to your own clients."
         />
@@ -121,7 +121,7 @@ function CampaignsPage() {
     return (
       <div>
         <PageHeader
-          eyebrow="Emma(OS) · Campaigns"
+          eyebrow="SmartSpa · Campaigns"
           title="Campaigns"
           description="Reactivation, anniversary, cross-sell — pick a template and ship."
           actions={
@@ -163,7 +163,7 @@ function CampaignsPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Emma(OS) · Campaigns"
+        eyebrow="SmartSpa · Campaigns"
         title="Campaigns"
         description={
           rows ? `${rows.length} campaign${rows.length === 1 ? "" : "s"} so far.` : undefined

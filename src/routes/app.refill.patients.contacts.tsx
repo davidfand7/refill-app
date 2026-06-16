@@ -206,7 +206,7 @@ function ContactsPage() {
   return (
     <div>
       <PageHeader wide
-        eyebrow="Emma(OS) · Patients"
+        eyebrow="SmartSpa · Patients"
         title="Contacts"
         description="Connect phone and email to every patient so Emma can reach them."
         breadcrumbs={[

@@ -79,12 +79,12 @@ function RecoveryDashboard() {
 
   // v410.1: shell-aware branding. Inside the Refill standalone-product
   // shell, surface "Refill" everywhere; on emma.agentiport.com the legacy
-  // "Emma(OS)" branding stays. Per [[project-refill-trojan-horse-thesis]]
-  // the two products are separate brands; bleeding Emma(OS) labels into
+  // "SmartSpa" branding stays. Per [[project-refill-trojan-horse-thesis]]
+  // the two products are separate brands; bleeding SmartSpa labels into
   // Refill chrome conflates them and breaks the stealth positioning.
   const shell = useShell();
   const isRefill = shell === "refill";
-  const brandHeader = isRefill ? "Refill" : "Emma(OS)";
+  const brandHeader = isRefill ? "Refill" : "SmartSpa";
   const brandName = isRefill ? "Refill" : "Emma";
 
   // v1.26.8: admin viewing-as plumbing. All 7 server fns called from this

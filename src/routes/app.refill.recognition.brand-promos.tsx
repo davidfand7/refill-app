@@ -14,7 +14,7 @@
  * rep-private fields.
  *
  * Cleave changes from openagenticv4's v341:
- *   - Eyebrow "Emma(OS)" removed per feedback-emma-never-user-facing
+ *   - Eyebrow "SmartSpa" removed per feedback-emma-never-user-facing
  *     (Emma stays as the stealth codename, never user-surface)
  *   - All silently-broken shadcn tokens translated to brand tokens:
  *     bg-card → bg-white, border-border → border-rule, text-foreground

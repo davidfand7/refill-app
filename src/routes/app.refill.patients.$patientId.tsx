@@ -3,7 +3,7 @@
  *
  * The "everything Emma knows about this patient" view. Mirrors the shape of
  * app.lizzie.accounts.$accountId.tsx (the rep-side analogue) on purpose —
- * symmetry between Lizzie(OS) and Emma(OS) makes the platform feel one,
+ * symmetry between Lizzie(OS) and SmartSpa makes the platform feel one,
  * even though the products are standalone (see project_emma_lizzie_independence).
  *
  * Sections, top to bottom:

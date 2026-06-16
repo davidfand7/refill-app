@@ -296,7 +296,7 @@ function BlastComposerPage() {
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <PageHeader
-        eyebrow="Emma(OS) · Blast composer"
+        eyebrow="SmartSpa · Blast composer"
         title={result?.campaignTitle ?? (loading ? "Loading…" : "Compose")}
         description="Review every draft, then send. Each send respects banned + opted-out + velocity + quiet hours — Emma never breaks compliance."
         breadcrumbs={[

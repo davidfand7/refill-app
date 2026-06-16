@@ -27,7 +27,7 @@ export const Route = createFileRoute("/app/refill/calendar/booker-install")({
 function BookerInstallPage() {
   const search = useSearch({ from: "/app/refill/calendar/booker-install" });
   const shell = useShell();
-  const brandHeader = shell === "refill" ? "Refill" : "Emma(OS)";
+  const brandHeader = shell === "refill" ? "Refill" : "SmartSpa";
   const brandName = shell === "refill" ? "Refill" : "Emma";
 
   const [locationId, setLocationId] = useState("");

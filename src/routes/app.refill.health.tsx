@@ -72,7 +72,7 @@ function EngineHealthPage() {
   return (
     <div className="container mx-auto max-w-[960px] px-4 py-8">
       <PageHeader
-        eyebrow="Emma(OS)"
+        eyebrow="SmartSpa"
         title="Engine health"
         description="Is the no-show recovery pipeline alive? Glance here daily during pilot."
         actions={

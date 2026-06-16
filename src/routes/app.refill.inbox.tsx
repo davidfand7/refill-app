@@ -46,13 +46,13 @@ type Filter = "unread" | "today" | "all";
 
 function InboxPage() {
   // v411.5 — brand-aware constants per [[project-refill-trojan-horse-thesis]].
-  // On emma.agentiport.com (shell=karen): Emma(OS) brand + Karen agent name +
+  // On emma.agentiport.com (shell=karen): SmartSpa brand + Karen agent name +
   // Campaigns is a real surface to back-link to. On app.getrefill.app
   // (shell=refill): Refill brand + Refill (no separate agent persona) +
   // Campaigns doesn't exist in the 4-chip nav so we back-link to Recovery.
   const shell = useShell();
   const isRefill = shell === "refill";
-  const brandHeader = isRefill ? "Refill" : "Emma(OS)";
+  const brandHeader = isRefill ? "Refill" : "SmartSpa";
   const agentName = isRefill ? "Refill" : "Karen";
   const backRoute = isRefill ? "/app/refill/recovery" : "/app/refill/campaigns";
   const backLabel = isRefill ? "Back to Recovery" : "Back to Campaigns";

@@ -1,5 +1,5 @@
 /**
- * /app/refill/settings/sender — Emma(OS) per-spa email sender (v355).
+ * /app/refill/settings/sender — SmartSpa per-spa email sender (v355).
  *
  * Replaces the platform-default "Emma <hello@notify.openagentic.site>"
  * with a verified domain the spa owns ("hello@rejuvmedical.com").
@@ -68,7 +68,7 @@ function SenderSettingsPage() {
   // v411.6 — brand-aware constants. Same useShell pattern as v411.5.
   const shell = useShell();
   const isRefill = shell === "refill";
-  const brandHeader = isRefill ? "Refill" : "Emma(OS)";
+  const brandHeader = isRefill ? "Refill" : "SmartSpa";
   const brandName = isRefill ? "Refill" : "Emma";
   const platformDefault = platformDefaultFor(brandName);
 

@@ -1,5 +1,5 @@
 /**
- * /app/karen — Emma(OS) spa-owner dashboard for managing what Emma knows.
+ * /app/karen — SmartSpa spa-owner dashboard for managing what Emma knows.
  *
  * Post-claim management surface for spa owners. Reads the spa profile from
  * knowledge_nodes (the canonical store after claim — spa_claim_sessions is
@@ -75,13 +75,13 @@ export const Route = createFileRoute("/app/refill/")({
 
 // v410: persona index branch. Tenant users on the Refill product surface
 // (app.getrefill.app) render RefillHome — the narrow standalone-product
-// landing — instead of KarenDashboard (which is the Emma(OS) spa-profile
+// landing — instead of KarenDashboard (which is the SmartSpa spa-profile
 // editor, the wrong front door for a returning Refill customer).
 // Non-Refill spa owners on emma.agentiport.com keep KarenDashboard
 // unchanged. Per [[project-refill-trojan-horse-thesis]].
 //
 // v413.2 HARD GATE: on Refill shell, KarenDashboard MUST NEVER render —
-// it leaks Emma(OS) branding into a Refill-host surface (eyebrow
+// it leaks SmartSpa branding into a Refill-host surface (eyebrow
 // "EMMA(OS)", title "Emma", body copy referencing Emma). The app.tsx
 // AppLayout already redirects non-tenant Refill users to /onboard
 // before this component mounts, but defense in depth: if we somehow
@@ -150,7 +150,7 @@ function KarenDashboard() {
     return (
       <div>
         <PageHeader
-          eyebrow="Emma(OS)"
+          eyebrow="SmartSpa"
           title="Emma"
           description="Manage what Emma knows about your spa."
         />
@@ -169,7 +169,7 @@ function KarenDashboard() {
     return (
       <div>
         <PageHeader
-          eyebrow="Emma(OS)"
+          eyebrow="SmartSpa"
           title="Emma"
           description="Once you've claimed a spa, Emma's knowledge lives here."
         />
@@ -215,7 +215,7 @@ function ClaimedDashboard({
   return (
     <div>
       <PageHeader
-        eyebrow="Emma(OS) · Spa Settings"
+        eyebrow="SmartSpa · Spa Settings"
         title={spaName}
         description={
           profile.sourceUrl ? `Loaded from ${hostname(profile.sourceUrl)}.` : undefined

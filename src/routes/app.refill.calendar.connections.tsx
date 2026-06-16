@@ -77,7 +77,7 @@ export const Route = createFileRoute("/app/refill/calendar/connections")({
 function SchedulerSettingsPage() {
   const search = useSearch({ from: "/app/refill/calendar/connections" });
   const navigate = useNavigate();
-  // v411.5 — brand-aware constants. emma.agentiport.com renders "Emma(OS) ·
+  // v411.5 — brand-aware constants. emma.agentiport.com renders "SmartSpa ·
   // Settings" + "Emma knows..."; app.getrefill.app renders "Refill · Settings"
   // + "Refill knows...". Both surfaces share the same Acuity connection flow.
   const shell = useShell();
