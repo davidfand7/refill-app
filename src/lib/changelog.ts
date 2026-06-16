@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.59.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.59.0 &mdash; Win back brand-new patients who cancel, too.</strong> Reschedule Reminders used to only nudge patients who already had a profile in SmartSpa &mdash; so a first-time patient who booked, cancelled, and had no record yet was silently skipped, even though we had their phone from the booking. Now those <strong>unmatched cancellers show up as targets</strong> (tagged <em>New patient</em>) and get the same warm rebook nudge, reachable by the contact on their booking. They&rsquo;re deduped by phone, held through your grace window, and skipped if they&rsquo;ve already rebooked &mdash; same rules as everyone else. <strong>Touched</strong>: <code>reschedule.functions</code> + the Reschedule page. No migration.",
+    ],
+  },
+  {
     version: "v2.58.2",
     date: "June 2026",
     items: [

@@ -162,7 +162,15 @@ const CHUNK = 200;
 export type RescheduleOutcomeKind = "cancel" | "no_show";
 
 export type RescheduleTarget = {
-  patientNodeId: string;
+  /** The patient's knowledge-node id, or null for a TRULY UNMATCHED canceller —
+   *  a (usually brand-new) patient with no profile yet, reachable only via the
+   *  contact captured on the appointment itself (booking_phone/email, v2.46.0).
+   *  Gap-A Level 2: these used to be silently dropped (the pipeline keyed on
+   *  patient_node_id); they're now first-class targets. */
+  patientNodeId: string | null;
+  /** Stable identity for dedupe / React keys / nudge-tracking: the patient-node
+   *  id when matched, `appt:<appointmentId>` when unmatched. */
+  targetKey: string;
   name: string;
   phone: string | null;
   email: string | null;
@@ -177,6 +185,15 @@ export type RescheduleTarget = {
    *  (still actionable). Set patients are shown greyed for continuity, not hidden. */
   nudgedAt: string | null;
 };
+
+/** Normalize a phone to its last 10 digits — the dedupe key for unmatched
+ *  cancellers (so the same new lead with two cancels is one target, and a later
+ *  rebooking under the same number is recognized as "returned"). */
+function normPhone(raw: string | null): string | null {
+  if (!raw) return null;
+  const d = raw.replace(/\D/g, "");
+  return d.length >= 10 ? d.slice(-10) : d || null;
+}
 
 type ReschedulePolicy = {
   enabled: boolean;
@@ -250,13 +267,14 @@ async function computeRescheduleTargets(
     status: string;
     cancelled_at: string | null;
     treatment_type: string | null;
+    booking_name: string | null;
     booking_phone: string | null;
     booking_email: string | null;
   };
   const appts = await fetchAllRows<ApptRow>((from, to) =>
     any
       .from("emma_appointments")
-      .select("id, patient_node_id, scheduled_at, status, cancelled_at, treatment_type, booking_phone, booking_email")
+      .select("id, patient_node_id, scheduled_at, status, cancelled_at, treatment_type, booking_name, booking_phone, booking_email")
       .eq("user_id", userId)
       .in("status", ["cancelled", "no_show"])
       .gte("scheduled_at", sinceIso)
@@ -267,11 +285,11 @@ async function computeRescheduleTargets(
   // Classify, filter to the chosen classes, dedupe to one row per patient
   // (the most recent, since the rows are ordered newest-first).
   const byPatient = new Map<string, RescheduleTarget>();
-  // Gap-A fallback (v2.57): the appointment carries the patient's contact
+  // Gap-A Level 1 (v2.57): the appointment carries the patient's contact
   // (booking_phone/email, v2.46.0) even when their patient-node has none. Capture
   // the deciding appt's contact so a matched-but-contactless patient is still
-  // reachable. (Truly unmatched cancellers — no patient_node — are a separate,
-  // bigger follow-up since the whole pipeline keys on patient_node_id.)
+  // reachable. (Truly unmatched cancellers — no patient_node at all — are handled
+  // by the separate unmatched track below, Gap-A Level 2.)
   const bookingContact = new Map<string, { phone: string | null; email: string | null }>();
   // Patients whose most-recent chosen outcome is still inside the operator's
   // grace window — held back (give them time to self-rebook first), but counted
@@ -319,6 +337,7 @@ async function computeRescheduleTargets(
     });
     byPatient.set(a.patient_node_id, {
       patientNodeId: a.patient_node_id,
+      targetKey: a.patient_node_id,
       name: "",
       phone: null,
       email: null,
@@ -331,33 +350,113 @@ async function computeRescheduleTargets(
       nudgedAt: null, // filled in below once the nudge map is built
     });
   }
+
+  // ── Gap-A Level 2: the UNMATCHED track ──────────────────────────────────────
+  // A cancel/no-show with NO patient_node at all (a brand-new patient who never
+  // matched a profile) was dropped above. But the appointment still carries their
+  // contact (booking_name/phone/email, v2.46.0), so they ARE reachable. Build them
+  // as first-class targets keyed by the appointment, deduped by phone (one nudge
+  // per new lead, newest cancel wins since appts are newest-first). State that
+  // keys on patient_node_id doesn't apply: opt-out can't exist (no node), and the
+  // "already returned" + nudge-dedupe checks below are done by contact / appt id.
+  type UnmatchedDraft = {
+    appointmentId: string;
+    scheduledAt: string;
+    kind: RescheduleOutcomeKind;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    treatmentType: string | null;
+    noticeKnown: boolean;
+    leadHours: number | null;
+  };
+  const unmatched: UnmatchedDraft[] = [];
+  const seenUnmatchedPhone = new Set<string>();
+  let unmatchedHeldInGrace = 0;
+  for (const a of appts) {
+    if (a.patient_node_id) continue; // matched handled above
+    const res = classifyAppointmentOutcome({
+      status: a.status,
+      scheduledAt: a.scheduled_at,
+      cancelledAt: a.cancelled_at,
+      noticeHours: pol.noticeHours,
+    });
+    let kind: RescheduleOutcomeKind | null = null;
+    if (res.outcome === "no_show") kind = "no_show";
+    else if (res.outcome === "cancel_honored") kind = "cancel";
+    else continue;
+    if (kind === "cancel" && !pol.targetCancels) continue;
+    if (kind === "no_show" && !pol.targetNoshows) continue;
+    const phone = (a.booking_phone ?? "").trim() || null;
+    const email = (a.booking_email ?? "").trim() || null;
+    if (!phone && !email) continue; // truly unreachable — nothing to nudge
+    // Grace window (same anchor as matched): hold a too-recent outcome back.
+    if (graceFloorMs > 0) {
+      const outcomeAtMs = Date.parse(a.cancelled_at ?? a.scheduled_at);
+      if (Number.isFinite(outcomeAtMs) && Date.now() - outcomeAtMs < graceFloorMs) {
+        unmatchedHeldInGrace += 1;
+        continue;
+      }
+    }
+    // Dedupe by phone so the same new lead with multiple cancels is one target.
+    const pk = normPhone(phone);
+    if (pk) {
+      if (seenUnmatchedPhone.has(pk)) continue;
+      seenUnmatchedPhone.add(pk);
+    }
+    unmatched.push({
+      appointmentId: a.id,
+      scheduledAt: a.scheduled_at,
+      kind,
+      name: (a.booking_name ?? "").trim(),
+      phone,
+      email,
+      treatmentType: a.treatment_type,
+      noticeKnown: res.noticeKnown,
+      leadHours: res.leadHours,
+    });
+  }
+
   let ids = [...byPatient.keys()];
   // The opted-out / already-returned facts are needed for nudge candidates AND
   // grace-held patients (so the held count excludes anyone who already came back).
   const factIds = [...new Set([...ids, ...graceHeld])];
-  if (factIds.length === 0) return { targets: [], heldInGrace: 0 };
+  // Early out only when BOTH tracks are empty (matched AND unmatched).
+  if (factIds.length === 0 && unmatched.length === 0) {
+    return { targets: [], heldInGrace: 0 };
+  }
 
-  // Nudged map: patient → most recent nudge time in-window. We KEEP nudged
-  // patients (shown greyed for continuity) rather than hiding them — the draft
-  // path filters them out so they're never re-texted, but the owner still sees
-  // who was just drafted instead of the list silently emptying.
-  const nudgedAt = new Map<string, string>();
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const { data } = await any
+  // Nudged maps — ONE pull of recent reschedule nudges serves both tracks: matched
+  // patients dedupe by patient_node_id, unmatched by the cancelled appointment id
+  // (which the draft path records in metadata). We KEEP nudged targets (shown
+  // greyed for continuity); the draft path filters them so they're never re-texted.
+  // Bounded by the lookback window + human-gated (small) — paginated for safety.
+  const nudgedAt = new Map<string, string>(); // patient_node_id → ISO
+  const nudgedApptAt = new Map<string, string>(); // appointmentId → ISO
+  type NudgeRow = {
+    patient_node_id: string | null;
+    created_at: string;
+    metadata: { appointmentId?: string } | null;
+  };
+  const nudgeRows = await fetchAllRows<NudgeRow>((from, to) =>
+    any
       .from("agent_actions")
-      .select("patient_node_id, created_at")
+      .select("patient_node_id, created_at, metadata")
       .eq("user_id", userId)
       .eq("agent", "reschedule")
       .eq("action", "nudge_drafted")
       .gte("created_at", sinceIso)
-      .in("patient_node_id", ids.slice(i, i + CHUNK))
-      .order("created_at", { ascending: false });
-    for (const r of (data ?? []) as Array<{ patient_node_id: string | null; created_at: string }>) {
-      if (r.patient_node_id && !nudgedAt.has(r.patient_node_id)) {
-        nudgedAt.set(r.patient_node_id, r.created_at);
-      }
+      .order("created_at", { ascending: false })
+      .range(from, to),
+  );
+  for (const r of nudgeRows) {
+    if (r.patient_node_id && !nudgedAt.has(r.patient_node_id)) {
+      nudgedAt.set(r.patient_node_id, r.created_at);
     }
+    const apptId = r.metadata?.appointmentId;
+    if (apptId && !nudgedApptAt.has(apptId)) nudgedApptAt.set(apptId, r.created_at);
   }
+
   const opted = await collectIdSet(
     (slice) =>
       any
@@ -369,11 +468,10 @@ async function computeRescheduleTargets(
     factIds,
   );
 
-  // "Already rescheduled" = the patient has a REAL appointment (anything that
-  // isn't itself a cancel/no-show) dated AFTER the cancel/no-show we'd nudge
-  // them about — a future booking they made, OR a past visit they already
-  // attended. Either way they've come back; don't nudge. (This subsumes the old
-  // future-only "rebooked" check, which missed people who already returned.)
+  // "Already rescheduled" (matched) = the patient has a REAL appointment (anything
+  // that isn't itself a cancel/no-show) dated AFTER the cancel/no-show we'd nudge
+  // them about — a future booking OR a past visit they already attended. Either
+  // way they've come back; don't nudge.
   const goodMaxByPatient = new Map<string, string>();
   for (let i = 0; i < factIds.length; i += CHUNK) {
     const { data } = await any
@@ -398,19 +496,91 @@ async function computeRescheduleTargets(
     return Boolean(latestGood && outcomeAt && latestGood > outcomeAt);
   };
 
-  // Honest count of patients waiting in the grace window — excluding any who
-  // since opted out or already rebooked (those aren't "waiting", they're done).
-  const heldInGrace = [...graceHeld].filter(
-    (id) => !opted.has(id) && !hasReturned(id),
-  ).length;
+  // "Already rescheduled" (unmatched) = by CONTACT: a later good appt carrying the
+  // same booking_phone/email means this new lead already came back. Best-effort —
+  // it matches the contact string as the feed stores it (consistent within one
+  // spa's source); a number reformatted between visits could be missed, which only
+  // risks a warm, no-blame nudge to someone who returned — never a wrong send.
+  const goodMaxByContact = new Map<string, string>(); // "p:<10d>" | "e:<lower>" → ISO
+  if (unmatched.length) {
+    const rawPhones = [
+      ...new Set(unmatched.map((u) => u.phone).filter((v): v is string => !!v)),
+    ];
+    const rawEmails = [
+      ...new Set(unmatched.map((u) => u.email).filter((v): v is string => !!v)),
+    ];
+    const absorb = (
+      rows: Array<{ booking_phone: string | null; booking_email: string | null; scheduled_at: string }>,
+    ) => {
+      for (const r of rows) {
+        const pk = normPhone(r.booking_phone);
+        const ek = (r.booking_email ?? "").trim().toLowerCase() || null;
+        for (const key of [pk ? `p:${pk}` : null, ek ? `e:${ek}` : null]) {
+          if (!key) continue;
+          const prev = goodMaxByContact.get(key);
+          if (!prev || r.scheduled_at > prev) goodMaxByContact.set(key, r.scheduled_at);
+        }
+      }
+    };
+    type GoodContactRow = {
+      booking_phone: string | null;
+      booking_email: string | null;
+      scheduled_at: string;
+    };
+    // Chunk by the .in() set AND paginate each chunk's rows (selectAllRows): 200
+    // contacts can each carry several good appts → the result can top the 1,000-row
+    // PostgREST cap, which would silently drop a rebooking and falsely nudge a
+    // returned patient (feedback_silent_truncation_audit — always paginate bulk reads).
+    for (let i = 0; i < rawPhones.length; i += CHUNK) {
+      const slice = rawPhones.slice(i, i + CHUNK);
+      const rows = await fetchAllRows<GoodContactRow>((from, to) =>
+        any
+          .from("emma_appointments")
+          .select("booking_phone, booking_email, scheduled_at")
+          .eq("user_id", userId)
+          .in("status", ["scheduled", "confirmed", "showed", "rescheduled"])
+          .in("booking_phone", slice)
+          .range(from, to),
+      );
+      absorb(rows);
+    }
+    for (let i = 0; i < rawEmails.length; i += CHUNK) {
+      const slice = rawEmails.slice(i, i + CHUNK);
+      const rows = await fetchAllRows<GoodContactRow>((from, to) =>
+        any
+          .from("emma_appointments")
+          .select("booking_phone, booking_email, scheduled_at")
+          .eq("user_id", userId)
+          .in("status", ["scheduled", "confirmed", "showed", "rescheduled"])
+          .in("booking_email", slice)
+          .range(from, to),
+      );
+      absorb(rows);
+    }
+  }
+  const unmatchedReturned = (u: UnmatchedDraft): boolean => {
+    const pk = normPhone(u.phone);
+    const ek = (u.email ?? "").trim().toLowerCase() || null;
+    const candidates = [
+      pk ? goodMaxByContact.get(`p:${pk}`) : undefined,
+      ek ? goodMaxByContact.get(`e:${ek}`) : undefined,
+    ].filter((v): v is string => !!v);
+    if (!candidates.length) return false;
+    const latestGood = candidates.sort().at(-1)!;
+    return latestGood > u.scheduledAt;
+  };
 
-  // Drop opted-out + already-returned (resolved); KEEP nudged (shown greyed).
+  // Honest grace count across BOTH tracks (matched excludes opted/returned;
+  // unmatched grace-held are counted as-is — a short window, brand-new leads).
+  const heldInGrace =
+    [...graceHeld].filter((id) => !opted.has(id) && !hasReturned(id)).length +
+    unmatchedHeldInGrace;
+
+  // Drop opted-out + already-returned (matched); KEEP nudged (shown greyed).
   ids = ids.filter((id) => !opted.has(id) && !hasReturned(id));
-  if (ids.length === 0) return { targets: [], heldInGrace };
 
-  // Resolve contact from the patient node, then fall back to the appointment's
-  // own booking_phone/email (v2.46.0) so a patient whose node has no contact is
-  // still reachable (Gap-A).
+  // Resolve matched contact from the patient node, then fall back to the appt's
+  // own booking_phone/email (Gap-A Level 1) so a node with no contact still reaches.
   const contact = new Map<string, { name: string; phone: string | null; email: string | null }>();
   for (let i = 0; i < ids.length; i += CHUNK) {
     const { data } = await any
@@ -431,7 +601,7 @@ async function computeRescheduleTargets(
     }
   }
 
-  const out: RescheduleTarget[] = ids.map((id) => {
+  const matchedTargets: RescheduleTarget[] = ids.map((id) => {
     const t = byPatient.get(id)!;
     const c = contact.get(id);
     const bc = bookingContact.get(id);
@@ -443,6 +613,27 @@ async function computeRescheduleTargets(
       nudgedAt: nudgedAt.get(id) ?? null,
     };
   });
+
+  // Unmatched targets (Gap-A Level 2): drop already-returned, key by appointment,
+  // dedupe-nudge by appointment id (the marker the draft path writes to metadata).
+  const unmatchedTargets: RescheduleTarget[] = unmatched
+    .filter((u) => !unmatchedReturned(u))
+    .map((u) => ({
+      patientNodeId: null,
+      targetKey: `appt:${u.appointmentId}`,
+      name: u.name,
+      phone: u.phone,
+      email: u.email,
+      kind: u.kind,
+      appointmentId: u.appointmentId,
+      scheduledAt: u.scheduledAt,
+      treatmentType: u.treatmentType,
+      noticeKnown: u.noticeKnown,
+      leadHours: u.leadHours,
+      nudgedAt: nudgedApptAt.get(u.appointmentId) ?? null,
+    }));
+
+  const out: RescheduleTarget[] = [...matchedTargets, ...unmatchedTargets];
   // Actionable (not yet nudged) first, then by recency.
   out.sort((a, b) => {
     if (!a.nudgedAt !== !b.nudgedAt) return a.nudgedAt ? 1 : -1;
@@ -567,7 +758,7 @@ export const draftRescheduleNudges = createServerFn({ method: "POST" })
       name: string;
       phone: string;
       body: string;
-      patientNodeId: string;
+      patientNodeId: string | null;
       appointmentId: string;
       kind: string;
     }> = [];

@@ -238,7 +238,7 @@ function ReschedulePage() {
         {fresh.length > 0 && (
           <ul className="space-y-1.5">
             {fresh.map((t) => (
-              <TargetRow key={t.patientNodeId} t={t} />
+              <TargetRow key={t.targetKey} t={t} />
             ))}
           </ul>
         )}
@@ -251,7 +251,7 @@ function ReschedulePage() {
             </div>
             <ul className="space-y-1.5">
               {nudgedList.map((t) => (
-                <TargetRow key={t.patientNodeId} t={t} nudged />
+                <TargetRow key={t.targetKey} t={t} nudged />
               ))}
             </ul>
           </div>
@@ -272,6 +272,14 @@ function TargetRow({ t, nudged }: { t: RescheduleTarget; nudged?: boolean }) {
     >
       <span className="font-medium text-ink">{t.name || "(unnamed)"}</span>
       <KindBadge kind={t.kind} />
+      {t.patientNodeId === null && (
+        <span
+          className="rounded-full bg-rule px-2 py-0.5 text-[10.5px] font-semibold text-ink-soft"
+          title="No profile yet — reachable via the contact on their booking"
+        >
+          New patient
+        </span>
+      )}
       {t.treatmentType && <span className="text-ink-faint">· {t.treatmentType}</span>}
       <span className="text-ink-faint">· {fmtWhen(t.scheduledAt)}</span>
       <div className="ml-auto flex items-center gap-2 text-ink-faint">
