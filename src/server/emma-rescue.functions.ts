@@ -3110,6 +3110,15 @@ const simulateRescueInput = z.object({
   viewAsUserId: z.string().uuid().optional(),
   /** The freed slot's treatment (default Tox) — drives the waitlist match copy. */
   treatmentType: z.string().max(120).optional(),
+  /** v2.64.0 — the freed slot's duration in minutes (default 30). The Smart
+   *  Slot-Fill safety gate: only services whose effective duration fits this
+   *  are eligible, so a short sim slot tests the duration gate. */
+  durationMin: z.number().int().positive().max(600).optional(),
+  /** v2.64.0 — link the test slot to a specific scheduling provider so the
+   *  qualification matrix (Smart Slot-Fill) is exercised. Omit to auto-pick the
+   *  tenant's primary active provider; pass null to force the legacy (unlinked)
+   *  path. */
+  providerId: z.string().uuid().nullable().optional(),
 });
 
 export const simulateRescueDispatchFn = createServerFn({ method: "POST" })
@@ -3127,6 +3136,41 @@ export const simulateRescueDispatchFn = createServerFn({ method: "POST" })
       const nowMs = Date.now();
       // +2h so it's comfortably future (dispatch requires scheduled_at > now).
       const scheduledAt = new Date(nowMs + 2 * 60 * 60 * 1000).toISOString();
+
+      // v2.64.0 — link the test slot to a scheduling provider so the Smart
+      // Slot-Fill qualification matrix actually runs (an unlinked slot degrades
+      // to the legacy matcher). Auto-pick the tenant's primary active provider
+      // unless the caller passed one (or explicitly passed null for legacy).
+      let providerId: string | null = data.providerId ?? null;
+      let providerName: string | null = null;
+      if (data.providerId !== null) {
+        try {
+          const { getTenantIdForUser } = await import("@/server/refill-catalog");
+          const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+          const { data: prov } = await sb
+            .from("scheduling_providers")
+            .select("id, name")
+            .eq("tenant_id", tenantId)
+            .eq("is_active", true)
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          if (data.providerId) {
+            const { data: named } = await sb
+              .from("scheduling_providers")
+              .select("id, name")
+              .eq("id", data.providerId)
+              .maybeSingle();
+            providerName = named?.name ?? null;
+          } else if (prov) {
+            providerId = prov.id;
+            providerName = prov.name;
+          }
+        } catch (e) {
+          console.error("[rescue-sim] provider link failed; running unlinked:", e);
+        }
+      }
+
       // Loose cast: booking_name / cancelled_at landed in later migrations than
       // the generated types know (same pattern the reschedule + ingest paths use).
       const { data: inserted, error } = await (
@@ -3139,6 +3183,9 @@ export const simulateRescueDispatchFn = createServerFn({ method: "POST" })
           status: "cancelled",
           cancelled_at: new Date(nowMs).toISOString(),
           treatment_type: (data.treatmentType ?? "Tox").trim() || "Tox",
+          duration_min: data.durationMin ?? 30,
+          provider_id: providerId,
+          provider_name: providerName,
           booking_name: "__Rescue Sim__",
           source: "manual",
           notes: "rescue-sim",

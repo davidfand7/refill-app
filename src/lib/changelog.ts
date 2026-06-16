@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.64.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.64.1 &mdash; &ldquo;Simulate a cancellation&rdquo; now tests Smart Slot-Fill for real.</strong> The go-live test button used to create an unlinked test slot, which quietly fell back to the old same-service matcher &mdash; so it could never show off the new cross-service fills. Now the simulated slot is automatically linked to your primary provider (and accepts an optional duration), so firing it runs the full provider-qualification &times; duration match and surfaces cross-service candidates just like a real cancellation would. <strong>Touched</strong>: <code>simulateRescueDispatchFn</code> (auto-link provider + optional <code>durationMin</code>/<code>providerId</code>).",
+    ],
+  },
+  {
     version: "v2.64.0",
     date: "June 2026",
     items: [
