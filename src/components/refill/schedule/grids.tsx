@@ -495,11 +495,25 @@ export function MonthGrid({
                 {parseInt(d.slice(8), 10)}
               </span>
               <div className="flex flex-col gap-0.5">
-                {appts.slice(0, 3).map((a) => (
-                  <span key={a.id} className={cn("text-[10px] truncate rounded px-1 py-0.5", a.status === "held" ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-800")}>
-                    {fmtTime(a.startIso, tz)} {a.patientName ?? "Booked"}
-                  </span>
-                ))}
+                {appts.slice(0, 3).map((a) => {
+                  const held = a.status === "held";
+                  // Same treatment color-coding as day/week, in miniature.
+                  const c = !held && a.treatment?.trim() ? treatmentColor(a.treatment) : null;
+                  return (
+                    <span
+                      key={a.id}
+                      title={a.treatment?.trim() ? `${a.patientName ?? "Booked"} · ${a.treatment.trim()}` : undefined}
+                      className={cn(
+                        "flex items-center gap-1 text-[10px] leading-tight truncate rounded px-1 py-0.5 border",
+                        held ? "bg-amber-50 border-amber-200" : c ? "" : "bg-emerald-50 border-emerald-200",
+                      )}
+                      style={c ? { backgroundColor: c.bg, borderColor: c.border } : undefined}
+                    >
+                      <span className="tabular-nums text-ink-soft shrink-0">{fmtTime(a.startIso, tz)}</span>
+                      <span className="truncate text-ink">{a.patientName ?? "Booked"}</span>
+                    </span>
+                  );
+                })}
                 {appts.length > 3 && <span className="text-[10px] text-ink-faint pl-1">+{appts.length - 3} more</span>}
               </div>
             </button>

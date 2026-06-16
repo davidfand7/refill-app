@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.56.7",
+    date: "June 2026",
+    items: [
+      "<strong>v2.56.7 &mdash; Month view now color-codes by treatment too.</strong> Each appointment chip in a month cell now carries the same treatment tint as the day &amp; week views (Tox = violet, Filler = pink, Sculptra = green, Laser = blue, Peel = amber&hellip;), so a month reads at a glance and matches the rest of the calendar instead of being a wall of plain green. Hover a chip to see the patient + full treatment. <strong>Touched</strong>: <code>schedule/grids.tsx</code> (MonthGrid chips). No migration.",
+    ],
+  },
+  {
     version: "v2.56.6",
     date: "June 2026",
     items: [
