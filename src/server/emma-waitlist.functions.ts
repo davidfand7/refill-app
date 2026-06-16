@@ -28,6 +28,8 @@ import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
+import { loadServiceCatalogForUser } from "@/server/refill-catalog";
+import { resolveTreatmentsToServiceIds } from "@/lib/treatment-catalog-resolver";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -45,6 +47,8 @@ export type WaitlistEntry = {
   optInSource: string;
   optedInAt: string;
   revokedAt: string | null;
+  /** v2.63.0: catalog-linked desired services resolved from treatment_types. */
+  desiredServices: { id: string; name: string }[];
 };
 
 export type WaitlistOptInPayload = {
@@ -281,17 +285,31 @@ export const optInToWaitlist = createServerFn({ method: "POST" })
     // the admin's pre-seed for back-compat).
     const patientPickedTreatments = data.treatmentTypes;
 
+    // v2.63.0: catalog-link the patient's picks (the Slot-Fill spine). Only
+    // resolved when the patient actually sent picks; an undefined pick leaves
+    // the invite-time pre-seed (treatment_types + desired_service_ids) intact.
+    let pickedServiceIds: string[] | null = null;
+    if (patientPickedTreatments !== undefined) {
+      const catalog = await loadServiceCatalogForUser(sb, tokenRow.user_id);
+      pickedServiceIds = resolveTreatmentsToServiceIds(
+        patientPickedTreatments,
+        catalog,
+      ).serviceIds;
+    }
+
     if (existing) {
       if (existing.status === "active") return { ok: true, alreadyActive: true };
       // Reactivate from paused/revoked
-      const updatePatch: Record<string, unknown> = {
-        status: "active",
-        revoked_at: null,
-        opted_in_at: new Date().toISOString(),
-        opt_in_source: "footer-link",
-      };
+      const updatePatch: Database["public"]["Tables"]["emma_waitlist"]["Update"] =
+        {
+          status: "active",
+          revoked_at: null,
+          opted_in_at: new Date().toISOString(),
+          opt_in_source: "footer-link",
+        };
       if (patientPickedTreatments !== undefined) {
         updatePatch.treatment_types = patientPickedTreatments;
+        updatePatch.desired_service_ids = pickedServiceIds ?? [];
       }
       const { error } = await sb
         .from("emma_waitlist")
@@ -301,7 +319,7 @@ export const optInToWaitlist = createServerFn({ method: "POST" })
       return { ok: true, alreadyActive: false };
     }
 
-    const insertRow: Record<string, unknown> = {
+    const insertRow: Database["public"]["Tables"]["emma_waitlist"]["Insert"] = {
       user_id: tokenRow.user_id,
       patient_node_id: tokenRow.patient_node_id,
       status: "active",
@@ -309,6 +327,7 @@ export const optInToWaitlist = createServerFn({ method: "POST" })
     };
     if (patientPickedTreatments !== undefined) {
       insertRow.treatment_types = patientPickedTreatments;
+      insertRow.desired_service_ids = pickedServiceIds ?? [];
     }
     const { error } = await sb.from("emma_waitlist").insert(insertRow);
     if (error) throw new Error(`Couldn't opt in: ${error.message}`);
@@ -354,7 +373,7 @@ export const listWaitlist = createServerFn({ method: "POST" })
     const { data: rows, error } = await sb
       .from("emma_waitlist")
       .select(
-        "id, patient_node_id, treatment_types, preferred_providers, status, opt_in_source, opted_in_at, revoked_at",
+        "id, patient_node_id, treatment_types, desired_service_ids, preferred_providers, status, opt_in_source, opted_in_at, revoked_at",
       )
       .eq("user_id", effectiveUserId)
       .order("opted_in_at", { ascending: false })
@@ -381,6 +400,18 @@ export const listWaitlist = createServerFn({ method: "POST" })
       });
     }
 
+    // v2.63.0: hydrate catalog-linked desired services into {id, name} for
+    // display. Reuse the paginated catalog loader (truncation-safe) and build a
+    // name map; the catalog is small (dozens) so loading it whole is cheap.
+    const hasServiceLinks = rows.some(
+      (r) => (r.desired_service_ids ?? []).length > 0,
+    );
+    const serviceNameById = new Map<string, string>();
+    if (hasServiceLinks) {
+      const catalog = await loadServiceCatalogForUser(sb, effectiveUserId);
+      for (const s of catalog) serviceNameById.set(s.id, s.name);
+    }
+
     return rows.map((r) => ({
       id: r.id,
       patientNodeId: r.patient_node_id,
@@ -393,6 +424,9 @@ export const listWaitlist = createServerFn({ method: "POST" })
       optInSource: r.opt_in_source,
       optedInAt: r.opted_in_at,
       revokedAt: r.revoked_at,
+      desiredServices: (r.desired_service_ids ?? [])
+        .filter((id) => serviceNameById.has(id))
+        .map((id) => ({ id, name: serviceNameById.get(id) as string })),
     }));
   });
 

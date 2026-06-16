@@ -1756,6 +1756,7 @@ export type Database = {
         Row: {
           availability_windows: Json
           created_at: string
+          desired_service_ids: string[]
           id: string
           intent_type: string
           opt_in_source: string
@@ -1772,6 +1773,7 @@ export type Database = {
         Insert: {
           availability_windows?: Json
           created_at?: string
+          desired_service_ids?: string[]
           id?: string
           intent_type?: string
           opt_in_source: string
@@ -1788,6 +1790,7 @@ export type Database = {
         Update: {
           availability_windows?: Json
           created_at?: string
+          desired_service_ids?: string[]
           id?: string
           intent_type?: string
           opt_in_source?: string

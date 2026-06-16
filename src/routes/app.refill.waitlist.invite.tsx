@@ -49,6 +49,7 @@ import {
   type ReliabilityFlag,
 } from "@/server/emma-reliability.functions";
 import {
+  backfillWaitlistServiceLinksFn,
   getInviteCopyTemplateFn,
   getSmartInviteCohortFn,
   sendOptInInviteBatchFn,
@@ -118,6 +119,7 @@ function WaitlistInvitePage() {
   const [sending, setSending] = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [result, setResult] = useState<InviteBatchResult | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
 
   // ─── Bootstrap ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -360,6 +362,31 @@ function WaitlistInvitePage() {
     setSelectedIds(new Set());
     setDidAutoSelect(false);
   }, []);
+
+  const handleBackfill = useCallback(async () => {
+    if (!accessToken || backfilling) return;
+    setBackfilling(true);
+    try {
+      const r = await backfillWaitlistServiceLinksFn({
+        data: { accessToken, viewAsUserId },
+      });
+      if (r.updated > 0) {
+        toast.success(
+          `Linked ${r.updated} waitlist ${r.updated === 1 ? "patient" : "patients"} to your service catalog.${r.stillUnresolved > 0 ? ` ${r.stillUnresolved} still free-text (no catalog match).` : ""}`,
+        );
+      } else if (r.stillUnresolved > 0) {
+        toast.message(
+          `Nothing to link — ${r.stillUnresolved} ${r.stillUnresolved === 1 ? "row" : "rows"} have desires that don't match a catalog service yet.`,
+        );
+      } else {
+        toast.message("Already linked — every waitlist desire maps to your catalog.");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Backfill failed.");
+    } finally {
+      setBackfilling(false);
+    }
+  }, [accessToken, backfilling, viewAsUserId]);
 
   // ─── Render ─────────────────────────────────────────────────────────────
   if (loading) {
@@ -726,6 +753,30 @@ function WaitlistInvitePage() {
               <span className="text-xs text-ink-soft max-w-md leading-relaxed">
                 Creates paused waitlist rows and composes one iMessage draft per
                 patient. Patients flip paused → active when they tap the link.
+              </span>
+            </div>
+
+            {/* Catalog-link maintenance (v2.63.0) */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 pt-4 mt-2 border-t border-rule/60">
+              <button
+                type="button"
+                onClick={handleBackfill}
+                disabled={backfilling}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-1.5 text-xs font-medium text-ink-soft hover:bg-rule-soft hover:text-ink transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {backfilling ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Linking…
+                  </>
+                ) : (
+                  "Link existing waitlist to catalog"
+                )}
+              </button>
+              <span className="text-[11px] text-ink-faint max-w-md leading-relaxed">
+                Maps everyone already on your waitlist to the matching service in
+                your catalog, so slot-fill matching knows exactly what they want.
+                Safe to re-run after editing your services.
               </span>
             </div>
           </>

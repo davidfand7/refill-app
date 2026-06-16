@@ -565,6 +565,19 @@ function WaitlistTab({
                 {w.patientPhone && w.patientEmail && <span> · </span>}
                 {w.patientEmail && <span>{w.patientEmail}</span>}
               </div>
+              {w.desiredServices.length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {w.desiredServices.map((s) => (
+                    <span
+                      key={s.id}
+                      className="inline-flex items-center rounded-full bg-emerald/10 text-emerald-800 px-2 py-0.5 text-[10px] font-medium"
+                      title="Catalog-linked desired service"
+                    >
+                      {s.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="text-[11px] text-ink-soft shrink-0">
               Opted in {new Date(w.optedInAt).toLocaleDateString()}

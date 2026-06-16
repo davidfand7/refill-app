@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.63.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.63.0 &mdash; Waitlist desires now link to your real service catalog.</strong> Until now, what a waitlist patient &ldquo;wants&rdquo; lived as free text (&ldquo;Tox w/ Karen&rdquo;, &ldquo;RF Micro Face+Neck&rdquo;) &mdash; fine for the loose rescue match, but the upcoming <strong>Smart Slot-Fill</strong> needs to know the exact service so it can check which providers are qualified for it and whether it fits a freed slot&rsquo;s duration. This lays that spine: every waitlist row now also carries the <strong>catalog service(s)</strong> its desire maps to. New Smart-Invite sends and patient opt-ins resolve it automatically; a <strong>&ldquo;Link existing waitlist to catalog&rdquo;</strong> button (on the Invite page) backfills everyone already on the list, and the waitlist tab shows each patient&rsquo;s linked service as a green chip. The matcher is whole-word (so &ldquo;Detox Facial&rdquo; never mis-links to &ldquo;Tox&rdquo;), and anything that doesn&rsquo;t match a catalog service keeps working on the old free-text path &mdash; nothing breaks. <strong>Touched</strong>: new <code>desired_service_ids</code> column on <code>emma_waitlist</code> (additive), new <code>treatment-catalog-resolver</code> + <code>loadServiceCatalogForUser</code>, <code>sendOptInInviteBatchFn</code> / <code>optInToWaitlist</code> / <code>listWaitlist</code> / <code>backfillWaitlistServiceLinksFn</code>, rescue + invite UI. Migration: <code>desired_service_ids uuid[]</code>.",
+    ],
+  },
+  {
     version: "v2.62.0",
     date: "June 2026",
     items: [

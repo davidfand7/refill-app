@@ -81,7 +81,7 @@ function admin() {
 
 type SupabaseAdmin = ReturnType<typeof admin>;
 
-async function getTenantIdForUser(sb: SupabaseAdmin, userId: string): Promise<string> {
+export async function getTenantIdForUser(sb: SupabaseAdmin, userId: string): Promise<string> {
   const { data, error } = await sb
     .from("tenant_memberships")
     .select("tenant_id, created_at")
@@ -94,6 +94,56 @@ async function getTenantIdForUser(sb: SupabaseAdmin, userId: string): Promise<st
     throw new Error("No Refill tenant — finish onboarding before opening the catalog.");
   }
   return data.tenant_id;
+}
+
+/**
+ * Lightweight catalog load for the treatment→service resolver (v2.63.0). Lives
+ * here so tenant resolution + the `services` table stay in one place; consumed
+ * by the waitlist write paths to populate emma_waitlist.desired_service_ids.
+ * Excludes soft-hidden services. Returns null tenant gracefully (empty list)
+ * so a not-yet-onboarded spa doesn't hard-fail an invite send.
+ */
+export type ServiceCatalogLite = {
+  id: string;
+  name: string;
+  category: string | null;
+  durationMin: number;
+  onlineBookable: boolean;
+};
+
+export async function loadServiceCatalogForUser(
+  sb: SupabaseAdmin,
+  effectiveUserId: string,
+): Promise<ServiceCatalogLite[]> {
+  let tenantId: string;
+  try {
+    tenantId = await getTenantIdForUser(sb, effectiveUserId);
+  } catch {
+    return [];
+  }
+  const rows = await fetchAllRows<{
+    id: string;
+    name: string;
+    category: string | null;
+    duration_min: number;
+    online_bookable: boolean;
+    hidden_at: string | null;
+  }>((from, to) =>
+    sb
+      .from("services")
+      .select("id, name, category, duration_min, online_bookable, hidden_at")
+      .eq("tenant_id", tenantId)
+      .range(from, to),
+  );
+  return rows
+    .filter((s) => !s.hidden_at)
+    .map((s) => ({
+      id: s.id,
+      name: s.name,
+      category: s.category ?? null,
+      durationMin: s.duration_min,
+      onlineBookable: s.online_bookable,
+    }));
 }
 
 // ─── Shape adapters ───────────────────────────────────────────────────────

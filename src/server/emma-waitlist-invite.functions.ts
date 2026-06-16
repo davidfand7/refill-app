@@ -38,6 +38,8 @@ import {
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
 import { doListOverdue } from "@/server/patient-ingest.functions";
 import { selectAllRows } from "@/lib/supabase-paginate";
+import { loadServiceCatalogForUser } from "@/server/refill-catalog";
+import { resolveTreatmentsToServiceIds } from "@/lib/treatment-catalog-resolver";
 
 const PUBLIC_REFILL_ORIGIN =
   process.env.PUBLIC_REFILL_URL ?? "https://getrefill.app";
@@ -223,7 +225,7 @@ export const sendOptInInviteBatchFn = createServerFn({ method: "POST" })
     });
     const sb = admin();
 
-    const [bundle, policy, patientsRes] = await Promise.all([
+    const [bundle, policy, patientsRes, catalog] = await Promise.all([
       getSpaProfileBundle(sb, effectiveUserId),
       sb
         .from("emma_noshow_policies")
@@ -235,6 +237,8 @@ export const sendOptInInviteBatchFn = createServerFn({ method: "POST" })
         .select("id, title, attachments")
         .eq("user_id", effectiveUserId)
         .in("id", data.patientNodeIds),
+      // v2.63.0: catalog for resolving inferred treatment → desired_service_ids.
+      loadServiceCatalogForUser(sb, effectiveUserId),
     ]);
 
     const proxyEmail = policy.data?.rescue_proxy_email?.trim() || null;
@@ -301,11 +305,15 @@ export const sendOptInInviteBatchFn = createServerFn({ method: "POST" })
       // v2.62.0: inferred desired-service for this patient (Smart Invite).
       const inferred =
         data.inferredTreatmentByPatient?.[patientNodeId]?.trim() || null;
+      // v2.63.0: catalog-link the inferred desire (the Slot-Fill spine).
+      const inferredServiceIds = inferred
+        ? resolveTreatmentsToServiceIds([inferred], catalog).serviceIds
+        : [];
 
       try {
         const { data: existing } = await sb
           .from("emma_waitlist")
-          .select("id, status, treatment_types")
+          .select("id, status, treatment_types, desired_service_ids")
           .eq("user_id", effectiveUserId)
           .eq("patient_node_id", patientNodeId)
           .maybeSingle();
@@ -336,6 +344,13 @@ export const sendOptInInviteBatchFn = createServerFn({ method: "POST" })
           ) {
             updatePatch.treatment_types = [inferred];
           }
+          if (
+            inferredServiceIds.length > 0 &&
+            (!existing.desired_service_ids ||
+              existing.desired_service_ids.length === 0)
+          ) {
+            updatePatch.desired_service_ids = inferredServiceIds;
+          }
           const { error: updateErr } = await sb
             .from("emma_waitlist")
             .update(updatePatch)
@@ -351,6 +366,7 @@ export const sendOptInInviteBatchFn = createServerFn({ method: "POST" })
               opt_in_source: "spa-manual",
               intent_type: "catchall",
               treatment_types: inferred ? [inferred] : [],
+              desired_service_ids: inferredServiceIds,
             });
           if (insertErr) throw new Error(insertErr.message);
         }
@@ -666,4 +682,73 @@ export const getSmartInviteCohortFn = createServerFn({ method: "POST" })
     }
 
     return { signals, generatedAt: new Date(nowMs).toISOString() };
+  });
+
+// ─── Backfill: catalog-link existing waitlist desires (v2.63.0) ─────────────
+//
+// New invites (Smart Invite) and patient opt-ins now populate
+// desired_service_ids at write time. This one-shot (idempotent, re-runnable
+// after catalog edits) resolves EXISTING rows' free-text treatment_types onto
+// the catalog, but only rows that don't already carry a catalog link — so it
+// never clobbers a resolved row. Rows whose free-text matches nothing are
+// reported as `stillUnresolved` (they keep working via the legacy free-text
+// matcher; not an error).
+
+const backfillInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+});
+
+export type BackfillServiceLinksResult = {
+  scanned: number;
+  updated: number;
+  stillUnresolved: number;
+};
+
+export const backfillWaitlistServiceLinksFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => backfillInput.parse(raw))
+  .handler(async ({ data }): Promise<BackfillServiceLinksResult> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const catalog = await loadServiceCatalogForUser(sb, effectiveUserId);
+
+    const rows = await selectAllRows<{
+      id: string;
+      treatment_types: string[];
+      desired_service_ids: string[];
+    }>(
+      (from, to) =>
+        sb
+          .from("emma_waitlist")
+          .select("id, treatment_types, desired_service_ids")
+          .eq("user_id", effectiveUserId)
+          .range(from, to),
+      { label: "waitlist service-link backfill" },
+    );
+
+    let updated = 0;
+    let stillUnresolved = 0;
+    for (const r of rows) {
+      if (r.desired_service_ids && r.desired_service_ids.length > 0) continue;
+      if (!r.treatment_types || r.treatment_types.length === 0) continue;
+      const { serviceIds } = resolveTreatmentsToServiceIds(
+        r.treatment_types,
+        catalog,
+      );
+      if (serviceIds.length === 0) {
+        stillUnresolved++;
+        continue;
+      }
+      const { error } = await sb
+        .from("emma_waitlist")
+        .update({ desired_service_ids: serviceIds })
+        .eq("id", r.id);
+      if (error) throw new Error(error.message);
+      updated++;
+    }
+
+    return { scanned: rows.length, updated, stillUnresolved };
   });

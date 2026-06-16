@@ -350,6 +350,7 @@ function PatientsPage() {
             optInSource: "spa-manual",
             optedInAt: now,
             revokedAt: null,
+            desiredServices: existing?.desiredServices ?? [],
           });
           return next;
         });
