@@ -124,7 +124,7 @@ export function anchorApptCards(
   winStart: number,
 ): AnchorLayout {
   const GAP = 2;
-  const MIN_VIS = 15; // a card never collapses below this (stays clickable)
+  const MIN_VIS = 20; // a card never collapses below this (room for one clean line)
   const topOf = new Map<string, number>();
   const heightOf = new Map<string, number>();
   const sorted = appts

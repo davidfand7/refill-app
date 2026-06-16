@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.56.5",
+    date: "June 2026",
+    items: [
+      "<strong>v2.56.5 &mdash; Schedule cards: compact ones now center their text instead of cramming it at the top.</strong> On tightly-packed appointments, the single-line card (name + treatment) is now vertically centered so it reads cleanly instead of looking clipped against the top edge; taller cards still top-align their two lines. The shrink floor also gives a compact card a touch more room for one clean line. <strong>Touched</strong>: <code>schedule/grids.tsx</code>, <code>schedule/shared.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.56.4",
     date: "June 2026",
     items: [

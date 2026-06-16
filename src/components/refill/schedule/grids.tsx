@@ -574,7 +574,7 @@ export function ApptCard({
       }}
       title={held ? undefined : "Double-click to edit · drag to move"}
     >
-      <div className="flex items-start justify-between gap-1">
+      <div className={cn("flex justify-between gap-1", twoLine ? "items-start" : "h-full items-center")}>
         <div className="min-w-0">
           <div className={cn("font-semibold text-ink truncate leading-tight", compact ? "text-[11px]" : "text-[12px]")}>
             {a.patientName ?? (held ? "Hold" : "Booked")}
