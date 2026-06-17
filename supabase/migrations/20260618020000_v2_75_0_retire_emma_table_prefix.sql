@@ -21,7 +21,7 @@ declare
   newname text;
 begin
   -- 1) Tables: emma_X -> X  (record each rename for the compat-view pass below)
-  create temp table if not exists _emma_renamed(oldname text, newname text) on commit drop;
+  create temp table if not exists _emma_renamed(old_name text, new_name text) on commit drop;
 
   for r in
     select c.relname as nm
@@ -39,7 +39,7 @@ begin
       continue;
     end if;
     execute format('alter table public.%I rename to %I', r.nm, newname);
-    insert into _emma_renamed values (r.nm, newname);
+    insert into _emma_renamed(old_name, new_name) values (r.nm, newname);
   end loop;
 
   -- 2) Constraints: emma_X_... -> X_...  (keeps code FK-relationship hints valid)
@@ -85,10 +85,10 @@ begin
   end loop;
 
   -- 6) Compatibility views: old emma_ name -> new bare table (RLS-preserving).
-  for r in select oldname, newname from _emma_renamed loop
+  for r in select old_name, new_name from _emma_renamed loop
     execute format(
       'create view public.%I with (security_invoker = true) as select * from public.%I',
-      r.oldname, r.newname
+      r.old_name, r.new_name
     );
   end loop;
 
