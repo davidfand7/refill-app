@@ -53,7 +53,7 @@ export const Route = createFileRoute("/api/cron/emma-preshow-sweep")({
         // 1) Pull all spas with preshow enabled. Most installations will be
         //    small (<100 spas) so a single full-scan is fine.
         const { data: policies, error: pErr } = await sb
-          .from("emma_noshow_policies")
+          .from("noshow_policies")
           .select("user_id, preshow_cadence_hours")
           .eq("preshow_enabled", true);
         if (pErr) return jsonResp(500, { error: `policies: ${pErr.message}` });
@@ -88,7 +88,7 @@ export const Route = createFileRoute("/api/cron/emma-preshow-sweep")({
         for (const policy of policies) {
           let offsets: number[] = policy.preshow_cadence_hours ?? [];
           const { data: profiles } = await sb
-            .from("emma_preshow_profiles")
+            .from("preshow_profiles")
             .select("cadence_hours, cadence_by_treatment_type")
             .eq("user_id", policy.user_id);
           if (profiles && profiles.length > 0) {
@@ -122,7 +122,7 @@ export const Route = createFileRoute("/api/cron/emma-preshow-sweep")({
             const winEnd = new Date(targetMs + WINDOW_MIN * 60 * 1000);
 
             const { data: due, error: dueErr } = await sb
-              .from("emma_appointments")
+              .from("appointments")
               .select("id")
               .eq("user_id", policy.user_id)
               .in("status", ["scheduled", "confirmed"])

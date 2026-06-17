@@ -2,7 +2,7 @@
  * POST /api/cron/recall-digest — the weekly Recall Digest routine (v2.22.0).
  *
  * The honest "Auto-Recall" Skill. Fired by pg_cron once a week, it walks every
- * spa that has turned the digest on (emma_noshow_policies.recall_digest_enabled
+ * spa that has turned the digest on (noshow_policies.recall_digest_enabled
  * = true — the Skill's adopt/On flips it), computes that spa's recall view
  * (computeRecallView — the SAME math the Recall page renders), and emails the
  * owner a heads-up: "$X on the table across N patients due."
@@ -85,7 +85,7 @@ export const Route = createFileRoute("/api/cron/recall-digest")({
           };
         };
         const { data: rawRows, error } = await loose
-          .from("emma_noshow_policies")
+          .from("noshow_policies")
           .select("user_id, recall_digest_last_sent_at")
           .eq("recall_digest_enabled", true);
         if (error) return jsonResp(500, { error: `pull: ${error.message}` });

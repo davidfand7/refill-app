@@ -58,7 +58,7 @@ export const Route = createFileRoute("/api/cron/acuity-provider-relink")({
         const daysForward = daysForwardParam ? Number(daysForwardParam) : undefined;
 
         let q = sb
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select("id, user_id, access_token")
           .eq("platform", "acuity")
           .eq("status", "connected");

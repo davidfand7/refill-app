@@ -121,7 +121,7 @@ function EngineHealthPage() {
             <VitalCard
               icon={DollarSign}
               label="Recoveries logged"
-              tooltip="Most recent emma_recovery_events row — billable save attributed"
+              tooltip="Most recent recovery_events row — billable save attributed"
               row={vitals.recoveryEvents}
               tone="emerald"
             />

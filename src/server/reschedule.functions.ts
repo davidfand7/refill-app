@@ -87,7 +87,7 @@ export const getRescheduleClassificationPreview = createServerFn({ method: "POST
     let noticeHours = data.noticeHoursOverride;
     if (noticeHours === undefined) {
       const { data: policy } = await loose(sb)
-        .from("emma_noshow_policies")
+        .from("noshow_policies")
         .select("noshow_notice_hours")
         .eq("user_id", effectiveUserId)
         .maybeSingle();
@@ -105,7 +105,7 @@ export const getRescheduleClassificationPreview = createServerFn({ method: "POST
     };
     const rows = await fetchAllRows<Row>((from, to) =>
       loose(sb)
-        .from("emma_appointments")
+        .from("appointments")
         .select("status, scheduled_at, cancelled_at")
         .eq("user_id", effectiveUserId)
         .in("status", ["cancelled", "no_show"])
@@ -211,7 +211,7 @@ async function loadReschedulePolicy(
   userId: string,
 ): Promise<ReschedulePolicy> {
   const { data } = await loose(sb)
-    .from("emma_noshow_policies")
+    .from("noshow_policies")
     .select(
       "reschedule_enabled, noshow_notice_hours, reschedule_target_cancels, reschedule_target_noshows, reschedule_lookback_days, reschedule_delay_days, rescue_proxy_email, sending_paused",
     )
@@ -273,7 +273,7 @@ async function computeRescheduleTargets(
   };
   const appts = await fetchAllRows<ApptRow>((from, to) =>
     any
-      .from("emma_appointments")
+      .from("appointments")
       .select("id, patient_node_id, scheduled_at, status, cancelled_at, treatment_type, booking_name, booking_phone, booking_email")
       .eq("user_id", userId)
       .in("status", ["cancelled", "no_show"])
@@ -475,7 +475,7 @@ async function computeRescheduleTargets(
   const goodMaxByPatient = new Map<string, string>();
   for (let i = 0; i < factIds.length; i += CHUNK) {
     const { data } = await any
-      .from("emma_appointments")
+      .from("appointments")
       .select("patient_node_id, scheduled_at")
       .eq("user_id", userId)
       .in("status", ["scheduled", "confirmed", "showed", "rescheduled"])
@@ -535,7 +535,7 @@ async function computeRescheduleTargets(
       const slice = rawPhones.slice(i, i + CHUNK);
       const rows = await fetchAllRows<GoodContactRow>((from, to) =>
         any
-          .from("emma_appointments")
+          .from("appointments")
           .select("booking_phone, booking_email, scheduled_at")
           .eq("user_id", userId)
           .in("status", ["scheduled", "confirmed", "showed", "rescheduled"])
@@ -548,7 +548,7 @@ async function computeRescheduleTargets(
       const slice = rawEmails.slice(i, i + CHUNK);
       const rows = await fetchAllRows<GoodContactRow>((from, to) =>
         any
-          .from("emma_appointments")
+          .from("appointments")
           .select("booking_phone, booking_email, scheduled_at")
           .eq("user_id", userId)
           .in("status", ["scheduled", "confirmed", "showed", "rescheduled"])

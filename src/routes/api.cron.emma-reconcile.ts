@@ -50,7 +50,7 @@ export const Route = createFileRoute("/api/cron/emma-reconcile")({
         // expired no longer needs a reconcile pass (the rows are dead).
         // expired_at isn't in the generated types yet → loose-cast the filter.
         const { data: rows, error } = await (
-          sb.from("emma_recovery_events") as unknown as { select(c: string): any }
+          sb.from("recovery_events") as unknown as { select(c: string): any }
         )
           .select("user_id")
           .is("verified_at", null)

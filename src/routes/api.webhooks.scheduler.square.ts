@@ -12,11 +12,11 @@
  *   3. Verifies the x-square-hmacsha256-signature HMAC against
  *      (notification_url + raw_body) using the connection's
  *      webhook_secret (which Square calls signature_key)
- *   4. Audits the inbound event in emma_scheduler_webhook_events
+ *   4. Audits the inbound event in scheduler_webhook_events
  *   5. Resolves the booking either from the payload's embedded object
  *      OR from a follow-up GET /v2/bookings/:id when only an id is
  *      embedded
- *   6. Upserts into emma_appointments — fires the rescue + reliability
+ *   6. Upserts into appointments — fires the rescue + reliability
  *      trigger graph on status transitions
  *
  * Always returns 200 (so Square doesn't retry indefinitely); failures
@@ -75,7 +75,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/square")({
         if (!payload) {
           // Body was unparseable or event type unsupported. Acknowledge
           // and audit so we don't accidentally retry forever.
-          await sbAny.from("emma_scheduler_webhook_events").insert({
+          await sbAny.from("scheduler_webhook_events").insert({
             connection_id: null,
             user_id: null,
             platform: "square",
@@ -88,7 +88,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/square")({
 
         // ── Look up the connection by merchant_id
         const { data: connection } = await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select(
             "id, user_id, status, access_token, webhook_secret",
           )
@@ -122,7 +122,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/square")({
           // Hard reject — unlike Acuity's advisory mode, Square's HMAC
           // scheme is well-documented and consistent. A mismatch means
           // either spoofing or stale signature_key (rotated subscription).
-          await sbAny.from("emma_scheduler_webhook_events").insert({
+          await sbAny.from("scheduler_webhook_events").insert({
             connection_id: connection.id,
             user_id: connection.user_id,
             platform: "square",
@@ -139,7 +139,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/square")({
 
         // ── Audit the inbound event (best-effort, never block downstream)
         const auditInsert = await sbAny
-          .from("emma_scheduler_webhook_events")
+          .from("scheduler_webhook_events")
           .insert({
             connection_id: connection.id,
             user_id: connection.user_id,
@@ -190,7 +190,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/square")({
 
         // ── Capture prior status for trigger graph
         const { data: prior } = await sb
-          .from("emma_appointments")
+          .from("appointments")
           .select("id, status, patient_node_id, scheduled_at")
           .eq("user_id", connection.user_id)
           .eq("external_id", booking.id)
@@ -227,7 +227,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/square")({
           resolvedPatientNodeId,
         );
         const { data: upserted, error: upsertErr } = await sb
-          .from("emma_appointments")
+          .from("appointments")
           .upsert(row, { onConflict: "user_id,external_id,source" })
           .select("id, status, patient_node_id, scheduled_at")
           .single();
@@ -244,7 +244,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/square")({
         // ── Stamp audit row with success
         if (auditId) {
           await sbAny
-            .from("emma_scheduler_webhook_events")
+            .from("scheduler_webhook_events")
             .update({
               processed_at: new Date().toISOString(),
               emma_appointment_id: upserted.id,
@@ -254,7 +254,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/square")({
 
         // ── Update connection last_sync_at
         await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .update({ last_sync_at: new Date().toISOString() })
           .eq("id", connection.id);
 
@@ -265,7 +265,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/square")({
 
         if (statusChanged) {
           await sb
-            .from("emma_appointment_status_events")
+            .from("appointment_status_events")
             .insert({
               user_id: connection.user_id,
               appointment_id: upserted.id,
@@ -387,7 +387,7 @@ async function stampAuditError(
 ): Promise<void> {
   if (!auditId) return;
   await sbAny
-    .from("emma_scheduler_webhook_events")
+    .from("scheduler_webhook_events")
     .update({ error })
     .eq("id", auditId);
 }

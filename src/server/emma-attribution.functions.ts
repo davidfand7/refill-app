@@ -127,7 +127,7 @@ export async function recordRecoveryEvent(args: {
 
   // Idempotency check
   const { data: existing } = await sb
-    .from("emma_recovery_events")
+    .from("recovery_events")
     .select("id")
     .eq("appointment_id", appointmentId)
     .maybeSingle();
@@ -136,7 +136,7 @@ export async function recordRecoveryEvent(args: {
   }
 
   const { data: row, error } = await sb
-    .from("emma_recovery_events")
+    .from("recovery_events")
     .insert({
       user_id: userId,
       appointment_id: appointmentId,
@@ -154,7 +154,7 @@ export async function recordRecoveryEvent(args: {
     // failure — re-fetch the winning row and return it so we never double-bill.
     if (error?.code === "23505" && appointmentId) {
       const { data: winner } = await sb
-        .from("emma_recovery_events")
+        .from("recovery_events")
         .select("id")
         .eq("appointment_id", appointmentId)
         .maybeSingle();
@@ -165,7 +165,7 @@ export async function recordRecoveryEvent(args: {
 
   // Back-reference on the appointment row for fast joins.
   await sb
-    .from("emma_appointments")
+    .from("appointments")
     .update({ recovery_event_id: row.id })
     .eq("id", appointmentId)
     .then(({ error: e }) => {
@@ -214,7 +214,7 @@ export async function reconcileRecoveryEventsForUser(args: {
   // late-match (the stale-charge fairness risk). expired_at isn't in the
   // generated Supabase types yet → loose-cast the column filter.
   const { data: unverified } = await sb
-    .from("emma_recovery_events")
+    .from("recovery_events")
     .select("id, patient_node_id, created_at, appointment_id")
     .eq("user_id", userId)
     .is("verified_at", null)
@@ -270,7 +270,7 @@ export async function reconcileRecoveryEventsForUser(args: {
           matched_transaction_id: best.id,
         };
     const { error: upErr } = await sb
-      .from("emma_recovery_events")
+      .from("recovery_events")
       .update(updateFields)
       .eq("id", ev.id)
       .is("verified_at", null); // Race-safe — first writer wins.
@@ -317,7 +317,7 @@ async function expireDeadProvisionals(
   // expired_at / expiry_reason aren't in the generated types yet → loose-cast
   // the table builder (same pattern as sending-pause.ts / frequency-cap.ts).
   const tbl = (sb as unknown as { from(t: string): any }).from(
-    "emma_recovery_events",
+    "recovery_events",
   );
   const { data: rows, error } = await tbl
     .update({
@@ -390,7 +390,7 @@ export const listRecoveryEvents = createServerFn({ method: "POST" })
     }
 
     const { data: rows, error } = await sb
-      .from("emma_recovery_events")
+      .from("recovery_events")
       .select(
         "id, appointment_id, patient_node_id, recovery_agent, attribution_method, attributed_revenue_usd, verification_source, verified_at, created_at",
       )
@@ -424,7 +424,7 @@ export const listRecoveryEvents = createServerFn({ method: "POST" })
         : Promise.resolve({ data: [] }),
       aptIds.length > 0
         ? sb
-            .from("emma_appointments")
+            .from("appointments")
             .select("id, treatment_type, scheduled_at")
             .in("id", aptIds)
         : Promise.resolve({ data: [] }),
@@ -476,7 +476,7 @@ export const manualConfirmRecovery = createServerFn({ method: "POST" })
     const sb = admin();
 
     const { data: updated, error } = await sb
-      .from("emma_recovery_events")
+      .from("recovery_events")
       .update({
         verified_at: new Date().toISOString(),
         verification_source: "manual",
@@ -530,7 +530,7 @@ export const unconfirmRecovery = createServerFn({ method: "POST" })
     const sb = admin();
 
     await sb
-      .from("emma_recovery_events")
+      .from("recovery_events")
       .update({
         verified_at: null,
         verification_source: null,
@@ -567,14 +567,14 @@ export const getRecoveryStats = createServerFn({ method: "POST" })
         // Current-month verified — pull appointment_id so we can group by
         // treatment_type after a single join below.
         sb
-          .from("emma_recovery_events")
+          .from("recovery_events")
           .select("attributed_revenue_usd, appointment_id")
           .eq("user_id", effectiveUserId)
           .gte("verified_at", monthStart.toISOString())
           .not("verified_at", "is", null),
         // Prior-month verified — just the totals for MoM delta.
         sb
-          .from("emma_recovery_events")
+          .from("recovery_events")
           .select("attributed_revenue_usd")
           .eq("user_id", effectiveUserId)
           .gte("verified_at", priorMonthStart.toISOString())
@@ -585,7 +585,7 @@ export const getRecoveryStats = createServerFn({ method: "POST" })
         // SUM is the real lifetime total, not a truncated slice that underbills.
         fetchAllRows<{ attributed_revenue_usd: number | null }>((from, to) =>
           sb
-            .from("emma_recovery_events")
+            .from("recovery_events")
             .select("attributed_revenue_usd")
             .eq("user_id", effectiveUserId)
             .not("verified_at", "is", null)
@@ -593,7 +593,7 @@ export const getRecoveryStats = createServerFn({ method: "POST" })
             .range(from, to),
         ),
         sb
-          .from("emma_recovery_events")
+          .from("recovery_events")
           .select("id", { count: "exact", head: true })
           .eq("user_id", effectiveUserId)
           .is("verified_at", null)
@@ -618,7 +618,7 @@ export const getRecoveryStats = createServerFn({ method: "POST" })
     );
 
     // Per-treatment breakdown for the current month. Hydrate treatment_type
-    // via a single batched query against emma_appointments — same pattern
+    // via a single batched query against appointments — same pattern
     // listRecoveryEvents uses for hydration.
     const monthAptIds = Array.from(
       new Set(
@@ -630,7 +630,7 @@ export const getRecoveryStats = createServerFn({ method: "POST" })
     const treatmentByAptId = new Map<string, string | null>();
     if (monthAptIds.length > 0) {
       const { data: apts } = await sb
-        .from("emma_appointments")
+        .from("appointments")
         .select("id, treatment_type")
         .in("id", monthAptIds);
       for (const a of apts ?? []) {

@@ -174,7 +174,7 @@ export const Route = createFileRoute("/api/integrations/square/oauth-callback")(
         };
 
         const existing = await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select("id")
           .eq("user_id", state.userId)
           .eq("platform", "square")
@@ -185,7 +185,7 @@ export const Route = createFileRoute("/api/integrations/square/oauth-callback")(
         if (existing.data) {
           connectionId = existing.data.id;
           await sbAny
-            .from("emma_scheduler_connections")
+            .from("scheduler_connections")
             .update({
               status: "pending",
               access_token: tokenResp.accessToken,
@@ -201,7 +201,7 @@ export const Route = createFileRoute("/api/integrations/square/oauth-callback")(
             .eq("id", connectionId);
         } else {
           const ins = await sbAny
-            .from("emma_scheduler_connections")
+            .from("scheduler_connections")
             .insert({
               user_id: state.userId,
               platform: "square",
@@ -250,7 +250,7 @@ export const Route = createFileRoute("/api/integrations/square/oauth-callback")(
 
         if (subscription) {
           await sbAny
-            .from("emma_scheduler_connections")
+            .from("scheduler_connections")
             .update({
               webhook_subscription_id: subscription.id,
               webhook_secret: subscription.signatureKey,
@@ -304,7 +304,7 @@ export const Route = createFileRoute("/api/integrations/square/oauth-callback")(
             ? "tier_gate: Square Appointments Free tier detected. Sync + Rescue work; claim writeback will fail until you upgrade to Appointments Plus or Premium."
             : backfillWarning ?? webhookWarning ?? null;
         await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .update({
             status: "connected",
             connected_at: new Date().toISOString(),

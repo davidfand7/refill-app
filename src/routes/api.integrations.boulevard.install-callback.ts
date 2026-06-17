@@ -247,7 +247,7 @@ async function handleInstallCallback(request: Request): Promise<Response> {
 
   // ── Step 2: upsert connection row (pending while we wire webhooks)
   const existing = await sbAny
-    .from("emma_scheduler_connections")
+    .from("scheduler_connections")
     .select("id")
     .eq("user_id", state.userId)
     .eq("platform", "boulevard")
@@ -257,7 +257,7 @@ async function handleInstallCallback(request: Request): Promise<Response> {
   if (existing.data) {
     connectionId = existing.data.id;
     await sbAny
-      .from("emma_scheduler_connections")
+      .from("scheduler_connections")
       .update({
         status: "pending",
         // Boulevard auth is app-level — no per-spa access/refresh tokens.
@@ -274,7 +274,7 @@ async function handleInstallCallback(request: Request): Promise<Response> {
       .eq("id", connectionId);
   } else {
     const ins = await sbAny
-      .from("emma_scheduler_connections")
+      .from("scheduler_connections")
       .insert({
         user_id: state.userId,
         platform: "boulevard",
@@ -329,7 +329,7 @@ async function handleInstallCallback(request: Request): Promise<Response> {
 
   if (webhookSubscriptionId) {
     await sbAny
-      .from("emma_scheduler_connections")
+      .from("scheduler_connections")
       .update({
         webhook_subscription_id: webhookSubscriptionId,
         webhook_secret: webhookSigningSecret ?? "",
@@ -377,7 +377,7 @@ async function handleInstallCallback(request: Request): Promise<Response> {
     : backfillWarning ?? webhookWarning ?? null;
 
   await sbAny
-    .from("emma_scheduler_connections")
+    .from("scheduler_connections")
     .update({
       status: "connected",
       connected_at: new Date().toISOString(),

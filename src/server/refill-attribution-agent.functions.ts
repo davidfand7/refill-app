@@ -260,7 +260,7 @@ export const getAttributionAgentMetrics = createServerFn({ method: "POST" })
     ).toISOString();
 
     const { data: rows, error } = await sb
-      .from("emma_recovery_events")
+      .from("recovery_events")
       .select("attributed_revenue_usd, verification_source, verified_at, created_at")
       .eq("user_id", effectiveUserId)
       .gte("created_at", since);

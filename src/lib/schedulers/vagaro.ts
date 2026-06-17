@@ -110,7 +110,7 @@ export type VagaroAppointmentStatus =
   | "Service In Progress"
   | "Show"
   // v1.38.0 guesses retained as legacy aliases (tolerant normalization
-  // — old data already in emma_appointments.status uses these forms).
+  // — old data already in appointments.status uses these forms).
   | "Booked"
   | "CheckedIn"
   | "Completed"

@@ -724,7 +724,7 @@ export const getSchedulerConnection = createServerFn({ method: "POST" })
         };
       };
     })
-      .from("emma_scheduler_connections")
+      .from("scheduler_connections")
       .select(
         "id, platform, platform_account_id, platform_account_email, status, last_sync_at, last_error, connected_at, disconnected_at",
       )
@@ -800,7 +800,7 @@ export const disconnectScheduler = createServerFn({ method: "POST" })
         };
       };
     })
-      .from("emma_scheduler_connections")
+      .from("scheduler_connections")
       .select("id, platform, access_token, webhook_secret, webhook_subscription_id, status, platform_account_id, platform_account_email, last_sync_at, last_error, connected_at, disconnected_at")
       .eq("user_id", userId)
       .in("status", ["connected", "pending", "reauth_needed", "error"])
@@ -823,7 +823,7 @@ export const disconnectScheduler = createServerFn({ method: "POST" })
         // Token may already be invalidated. Continue with the disconnect.
         // We log via the connection row's last_error so it shows in UI.
         await (sb as unknown as { from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> } } })
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .update({
             last_error: `Webhook teardown failed: ${e instanceof Error ? e.message : "unknown"}`,
           })
@@ -850,7 +850,7 @@ export const disconnectScheduler = createServerFn({ method: "POST" })
         webhooksRemoved = 1;
       } catch (e) {
         await (sb as unknown as { from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> } } })
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .update({
             last_error: `Square webhook teardown failed: ${e instanceof Error ? e.message : "unknown"}`,
           })
@@ -872,7 +872,7 @@ export const disconnectScheduler = createServerFn({ method: "POST" })
         webhooksRemoved = 1;
       } catch (e) {
         await (sb as unknown as { from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> } } })
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .update({ last_error: `Zenoti webhook teardown failed: ${e instanceof Error ? e.message : "unknown"}` })
           .eq("id", row.id);
       }
@@ -899,7 +899,7 @@ export const disconnectScheduler = createServerFn({ method: "POST" })
         webhooksRemoved = 1;
       } catch (e) {
         await (sb as unknown as { from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> } } })
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .update({ last_error: `Booker webhook teardown failed: ${e instanceof Error ? e.message : "unknown"}` })
           .eq("id", row.id);
       }
@@ -921,7 +921,7 @@ export const disconnectScheduler = createServerFn({ method: "POST" })
         webhooksRemoved = 1;
       } catch (e) {
         await (sb as unknown as { from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> } } })
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .update({
             last_error: `Vagaro webhook teardown failed: ${e instanceof Error ? e.message : "unknown"}`,
           })
@@ -953,7 +953,7 @@ export const disconnectScheduler = createServerFn({ method: "POST" })
         webhooksRemoved = 1;
       } catch (e) {
         await (sb as unknown as { from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> } } })
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .update({
             last_error: `Mindbody webhook teardown failed: ${e instanceof Error ? e.message : "unknown"}`,
           })
@@ -1004,7 +1004,7 @@ export const disconnectScheduler = createServerFn({ method: "POST" })
         webhooksRemoved = 1;
       } catch (e) {
         await (sb as unknown as { from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> } } })
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .update({
             last_error: `Boulevard webhook teardown failed: ${e instanceof Error ? e.message : "unknown"}`,
           })
@@ -1013,7 +1013,7 @@ export const disconnectScheduler = createServerFn({ method: "POST" })
     }
 
     await (sb as unknown as { from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<{ error: { message: string } | null }> } } })
-      .from("emma_scheduler_connections")
+      .from("scheduler_connections")
       .update({
         status: "disconnected",
         disconnected_at: new Date().toISOString(),
@@ -1070,7 +1070,7 @@ export const resyncSchedulerConnection = createServerFn({ method: "POST" })
         };
       };
     })
-      .from("emma_scheduler_connections")
+      .from("scheduler_connections")
       .select("id, platform, access_token, platform_account_id")
       .eq("user_id", userId)
       .in("status", ["connected", "reauth_needed", "error"])
@@ -1193,7 +1193,7 @@ export const resyncSchedulerConnection = createServerFn({ method: "POST" })
         };
       };
     })
-      .from("emma_scheduler_connections")
+      .from("scheduler_connections")
       .update({
         last_sync_at: new Date().toISOString(),
         last_error: null,
@@ -1269,7 +1269,7 @@ export async function backfillAcuityAppointments(args: {
       };
     };
   })
-    .from("emma_appointments")
+    .from("appointments")
     .update({ source: "acuity" })
     .eq("user_id", userId)
     .eq("source", "csv-acuity");
@@ -1302,7 +1302,7 @@ export async function backfillAcuityAppointments(args: {
   for (let i = 0; i < rows.length; i += BATCH) {
     const slice = rows.slice(i, i + BATCH);
     const { error } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .upsert(slice, { onConflict: "user_id,external_id,source" });
     if (error) {
       throw new Error(`Appointment upsert batch ${i}: ${error.message}`);
@@ -1376,7 +1376,7 @@ export async function reconcileAcuityForConnection(args: {
   const CHUNK = 200;
   for (let i = 0; i < ids.length; i += CHUNK) {
     const { data } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .select("id, external_id, status, patient_node_id, scheduled_at")
       .eq("user_id", userId)
       .eq("source", "acuity")
@@ -1421,7 +1421,7 @@ export async function reconcileAcuityForConnection(args: {
       providerIndex.get(String(apt.calendarID)) ?? null,
     );
     const { data: upserted } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .upsert(row, { onConflict: "user_id,external_id,source" })
       .select("id, status, patient_node_id, scheduled_at")
       .single();
@@ -1431,7 +1431,7 @@ export async function reconcileAcuityForConnection(args: {
     if (priorStatus === upserted.status) continue; // no transition → webhook already handled (or unchanged)
     changed++;
 
-    await sb.from("emma_appointment_status_events").insert({
+    await sb.from("appointment_status_events").insert({
       user_id: userId,
       appointment_id: upserted.id,
       from_status: priorStatus ?? "scheduled",
@@ -1467,7 +1467,7 @@ export async function reconcileAcuityForConnection(args: {
   // Stamp the connection's freshness pulse (so Connection Health sees the
   // reconcile heartbeat even during a webhook outage).
   await sb
-    .from("emma_scheduler_connections")
+    .from("scheduler_connections")
     .update({ last_sync_at: new Date().toISOString() })
     .eq("user_id", userId)
     .eq("platform", "acuity");
@@ -1506,7 +1506,7 @@ export async function buildAcuityProviderIndex(
 // The reconcile cron only re-pulls a RECENT window (7d back / 45d fwd), so
 // historical appointments beyond it keep whatever provider_id the one-shot
 // staging mirror could resolve BY NAME — structurally weaker than calendarID
-// linking (emma_appointments stores provider_name, not calendarID; only a live
+// linking (appointments stores provider_name, not calendarID; only a live
 // Acuity pull carries calendarID — see the S2 finding: calendarID linked +172
 // rows exact name-match physically can't). This is the one-time / on-demand
 // WIDE pass that closes that gap for any spa with deep history.
@@ -1578,7 +1578,7 @@ export async function wideRelinkAcuityProviders(args: {
       // Only touch rows whose provider_id is null or different → honest count,
       // idempotent, never a no-op write.
       const { data, error } = await sb
-        .from("emma_appointments")
+        .from("appointments")
         .update({ provider_id: providerId, updated_at: new Date().toISOString() })
         .eq("user_id", userId)
         .eq("source", "acuity")
@@ -1601,7 +1601,7 @@ function acuityAppointmentToRow(
   userId: string,
   patientNodeId: string | null,
   providerId: string | null = null,
-): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
+): Database["public"]["Tables"]["appointments"]["Insert"] {
   // v1.4.3: parse Acuity's timezone-aware datetime properly. The old
   // regex .replace(/[+-]\d{4}$/, "Z") STRIPPED the offset without
   // applying it — so "2026-05-26T16:00:00-0600" (4 PM MT) became
@@ -1611,13 +1611,13 @@ function acuityAppointmentToRow(
   // already 2.5h in the past, skipped rescue. new Date().toISOString()
   // handles all Acuity formats (with or without colon in offset, Z, etc.).
   const scheduledAt = new Date(apt.datetime ?? "").toISOString();
-  const status: Database["public"]["Tables"]["emma_appointments"]["Insert"]["status"] = apt.canceled
+  const status: Database["public"]["Tables"]["appointments"]["Insert"]["status"] = apt.canceled
     ? "cancelled"
     : apt.noShow
       ? "no_show"
       : "scheduled";
 
-  const base: Database["public"]["Tables"]["emma_appointments"]["Insert"] = {
+  const base: Database["public"]["Tables"]["appointments"]["Insert"] = {
     user_id: userId,
     external_id: String(apt.id),
     source: "acuity",
@@ -1649,7 +1649,7 @@ function acuityAppointmentToRow(
 // ─── importAcuityClients (v415.3) ──────────────────────────────────────────
 //
 // Pull the spa's full client roster from Acuity via the OAuth token saved
-// on the user's emma_scheduler_connections row, synthesize a CSV in the
+// on the user's scheduler_connections row, synthesize a CSV in the
 // shape parseClientListCsv expects, and run it through the existing
 // doIngestClientList pipeline. Reuses every line of the ingest /
 // matching / enrichment code (patient-ingest.functions.ts:966) without
@@ -1699,7 +1699,7 @@ export const importAcuityClients = createServerFn({ method: "POST" })
         };
       };
     })
-      .from("emma_scheduler_connections")
+      .from("scheduler_connections")
       .select("access_token")
       .eq("user_id", userId)
       .eq("platform", "acuity")
@@ -1876,7 +1876,7 @@ export async function backfillSquareBookings(args: {
       };
     };
   })
-    .from("emma_appointments")
+    .from("appointments")
     .update({ source: "square" })
     .eq("user_id", userId)
     .eq("source", "csv-square");
@@ -1910,7 +1910,7 @@ export async function backfillSquareBookings(args: {
   for (let i = 0; i < rows.length; i += BATCH) {
     const slice = rows.slice(i, i + BATCH);
     const { error } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .upsert(slice, { onConflict: "user_id,external_id,source" });
     if (error) {
       throw new Error(`Square appointment upsert batch ${i}: ${error.message}`);
@@ -1927,14 +1927,14 @@ export function squareBookingToRow(
   b: SquareBooking,
   userId: string,
   patientNodeId: string | null,
-): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
+): Database["public"]["Tables"]["appointments"]["Insert"] {
   const scheduledAt = new Date(b.startAt).toISOString();
   const seg = b.appointmentSegments[0];
   const durationMin = b.appointmentSegments.reduce(
     (sum, s) => sum + (s.durationMinutes ?? 0),
     0,
   );
-  const base: Database["public"]["Tables"]["emma_appointments"]["Insert"] = {
+  const base: Database["public"]["Tables"]["appointments"]["Insert"] = {
     user_id: userId,
     external_id: b.id,
     source: "square",
@@ -2006,7 +2006,7 @@ export async function withFreshSquareToken<T>(args: {
       };
     };
   })
-    .from("emma_scheduler_connections")
+    .from("scheduler_connections")
     .update({
       access_token: fresh.accessToken,
       refresh_token: fresh.refreshToken,
@@ -2061,7 +2061,7 @@ export async function backfillZenotiAppointments(args: {
   await (sb as unknown as {
     from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => { eq: (c: string, v: string) => Promise<unknown> } } };
   })
-    .from("emma_appointments")
+    .from("appointments")
     .update({ source: "zenoti" })
     .eq("user_id", userId)
     .eq("source", "csv-zenoti");
@@ -2082,7 +2082,7 @@ export async function backfillZenotiAppointments(args: {
   for (let i = 0; i < rows.length; i += BATCH) {
     const slice = rows.slice(i, i + BATCH);
     const { error } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .upsert(slice, { onConflict: "user_id,external_id,source" });
     if (error) throw new Error(`Zenoti appointment upsert batch ${i}: ${error.message}`);
   }
@@ -2094,12 +2094,12 @@ export function zenotiAppointmentToRow(
   apt: ZenotiAppointment,
   userId: string,
   patientNodeId: string | null,
-): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
+): Database["public"]["Tables"]["appointments"]["Insert"] {
   const scheduledAt = new Date(apt.startTime).toISOString();
   const durationMin = Math.round(
     (new Date(apt.endTime).getTime() - new Date(apt.startTime).getTime()) / 60000,
   );
-  const base: Database["public"]["Tables"]["emma_appointments"]["Insert"] = {
+  const base: Database["public"]["Tables"]["appointments"]["Insert"] = {
     user_id: userId,
     external_id: apt.id,
     source: "zenoti",
@@ -2156,7 +2156,7 @@ export async function backfillJaneAppointments(args: {
   await (sb as unknown as {
     from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => { eq: (c: string, v: string) => Promise<unknown> } } };
   })
-    .from("emma_appointments")
+    .from("appointments")
     .update({ source: "jane" })
     .eq("user_id", userId)
     .eq("source", "csv-jane");
@@ -2177,7 +2177,7 @@ export async function backfillJaneAppointments(args: {
   for (let i = 0; i < rows.length; i += BATCH) {
     const slice = rows.slice(i, i + BATCH);
     const { error } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .upsert(slice, { onConflict: "user_id,external_id,source" });
     if (error) throw new Error(`Jane appointment upsert batch ${i}: ${error.message}`);
   }
@@ -2189,12 +2189,12 @@ export function janeAppointmentToRow(
   apt: JaneAppointment,
   userId: string,
   patientNodeId: string | null,
-): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
+): Database["public"]["Tables"]["appointments"]["Insert"] {
   const scheduledAt = new Date(apt.startAt).toISOString();
   const durationMin = Math.round(
     (new Date(apt.endAt).getTime() - new Date(apt.startAt).getTime()) / 60000,
   );
-  const base: Database["public"]["Tables"]["emma_appointments"]["Insert"] = {
+  const base: Database["public"]["Tables"]["appointments"]["Insert"] = {
     user_id: userId,
     external_id: apt.id,
     source: "jane",
@@ -2244,7 +2244,7 @@ export async function withFreshJaneToken<T>(args: {
   await (args.sb as unknown as {
     from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> } };
   })
-    .from("emma_scheduler_connections")
+    .from("scheduler_connections")
     .update({
       access_token: fresh.accessToken,
       refresh_token: fresh.refreshToken || args.refreshToken,
@@ -2305,7 +2305,7 @@ export async function backfillBookerAppointments(args: {
   await (sb as unknown as {
     from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => { eq: (c: string, v: string) => Promise<unknown> } } };
   })
-    .from("emma_appointments")
+    .from("appointments")
     .update({ source: "booker" })
     .eq("user_id", userId)
     .eq("source", "csv-booker");
@@ -2326,7 +2326,7 @@ export async function backfillBookerAppointments(args: {
   for (let i = 0; i < rows.length; i += BATCH) {
     const slice = rows.slice(i, i + BATCH);
     const { error } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .upsert(slice, { onConflict: "user_id,external_id,source" });
     if (error) throw new Error(`Booker appointment upsert batch ${i}: ${error.message}`);
   }
@@ -2340,12 +2340,12 @@ export function bookerAppointmentToRow(
   apt: BookerAppointment,
   userId: string,
   patientNodeId: string | null,
-): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
+): Database["public"]["Tables"]["appointments"]["Insert"] {
   const scheduledAt = new Date(apt.startDateTime).toISOString();
   const durationMin = Math.round(
     (new Date(apt.endDateTime).getTime() - new Date(apt.startDateTime).getTime()) / 60000,
   );
-  const base: Database["public"]["Tables"]["emma_appointments"]["Insert"] = {
+  const base: Database["public"]["Tables"]["appointments"]["Insert"] = {
     user_id: userId,
     external_id: apt.id,
     source: "booker",
@@ -2408,7 +2408,7 @@ export async function backfillVagaroAppointments(args: {
       };
     };
   })
-    .from("emma_appointments")
+    .from("appointments")
     .update({ source: "vagaro" })
     .eq("user_id", userId)
     .eq("source", "csv-vagaro");
@@ -2434,7 +2434,7 @@ export async function backfillVagaroAppointments(args: {
   for (let i = 0; i < rows.length; i += BATCH) {
     const slice = rows.slice(i, i + BATCH);
     const { error } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .upsert(slice, { onConflict: "user_id,external_id,source" });
     if (error) {
       throw new Error(`Vagaro appointment upsert batch ${i}: ${error.message}`);
@@ -2448,12 +2448,12 @@ export function vagaroAppointmentToRow(
   apt: VagaroAppointment,
   userId: string,
   patientNodeId: string | null,
-): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
+): Database["public"]["Tables"]["appointments"]["Insert"] {
   const scheduledAt = new Date(apt.startDateTime).toISOString();
   const durationMin = Math.round(
     (new Date(apt.endDateTime).getTime() - new Date(apt.startDateTime).getTime()) / 60000,
   );
-  const base: Database["public"]["Tables"]["emma_appointments"]["Insert"] = {
+  const base: Database["public"]["Tables"]["appointments"]["Insert"] = {
     user_id: userId,
     external_id: apt.id,
     source: "vagaro",
@@ -2566,7 +2566,7 @@ export async function backfillBoulevardAppointments(args: {
       };
     };
   })
-    .from("emma_appointments")
+    .from("appointments")
     .update({ source: "boulevard" })
     .eq("user_id", userId)
     .eq("source", "csv-boulevard");
@@ -2596,7 +2596,7 @@ export async function backfillBoulevardAppointments(args: {
   for (let i = 0; i < rows.length; i += BATCH) {
     const slice = rows.slice(i, i + BATCH);
     const { error } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .upsert(slice, { onConflict: "user_id,external_id,source" });
     if (error) {
       throw new Error(
@@ -2628,12 +2628,12 @@ export function boulevardAppointmentToRow(
   userId: string,
   patientNodeId: string | null,
   statusMap: (s: string) => "scheduled" | "cancelled" | "no_show" | "showed",
-): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
+): Database["public"]["Tables"]["appointments"]["Insert"] {
   const scheduledAt = new Date(apt.startAt).toISOString();
   const durationMin = Math.round(
     (new Date(apt.endAt).getTime() - new Date(apt.startAt).getTime()) / 60000,
   );
-  const base: Database["public"]["Tables"]["emma_appointments"]["Insert"] = {
+  const base: Database["public"]["Tables"]["appointments"]["Insert"] = {
     user_id: userId,
     external_id: apt.id,
     source: "boulevard",
@@ -2747,7 +2747,7 @@ export async function backfillMindbodyAppointments(args: {
       };
     };
   })
-    .from("emma_appointments")
+    .from("appointments")
     .update({ source: "mindbody" })
     .eq("user_id", userId)
     .eq("source", "csv-mindbody");
@@ -2778,7 +2778,7 @@ export async function backfillMindbodyAppointments(args: {
   for (let i = 0; i < rows.length; i += BATCH) {
     const slice = rows.slice(i, i + BATCH);
     const { error } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .upsert(slice, { onConflict: "user_id,external_id,source" });
     if (error) {
       throw new Error(
@@ -2797,14 +2797,14 @@ export function mindbodyAppointmentToRow(
   apt: MindbodyAppointment,
   userId: string,
   patientNodeId: string | null,
-): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
+): Database["public"]["Tables"]["appointments"]["Insert"] {
   const scheduledAt = new Date(apt.startDateTime).toISOString();
   const durationMin = Math.round(
     (new Date(apt.endDateTime).getTime() -
       new Date(apt.startDateTime).getTime()) /
       60000,
   );
-  const base: Database["public"]["Tables"]["emma_appointments"]["Insert"] = {
+  const base: Database["public"]["Tables"]["appointments"]["Insert"] = {
     user_id: userId,
     external_id: apt.id,
     source: "mindbody",
@@ -2885,7 +2885,7 @@ export async function withFreshMindbodyToken<T>(args: {
       };
     };
   })
-    .from("emma_scheduler_connections")
+    .from("scheduler_connections")
     .update({
       access_token: fresh.accessToken,
       refresh_token: fresh.refreshToken || args.refreshToken,

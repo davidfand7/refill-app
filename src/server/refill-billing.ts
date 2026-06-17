@@ -399,14 +399,14 @@ export const getPaymentMethodStatus = createServerFn({ method: "POST" })
 // closed-month billing) and the dashboard preview (getInvoicePreview —
 // open-month MTD). Pre-v1.26.23 the cron had its own aggregation inline
 // and the preview lived in emma-billing.functions.ts reading the legacy
-// emma_pricing_plans + user-scoped emma_recovery_events. That left the
+// pricing_plans + user-scoped recovery_events. That left the
 // Recovery dashboard structurally stale: tenants on a refill_pricing_plans
 // plan saw "no active plan" on /app/refill/recovery while /app/billing
 // showed the real plan. Phase 1 of the billing unification extracts this
 // aggregation step so both paths roll up the same way.
 //
-// Membership fan-out caveat: emma_recovery_events still rides user_id
-// (predates the tenant model). Direct tenant_id on emma_recovery_events
+// Membership fan-out caveat: recovery_events still rides user_id
+// (predates the tenant model). Direct tenant_id on recovery_events
 // is Phase 5 of the unification (project_billing_unification_plan).
 
 async function aggregateRecoveryForTenant(args: {
@@ -425,7 +425,7 @@ async function aggregateRecoveryForTenant(args: {
     return { recoveredRevenueUsd: 0, recoveredRevenueCount: 0 };
   }
   const { data: recs } = await sb
-    .from("emma_recovery_events")
+    .from("recovery_events")
     .select("attributed_revenue_usd")
     .in("user_id", userIds)
     .gte("verified_at", periodStart.toISOString())
@@ -447,10 +447,10 @@ async function aggregateRecoveryForTenant(args: {
  * Generate the invoice for ONE tenant for the PRIOR calendar month.
  * Idempotent on (tenant_id, period_start). Wired into a v391.2 cron.
  *
- * Recovery revenue is sourced from emma_recovery_events for any user_id
+ * Recovery revenue is sourced from recovery_events for any user_id
  * with a membership in this tenant — the recovery engine writes user-scoped
  * rows because it predates the tenant model, but billing rolls up to the
- * tenant. Future ship: tenant_id column directly on emma_recovery_events
+ * tenant. Future ship: tenant_id column directly on recovery_events
  * to avoid the membership fan-out.
  *
  * v1.26.23 — aggregation step extracted into aggregateRecoveryForTenant
@@ -814,7 +814,7 @@ export function getPlanEconomics(plan: RefillPricingPlan) {
  *
  * v1.26.14 removed the original tenant-aware preview here on the (wrong)
  * read that the recovery page wanted the emma-side variant. The emma side
- * reads emma_pricing_plans which is now structurally stale — any tenant
+ * reads pricing_plans which is now structurally stale — any tenant
  * who picked a Refill plan via applyPricingPlan writes to
  * refill_pricing_plans, so the emma-side preview returns plan=null on
  * the dashboard. v1.26.23 restores this surface against the live tables
@@ -822,7 +822,7 @@ export function getPlanEconomics(plan: RefillPricingPlan) {
  *
  * Math parity vs. the cron (generateMonthlyInvoiceForTenant) is locked by
  * aggregateRecoveryForTenant — both paths roll up the same memberships
- * fan-out + same emma_recovery_events filter.
+ * fan-out + same recovery_events filter.
  *
  * Plan-lookup shape: the cron uses "active AS OF period_end" (handles
  * mid-month plan switches — invoices under the plan that was active when

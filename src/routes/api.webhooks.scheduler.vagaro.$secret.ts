@@ -52,7 +52,7 @@ export const Route = createFileRoute(
 
         const payload = parseVagaroWebhookBody(rawBody);
         if (!payload) {
-          await sbAny.from("emma_scheduler_webhook_events").insert({
+          await sbAny.from("scheduler_webhook_events").insert({
             connection_id: null,
             user_id: null,
             platform: "vagaro",
@@ -64,7 +64,7 @@ export const Route = createFileRoute(
         }
 
         const { data: connection } = await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select(
             "id, user_id, status, access_token, platform_account_id, platform_account_email",
           )
@@ -87,7 +87,7 @@ export const Route = createFileRoute(
           sharedToken,
         });
         if (!sigOk) {
-          await sbAny.from("emma_scheduler_webhook_events").insert({
+          await sbAny.from("scheduler_webhook_events").insert({
             connection_id: connection.id,
             user_id: connection.user_id,
             platform: "vagaro",
@@ -110,7 +110,7 @@ export const Route = createFileRoute(
         }
 
         const auditInsert = await sbAny
-          .from("emma_scheduler_webhook_events")
+          .from("scheduler_webhook_events")
           .insert({
             connection_id: connection.id,
             user_id: connection.user_id,
@@ -134,7 +134,7 @@ export const Route = createFileRoute(
         if (payload.type.startsWith("customer.")) {
           if (auditId) {
             await sbAny
-              .from("emma_scheduler_webhook_events")
+              .from("scheduler_webhook_events")
               .update({ processed_at: new Date().toISOString() })
               .eq("id", auditId);
           }
@@ -175,7 +175,7 @@ export const Route = createFileRoute(
         }
 
         const { data: prior } = await sb
-          .from("emma_appointments")
+          .from("appointments")
           .select("id, status, patient_node_id, scheduled_at")
           .eq("user_id", connection.user_id)
           .eq("external_id", appointment.id)
@@ -197,7 +197,7 @@ export const Route = createFileRoute(
           resolvedPatientNodeId,
         );
         const { data: upserted, error: upsertErr } = await sb
-          .from("emma_appointments")
+          .from("appointments")
           .upsert(row, { onConflict: "user_id,external_id,source" })
           .select("id, status, patient_node_id, scheduled_at")
           .single();
@@ -209,7 +209,7 @@ export const Route = createFileRoute(
 
         if (auditId) {
           await sbAny
-            .from("emma_scheduler_webhook_events")
+            .from("scheduler_webhook_events")
             .update({
               processed_at: new Date().toISOString(),
               emma_appointment_id: upserted.id,
@@ -218,7 +218,7 @@ export const Route = createFileRoute(
         }
 
         await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .update({ last_sync_at: new Date().toISOString() })
           .eq("id", connection.id);
 
@@ -228,7 +228,7 @@ export const Route = createFileRoute(
 
         if (statusChanged) {
           await sb
-            .from("emma_appointment_status_events")
+            .from("appointment_status_events")
             .insert({
               user_id: connection.user_id,
               appointment_id: upserted.id,
@@ -321,7 +321,7 @@ async function stampAuditError(
 ): Promise<void> {
   if (!auditId) return;
   await sbAny
-    .from("emma_scheduler_webhook_events")
+    .from("scheduler_webhook_events")
     .update({ error })
     .eq("id", auditId);
 }

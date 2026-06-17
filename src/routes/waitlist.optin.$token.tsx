@@ -1,7 +1,7 @@
 /**
  * /waitlist/optin/<token> — public landing for the waitlist opt-in invite (v1.27.0).
  *
- * Karen (or any spa owner) seeds a paused emma_waitlist row + mints a per-patient
+ * Karen (or any spa owner) seeds a paused waitlist row + mints a per-patient
  * token via the bulk-seed or v1.27.1 invite-composer path. The token URL ships to
  * the patient through the iMessage MCP composer (blue-bubble from the owner's Apple
  * ID) or any other channel. Patient taps → lands here.

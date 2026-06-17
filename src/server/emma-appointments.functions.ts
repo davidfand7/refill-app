@@ -5,13 +5,13 @@
  *
  *   ingestAppointmentCsv  — auto-detects PMS dialect (Acuity, Boulevard,
  *                            Mangomint, Vagaro, AestheticsPro, AR, generic)
- *                            and upserts emma_appointments rows. Idempotent
+ *                            and upserts appointments rows. Idempotent
  *                            on (user_id, external_id, source) where
  *                            external_id is present.
  *   listAppointments      — for the /app/refill/appointments UI.
  *   updateAppointmentStatus — manual status flip (the spa marks a no-show
  *                            or showed via the UI). Writes the audit event
- *                            to emma_appointment_status_events.
+ *                            to appointment_status_events.
  *   getNoShowPolicy       — load the spa's noshow policy (auto-creates a
  *                            row with defaults on first read).
  *   updateNoShowPolicy    — merge-patch the policy row.
@@ -445,7 +445,7 @@ const POLICY_DEFAULTS: NoShowPolicy = {
 };
 
 function rowToPolicy(
-  row: Database["public"]["Tables"]["emma_noshow_policies"]["Row"],
+  row: Database["public"]["Tables"]["noshow_policies"]["Row"],
 ): NoShowPolicy {
   return {
     preshowEnabled: row.preshow_enabled,
@@ -568,7 +568,7 @@ export const ingestAppointmentCsv = createServerFn({ method: "POST" })
     // Workers' 30s CPU timeout. New approach: 1 query + 900 hash lookups
     // = ~1 second total.
     const patientIndex = await buildPatientIndex(sb, userId);
-    const rowsToUpsert: Database["public"]["Tables"]["emma_appointments"]["Insert"][] = [];
+    const rowsToUpsert: Database["public"]["Tables"]["appointments"]["Insert"][] = [];
     for (const a of parsed.appointments) {
       const patientNodeId = matchPatientFromIndex(a, patientIndex);
       if (patientNodeId) receipt.patientsMatched++;
@@ -601,7 +601,7 @@ export const ingestAppointmentCsv = createServerFn({ method: "POST" })
 
     if (withExternal.length > 0) {
       const { data: upserted, error } = await sb
-        .from("emma_appointments")
+        .from("appointments")
         .upsert(withExternal, {
           onConflict: "user_id,external_id,source",
         })
@@ -618,7 +618,7 @@ export const ingestAppointmentCsv = createServerFn({ method: "POST" })
 
     if (withoutExternal.length > 0) {
       const { data: inserted, error } = await sb
-        .from("emma_appointments")
+        .from("appointments")
         .insert(withoutExternal)
         .select("id");
       if (error) {
@@ -670,7 +670,7 @@ export const listAppointments = createServerFn({ method: "POST" })
       new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
     const { data: rows, error } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .select(
         "id, user_id, patient_node_id, scheduled_at, duration_min, treatment_type, provider_name, status, external_id, source, notes, created_at, updated_at",
       )
@@ -738,7 +738,7 @@ export const updateAppointmentStatus = createServerFn({ method: "POST" })
 
     // Read current status for the audit event.
     const { data: existing, error: readErr } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .select("*")
       .eq("id", data.appointmentId)
       .eq("user_id", userId)
@@ -749,7 +749,7 @@ export const updateAppointmentStatus = createServerFn({ method: "POST" })
     if (existing.status !== data.status) {
       // Audit log first (best-effort — non-blocking if it fails)
       await sb
-        .from("emma_appointment_status_events")
+        .from("appointment_status_events")
         .insert({
           user_id: userId,
           appointment_id: data.appointmentId,
@@ -775,9 +775,9 @@ export const updateAppointmentStatus = createServerFn({ method: "POST" })
     }
 
     const { data: updated, error: updErr } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .update(
-        statusPatch as Database["public"]["Tables"]["emma_appointments"]["Update"],
+        statusPatch as Database["public"]["Tables"]["appointments"]["Update"],
       )
       .eq("id", data.appointmentId)
       .eq("user_id", userId)
@@ -851,7 +851,7 @@ export const getNoShowPolicy = createServerFn({ method: "POST" })
     const sb = admin();
 
     const { data: row, error } = await sb
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .select("*")
       .eq("user_id", userId)
       .maybeSingle();
@@ -861,7 +861,7 @@ export const getNoShowPolicy = createServerFn({ method: "POST" })
 
     // First-read: insert defaults so the row exists for future updates.
     const { data: created, error: createErr } = await sb
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .insert({ user_id: userId })
       .select("*")
       .single();
@@ -884,7 +884,7 @@ export const updateNoShowPolicy = createServerFn({ method: "POST" })
     const userId = effectiveUserId;
     const sb = admin();
 
-    const patch: Database["public"]["Tables"]["emma_noshow_policies"]["Update"] = {};
+    const patch: Database["public"]["Tables"]["noshow_policies"]["Update"] = {};
     if (data.patch.preshowEnabled !== undefined)
       patch.preshow_enabled = data.patch.preshowEnabled;
     if (data.patch.preshowCadenceHours !== undefined)
@@ -944,9 +944,9 @@ export const updateNoShowPolicy = createServerFn({ method: "POST" })
 
     // Upsert: ensures the row exists for first-time updaters.
     const { data: updated, error } = await sb
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .upsert(
-        { user_id: userId, ...patch, ...extPatch } as unknown as Database["public"]["Tables"]["emma_noshow_policies"]["Insert"],
+        { user_id: userId, ...patch, ...extPatch } as unknown as Database["public"]["Tables"]["noshow_policies"]["Insert"],
         { onConflict: "user_id" },
       )
       .select("*")
@@ -1003,21 +1003,21 @@ export const getAppointmentMatchCoverage = createServerFn({ method: "POST" })
     const [allRes, allMatchedRes, futureRes, futureMatchedRes] =
       await Promise.all([
         sb
-          .from("emma_appointments")
+          .from("appointments")
           .select("id", { count: "exact", head: true })
           .eq("user_id", userId),
         sb
-          .from("emma_appointments")
+          .from("appointments")
           .select("id", { count: "exact", head: true })
           .eq("user_id", userId)
           .not("patient_node_id", "is", null),
         sb
-          .from("emma_appointments")
+          .from("appointments")
           .select("id", { count: "exact", head: true })
           .eq("user_id", userId)
           .gte("scheduled_at", nowIso),
         sb
-          .from("emma_appointments")
+          .from("appointments")
           .select("id", { count: "exact", head: true })
           .eq("user_id", userId)
           .gte("scheduled_at", nowIso)

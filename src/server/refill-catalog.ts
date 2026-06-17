@@ -99,7 +99,7 @@ export async function getTenantIdForUser(sb: SupabaseAdmin, userId: string): Pro
 /**
  * Lightweight catalog load for the treatment→service resolver (v2.63.0). Lives
  * here so tenant resolution + the `services` table stay in one place; consumed
- * by the waitlist write paths to populate emma_waitlist.desired_service_ids.
+ * by the waitlist write paths to populate waitlist.desired_service_ids.
  * Excludes soft-hidden services. Returns null tenant gracefully (empty list)
  * so a not-yet-onboarded spa doesn't hard-fail an invite send.
  */

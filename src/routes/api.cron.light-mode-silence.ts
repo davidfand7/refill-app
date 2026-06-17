@@ -72,7 +72,7 @@ async function runSilenceSweep() {
   // Also include connections where last_event_at is NULL but the
   // connection was created > threshold ago (pending forever = silent).
   const { data: stale } = await sbAny
-    .from("emma_light_mode_connections")
+    .from("light_mode_connections")
     .select("id,platform,user_id,last_event_at,created_at")
     .eq("status", "active")
     .lt("last_event_at", threshold);
@@ -81,7 +81,7 @@ async function runSilenceSweep() {
   if (stale) {
     for (const row of stale) {
       const { error } = await sbAny
-        .from("emma_light_mode_connections")
+        .from("light_mode_connections")
         .update({
           status: "silent",
           last_error:

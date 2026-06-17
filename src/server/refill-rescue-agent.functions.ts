@@ -5,7 +5,7 @@
  * stays single-policy per spa (no Rescue PROFILES like Preshow has —
  * the rescue domain doesn't benefit from per-cohort cadence routing
  * the same way Preshow does). Rescue settings live on the existing
- * emma_noshow_policies row (rescue_enabled, rescue_eligible_treatments,
+ * noshow_policies row (rescue_enabled, rescue_eligible_treatments,
  * rescue_max_concurrent, rescue_outreach_window_min, rescue_proxy_*).
  *
  * Dispatch logic is unchanged in emma-rescue.functions.ts — this module
@@ -74,7 +74,7 @@ const metricsInput = accessInput.extend({
 
 // ─── Hydration ────────────────────────────────────────────────────────────
 
-type PolicyRow = Database["public"]["Tables"]["emma_noshow_policies"]["Row"];
+type PolicyRow = Database["public"]["Tables"]["noshow_policies"]["Row"];
 
 function hydratePolicy(row: PolicyRow): RescuePolicy {
   return {
@@ -99,7 +99,7 @@ export const getRescuePolicy = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const { data: row, error } = await sb
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .select("*")
       .eq("user_id", effectiveUserId)
       .maybeSingle();
@@ -118,7 +118,7 @@ export const updateRescuePolicy = createServerFn({ method: "POST" })
     });
     const sb = admin();
 
-    const updates: Database["public"]["Tables"]["emma_noshow_policies"]["Update"] = {
+    const updates: Database["public"]["Tables"]["noshow_policies"]["Update"] = {
       updated_at: new Date().toISOString(),
     };
     if (data.enabled !== undefined) updates.rescue_enabled = data.enabled;
@@ -138,14 +138,14 @@ export const updateRescuePolicy = createServerFn({ method: "POST" })
 
     // Upsert-style: if no row yet, insert one with defaults + updates.
     const { data: existing } = await sb
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .select("id")
       .eq("user_id", effectiveUserId)
       .maybeSingle();
 
     if (!existing) {
       const { data: inserted, error: insErr } = await sb
-        .from("emma_noshow_policies")
+        .from("noshow_policies")
         .insert({
           user_id: effectiveUserId,
           ...updates,
@@ -157,7 +157,7 @@ export const updateRescuePolicy = createServerFn({ method: "POST" })
     }
 
     const { data: row, error } = await sb
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .update(updates)
       .eq("user_id", effectiveUserId)
       .select("*")
@@ -183,7 +183,7 @@ export const getRescueAgentMetrics = createServerFn({ method: "POST" })
     ).toISOString();
 
     const { data: offers, error } = await sb
-      .from("emma_rescue_offers")
+      .from("rescue_offers")
       .select("id, claimed_at, expired_at, created_at")
       .eq("user_id", effectiveUserId)
       .gte("created_at", since);

@@ -16,7 +16,7 @@
  *   listRescueActivity       — spa-facing — for /app/refill/rescue.
  *
  * Fit-patient selection:
- *   1. emma_waitlist where status='active' for this spa
+ *   1. waitlist where status='active' for this spa
  *   2. Treatment-type filter — if patient's treatment_types is non-empty,
  *      the freed appointment's treatment_type must be in the list
  *      (case-insensitive substring); empty list = open to anything.
@@ -28,9 +28,9 @@
  * Compliance: opted_out / banned patients are excluded. The claim SMS
  * gets a STOP footer (standard).
  *
- * Race-safe claim: UPDATE emma_rescue_offers SET claimed_at = now()
+ * Race-safe claim: UPDATE rescue_offers SET claimed_at = now()
  *   WHERE id = $offer_id AND claimed_at IS NULL RETURNING *
- * The reassign step then takes a second lock on emma_appointments to
+ * The reassign step then takes a second lock on appointments to
  * make sure the appointment is still in cancelled/no_show state.
  *
  * Established 2026-05-17 (Promotions Engine v361).
@@ -167,7 +167,7 @@ type WaitlistRow = {
 
 /** Smart Slot-Fill context for one freed slot (v2.64.0). Built by the
  *  dispatcher only when the freed appointment is linked to a scheduling
- *  provider (emma_appointments.provider_id) — that's the join into the
+ *  provider (appointments.provider_id) — that's the join into the
  *  qualification matrix. Null when the slot is unlinked OR the matrix is
  *  unavailable, in which case selectFitPatients degrades to the legacy
  *  free-text matcher unchanged. */
@@ -235,7 +235,7 @@ async function selectFitPatients(
   // the core path). The treatment filter below runs in JS over the full set.
   const waitlist = await fetchAllRows<WaitlistRow>((from, to) =>
     sb
-      .from("emma_waitlist")
+      .from("waitlist")
       .select("id, patient_node_id, treatment_types, desired_service_ids")
       .eq("user_id", userId)
       .eq("status", "active")
@@ -431,7 +431,7 @@ async function selectFitPatients(
         provider_name: string | null;
       }>((from, to) =>
         sb
-          .from("emma_appointments")
+          .from("appointments")
           .select("patient_node_id, provider_name")
           .eq("user_id", userId)
           .in("patient_node_id", slice)
@@ -827,13 +827,13 @@ export async function dispatchRescueAttempt(args: {
   // 1) Load appointment + policy
   const [aptRes, policyRes] = await Promise.all([
     sb
-      .from("emma_appointments")
+      .from("appointments")
       .select("*")
       .eq("id", appointmentId)
       .eq("user_id", userId)
       .maybeSingle(),
     sb
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .select("*")
       .eq("user_id", userId)
       .maybeSingle(),
@@ -910,7 +910,7 @@ export async function dispatchRescueAttempt(args: {
 
   // 3) Idempotency — return existing active attempt if any
   const { data: existing } = await sb
-    .from("emma_rescue_attempts")
+    .from("rescue_attempts")
     .select("id, outreach_count")
     .eq("user_id", userId)
     .eq("freed_appointment_id", appointmentId)
@@ -1016,7 +1016,7 @@ export async function dispatchRescueAttempt(args: {
   if (fitPatients.length === 0) {
     // Still record an attempt for the audit trail, marked closed_unfilled.
     const { data: attempt } = await sb
-      .from("emma_rescue_attempts")
+      .from("rescue_attempts")
       .insert({
         user_id: userId,
         freed_appointment_id: appointmentId,
@@ -1040,12 +1040,12 @@ export async function dispatchRescueAttempt(args: {
   //    (Acuity fires both `appointment.canceled` and `appointment.changed`
   //    for a single status flip and they arrive within the same second,
   //    both passing the step 3 SELECT before either has INSERTed). The
-  //    partial unique index `emma_rescue_attempts_one_active_per_apt`
+  //    partial unique index `rescue_attempts_one_active_per_apt`
   //    constrains at most one active row per (user_id, freed_appointment_id);
   //    the losing INSERT comes back with SQLSTATE 23505 and we fall
   //    through to returning the winner's id rather than throwing.
   const { data: attempt, error: attemptErr } = await sb
-    .from("emma_rescue_attempts")
+    .from("rescue_attempts")
     .insert({
       user_id: userId,
       freed_appointment_id: appointmentId,
@@ -1057,7 +1057,7 @@ export async function dispatchRescueAttempt(args: {
   if (attemptErr || !attempt) {
     if (attemptErr && (attemptErr.code === "23505" || /duplicate key/i.test(attemptErr.message))) {
       const { data: winner } = await sb
-        .from("emma_rescue_attempts")
+        .from("rescue_attempts")
         .select("id, outreach_count")
         .eq("user_id", userId)
         .eq("freed_appointment_id", appointmentId)
@@ -1099,7 +1099,7 @@ export async function dispatchRescueAttempt(args: {
   const willNeedFromNumber = !isProxyMode || !!proxyPhone;
   if (willNeedFromNumber && !fromNumber) {
     await sb
-      .from("emma_rescue_attempts")
+      .from("rescue_attempts")
       .update({
         status: "closed_unfilled",
         closed_at: new Date().toISOString(),
@@ -1136,7 +1136,7 @@ export async function dispatchRescueAttempt(args: {
   const collected: CollectedOffer[] = [];
   for (const fp of fitPatients) {
     const { data: offer, error: offerErr } = await sb
-      .from("emma_rescue_offers")
+      .from("rescue_offers")
       .insert({
         user_id: userId,
         rescue_attempt_id: attempt.id,
@@ -1286,7 +1286,7 @@ export async function dispatchRescueAttempt(args: {
       .filter(Boolean)
       .join(" ") || "proxy:no-delivery";
     await sb
-      .from("emma_rescue_offers")
+      .from("rescue_offers")
       .update({ message_id: proxyMarker })
       .in(
         "id",
@@ -1324,7 +1324,7 @@ export async function dispatchRescueAttempt(args: {
           // held_at / held_reason were added by the v2.16.0 migration; cast
           // narrowly since they're not in the generated types yet. Best-effort:
           // if the write fails we leave the offer unsent rather than blast it.
-          await (sb.from("emma_rescue_offers") as unknown as {
+          await (sb.from("rescue_offers") as unknown as {
             update(v: Record<string, unknown>): {
               eq(c: string, v: string): Promise<{ error: unknown }>;
             };
@@ -1379,7 +1379,7 @@ export async function dispatchRescueAttempt(args: {
           body,
         });
         await sb
-          .from("emma_rescue_offers")
+          .from("rescue_offers")
           .update({ message_id: resp.messageId })
           .eq("id", c.offerId);
         offersSent++;
@@ -1399,7 +1399,7 @@ export async function dispatchRescueAttempt(args: {
         });
       } catch (e) {
         await sb
-          .from("emma_rescue_offers")
+          .from("rescue_offers")
           .update({
             send_error:
               e instanceof Error ? `sms: ${e.message}` : "sms: unknown error",
@@ -1411,7 +1411,7 @@ export async function dispatchRescueAttempt(args: {
 
   // 7) Bump outreach_count on the attempt row
   await sb
-    .from("emma_rescue_attempts")
+    .from("rescue_attempts")
     .update({ outreach_count: offersSent })
     .eq("id", attempt.id);
 
@@ -1441,7 +1441,7 @@ export const getRescueOfferBrand = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ name: string } | null> => {
     const sb = admin();
     const { data: offer } = await sb
-      .from("emma_rescue_offers")
+      .from("rescue_offers")
       .select("user_id")
       .eq("token", data.token)
       .maybeSingle();
@@ -1456,7 +1456,7 @@ export const getRescueOfferPayload = createServerFn({ method: "POST" })
     const sb = admin();
 
     const { data: offer } = await sb
-      .from("emma_rescue_offers")
+      .from("rescue_offers")
       .select(
         "id, user_id, appointment_id, patient_node_id, claimed_at, declined_at, expired_at, offer_service_id",
       )
@@ -1487,7 +1487,7 @@ export const getRescueOfferPayload = createServerFn({ method: "POST" })
       { data: anyClaimed },
     ] = await Promise.all([
       sb
-        .from("emma_appointments")
+        .from("appointments")
         .select(
           "scheduled_at, duration_min, treatment_type, provider_name, status, patient_node_id",
         )
@@ -1516,7 +1516,7 @@ export const getRescueOfferPayload = createServerFn({ method: "POST" })
         .maybeSingle(),
       // Has any sibling offer been claimed?
       sb
-        .from("emma_rescue_offers")
+        .from("rescue_offers")
         .select("id")
         .eq("appointment_id", offer.appointment_id)
         .not("claimed_at", "is", null)
@@ -1586,7 +1586,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
 
     // 1) Load the offer
     const { data: offer } = await sb
-      .from("emma_rescue_offers")
+      .from("rescue_offers")
       .select(
         "id, user_id, appointment_id, patient_node_id, rescue_attempt_id, claimed_at, offer_service_id",
       )
@@ -1599,7 +1599,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
     if (offer.claimed_at) {
       // Re-visiting; already claimed by us. Return success-shape.
       const { data: apt } = await sb
-        .from("emma_appointments")
+        .from("appointments")
         .select("scheduled_at")
         .eq("id", offer.appointment_id)
         .maybeSingle();
@@ -1612,7 +1612,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
 
     // 2) Race-safe lock on the offer
     const { data: locked, error: lockErr } = await sb
-      .from("emma_rescue_offers")
+      .from("rescue_offers")
       .update({ claimed_at: new Date().toISOString() })
       .eq("id", offer.id)
       .is("claimed_at", null)
@@ -1629,7 +1629,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
     // 3) Reassign the appointment AND verify no sibling offer beat us
     //    to it. The appointment update uses a status guard.
     const { data: reassigned, error: reassignErr } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .update({
         patient_node_id: offer.patient_node_id,
         status: "scheduled",
@@ -1643,7 +1643,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
       // Sibling won. Roll our claim back so the spa knows the offer
       // didn't actually take.
       await sb
-        .from("emma_rescue_offers")
+        .from("rescue_offers")
         .update({ claimed_at: null })
         .eq("id", offer.id);
       return { ok: false, status: "claimed_by_someone_else" };
@@ -1651,7 +1651,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
 
     // 4) Mark the rescue attempt as filled
     await sb
-      .from("emma_rescue_attempts")
+      .from("rescue_attempts")
       .update({
         status: "filled",
         filled_at: new Date().toISOString(),
@@ -1685,7 +1685,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
             freedTreatment ? ` (the slot freed up was ${freedTreatment})` : ""
           } — set the appointment type to ${svcName} in your booking calendar.`;
           await sb
-            .from("emma_rescue_attempts")
+            .from("rescue_attempts")
             .update({ notes: note })
             .eq("id", offer.rescue_attempt_id);
         }
@@ -1760,14 +1760,14 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
     //
     //    Fail-open: if any step fails (no connection, Acuity API down,
     //    appointment-type lookup miss, etc.) we keep the local claim
-    //    committed and stamp the outcome on emma_rescue_attempts.notes so
+    //    committed and stamp the outcome on rescue_attempts.notes so
     //    the spa can reconcile manually from the rescue dashboard. The
     //    patient still sees "you're on the books" — never punish the
     //    patient for an upstream API issue.
     const stampWritebackNotes = async (notes: string) => {
       try {
         await sb
-          .from("emma_rescue_attempts")
+          .from("rescue_attempts")
           .update({ notes })
           .eq("id", offer.rescue_attempt_id);
       } catch (e) {
@@ -1780,7 +1780,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
 
     try {
       const { data: claimedApt } = await sb
-        .from("emma_appointments")
+        .from("appointments")
         .select("id, source, external_id, scheduled_at")
         .eq("id", offer.appointment_id)
         .maybeSingle();
@@ -1849,7 +1849,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
         );
         await stampWritebackNotes("writeback_failed: missing_external_id");
       } else if (writeableSource === "acuity") {
-        // emma_scheduler_connections is not in the generated Database
+        // scheduler_connections is not in the generated Database
         // types yet; cast through unknown to access the table directly.
         // Same pattern used in api.webhooks.scheduler.acuity.$secret.ts
         // and src/server/emma-scheduler.functions.ts.
@@ -1871,7 +1871,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
           };
         };
         const { data: connection } = await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select("access_token, status, platform")
           .eq("user_id", offer.user_id)
           .eq("platform", "acuity")
@@ -1933,7 +1933,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
           // source) and will be a near-no-op since this row is already
           // current.
           await sb
-            .from("emma_appointments")
+            .from("appointments")
             .update({ external_id: String(newApt.id) })
             .eq("id", offer.appointment_id);
 
@@ -1973,7 +1973,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
           };
         };
         const { data: connection } = await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select("id, access_token, refresh_token, token_expires_at, status, platform")
           .eq("user_id", offer.user_id)
           .eq("platform", "square")
@@ -2052,7 +2052,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
             });
 
             await sb
-              .from("emma_appointments")
+              .from("appointments")
               .update({ external_id: newApt.id })
               .eq("id", offer.appointment_id);
 
@@ -2096,7 +2096,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
           };
         };
         const { data: connection } = await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select("platform_account_id, status")
           .eq("user_id", offer.user_id)
           .eq("platform", "zenoti")
@@ -2149,7 +2149,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
                 serviceId: originalApt.serviceId,
                 notes: `Rebooked via Refill from cancelled appointment ${claimedApt.external_id}`,
               });
-              await sb.from("emma_appointments").update({ external_id: newApt.id }).eq("id", offer.appointment_id);
+              await sb.from("appointments").update({ external_id: newApt.id }).eq("id", offer.appointment_id);
               await stampWritebackNotes(`writeback_ok: new_external_id=${newApt.id} replaced=${claimedApt.external_id}`);
             } catch (e) {
               const msg = e instanceof Error ? e.message : String(e);
@@ -2183,7 +2183,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
           };
         };
         const { data: connection } = await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select("id, access_token, refresh_token, token_expires_at, platform_account_id, status")
           .eq("user_id", offer.user_id)
           .eq("platform", "jane")
@@ -2251,7 +2251,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
                 });
               },
             });
-            await sb.from("emma_appointments").update({ external_id: newApt.id }).eq("id", offer.appointment_id);
+            await sb.from("appointments").update({ external_id: newApt.id }).eq("id", offer.appointment_id);
             await stampWritebackNotes(
               `writeback_ok: new_external_id=${newApt.id} replaced=${claimedApt.external_id}`,
             );
@@ -2279,7 +2279,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
           };
         };
         const { data: connection } = await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select("platform_account_id, status")
           .eq("user_id", offer.user_id)
           .eq("platform", "booker")
@@ -2346,7 +2346,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
                 treatmentId: originalApt.treatmentId,
                 notes: `Rebooked via Refill from cancelled appointment ${claimedApt.external_id}`,
               });
-              await sb.from("emma_appointments").update({ external_id: newApt.id }).eq("id", offer.appointment_id);
+              await sb.from("appointments").update({ external_id: newApt.id }).eq("id", offer.appointment_id);
               await stampWritebackNotes(`writeback_ok: new_external_id=${newApt.id} replaced=${claimedApt.external_id}`);
             } catch (e) {
               const msg = e instanceof Error ? e.message : String(e);
@@ -2378,7 +2378,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
           };
         };
         const { data: connection } = await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select("access_token, platform_account_id, status")
           .eq("user_id", offer.user_id)
           .eq("platform", "vagaro")
@@ -2431,7 +2431,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
               notes: `Rebooked via Refill from cancelled appointment ${claimedApt.external_id}`,
             });
             await sb
-              .from("emma_appointments")
+              .from("appointments")
               .update({ external_id: newApt.id })
               .eq("id", offer.appointment_id);
             await stampWritebackNotes(
@@ -2475,7 +2475,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
           };
         };
         const { data: connection } = await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select(
             "id, access_token, refresh_token, token_expires_at, status, platform, platform_account_id",
           )
@@ -2603,7 +2603,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
               });
 
               await sb
-                .from("emma_appointments")
+                .from("appointments")
                 .update({ external_id: newApt.id })
                 .eq("id", offer.appointment_id);
 
@@ -2649,7 +2649,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
           };
         };
         const { data: connection } = await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select("id, status, platform, platform_account_id")
           .eq("user_id", offer.user_id)
           .eq("platform", "boulevard")
@@ -2752,7 +2752,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
                 });
 
                 await sb
-                  .from("emma_appointments")
+                  .from("appointments")
                   .update({ external_id: newApt.id })
                   .eq("id", offer.appointment_id);
 
@@ -2817,7 +2817,7 @@ export const listRescueActivity = createServerFn({ method: "POST" })
     const sb = admin();
 
     const { data: attempts } = await sb
-      .from("emma_rescue_attempts")
+      .from("rescue_attempts")
       .select(
         "id, freed_appointment_id, triggered_at, outreach_count, status, filled_at, filled_by_offer_id",
       )
@@ -2833,12 +2833,12 @@ export const listRescueActivity = createServerFn({ method: "POST" })
 
     const [{ data: appts }, { data: filledOffers }] = await Promise.all([
       sb
-        .from("emma_appointments")
+        .from("appointments")
         .select("id, scheduled_at, treatment_type")
         .in("id", aptIds),
       offerIds.length > 0
         ? sb
-            .from("emma_rescue_offers")
+            .from("rescue_offers")
             .select("id, patient_node_id")
             .in("id", offerIds)
         : Promise.resolve({ data: [] }),
@@ -2889,13 +2889,13 @@ export const listRescueActivity = createServerFn({ method: "POST" })
 // send the same SMS the auto-path would have), or dismiss it. Mirrors the
 // reward-attribution hold queue (reward-attribution-holds.functions.ts).
 
-/** held_at / held_reason live on emma_rescue_offers as of the v2.16.0 migration
+/** held_at / held_reason live on rescue_offers as of the v2.16.0 migration
  *  but aren't in the generated types yet — a loose handle keeps these queries
  *  readable without weakening the typed client everywhere else. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function looseOffers(sb: SupabaseAdmin): any {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (sb as unknown as { from(t: string): any }).from("emma_rescue_offers");
+  return (sb as unknown as { from(t: string): any }).from("rescue_offers");
 }
 
 export type HeldRescueOffer = {
@@ -2956,7 +2956,7 @@ export const listHeldRescueOffers = createServerFn({ method: "POST" })
     const patientIds = Array.from(new Set(rows.map((r) => r.patient_node_id)));
     const [{ data: appts }, { data: patients }] = await Promise.all([
       sb
-        .from("emma_appointments")
+        .from("appointments")
         .select("id, scheduled_at, treatment_type")
         .in("id", aptIds),
       sb.from("knowledge_nodes").select("id, title, attachments").in("id", patientIds),
@@ -3031,7 +3031,7 @@ export const sendHeldRescueOffer = createServerFn({ method: "POST" })
     if (offer.message_id) return { ok: true, sent: true }; // already sent — idempotent
 
     const { data: apt } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .select("scheduled_at, treatment_type, provider_name, status")
       .eq("id", offer.appointment_id)
       .maybeSingle();
@@ -3105,12 +3105,12 @@ export const sendHeldRescueOffer = createServerFn({ method: "POST" })
     // Recompute outreach_count from actually-sent offers (exact, race-safe).
     if (offer.rescue_attempt_id) {
       const { count } = await sb
-        .from("emma_rescue_offers")
+        .from("rescue_offers")
         .select("id", { count: "exact", head: true })
         .eq("rescue_attempt_id", offer.rescue_attempt_id)
         .not("message_id", "is", null);
       await sb
-        .from("emma_rescue_attempts")
+        .from("rescue_attempts")
         .update({ outreach_count: count ?? 0 })
         .eq("id", offer.rescue_attempt_id);
     }
@@ -3171,7 +3171,7 @@ function extractFirstName(displayName: string | null): string | null {
 // dispatchRescueAttempt path the webhook uses. The waitlist select, ranking,
 // composition, and proxy email are all real, so it's a true end-to-end rerun.
 // Admin/tenant-view only (gated in the UI); cleanup:
-//   delete from emma_appointments where user_id = '<spa>' and notes = 'rescue-sim';
+//   delete from appointments where user_id = '<spa>' and notes = 'rescue-sim';
 
 const simulateRescueInput = z.object({
   accessToken: z.string().min(1),
@@ -3280,7 +3280,7 @@ export const simulateRescueDispatchFn = createServerFn({ method: "POST" })
       const { data: inserted, error } = await (
         sb as unknown as { from(t: string): any }
       )
-        .from("emma_appointments")
+        .from("appointments")
         .insert({
           user_id: effectiveUserId,
           scheduled_at: scheduledAt,

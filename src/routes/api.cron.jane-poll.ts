@@ -8,7 +8,7 @@
  * For each active Jane connection:
  *   1. Pull recent appointments via listJaneAppointments (last 24h
  *      forward 14 days — narrow window for polling efficiency)
- *   2. Compare against emma_appointments rows for status transitions
+ *   2. Compare against appointments rows for status transitions
  *   3. Dispatch trigger graph (rescue + reliability) on cancel/no-show
  *
  * Architecture-stub: cron trigger config in wrangler.jsonc is added
@@ -72,7 +72,7 @@ export const Route = createFileRoute("/api/cron/jane-poll")({
             };
           };
         })
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select("id, user_id, access_token, refresh_token, token_expires_at, platform_account_id")
           .eq("platform", "jane")
           .eq("status", "connected");
@@ -117,7 +117,7 @@ export const Route = createFileRoute("/api/cron/jane-poll")({
             for (const apt of appointments) {
               totalPolled++;
               const { data: prior } = await sb
-                .from("emma_appointments")
+                .from("appointments")
                 .select("id, status, patient_node_id, scheduled_at")
                 .eq("user_id", conn.user_id)
                 .eq("external_id", apt.id)
@@ -126,7 +126,7 @@ export const Route = createFileRoute("/api/cron/jane-poll")({
 
               const row = janeAppointmentToRow(apt, conn.user_id, prior?.patient_node_id ?? null);
               const { data: upserted } = await sb
-                .from("emma_appointments")
+                .from("appointments")
                 .upsert(row, { onConflict: "user_id,external_id,source" })
                 .select("id, status, patient_node_id, scheduled_at")
                 .single();
@@ -138,7 +138,7 @@ export const Route = createFileRoute("/api/cron/jane-poll")({
 
               totalChanged++;
 
-              await sb.from("emma_appointment_status_events").insert({
+              await sb.from("appointment_status_events").insert({
                 user_id: conn.user_id,
                 appointment_id: upserted.id,
                 from_status: priorStatus ?? "scheduled",
@@ -159,7 +159,7 @@ export const Route = createFileRoute("/api/cron/jane-poll")({
             }
 
             await (sb as unknown as { from: (t: string) => { update: (v: object) => { eq: (c: string, v: string) => Promise<unknown> } } })
-              .from("emma_scheduler_connections")
+              .from("scheduler_connections")
               .update({ last_sync_at: new Date().toISOString() })
               .eq("id", conn.id);
           } catch (e) {

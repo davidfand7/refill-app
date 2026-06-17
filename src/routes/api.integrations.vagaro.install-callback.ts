@@ -148,7 +148,7 @@ export const Route = createFileRoute(
         const webhookSecret = crypto.randomUUID().replace(/-/g, "");
 
         const existing = await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select("id")
           .eq("user_id", state.userId)
           .eq("platform", "vagaro")
@@ -158,7 +158,7 @@ export const Route = createFileRoute(
         if (existing.data) {
           connectionId = existing.data.id;
           await sbAny
-            .from("emma_scheduler_connections")
+            .from("scheduler_connections")
             .update({
               status: "pending",
               access_token: cleanedApiKey,
@@ -175,7 +175,7 @@ export const Route = createFileRoute(
             .eq("id", connectionId);
         } else {
           const ins = await sbAny
-            .from("emma_scheduler_connections")
+            .from("scheduler_connections")
             .insert({
               user_id: state.userId,
               platform: "vagaro",
@@ -210,7 +210,7 @@ export const Route = createFileRoute(
           // overload same as Mindbody — clean migration adding
           // webhook_message_signature_key column queued).
           await sbAny
-            .from("emma_scheduler_connections")
+            .from("scheduler_connections")
             .update({
               webhook_subscription_id: sub.subscriptionId,
               platform_account_email: sub.sharedToken,
@@ -243,7 +243,7 @@ export const Route = createFileRoute(
         }
 
         await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .update({
             status: "connected",
             connected_at: new Date().toISOString(),

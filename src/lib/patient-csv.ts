@@ -459,7 +459,7 @@ export type PatientSoftTags = {
   culturalNotes?: PatientSoftTagEntry<string> | null;
   /**
    * v1.34.3.1: per-patient routing override for the Preshow Agent. UUID
-   * of an emma_preshow_profiles row under this tenant. When set,
+   * of an preshow_profiles row under this tenant. When set,
    * dispatchPreShowReminder resolves THIS profile; when null/absent
    * (Karen never set it OR profile was deleted), falls back to the
    * spa's is_default=true profile. Lets Karen route the Chronic-cohort

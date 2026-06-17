@@ -572,9 +572,9 @@ export const listTenantsForAdmin = createServerFn({ method: "POST" })
 // totals + recent events + the tenant's user_ids so the client can wire a
 // supabase realtime subscription scoped to those users.
 //
-// emma_recovery_events is user-scoped today (no tenant_id column yet — the
+// recovery_events is user-scoped today (no tenant_id column yet — the
 // refill-billing cron does the same membership fan-out). When a tenant_id
-// column lands on emma_recovery_events in a future ship, this fn collapses
+// column lands on recovery_events in a future ship, this fn collapses
 // to a single eq(tenant_id) filter and the membership lookup goes away.
 
 const liveFeedLimit = 8;
@@ -656,7 +656,7 @@ export const getMyTenantRecoveryFeed = createServerFn({ method: "POST" })
       };
       const rows = await fetchAllRows<RecoveryEventRow>((from, to) =>
         sb
-          .from("emma_recovery_events")
+          .from("recovery_events")
           .select(
             "id, created_at, recovery_agent, attributed_revenue_usd, verified_at",
           )

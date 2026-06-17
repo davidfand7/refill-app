@@ -2,7 +2,7 @@
  * LiveEarningsCard — composable rep-facing live revenue widget.
  *
  * Mounted at the top of /app/rep/network and /app/rep/ledger.
- * Subscribes to emma_recovery_events filtered by referred_by_rep_id =
+ * Subscribes to recovery_events filtered by referred_by_rep_id =
  * accessToken's auth.uid() via Supabase realtime, re-pulls aggregated
  * totals on every change. Phase 2D (v396).
  *
@@ -76,7 +76,7 @@ export function LiveEarningsCard({ accessToken, repUserId }: Props) {
         {
           event: "*",
           schema: "public",
-          table: "emma_recovery_events",
+          table: "recovery_events",
           filter: `referred_by_rep_id=eq.${repUserId}`,
         },
         () => {

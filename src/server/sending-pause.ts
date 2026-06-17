@@ -1,7 +1,7 @@
 /**
  * sending-pause.ts — the honest-pause kill switch (Tier-2 Autonomous · Slice 3).
  *
- * One per-tenant master switch (`emma_noshow_policies.sending_paused`) that
+ * One per-tenant master switch (`noshow_policies.sending_paused`) that
  * halts ALL automated sending. Every agent that dispatches on the spa's behalf
  * polls it at its dispatch entry and bails before anything goes out:
  *   - rescue auto-text          (reads the already-loaded policy row)
@@ -23,7 +23,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export const SENDING_PAUSED_REASON = "sending_paused";
 
 /**
- * Read the pause flag off an emma_noshow_policies row the caller already loaded
+ * Read the pause flag off an noshow_policies row the caller already loaded
  * (rescue + preshow both hold the row). Pure — no query. Treats a missing
  * column / null as NOT paused (fail-open: a schema hiccup never silently halts
  * a spa's sends).
@@ -45,7 +45,7 @@ export async function isSendingPaused(
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tbl = (sb as unknown as { from(t: string): any }).from(
-      "emma_noshow_policies",
+      "noshow_policies",
     );
     const { data, error } = await tbl
       .select("sending_paused")

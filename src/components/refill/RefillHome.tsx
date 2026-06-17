@@ -18,7 +18,7 @@
  *      stays 4-locked per trojan-horse thesis; the grid is the soft
  *      discoverability surface for /app/refill/patients.
  *   3. LiveRecoveryFeed slot — v410 placeholder; v410.1 wires the realtime
- *      ticker against emma_recovery_events for this tenant
+ *      ticker against recovery_events for this tenant
  */
 
 import { Link } from "@tanstack/react-router";

@@ -1,7 +1,7 @@
 /**
  * POST /api/cron/emma-recommendations — weekly recommendation regen (v365).
  *
- * Iterates every spa with an emma_noshow_policies row + regenerates
+ * Iterates every spa with an noshow_policies row + regenerates
  * setting recommendations. Foreground regen also fires on page-view
  * with a 1-hour debounce; this weekly cron is the safety net for
  * spas that haven't opened /app/refill/rescue recently.
@@ -47,7 +47,7 @@ export const Route = createFileRoute("/api/cron/emma-recommendations")({
 
         // Pull every spa with a policy row (i.e. they've configured noshow at least once).
         const { data: rows, error } = await sb
-          .from("emma_noshow_policies")
+          .from("noshow_policies")
           .select("user_id");
         if (error) return jsonResp(500, { error: `pull: ${error.message}` });
         const userIds = Array.from(new Set((rows ?? []).map((r) => r.user_id)));

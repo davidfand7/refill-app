@@ -661,7 +661,7 @@ function MoMDelta({
 
 // v1.26.23 — labels updated to current refill_pricing_plans names
 // (starter/predictable/pro) when the preview swapped from the legacy
-// emma_pricing_plans (performance/predictable/hybrid) to the live
+// pricing_plans (performance/predictable/hybrid) to the live
 // refill source. Pre-v1.26.23 any tenant on a refill-side plan rendered
 // the raw enum string ("starter") in this card because the label map
 // only knew about the legacy names.

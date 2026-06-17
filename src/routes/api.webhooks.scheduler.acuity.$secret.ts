@@ -8,9 +8,9 @@
  *   2. Verifies the X-Acuity-Signature HMAC against the raw body using
  *      the OAuth app's client_secret
  *   3. Parses the form-encoded body for action + appointmentId
- *   4. Audits the inbound event in emma_scheduler_webhook_events
+ *   4. Audits the inbound event in scheduler_webhook_events
  *   5. Fetches the full appointment from Acuity API (webhook body is thin)
- *   6. Upserts into emma_appointments — which fires the existing
+ *   6. Upserts into appointments — which fires the existing
  *      updateAppointmentStatus trigger graph → rescue dispatch → engine
  *
  * Always returns 200 (even on most errors) so Acuity doesn't retry forever
@@ -68,7 +68,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
 
         // ── Look up the connection
         const { data: connection } = await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select(
             "id, user_id, status, access_token, refresh_token, webhook_signature_verified_at",
           )
@@ -128,7 +128,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
         // invalid signatures become rejectable forgeries.
         if (sigDecision.stampVerified) {
           await sbAny
-            .from("emma_scheduler_connections")
+            .from("scheduler_connections")
             .update({ webhook_signature_verified_at: new Date().toISOString() })
             .eq("id", connection.id);
           console.warn(
@@ -141,7 +141,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
         // last_sync_at, so a real key-rotation break surfaces via S3
         // appointment-freshness rather than passing silently.
         if (sigDecision.reject) {
-          await sbAny.from("emma_scheduler_webhook_events").insert({
+          await sbAny.from("scheduler_webhook_events").insert({
             connection_id: connection.id,
             user_id: connection.user_id,
             platform: "acuity",
@@ -165,7 +165,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
         // ── Parse the event
         const payload = parseAcuityWebhookBody(rawBody);
         if (!payload) {
-          await sbAny.from("emma_scheduler_webhook_events").insert({
+          await sbAny.from("scheduler_webhook_events").insert({
             connection_id: connection.id,
             user_id: connection.user_id,
             platform: "acuity",
@@ -178,7 +178,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
 
         // ── Audit the inbound event (best-effort, do not block downstream)
         const auditInsert = await sbAny
-          .from("emma_scheduler_webhook_events")
+          .from("scheduler_webhook_events")
           .insert({
             connection_id: connection.id,
             user_id: connection.user_id,
@@ -224,7 +224,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
         //    can detect status transitions and fire the same trigger
         //    graph that updateAppointmentStatus fires on UI-driven flips.
         const { data: prior } = await sb
-          .from("emma_appointments")
+          .from("appointments")
           .select("id, status, patient_node_id, scheduled_at")
           .eq("user_id", connection.user_id)
           .eq("external_id", String(acuityApt.id))
@@ -251,7 +251,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
           patientIndex,
         );
 
-        // ── Upsert into emma_appointments. Resolve provider_id continuously
+        // ── Upsert into appointments. Resolve provider_id continuously
         // from the Acuity calendarID → the mirrored provider's external_id, so
         // the appointment is linked to its native provider without waiting for
         // a manual staging-mirror re-run (v2.42.0). Best-effort: an unmapped
@@ -270,7 +270,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
           providerId,
         );
         const { data: upserted, error: upsertErr } = await sb
-          .from("emma_appointments")
+          .from("appointments")
           .upsert(row, { onConflict: "user_id,external_id,source" })
           .select("id, status, patient_node_id, scheduled_at")
           .single();
@@ -287,7 +287,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
         // ── Stamp audit row with success + the appointment id we wrote
         if (auditId) {
           await sbAny
-            .from("emma_scheduler_webhook_events")
+            .from("scheduler_webhook_events")
             .update({
               processed_at: new Date().toISOString(),
               emma_appointment_id: upserted.id,
@@ -297,7 +297,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
 
         // ── Update connection last_sync_at
         await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .update({ last_sync_at: new Date().toISOString() })
           .eq("id", connection.id);
 
@@ -311,7 +311,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
         if (statusChanged) {
           // Audit the status transition (best-effort).
           await sb
-            .from("emma_appointment_status_events")
+            .from("appointment_status_events")
             .insert({
               user_id: connection.user_id,
               appointment_id: upserted.id,
@@ -421,7 +421,7 @@ async function stampAuditError(
 ): Promise<void> {
   if (!auditId) return;
   await sbAny
-    .from("emma_scheduler_webhook_events")
+    .from("scheduler_webhook_events")
     .update({ error })
     .eq("id", auditId);
 }
@@ -431,16 +431,16 @@ function acuityAppointmentToInsert(
   userId: string,
   patientNodeId: string | null,
   providerId: string | null = null,
-): Database["public"]["Tables"]["emma_appointments"]["Insert"] {
+): Database["public"]["Tables"]["appointments"]["Insert"] {
   // v1.4.3: parse Acuity's timezone-aware datetime properly. See twin
   // helper in src/server/emma-scheduler.functions.ts for the war story.
   const scheduledAt = new Date(apt.datetime ?? "").toISOString();
-  const status: Database["public"]["Tables"]["emma_appointments"]["Insert"]["status"] = apt.canceled
+  const status: Database["public"]["Tables"]["appointments"]["Insert"]["status"] = apt.canceled
     ? "cancelled"
     : apt.noShow
       ? "no_show"
       : "scheduled";
-  const base: Database["public"]["Tables"]["emma_appointments"]["Insert"] = {
+  const base: Database["public"]["Tables"]["appointments"]["Insert"] = {
     user_id: userId,
     external_id: String(apt.id),
     source: "acuity",

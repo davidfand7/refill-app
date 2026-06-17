@@ -6,7 +6,7 @@
  * actually flowing — and if not, is it OUR fault or the connection's?"
  *
  * Two feed families today, one spine:
- *   1. PMS scheduler connections — emma_scheduler_connections (Acuity live;
+ *   1. PMS scheduler connections — scheduler_connections (Acuity live;
  *      Vagaro key; others reserved). Status enum + last_sync_at.
  *   2. Manufacturer reward-portal pulls — reward_signal_imports, the daily
  *      Allē / ASPIRE / Evolus pulls (a Claude Code /schedule task on the
@@ -159,7 +159,7 @@ function schedulerDetail(
 /**
  * Appointment-FLOW freshness (S3): a DISTINCT signal from the connection pulse
  * the scheduler rows above measure. The reconcile cron (api.cron.acuity-reconcile,
- * every 2h) keeps emma_scheduler_connections.last_sync_at fresh forever — so a
+ * every 2h) keeps scheduler_connections.last_sync_at fresh forever — so a
  * connected calendar reads "Healthy" indefinitely even if appointment DATA has
  * silently stopped arriving (a dead webhook + an empty reconcile window throw
  * nothing — the worst failure mode is an absence, not an error). This row
@@ -409,7 +409,7 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
     // ignoring `error` here would let a failed read render as "no connections /
     // all healthy" — the exact silent absence this whole surface exists to catch.
     const { data: schedRows, error: schedErr } = await sb
-      .from("emma_scheduler_connections")
+      .from("scheduler_connections")
       .select(
         "id, platform, platform_account_email, status, last_sync_at, connected_at",
       )
@@ -463,7 +463,7 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
     // The scheduler rows above score last_sync_at, which the reconcile cron keeps
     // fresh every 2h → a connected calendar reads "Healthy" forever even if no
     // appointment DATA is actually arriving. This adds a distinct per-connected-
-    // scheduler row scored on the newest booking's arrival time (emma_appointments
+    // scheduler row scored on the newest booking's arrival time (appointments
     // .created_at). Only emitted for a CONNECTED scheduler that has EVER received
     // an appointment — we don't invent a flow row for a calendar with none yet
     // (the connection row's setup/healthy state already covers that case).
@@ -474,7 +474,7 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
       await Promise.all(
         connectedSchedulers.map(async (row): Promise<ConnectionHealthItem | null> => {
           const { data: latestApt } = await sb
-            .from("emma_appointments")
+            .from("appointments")
             .select("created_at")
             .eq("user_id", effectiveUserId)
             .eq("source", row.platform)
@@ -923,7 +923,7 @@ export const EXPECTABLE_PORTALS: ExpectedSourceOption[] = [
 ];
 
 /** Calendar/PMS platforms a spa can actually connect today (keys match
- *  emma_scheduler_connections.platform + SCHEDULER_DISPLAY). Kept to the live
+ *  scheduler_connections.platform + SCHEDULER_DISPLAY). Kept to the live
  *  ones — we don't offer to "watch" a platform we can't connect. */
 export const EXPECTABLE_SCHEDULERS: ExpectedSourceOption[] = [
   { sourceKey: "acuity", name: "Acuity", subLabel: "Calendar" },

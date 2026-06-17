@@ -2,7 +2,7 @@
  * Lite Mode writeback dispatcher (v1.43.0).
  *
  * When `claimRescueSlot` resolves a winning offer that traces back to a
- * Lite Mode connection (`emma_appointments.source` matches /^lite-/),
+ * Lite Mode connection (`appointments.source` matches /^lite-/),
  * the connector substrate can NOT call the vendor API to book the slot.
  * That's the entire point of Lite Mode — we don't have API access.
  *
@@ -65,7 +65,7 @@ export interface LightModeWritebackResult {
 
 /**
  * Compose + dispatch the owner-facing email. Returns a status string
- * that gets stamped on emma_rescue_attempts.notes (caller pattern in
+ * that gets stamped on rescue_attempts.notes (caller pattern in
  * claimRescueSlot — fail-open, never break the claim).
  */
 export async function dispatchLightModeWriteback(
@@ -171,7 +171,7 @@ export async function dispatchLightModeWriteback(
 
   // ── Load original appointment service/notes (for the copy payload)
   const { data: apt } = await sbAny
-    .from("emma_appointments")
+    .from("appointments")
     .select("treatment_type, provider_name, scheduled_at")
     .eq("id", args.appointmentId)
     .maybeSingle();
@@ -185,13 +185,13 @@ export async function dispatchLightModeWriteback(
       : args.scheduledAt;
 
   // ── Try to resolve a per-spa platform slug (Mindbody siteId, etc.)
-  // from emma_scheduler_connections if a regular API connection also
+  // from scheduler_connections if a regular API connection also
   // exists for this user+platform (some spas might have BOTH Light
   // Mode AND an API connection for the same vendor).
   let spaPlatformSlug: string | null = null;
   try {
     const { data: conn } = await sbAny
-      .from("emma_scheduler_connections")
+      .from("scheduler_connections")
       .select("platform_account_id")
       .eq("user_id", args.userId)
       .maybeSingle();

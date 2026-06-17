@@ -9,7 +9,7 @@
  * Flow:
  *   1. Pick patients — search + sort + multi-select OR quick-select top-N
  *      by lifetime spend
- *   2. Pre-fill treatments — defaults from emma_noshow_policies
+ *   2. Pre-fill treatments — defaults from noshow_policies
  *      .rescue_eligible_treatments (the spa's already-configured list).
  *      Karen can edit before generating.
  *   3. Pick intent — catchall (default for bulk) or earlier_appointment.

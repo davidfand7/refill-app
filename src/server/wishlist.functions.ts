@@ -280,7 +280,7 @@ export const listMyWishlistRequests = createServerFn({ method: "POST" })
 // noise. The strategy doc's magic moment is "time-to-first-verifiable-dollar,"
 // so the gate opens the first time this spa has a VERIFIED recovery win (real
 // recovered revenue — the same signal the billing scoreboard bills on). Once
-// earned it stays open. emma_recovery_events is user-scoped (predates the
+// earned it stays open. recovery_events is user-scoped (predates the
 // tenant model), so we check the resolved owner's user_id. The widget also
 // shows for an admin explicitly viewing-as a tenant (operator context), so the
 // support channel is never hidden from us regardless of the spa's stage.
@@ -293,7 +293,7 @@ export const hasReachedValueMoment = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const { data: rows, error } = await sb
-      .from("emma_recovery_events")
+      .from("recovery_events")
       .select("id")
       .eq("user_id", effectiveUserId)
       .not("verified_at", "is", null)

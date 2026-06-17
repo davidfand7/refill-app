@@ -201,7 +201,7 @@ export async function mapCsvHeaders(
 
   // ── Cache hit?
   const { data: cached, error: cacheErr } = await sb
-    .from("emma_csv_dialect_cache")
+    .from("csv_dialect_cache")
     .select(
       "alias_map, detected_platform, user_corrected_at, use_count",
     )
@@ -215,13 +215,13 @@ export async function mapCsvHeaders(
       // termination, so the use_count counter never increments.
       try {
         await sb
-          .from("emma_csv_dialect_cache")
+          .from("csv_dialect_cache")
           .update({ use_count: (cached.use_count ?? 0) + 1 })
           .eq("user_id", userId)
           .eq("header_hash", headerHash);
       } catch (e) {
         console.error(
-          "emma_csv_dialect_cache use_count bump failed:",
+          "csv_dialect_cache use_count bump failed:",
           e instanceof Error ? e.message : e,
         );
       }
@@ -265,7 +265,7 @@ export async function mapCsvHeaders(
 
   // ── Cache the result (best-effort; ignore conflict)
   const { error: insertErr } = await sb
-    .from("emma_csv_dialect_cache")
+    .from("csv_dialect_cache")
     .upsert(
       {
         user_id: userId,
@@ -313,7 +313,7 @@ export const updateCsvDialectMapping = createServerFn({ method: "POST" })
     const userId = await verifyAuth(data.accessToken);
     const sb = admin();
     const { error } = await sb
-      .from("emma_csv_dialect_cache")
+      .from("csv_dialect_cache")
       .upsert(
         {
           user_id: userId,
@@ -358,7 +358,7 @@ export const listCsvDialectMappings = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const { data: rows, error } = await sb
-      .from("emma_csv_dialect_cache")
+      .from("csv_dialect_cache")
       .select(
         "header_hash, detected_platform, alias_map, llm_model, llm_at, user_corrected_at, use_count, created_at",
       )

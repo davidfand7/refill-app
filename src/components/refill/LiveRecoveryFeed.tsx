@@ -6,7 +6,7 @@
  * revenue stream — Today / 7 days / 30 days / All-time totals + a "Most
  * recent" sub-list with the last few recovery events as they land.
  *
- * Realtime: subscribes to emma_recovery_events filtered by user_id, ONE
+ * Realtime: subscribes to recovery_events filtered by user_id, ONE
  * subscription per user_id in the tenant. Most tenants have one owner today
  * (per the v387 wizard's single-tenant-per-user rule) so this collapses to
  * one subscription. Multi-owner tenants get N subscriptions; the refetch
@@ -77,7 +77,7 @@ export function LiveRecoveryFeed({ accessToken, viewAsUserId }: Props) {
     };
   }, [accessToken, viewAsUserId]);
 
-  // Stage 2: subscribe to emma_recovery_events for each user_id on this
+  // Stage 2: subscribe to recovery_events for each user_id on this
   // tenant. Realtime postgres_changes doesn't take an array filter directly,
   // so we open one channel per user_id. The refetch-on-change handler is
   // shared, and a single pulseTimer ensures multi-channel duplicate events
@@ -114,7 +114,7 @@ export function LiveRecoveryFeed({ accessToken, viewAsUserId }: Props) {
           {
             event: "*",
             schema: "public",
-            table: "emma_recovery_events",
+            table: "recovery_events",
             filter: `user_id=eq.${uid}`,
           },
           onChange,

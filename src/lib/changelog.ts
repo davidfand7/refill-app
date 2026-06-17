@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.75.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.75.0 &mdash; Retire the legacy <code>emma_</code> table prefix (internal cleanup; zero user-facing change).</strong> &ldquo;Emma&rdquo; was the product&rsquo;s original codename; ~24 core tables still carried it (<code>emma_appointments</code>, <code>emma_scheduler_connections</code>, &hellip;). Renamed every one to its bare name (<code>appointments</code>, <code>scheduler_connections</code>, &hellip;) to match the rest of the schema (<code>scheduling_*</code>, <code>services</code>, <code>tenants</code>, <code>brand_settings</code> &mdash; none of which carry a brand prefix). <strong>Done safely</strong>: a single atomic, idempotent migration renames each table + all child objects (FK constraints so PostgREST relationship hints stay valid, indexes, sequences, triggers) and leaves a <code>security_invoker</code> compatibility VIEW under every old name &mdash; so DB trigger/cron/function bodies keep working untouched until a follow-up rewrites them and drops the views. ~570 code references + generated types updated in lockstep; both tripwires re-frozen at the same counts (tsc 251, truncation 189 &mdash; the rename touched names, not read behavior). A pre-flight dry run caught the traps (an <code>emma_appointment_id</code> COLUMN, an <code>emma_sweep_cron</code> job, zero-code-ref tables) so a blanket strip couldn&rsquo;t silently break anything &mdash; those are left as a tiny follow-up. Migration: <code>20260618020000_v2_75_0_retire_emma_table_prefix.sql</code>.",
+    ],
+  },
+  {
     version: "v2.74.0",
     date: "June 2026",
     items: [

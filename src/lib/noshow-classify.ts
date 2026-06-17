@@ -30,7 +30,7 @@ export type OutcomeResult = {
 };
 
 export function classifyAppointmentOutcome(input: {
-  /** emma_appointments.status */
+  /** appointments.status */
   status: string;
   /** ISO instant of the appointment time. */
   scheduledAt: string;

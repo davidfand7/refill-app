@@ -9,7 +9,7 @@
  *   3. Mint a per-spa webhook_secret + upsert the connection row
  *   4. Register the four lifecycle webhooks on the spa's Acuity account
  *   5. Backfill: pull last 30d historical + next 90d future appointments,
- *      upsert into emma_appointments. Pre-migrate any existing
+ *      upsert into appointments. Pre-migrate any existing
  *      'csv-acuity' rows to 'acuity' so the upsert dedupes correctly.
  *   6. Stamp connected_at + status='connected' on the connection row
  *   7. Redirect back to /app/refill/settings/scheduler with a success flag
@@ -159,7 +159,7 @@ export const Route = createFileRoute("/api/integrations/acuity/oauth-callback")(
         };
 
         const existing = await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select("id, webhook_secret")
           .eq("user_id", state.userId)
           .eq("platform", "acuity")
@@ -172,7 +172,7 @@ export const Route = createFileRoute("/api/integrations/acuity/oauth-callback")(
           connectionId = existing.data.id;
           webhookSecret = existing.data.webhook_secret;
           await sbAny
-            .from("emma_scheduler_connections")
+            .from("scheduler_connections")
             .update({
               status: "pending",
               access_token: tokenResp.accessToken,
@@ -188,7 +188,7 @@ export const Route = createFileRoute("/api/integrations/acuity/oauth-callback")(
             .eq("id", connectionId);
         } else {
           const ins = await sbAny
-            .from("emma_scheduler_connections")
+            .from("scheduler_connections")
             .insert({
               user_id: state.userId,
               platform: "acuity",
@@ -220,7 +220,7 @@ export const Route = createFileRoute("/api/integrations/acuity/oauth-callback")(
         } catch (e) {
           console.error("[acuity/callback] webhook registration failed", e);
           await sbAny
-            .from("emma_scheduler_connections")
+            .from("scheduler_connections")
             .update({
               status: "error",
               last_error: `Webhook registration failed: ${e instanceof Error ? e.message : "unknown"}`,
@@ -239,7 +239,7 @@ export const Route = createFileRoute("/api/integrations/acuity/oauth-callback")(
         } catch (e) {
           console.error("[acuity/callback] backfill failed", e);
           await sbAny
-            .from("emma_scheduler_connections")
+            .from("scheduler_connections")
             .update({
               status: "error",
               last_error: `Backfill failed: ${e instanceof Error ? e.message : "unknown"}`,
@@ -250,7 +250,7 @@ export const Route = createFileRoute("/api/integrations/acuity/oauth-callback")(
 
         // ── Step 6: mark connected
         await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .update({
             status: "connected",
             connected_at: new Date().toISOString(),

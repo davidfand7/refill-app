@@ -371,7 +371,7 @@ function AListRulesPage() {
       // v1.26.10 — also stash the run result into freshness.lastRun so the
       // freshness card updates immediately to "X patients · N transitions"
       // without waiting for loadAll(). loadAll() runs anyway below and will
-      // reconcile from emma_reliability_runs.
+      // reconcile from reliability_runs.
       setFreshness({
         latestRecomputedAt: res.completedAt,
         patientsTracked: res.patientsRecomputed,
@@ -773,7 +773,7 @@ function AListRulesPage() {
 
         {/* v1.26.9 — Reliability data freshness + manual recompute.
             v1.26.10 — last-sweep result (patients + transitions + trigger)
-            now persists via emma_reliability_runs and survives reload. */}
+            now persists via reliability_runs and survives reload. */}
         <section className="rounded-2xl border border-rule bg-paper p-5">
           <div className="flex items-baseline justify-between gap-3 mb-2">
             <h2 className="text-sm font-semibold text-ink">
@@ -1029,7 +1029,7 @@ function PreviewRow({
 }
 
 // v1.26.10 — persistent last-sweep surface. Replaces the toast-only window
-// after a Recompute now click. Reads from emma_reliability_runs via
+// after a Recompute now click. Reads from reliability_runs via
 // getReliabilityFreshness; falls back to a "never" line on a fresh tenant
 // that hasn't been swept since the v1.26.10 deploy. The "no tier changes"
 // case is explicit so a successful sweep that found nothing to flip doesn't

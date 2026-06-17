@@ -3,7 +3,7 @@
  *
  * Mirror of the surface from app.lizzie.referral-links.tsx (same shell, same
  * loading/error states). Shows:
- *   1. LiveEarningsCard (top) — realtime sub to emma_recovery_events.
+ *   1. LiveEarningsCard (top) — realtime sub to recovery_events.
  *   2. Tier-grouped downstream tree (Tier 1 = direct, Tier 2/3 = cascade).
  *
  * Empty state per the 5/29 demo spec — "Here's where your downstream will

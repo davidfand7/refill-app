@@ -48,7 +48,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/booker/$secret")({
 
         const payload = parseBookerWebhookBody(rawBody);
         if (!payload) {
-          await sbAny.from("emma_scheduler_webhook_events").insert({
+          await sbAny.from("scheduler_webhook_events").insert({
             connection_id: null,
             user_id: null,
             platform: "booker",
@@ -60,7 +60,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/booker/$secret")({
         }
 
         const { data: connection } = await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select("id, user_id, status, platform_account_id, platform_account_email")
           .eq("platform", "booker")
           .eq("webhook_secret", secret)
@@ -81,7 +81,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/booker/$secret")({
         }) : false;
 
         if (!sigOk) {
-          await sbAny.from("emma_scheduler_webhook_events").insert({
+          await sbAny.from("scheduler_webhook_events").insert({
             connection_id: connection.id,
             user_id: connection.user_id,
             platform: "booker",
@@ -99,7 +99,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/booker/$secret")({
         }
 
         const auditInsert = await sbAny
-          .from("emma_scheduler_webhook_events")
+          .from("scheduler_webhook_events")
           .insert({
             connection_id: connection.id,
             user_id: connection.user_id,
@@ -120,7 +120,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/booker/$secret")({
 
         if (payload.type === "customer.created") {
           if (auditId) {
-            await sbAny.from("emma_scheduler_webhook_events").update({ processed_at: new Date().toISOString() }).eq("id", auditId);
+            await sbAny.from("scheduler_webhook_events").update({ processed_at: new Date().toISOString() }).eq("id", auditId);
           }
           return jsonResp(200, { ok: true, eventType: payload.type, customerId: payload.customer?.id, note: "Customer roster enrichment deferred." });
         }
@@ -154,7 +154,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/booker/$secret")({
         }
 
         const { data: prior } = await sb
-          .from("emma_appointments")
+          .from("appointments")
           .select("id, status, patient_node_id, scheduled_at")
           .eq("user_id", connection.user_id)
           .eq("external_id", appointment.id)
@@ -172,7 +172,7 @@ export const Route = createFileRoute("/api/webhooks/scheduler/booker/$secret")({
 
         const row = bookerAppointmentToRow(appointment, connection.user_id, resolvedPatientNodeId);
         const { data: upserted, error: upsertErr } = await sb
-          .from("emma_appointments")
+          .from("appointments")
           .upsert(row, { onConflict: "user_id,external_id,source" })
           .select("id, status, patient_node_id, scheduled_at")
           .single();
@@ -183,19 +183,19 @@ export const Route = createFileRoute("/api/webhooks/scheduler/booker/$secret")({
         }
 
         if (auditId) {
-          await sbAny.from("emma_scheduler_webhook_events").update({
+          await sbAny.from("scheduler_webhook_events").update({
             processed_at: new Date().toISOString(),
             emma_appointment_id: upserted.id,
           }).eq("id", auditId);
         }
-        await sbAny.from("emma_scheduler_connections").update({ last_sync_at: new Date().toISOString() }).eq("id", connection.id);
+        await sbAny.from("scheduler_connections").update({ last_sync_at: new Date().toISOString() }).eq("id", connection.id);
 
         const priorStatus = prior?.status ?? null;
         const newStatus = upserted.status;
         const statusChanged = priorStatus !== newStatus;
 
         if (statusChanged) {
-          await sb.from("emma_appointment_status_events").insert({
+          await sb.from("appointment_status_events").insert({
             user_id: connection.user_id,
             appointment_id: upserted.id,
             from_status: priorStatus ?? "scheduled",
@@ -261,5 +261,5 @@ type SbAny = {
 
 async function stampAuditError(sbAny: SbAny, auditId: string | null, error: string): Promise<void> {
   if (!auditId) return;
-  await sbAny.from("emma_scheduler_webhook_events").update({ error }).eq("id", auditId);
+  await sbAny.from("scheduler_webhook_events").update({ error }).eq("id", auditId);
 }

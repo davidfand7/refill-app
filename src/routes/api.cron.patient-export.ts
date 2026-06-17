@@ -2,7 +2,7 @@
  * POST /api/cron/patient-export — the Monthly Patient-Book Export routine (v2.31.0).
  *
  * Fired by pg_cron once a month, it walks every spa that turned the export on
- * (emma_noshow_policies.patient_export_enabled = true — the Skill's adopt/On
+ * (noshow_policies.patient_export_enabled = true — the Skill's adopt/On
  * flips it) and emails the OWNER a CSV of their patient book for bookkeeping.
  *
  * What it does NOT do: send anything to a patient. This is the owner's own data
@@ -84,7 +84,7 @@ export const Route = createFileRoute("/api/cron/patient-export")({
           };
         };
         const { data: rawRows, error } = await loose
-          .from("emma_noshow_policies")
+          .from("noshow_policies")
           .select("user_id, patient_export_last_sent_at")
           .eq("patient_export_enabled", true);
         if (error) return jsonResp(500, { error: `pull: ${error.message}` });

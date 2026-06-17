@@ -346,7 +346,7 @@ export async function computeRecallView(
 
     // ── 4) Digest routine state (for the page's honest "digest is on" chip) ──
     const { data: digestRow } = await (sb as unknown as LooseDigestRead)
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .select("recall_digest_enabled, recall_digest_last_sent_at")
       .eq("user_id", effectiveUserId)
       .maybeSingle();
@@ -604,7 +604,7 @@ export const draftRecallOutreachFn = createServerFn({ method: "POST" })
     // Destination inbox + spa identity (same sources as Recognition dispatch).
     const [{ data: policy }, spaName] = await Promise.all([
       sb
-        .from("emma_noshow_policies")
+        .from("noshow_policies")
         .select("rescue_proxy_email")
         .eq("user_id", effectiveUserId)
         .maybeSingle(),
@@ -749,7 +749,7 @@ export const draftRecallOutreachFn = createServerFn({ method: "POST" })
 //
 // A weekly scheduled job (pg_cron → /api/cron/recall-digest) that computes the
 // same recall view the page shows and emails the OWNER a heads-up: "$X on the
-// table across N patients due." Gated by emma_noshow_policies.recall_digest_
+// table across N patients due." Gated by noshow_policies.recall_digest_
 // enabled (the Skill's adopt/On flips it; pause flips it off). The digest is a
 // nudge to come review — it sends NO patient outreach. Sending stays one-click
 // and consented on the Recall page (draftRecallOutreachFn). That boundary is
@@ -921,8 +921,8 @@ export async function sendRecallDigestForUser(
     recall_digest_last_sent_at: new Date().toISOString(),
   };
   await sb
-    .from("emma_noshow_policies")
-    .update(stamp as Database["public"]["Tables"]["emma_noshow_policies"]["Update"])
+    .from("noshow_policies")
+    .update(stamp as Database["public"]["Tables"]["noshow_policies"]["Update"])
     .eq("user_id", userId);
 
   // Tier-2 ledger: the weekly digest just went out on its own (owner-facing

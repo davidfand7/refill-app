@@ -52,7 +52,7 @@ export const Route = createFileRoute("/api/cron/emma-reliability-sweep")({
 
         // Pull every spa with at least one appointment. The reliability
         // engine only matters for spas using v360 appointment data.
-        let spaQ = sb.from("emma_appointments").select("user_id").limit(10000);
+        let spaQ = sb.from("appointments").select("user_id").limit(10000);
         if (onlyUserId) spaQ = spaQ.eq("user_id", onlyUserId);
         const { data: spas, error } = await spaQ;
         if (error) return jsonResp(500, { error: `pull spas: ${error.message}` });

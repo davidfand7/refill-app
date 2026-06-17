@@ -28,7 +28,7 @@
  * Schema: supabase/migrations/20260728000000_v2_19_0_skill_funnel.sql.
  * NOTE: types.ts has NOT been regenerated for skill_proposals / skills, so
  * those two tables are reached through a loosely-typed view of the client
- * (same posture as wishlist.functions.ts). emma_preshow_profiles IS in types,
+ * (same posture as wishlist.functions.ts). preshow_profiles IS in types,
  * so the wired-engine writes use the fully-typed client.
  */
 
@@ -150,7 +150,7 @@ async function reachedValueMoment(
   userId: string,
 ): Promise<boolean> {
   const { data, error } = await sb
-    .from("emma_recovery_events")
+    .from("recovery_events")
     .select("id")
     .eq("user_id", userId)
     .not("verified_at", "is", null)
@@ -163,7 +163,7 @@ async function reachedValueMoment(
 //
 // The ONE template wired end-to-end in Phase 1. Adopting it guarantees the spa
 // has a default preshow profile (the artifact the Reminders agent dispatches
-// from) without ever creating a SECOND default — emma_preshow_profiles enforces
+// from) without ever creating a SECOND default — preshow_profiles enforces
 // exactly one default per spa.
 async function ensureDefaultPreshowProfile(
   sb: SupabaseAdmin,
@@ -171,7 +171,7 @@ async function ensureDefaultPreshowProfile(
   name: string,
 ): Promise<string> {
   const { data: existingDefault, error: dErr } = await sb
-    .from("emma_preshow_profiles")
+    .from("preshow_profiles")
     .select("id")
     .eq("user_id", userId)
     .eq("is_default", true)
@@ -181,7 +181,7 @@ async function ensureDefaultPreshowProfile(
 
   // No default. If the spa has any profile, promote the first; else create one.
   const { data: anyProfile } = await sb
-    .from("emma_preshow_profiles")
+    .from("preshow_profiles")
     .select("id")
     .eq("user_id", userId)
     .order("created_at", { ascending: true })
@@ -189,7 +189,7 @@ async function ensureDefaultPreshowProfile(
     .maybeSingle();
   if (anyProfile) {
     await sb
-      .from("emma_preshow_profiles")
+      .from("preshow_profiles")
       .update({ is_default: true, updated_at: new Date().toISOString() })
       .eq("id", anyProfile.id)
       .eq("user_id", userId);
@@ -197,7 +197,7 @@ async function ensureDefaultPreshowProfile(
   }
 
   const { data: created, error: cErr } = await sb
-    .from("emma_preshow_profiles")
+    .from("preshow_profiles")
     .insert({
       user_id: userId,
       name,
@@ -216,7 +216,7 @@ async function ensureDefaultPreshowProfile(
 // ─── The real engine gate for the wired routines ─────────────────────────────
 //
 // Both the preshow (Reminders) and rescue (Waitlist Auto-Fill) agents dispatch
-// off a boolean on the spa's emma_noshow_policies row (preshow_enabled /
+// off a boolean on the spa's noshow_policies row (preshow_enabled /
 // rescue_enabled — see emma-preshow.functions.ts:321 and emma-rescue.functions.ts:666).
 // Mapping a wired Skill's On/Pause to that boolean makes the toggle GENUINELY
 // gate the engine, not just flip a cosmetic record flag.
@@ -268,8 +268,8 @@ async function reachedAutonomyRung(
   return (await countHeldOfferApprovals(sb, userId)) >= AUTONOMY_RUNG_APPROVALS;
 }
 
-type NoshowUpdate = Database["public"]["Tables"]["emma_noshow_policies"]["Update"];
-type NoshowInsert = Database["public"]["Tables"]["emma_noshow_policies"]["Insert"];
+type NoshowUpdate = Database["public"]["Tables"]["noshow_policies"]["Update"];
+type NoshowInsert = Database["public"]["Tables"]["noshow_policies"]["Insert"];
 
 async function setNoshowPolicyGate(
   sb: SupabaseAdmin,
@@ -279,21 +279,21 @@ async function setNoshowPolicyGate(
 ): Promise<void> {
   const nowIso = new Date().toISOString();
   const { data: existing } = await sb
-    .from("emma_noshow_policies")
+    .from("noshow_policies")
     .select("id")
     .eq("user_id", userId)
     .maybeSingle();
   if (existing) {
     const patch: Record<string, unknown> = { updated_at: nowIso, [field]: value };
     const { error } = await sb
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .update(patch as NoshowUpdate)
       .eq("user_id", userId);
     if (error) throw new Error(`Couldn't update routine state: ${error.message}`);
   } else {
     const row: Record<string, unknown> = { user_id: userId, [field]: value };
     const { error } = await sb
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .insert(row as NoshowInsert);
     if (error) throw new Error(`Couldn't set up routine state: ${error.message}`);
   }
@@ -413,7 +413,7 @@ export const adoptSkill = createServerFn({ method: "POST" })
     if (gateField) {
       await setNoshowPolicyGate(sb, effectiveUserId, gateField, true);
     }
-    // auto_verify_recoveries lives in attribution settings, not emma_noshow_policies
+    // auto_verify_recoveries lives in attribution settings, not noshow_policies
     // (enabled defaults ON, so this is idempotent on a fresh spa; it re-enables a
     // spa that had turned it off). The reconcile cron honors this flag at dispatch.
     if (tpl.key === "auto_verify_recoveries") {
@@ -512,7 +512,7 @@ export const setSkillEnabled = createServerFn({ method: "POST" })
       await setAttributionEnabled(sb, effectiveUserId, data.enabled);
     }
     // Weekly Offer's gate is is_active on the spa's weekly offers (the offers
-    // table, not emma_noshow_policies) — the master switch for recurring offers.
+    // table, not noshow_policies) — the master switch for recurring offers.
     if (skill.template_key === "weekly_offer") {
       await setSpaWeeklyOffersActive(sb, effectiveUserId, data.enabled);
     }
@@ -573,29 +573,29 @@ async function loadMiningSignals(
   // reschedule_enabled isn't in generated types yet → loose-read the policy.
   const [policyRes, apptRes, waitRes, profileRes, missedRes] = await Promise.all([
     loose(sb)
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .select("rescue_enabled, reschedule_enabled")
       .eq("user_id", userId)
       .maybeSingle(),
     sb
-      .from("emma_appointments")
+      .from("appointments")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .gte("scheduled_at", nowIso)
       .neq("status", "cancelled"),
     sb
-      .from("emma_waitlist")
+      .from("waitlist")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .eq("status", "active"),
     sb
-      .from("emma_preshow_profiles")
+      .from("preshow_profiles")
       .select("id")
       .eq("user_id", userId)
       .eq("is_default", true)
       .maybeSingle(),
     sb
-      .from("emma_appointments")
+      .from("appointments")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .gte("scheduled_at", missedSinceIso)
@@ -866,7 +866,7 @@ export const createConciergeProposal = createServerFn({ method: "POST" })
 
 // ─── Sending kill switch (Tier-2 Autonomous · Slice 3) ────────────────────────
 //
-// The unified one-tap "pause all sending." A single flag on emma_noshow_policies
+// The unified one-tap "pause all sending." A single flag on noshow_policies
 // that every dispatching agent polls (rescue / preshow / recall-digest) and
 // bails on. NOT earned-gated — a safety control must always be reachable, even
 // for a spa that hasn't unlocked Skills yet. Admin viewing-as is honored so an
@@ -886,7 +886,7 @@ export const getSendingPaused = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const { data: row, error } = await loose(sb)
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .select("sending_paused, sending_paused_at")
       .eq("user_id", effectiveUserId)
       .maybeSingle();
@@ -916,7 +916,7 @@ export const setSendingPaused = createServerFn({ method: "POST" })
     // Upsert the flag onto the spa's policy row (create the row if a brand-new
     // spa flips it before any engine has written one).
     const { data: existing } = await loose(sb)
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .select("id")
       .eq("user_id", effectiveUserId)
       .maybeSingle();
@@ -928,14 +928,14 @@ export const setSendingPaused = createServerFn({ method: "POST" })
     };
     if (existing) {
       const { error } = await loose(sb)
-        .from("emma_noshow_policies")
+        .from("noshow_policies")
         .update(patch)
         .eq("user_id", effectiveUserId);
       if (error)
         throw new Error(`Couldn't update sending status: ${error.message}`);
     } else {
       const { error } = await loose(sb)
-        .from("emma_noshow_policies")
+        .from("noshow_policies")
         .insert({ user_id: effectiveUserId, ...patch });
       if (error)
         throw new Error(`Couldn't set sending status: ${error.message}`);

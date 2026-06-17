@@ -12,7 +12,7 @@
  *   DELETE /domains/:id        → removes
  *
  * Authority of truth: Resend. We mirror status + dns_records into
- * emma_sender_domains so the UI doesn't hit Resend on every page load.
+ * sender_domains so the UI doesn't hit Resend on every page load.
  * The Refresh button + send-time-when-pending re-read Resend and
  * update the local row.
  *
@@ -114,7 +114,7 @@ const idInput = z.object({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
-function hydrate(row: Database["public"]["Tables"]["emma_sender_domains"]["Row"]): EmmaSenderDomain {
+function hydrate(row: Database["public"]["Tables"]["sender_domains"]["Row"]): EmmaSenderDomain {
   const records = (row.dns_records as unknown as DnsRecord[] | null) ?? [];
   return {
     id: row.id,
@@ -206,7 +206,7 @@ export const listSenderDomains = createServerFn({ method: "POST" })
     const userId = await verifyAuth(data.accessToken);
     const sb = admin();
     const { data: rows, error } = await sb
-      .from("emma_sender_domains")
+      .from("sender_domains")
       .select("*")
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
@@ -237,7 +237,7 @@ export const createSenderDomain = createServerFn({ method: "POST" })
     const status = mapStatus(resp.status);
 
     const { data: row, error } = await sb
-      .from("emma_sender_domains")
+      .from("sender_domains")
       .insert({
         user_id: userId,
         domain,
@@ -271,7 +271,7 @@ export const refreshSenderDomain = createServerFn({ method: "POST" })
     const sb = admin();
 
     const { data: row, error } = await sb
-      .from("emma_sender_domains")
+      .from("sender_domains")
       .select("*")
       .eq("user_id", userId)
       .eq("id", data.id)
@@ -302,7 +302,7 @@ export const refreshSenderDomain = createServerFn({ method: "POST" })
     const nowVerified = status === "verified";
 
     const { data: updated, error: upErr } = await sb
-      .from("emma_sender_domains")
+      .from("sender_domains")
       .update({
         status,
         dns_records: records as unknown as Json,
@@ -331,7 +331,7 @@ export const updateSenderDomain = createServerFn({ method: "POST" })
     const userId = await verifyAuth(data.accessToken);
     const sb = admin();
 
-    const patch: Database["public"]["Tables"]["emma_sender_domains"]["Update"] = {};
+    const patch: Database["public"]["Tables"]["sender_domains"]["Update"] = {};
     if (data.fromLocalPart) patch.from_local_part = data.fromLocalPart;
     if (data.fromDisplayName) patch.from_display_name = data.fromDisplayName;
     if (Object.keys(patch).length === 0) {
@@ -339,7 +339,7 @@ export const updateSenderDomain = createServerFn({ method: "POST" })
     }
 
     const { data: row, error } = await sb
-      .from("emma_sender_domains")
+      .from("sender_domains")
       .update(patch)
       .eq("id", data.id)
       .eq("user_id", userId)
@@ -358,7 +358,7 @@ export const deleteSenderDomain = createServerFn({ method: "POST" })
     const sb = admin();
 
     const { data: row, error } = await sb
-      .from("emma_sender_domains")
+      .from("sender_domains")
       .select("resend_domain_id")
       .eq("user_id", userId)
       .eq("id", data.id)
@@ -376,7 +376,7 @@ export const deleteSenderDomain = createServerFn({ method: "POST" })
     }
 
     const { error: delErr } = await sb
-      .from("emma_sender_domains")
+      .from("sender_domains")
       .delete()
       .eq("user_id", userId)
       .eq("id", data.id);
@@ -390,7 +390,7 @@ export const deleteSenderDomain = createServerFn({ method: "POST" })
  * Resolve the From address to use when Emma sends email FOR this spa.
  *
  * Order of precedence:
- *   1. spa's verified emma_sender_domains row (most recent verified)
+ *   1. spa's verified sender_domains row (most recent verified)
  *   2. process.env.EMMA_FROM_EMAIL
  *   3. Refill platform default "Refill <hello@getrefill.app>"
  *      (only when REFILL_FROM_ENABLED=1 — see scan-followup.ts gating)
@@ -409,7 +409,7 @@ export const deleteSenderDomain = createServerFn({ method: "POST" })
 export async function resolveSpaFromEmail(userId: string): Promise<string> {
   const sb = admin();
   const { data: rows } = await sb
-    .from("emma_sender_domains")
+    .from("sender_domains")
     .select("from_display_name, from_local_part, domain")
     .eq("user_id", userId)
     .eq("status", "verified")

@@ -40,7 +40,7 @@ async function activeResourceIds(sb: Sb, tenantId: string, type: ResourceType): 
 async function occupancy(sb: Sb, resourceIds: string[], fromMs: number, toMs: number) {
   if (!resourceIds.length) return [] as Array<Interval & { resourceId: string }>;
   const { data } = await sb
-    .from("emma_appointments")
+    .from("appointments")
     .select("scheduled_at, duration_min, status, slot_held_until, resource_id")
     .in("resource_id", resourceIds)
     .neq("status", "cancelled")

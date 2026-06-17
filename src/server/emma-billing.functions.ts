@@ -13,12 +13,12 @@
  * in. Same pattern as v364 — engine first, money flow later.
  *
  * Surfaces (v1.26.14 cleanup): file is now in maintenance-mode for the
- * legacy emma_pricing_plans / emma_invoices tables. The spa-facing
+ * legacy pricing_plans / invoices tables. The spa-facing
  * plan/invoice flow lives in refill-billing.ts as of the v1.7.2 fork;
  * this file retains only:
  *   getInvoicePreview         — MTD math for /app/refill/recovery
  *   generateMonthlyInvoiceForUser / generateMonthlyInvoicesForAll
- *                              — legacy emma_invoices cron helpers
+ *                              — legacy invoices cron helpers
  *
  * The three formerly-exported plan/invoice fns
  * (applyPricingPlan, getActivePlan, listInvoices) were removed in
@@ -54,7 +54,7 @@ export type PricingPlan = "performance" | "predictable" | "hybrid";
 // ─── Plan economics ──────────────────────────────────────────────────────
 
 /**
- * Canonical plan economics. Snapshotted into emma_pricing_plans at
+ * Canonical plan economics. Snapshotted into pricing_plans at
  * selection time so future price changes don't retroactively alter
  * past invoices.
  */
@@ -113,7 +113,7 @@ export async function generateMonthlyInvoiceForUser(args: {
   // Find the active plan AS OF period_end (so a plan change mid-period
   // is invoiced under the plan that was active when the month closed).
   const { data: plan } = await sb
-    .from("emma_pricing_plans")
+    .from("pricing_plans")
     .select("plan, revenue_share_pct, monthly_flat_usd")
     .eq("user_id", userId)
     .lte("plan_started_at", periodEnd.toISOString())
@@ -127,7 +127,7 @@ export async function generateMonthlyInvoiceForUser(args: {
 
   // Aggregate verified recovery events in the period.
   const { data: recs } = await sb
-    .from("emma_recovery_events")
+    .from("recovery_events")
     .select("attributed_revenue_usd")
     .eq("user_id", userId)
     .gte("verified_at", periodStart.toISOString())
@@ -149,7 +149,7 @@ export async function generateMonthlyInvoiceForUser(args: {
 
   // Idempotent upsert
   const { error } = await sb
-    .from("emma_invoices")
+    .from("invoices")
     .upsert(
       {
         user_id: userId,
@@ -194,7 +194,7 @@ export async function generateMonthlyInvoicesForAll(args: {
   );
 
   const { data: plans } = await sb
-    .from("emma_pricing_plans")
+    .from("pricing_plans")
     .select("user_id")
     .is("plan_ended_at", null);
   const userIds = Array.from(new Set((plans ?? []).map((p) => p.user_id)));
@@ -230,7 +230,7 @@ export function getPlanEconomics(plan: PricingPlan) {
 //
 // v1.26.23: zero callers remain after the recovery page was repointed to
 // refill-billing.ts:getInvoicePreview (the tenant-aware, refill_pricing_plans
-// variant). This emma-side fn reads the legacy emma_pricing_plans table
+// variant). This emma-side fn reads the legacy pricing_plans table
 // which no spa-facing surface writes to anymore — leaving it live would
 // silently return plan=null for every modern tenant. Kept temporarily so
 // the broader Phase 3 deletion of this whole file (post-cron-decommission)
@@ -288,7 +288,7 @@ export const getInvoicePreview = createServerFn({ method: "POST" })
 
     const [planRes, recRes] = await Promise.all([
       sb
-        .from("emma_pricing_plans")
+        .from("pricing_plans")
         .select("plan, revenue_share_pct, monthly_flat_usd")
         .eq("user_id", effectiveUserId)
         .is("plan_ended_at", null)
@@ -296,7 +296,7 @@ export const getInvoicePreview = createServerFn({ method: "POST" })
         .limit(1)
         .maybeSingle(),
       sb
-        .from("emma_recovery_events")
+        .from("recovery_events")
         .select("attributed_revenue_usd")
         .eq("user_id", effectiveUserId)
         .gte("verified_at", periodStart.toISOString())

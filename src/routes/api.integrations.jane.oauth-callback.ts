@@ -132,7 +132,7 @@ export const Route = createFileRoute("/api/integrations/jane/oauth-callback")({
         };
 
         const existing = await sbAny
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select("id")
           .eq("user_id", state.userId)
           .eq("platform", "jane")
@@ -153,7 +153,7 @@ export const Route = createFileRoute("/api/integrations/jane/oauth-callback")({
 
         if (existing.data) {
           connectionId = existing.data.id;
-          await sbAny.from("emma_scheduler_connections").update({
+          await sbAny.from("scheduler_connections").update({
             ...baseFields,
             last_error: null,
             disconnected_at: null,
@@ -161,7 +161,7 @@ export const Route = createFileRoute("/api/integrations/jane/oauth-callback")({
           }).eq("id", connectionId);
         } else {
           const ins = await sbAny
-            .from("emma_scheduler_connections")
+            .from("scheduler_connections")
             .insert({ user_id: state.userId, platform: "jane", ...baseFields })
             .select("id")
             .single();
@@ -189,7 +189,7 @@ export const Route = createFileRoute("/api/integrations/jane/oauth-callback")({
           backfillWarning = `Initial backfill failed (${msg.slice(0, 200)}). Hit Re-sync to retry.`;
         }
 
-        await sbAny.from("emma_scheduler_connections").update({
+        await sbAny.from("scheduler_connections").update({
           status: "connected",
           connected_at: new Date().toISOString(),
           last_sync_at: new Date().toISOString(),

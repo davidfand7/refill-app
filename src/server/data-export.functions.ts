@@ -143,7 +143,7 @@ export async function gatherSpaDataExport(
       patient_node_id: string | null;
     }>((from, to) =>
       sb
-        .from("emma_appointments")
+        .from("appointments")
         .select(
           "id, scheduled_at, duration_min, treatment_type, provider_name, status, patient_node_id",
         )
@@ -169,7 +169,7 @@ export async function gatherSpaDataExport(
       created_at: string | null;
     }>((from, to) =>
       sb
-        .from("emma_waitlist")
+        .from("waitlist")
         .select("id, patient_node_id, treatment_types, status, created_at")
         .eq("user_id", effectiveUserId)
         .order("id", { ascending: true })
@@ -204,7 +204,7 @@ export async function gatherSpaDataExport(
 // gated, dedup-stamped). NOTE: this is the owner's OWN data delivered to the
 // owner's OWN inbox (the honest-exit category), NOT patient outreach — so it is
 // deliberately NOT gated by the patient-sending kill switch. Its own On/Pause
-// (emma_noshow_policies.patient_export_enabled) is the control.
+// (noshow_policies.patient_export_enabled) is the control.
 
 /** RFC-4180-ish CSV field: quote and double interior quotes when needed. */
 function csvField(v: string | number | null): string {
@@ -358,8 +358,8 @@ You can turn this monthly export off any time from Skills.`;
     patient_export_last_sent_at: new Date().toISOString(),
   };
   await sb
-    .from("emma_noshow_policies")
-    .update(stampPatch as Database["public"]["Tables"]["emma_noshow_policies"]["Update"])
+    .from("noshow_policies")
+    .update(stampPatch as Database["public"]["Tables"]["noshow_policies"]["Update"])
     .eq("user_id", userId);
 
   // Tier-2 ledger: an owner-facing autonomous send went out. Best-effort.

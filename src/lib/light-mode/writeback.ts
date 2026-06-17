@@ -1,7 +1,7 @@
 /**
  * Lite Mode writeback deeplinks (v1.43.0).
  *
- * When a rescue claim lands on a Lite Mode connection (emma_appointments
+ * When a rescue claim lands on a Lite Mode connection (appointments
  * row with source like `lite-zenoti`), Refill can NOT call the vendor's
  * API to book the slot — that's the entire point of Lite Mode. Instead,
  * we send the spa owner an email with:

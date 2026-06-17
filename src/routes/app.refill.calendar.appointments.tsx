@@ -632,7 +632,7 @@ function AppointmentRow({
 }
 
 function StatusPill({ status }: { status: AppointmentStatus | string }) {
-  // Keyed by string (not AppointmentStatus) because emma_appointments.status is a
+  // Keyed by string (not AppointmentStatus) because appointments.status is a
   // free DB column shared with the native scheduler, which writes statuses outside
   // the import union (e.g. "held"). Any unmapped value falls back instead of
   // crashing the section — the prior bug was cfg[status] being undefined → .bg throw.

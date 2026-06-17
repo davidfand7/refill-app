@@ -725,7 +725,7 @@ export const dispatchAllocationBatch = createServerFn({ method: "POST" })
       // Load proxy email + spa name + from address.
       const [{ data: policy }, { data: spaProfile }] = await Promise.all([
         sb
-          .from("emma_noshow_policies")
+          .from("noshow_policies")
           .select("rescue_proxy_email")
           .eq("user_id", effectiveUserId)
           .maybeSingle(),

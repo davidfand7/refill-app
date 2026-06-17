@@ -17,7 +17,7 @@
  * Schema: see supabase/migrations/20260626000000_v1_42_0_light_mode.sql.
  *
  * NOTE: types.ts has NOT been regenerated for the new tables, so all
- * .from("emma_light_mode_connections" | "emma_email_quarantine") calls
+ * .from("light_mode_connections" | "email_quarantine") calls
  * use `as never` casts at the supabase boundary. Runtime is correct
  * against the deployed schema once the migration is applied.
  */
@@ -117,7 +117,7 @@ export const listLightModeConnections = createServerFn({ method: "POST" })
       };
     };
     const { data: rows, error } = await sbAny
-      .from("emma_light_mode_connections")
+      .from("light_mode_connections")
       .select(
         "id,user_id,platform,inbound_slug,status,last_event_at,events_parsed_total,events_quarantined_total,notes,last_error,created_at,updated_at",
       )
@@ -178,7 +178,7 @@ export const enableLightMode = createServerFn({ method: "POST" })
     const tenantId = await getTenantIdForUser(sb, effectiveUserId);
 
     const { data: existing } = await sbAny
-      .from("emma_light_mode_connections")
+      .from("light_mode_connections")
       .select("id,inbound_slug,status")
       .eq("user_id", effectiveUserId)
       .eq("platform", data.platform)
@@ -186,7 +186,7 @@ export const enableLightMode = createServerFn({ method: "POST" })
 
     if (existing) {
       await sbAny
-        .from("emma_light_mode_connections")
+        .from("light_mode_connections")
         .update({
           status: "pending",
           last_error: null,
@@ -204,7 +204,7 @@ export const enableLightMode = createServerFn({ method: "POST" })
     // Insert; the inbound_slug default in the migration generates the
     // hex slug, so we don't pass it here.
     const { data: inserted, error } = await sbAny
-      .from("emma_light_mode_connections")
+      .from("light_mode_connections")
       .insert({
         user_id: effectiveUserId,
         tenant_id: tenantId,
@@ -252,7 +252,7 @@ export const disableLightMode = createServerFn({ method: "POST" })
       };
     };
     const { error } = await sbAny
-      .from("emma_light_mode_connections")
+      .from("light_mode_connections")
       .update({
         status: "paused",
         updated_at: new Date().toISOString(),
@@ -300,7 +300,7 @@ export const listLightModeQuarantine = createServerFn({ method: "POST" })
       };
     };
     const { data: rows } = await sbAny
-      .from("emma_email_quarantine")
+      .from("email_quarantine")
       .select(
         "id,platform,from_address,subject,reason,parser_confidence,received_at,reviewed_at",
       )
@@ -361,7 +361,7 @@ export const getPendingGmailVerification = createServerFn({ method: "POST" })
       };
     };
     const { data: rows } = await sbAny
-      .from("emma_email_quarantine")
+      .from("email_quarantine")
       .select("id,subject,reviewed_notes,received_at")
       .eq("user_id", effectiveUserId)
       .eq("platform", data.platform)

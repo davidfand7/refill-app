@@ -9,7 +9,7 @@
  *     tenant's one provider + scheduling_settings + 7 weekday hours rows +
  *     the bookable-service list. First open auto-creates the MVP single
  *     provider (mapped to the owner's auth user so native bookings can stamp
- *     emma_appointments.user_id), default settings, and a Mon–Fri 9–5 / weekend-
+ *     appointments.user_id), default settings, and a Mon–Fri 9–5 / weekend-
  *     closed week — so the page is immediately usable.
  *
  *   - saveSchedulingSetupFn — upserts settings + the 7 hours rows + per-service
@@ -52,7 +52,7 @@ export async function getTenantIdForUser(sb: Sb, userId: string): Promise<string
 
 /**
  * The auth user that owns a tenant — its earliest membership (the founder).
- * Native bookings stamp emma_appointments.user_id with this, so the public
+ * Native bookings stamp appointments.user_id with this, so the public
  * booking path can resolve it even when no scheduling_provider carries a
  * user_id of its own. Returns null only if the tenant has no membership.
  */
@@ -81,7 +81,7 @@ export async function tenantBooksOnExternalPms(sb: Sb, tenantId: string): Promis
   const ownerUserId = await getTenantOwnerUserId(sb, tenantId);
   if (!ownerUserId) return false;
   const { data } = await sb
-    .from("emma_scheduler_connections")
+    .from("scheduler_connections")
     .select("id")
     .eq("user_id", ownerUserId)
     .eq("platform", "acuity")

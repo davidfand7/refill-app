@@ -834,7 +834,7 @@ export const getMyLedger = createServerFn({ method: "POST" })
   );
 
 // ─── getMyLiveEarnings ───────────────────────────────────────────────────
-// Aggregates emma_recovery_events attributed directly to this rep (Tier-1
+// Aggregates recovery_events attributed directly to this rep (Tier-1
 // path — referred_by_rep_id = my user id). Today / 7-day / 30-day buckets,
 // plus the most recent N events for the live ticker.
 //
@@ -877,7 +877,7 @@ export const getMyLiveEarnings = createServerFn({ method: "POST" })
       const sb = admin();
 
       const { data: rows, error } = await sb
-        .from("emma_recovery_events")
+        .from("recovery_events")
         .select(
           "id, created_at, recovery_agent, attributed_revenue_usd, verified_at",
         )

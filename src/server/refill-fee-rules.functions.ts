@@ -302,7 +302,7 @@ export const getBillingLedger = createServerFn({ method: "POST" })
     let pendingCount = 0;
     if (userIds.length > 0) {
       const { count } = await sb
-        .from("emma_recovery_events")
+        .from("recovery_events")
         .select("id", { count: "exact", head: true })
         .in("user_id", userIds)
         .is("verified_at", null)
@@ -323,7 +323,7 @@ export const getBillingLedger = createServerFn({ method: "POST" })
         patient_node_id: string | null;
       }>((from, to) =>
         sb
-          .from("emma_recovery_events")
+          .from("recovery_events")
           .select("id, metric_key, attributed_revenue_usd, verified_at, patient_node_id")
           .in("user_id", userIds)
           .gte("verified_at", periodStart.toISOString())

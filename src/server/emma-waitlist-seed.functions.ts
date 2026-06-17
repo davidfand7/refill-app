@@ -8,7 +8,7 @@
  *
  * Flow:
  *   1. Admin calls seedWaitlistIntent({ patient, intent, treatments, ... })
- *   2. Server creates emma_waitlist row with status='paused' (preserves
+ *   2. Server creates waitlist row with status='paused' (preserves
  *      the admin's pre-set preferences but won't fire any rescue SMS
  *      until the patient confirms)
  *   3. Server mints (or returns existing) waitlist token for that patient
@@ -18,7 +18,7 @@
  *      to status='active' (preferences preserved)
  *
  * v362 reliability-tier note: the row carries the patient_node_id so
- * the rescue dispatcher can JOIN to emma_reliability_status when v374
+ * the rescue dispatcher can JOIN to reliability_status when v374
  * tiered-blast ships. No change to the v373 row shape needed for that.
  */
 
@@ -143,7 +143,7 @@ export const listUpcomingForPatient = createServerFn({ method: "POST" })
     const now = new Date().toISOString();
 
     const { data: rows, error } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .select("id, scheduled_at, treatment_type, provider_name, status")
       .eq("user_id", userId)
       .eq("patient_node_id", data.patientNodeId)
@@ -197,7 +197,7 @@ export const seedWaitlistIntent = createServerFn({ method: "POST" })
 
     // Check for an existing waitlist row for this (user, patient)
     const { data: existing } = await sb
-      .from("emma_waitlist")
+      .from("waitlist")
       .select("id, status")
       .eq("user_id", userId)
       .eq("patient_node_id", data.patientNodeId)
@@ -210,7 +210,7 @@ export const seedWaitlistIntent = createServerFn({ method: "POST" })
       // bump status back to 'paused' so the patient confirms via tap.
       const nextStatus = existing.status === "active" ? "active" : "paused";
       const { error: updateErr } = await sb
-        .from("emma_waitlist")
+        .from("waitlist")
         .update({
           intent_type: data.intentType,
           treatment_types: data.treatmentTypes,
@@ -225,7 +225,7 @@ export const seedWaitlistIntent = createServerFn({ method: "POST" })
       waitlistRowId = existing.id;
     } else {
       const { data: inserted, error: insertErr } = await sb
-        .from("emma_waitlist")
+        .from("waitlist")
         .insert({
           user_id: userId,
           patient_node_id: data.patientNodeId,
@@ -351,7 +351,7 @@ export const bulkSeedWaitlistIntents = createServerFn({ method: "POST" })
       try {
         // Same upsert logic as seedWaitlistIntent's single-patient handler.
         const { data: existing } = await sb
-          .from("emma_waitlist")
+          .from("waitlist")
           .select("id, status")
           .eq("user_id", userId)
           .eq("patient_node_id", patientNodeId)
@@ -361,7 +361,7 @@ export const bulkSeedWaitlistIntents = createServerFn({ method: "POST" })
           const nextStatus =
             existing.status === "active" ? "active" : "paused";
           const { error: updateErr } = await sb
-            .from("emma_waitlist")
+            .from("waitlist")
             .update({
               intent_type: data.intentType,
               treatment_types: data.treatmentTypes,
@@ -372,7 +372,7 @@ export const bulkSeedWaitlistIntents = createServerFn({ method: "POST" })
           if (updateErr) throw new Error(updateErr.message);
         } else {
           const { error: insertErr } = await sb
-            .from("emma_waitlist")
+            .from("waitlist")
             .insert({
               user_id: userId,
               patient_node_id: patientNodeId,
@@ -429,7 +429,7 @@ async function getOrMintToken(
   patientNodeId: string,
 ): Promise<string> {
   const { data: existing } = await sb
-    .from("emma_waitlist_tokens")
+    .from("waitlist_tokens")
     .select("token")
     .eq("user_id", userId)
     .eq("patient_node_id", patientNodeId)
@@ -437,13 +437,13 @@ async function getOrMintToken(
   if (existing?.token) return existing.token;
 
   const { data: inserted, error } = await sb
-    .from("emma_waitlist_tokens")
+    .from("waitlist_tokens")
     .insert({ user_id: userId, patient_node_id: patientNodeId })
     .select("token")
     .single();
   if (error) {
     const { data: retried } = await sb
-      .from("emma_waitlist_tokens")
+      .from("waitlist_tokens")
       .select("token")
       .eq("user_id", userId)
       .eq("patient_node_id", patientNodeId)

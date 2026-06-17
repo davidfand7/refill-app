@@ -162,7 +162,7 @@ async function loadWhiteLabelAddonUsd(sb: Sb, tenantId: string): Promise<number>
 
 /**
  * Verified wins per metric_key in a period. Paginated — billing must read the
- * COMPLETE set, never a 1,000-row slice. emma_recovery_events rides user_id
+ * COMPLETE set, never a 1,000-row slice. recovery_events rides user_id
  * (predates the tenant model), so we fan out via tenant_memberships.
  */
 export async function aggregateMetricsForTenant(args: {
@@ -183,7 +183,7 @@ export async function aggregateMetricsForTenant(args: {
   const rows = await fetchAllRows<{ metric_key: string; attributed_revenue_usd: number | null }>(
     (from, to) =>
       sb
-        .from("emma_recovery_events")
+        .from("recovery_events")
         .select("id, metric_key, attributed_revenue_usd")
         .in("user_id", userIds)
         .gte("verified_at", periodStart.toISOString())

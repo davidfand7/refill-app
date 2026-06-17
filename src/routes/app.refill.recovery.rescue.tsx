@@ -409,7 +409,7 @@ function RescueAgentPage() {
                 </div>
                 <p className="text-[10px] text-ink-faint">
                   Treatment-type names are case-insensitive and matched against{" "}
-                  <code>emma_appointments.treatment_type</code>.
+                  <code>appointments.treatment_type</code>.
                 </p>
               </div>
             </section>

@@ -8,7 +8,7 @@
  * v364 scope: intent-only logging. When an in-recovery (or new-patient
  * or high-value-treatment, per policy.deposit_trigger) patient takes
  * a slot AND policy.deposit_enabled is true, Emma writes a row to
- * emma_deposit_holds with status='intent'. The spa owner sees it on
+ * deposit_holds with status='intent'. The spa owner sees it on
  * /app/refill/recovery Deposits tab. NO MONEY MOVES yet. v364.x wires
  * the Stripe payment_intent flow for actual card holds.
  *
@@ -84,7 +84,7 @@ export async function checkDepositEligibility(args: {
   const { sb, userId, patientNodeId } = args;
 
   const { data: policy } = await sb
-    .from("emma_noshow_policies")
+    .from("noshow_policies")
     .select("deposit_enabled, deposit_amount_usd, deposit_trigger")
     .eq("user_id", userId)
     .maybeSingle();
@@ -97,7 +97,7 @@ export async function checkDepositEligibility(args: {
 
   if (trigger === "in_recovery_tier") {
     const { data: rel } = await sb
-      .from("emma_reliability_status")
+      .from("reliability_status")
       .select("tier")
       .eq("user_id", userId)
       .eq("patient_node_id", patientNodeId)
@@ -116,7 +116,7 @@ export async function checkDepositEligibility(args: {
     // "New" = has zero showed visits on file. The reliability table
     // tracks total_visits — use it if present, else fall back to no.
     const { data: rel } = await sb
-      .from("emma_reliability_status")
+      .from("reliability_status")
       .select("total_visits")
       .eq("user_id", userId)
       .eq("patient_node_id", patientNodeId)
@@ -137,7 +137,7 @@ export async function checkDepositEligibility(args: {
     // matches when treatment_type contains 'laser' (placeholder until
     // a future ship adds explicit high-value treatment configuration).
     const { data: apt } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .select("treatment_type")
       .eq("id", args.appointmentId)
       .maybeSingle();
@@ -172,14 +172,14 @@ export async function logDepositIntent(args: {
   const { sb, userId, appointmentId, patientNodeId, triggerReason, amountUsd } = args;
 
   const { data: existing } = await sb
-    .from("emma_deposit_holds")
+    .from("deposit_holds")
     .select("id")
     .eq("appointment_id", appointmentId)
     .maybeSingle();
   if (existing) return { id: existing.id, created: false };
 
   const { data: row, error } = await sb
-    .from("emma_deposit_holds")
+    .from("deposit_holds")
     .insert({
       user_id: userId,
       appointment_id: appointmentId,
@@ -221,7 +221,7 @@ export const listDepositIntents = createServerFn({ method: "POST" })
     const sb = admin();
 
     const { data: rows, error } = await sb
-      .from("emma_deposit_holds")
+      .from("deposit_holds")
       .select(
         "id, appointment_id, patient_node_id, trigger_reason, amount_usd, status, intent_logged_at",
       )
@@ -238,7 +238,7 @@ export const listDepositIntents = createServerFn({ method: "POST" })
     const [{ data: patients }, { data: appointments }] = await Promise.all([
       sb.from("knowledge_nodes").select("id, title").in("id", patientIds),
       sb
-        .from("emma_appointments")
+        .from("appointments")
         .select("id, treatment_type, scheduled_at")
         .in("id", aptIds),
     ]);
@@ -279,7 +279,7 @@ export const markDepositVoided = createServerFn({ method: "POST" })
     const sb = admin();
 
     await sb
-      .from("emma_deposit_holds")
+      .from("deposit_holds")
       .update({
         status: "voided",
         voided_at: new Date().toISOString(),

@@ -1077,7 +1077,7 @@ function RecruitClaimStep({
 
 // v415.2: Step 2 Scheduler — real Acuity OAuth wiring. Replaces the
 // v384.2 static-scaffold version. State machine:
-//   loading        → checking existing emma_scheduler_connections row
+//   loading        → checking existing scheduler_connections row
 //   connected      → already connected (re-run wizard / Back from Step 3);
 //                    show success badge + auto-advance after 1.5s beat
 //   needs-connect  → no connection; show Connect Acuity button. Optional

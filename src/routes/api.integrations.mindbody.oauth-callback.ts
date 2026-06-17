@@ -204,7 +204,7 @@ async function handleCallback(request: Request): Promise<Response> {
   const webhookSecret = crypto.randomUUID().replace(/-/g, "");
 
   const existing = await sbAny
-    .from("emma_scheduler_connections")
+    .from("scheduler_connections")
     .select("id")
     .eq("user_id", state.userId)
     .eq("platform", "mindbody")
@@ -214,7 +214,7 @@ async function handleCallback(request: Request): Promise<Response> {
   if (existing.data) {
     connectionId = existing.data.id;
     await sbAny
-      .from("emma_scheduler_connections")
+      .from("scheduler_connections")
       .update({
         status: "pending",
         access_token: tokenResp.accessToken,
@@ -231,7 +231,7 @@ async function handleCallback(request: Request): Promise<Response> {
       .eq("id", connectionId);
   } else {
     const ins = await sbAny
-      .from("emma_scheduler_connections")
+      .from("scheduler_connections")
       .insert({
         user_id: state.userId,
         platform: "mindbody",
@@ -283,7 +283,7 @@ async function handleCallback(request: Request): Promise<Response> {
 
   if (subscription) {
     await sbAny
-      .from("emma_scheduler_connections")
+      .from("scheduler_connections")
       .update({
         webhook_subscription_id: subscription.subscriptionId,
         // Store the messageSignatureKey returned from MB as the per-
@@ -337,7 +337,7 @@ async function handleCallback(request: Request): Promise<Response> {
   const lastError = backfillWarning ?? webhookWarning ?? null;
 
   await sbAny
-    .from("emma_scheduler_connections")
+    .from("scheduler_connections")
     .update({
       status: "connected",
       connected_at: new Date().toISOString(),

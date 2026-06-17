@@ -62,7 +62,7 @@ export const Route = createFileRoute("/api/cron/scheduling-reminders")({
         let releasedHolds = 0;
         {
           const { data, error } = await sb
-            .from("emma_appointments")
+            .from("appointments")
             .update({ status: "cancelled", updated_at: nowIso })
             .eq("status", "held")
             .lt("slot_held_until", nowIso)
@@ -74,7 +74,7 @@ export const Route = createFileRoute("/api/cron/scheduling-reminders")({
         // 2) Candidate confirmed bookings within the horizon.
         const horizonIso = new Date(now.getTime() + CANDIDATE_HORIZON_HOURS * 3600_000).toISOString();
         const { data: appts, error: apptErr } = await sb
-          .from("emma_appointments")
+          .from("appointments")
           .select("id, scheduled_at, booking_email, provider_id, treatment_type, duration_min")
           .eq("status", "confirmed")
           .not("booking_email", "is", null)

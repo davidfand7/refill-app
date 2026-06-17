@@ -49,7 +49,7 @@ export const Route = createFileRoute("/api/cron/acuity-reconcile")({
         const onlyUserId = new URL(request.url).searchParams.get("userId");
 
         let q = sb
-          .from("emma_scheduler_connections")
+          .from("scheduler_connections")
           .select("id, user_id, access_token")
           .eq("platform", "acuity")
           .eq("status", "connected");

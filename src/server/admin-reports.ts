@@ -115,14 +115,14 @@ export const getTenantReport = createServerFn({ method: "POST" })
       }
     }
 
-    // Recovery events per owner_user_id (emma_recovery_events).
+    // Recovery events per owner_user_id (recovery_events).
     const recoveryByUser = new Map<
       string,
       { count: number; revenueUsd: number }
     >();
     if (ownerUserIds.length > 0) {
       const { data: events } = await sb
-        .from("emma_recovery_events")
+        .from("recovery_events")
         .select("user_id, attributed_revenue_usd")
         .in("user_id", ownerUserIds);
       for (const e of events ?? []) {

@@ -10,7 +10,7 @@
  * v365 ships the schema + a rules-based starter recommendation
  * generator. When fewer than N=10 spas exist in a cohort, the system
  * falls back to curated best-practice rules ("starter_rule" source).
- * As more spas onboard, computeBenchmarks fills emma_setting_benchmarks
+ * As more spas onboard, computeBenchmarks fills setting_benchmarks
  * and generateRecommendationsForUser transitions naturally to data-
  * derived suggestions ("benchmark_data" source).
  *
@@ -23,7 +23,7 @@
  *   dismissRecommendation           — spa-owner dismisses
  *
  * Plus computeBenchmarks (cron helper) which aggregates per-spa
- * settings + recovery metrics into emma_setting_benchmarks when the
+ * settings + recovery metrics into setting_benchmarks when the
  * sample size justifies it.
  *
  * Established 2026-05-17 (Promotions Engine v365).
@@ -170,14 +170,14 @@ async function loadSpaSettingsInput(
 ): Promise<SpaSettingsInput> {
   const [policy, apptRes, waitRes] = await Promise.all([
     sb
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .select(
         "preshow_enabled, preshow_cadence_hours, preshow_tone, preshow_channel, optin_footer_enabled, optin_list_url, rescue_enabled, rescue_max_concurrent, grace_credits_per_6mo",
       )
       .eq("user_id", userId)
       .maybeSingle(),
     sb
-      .from("emma_appointments")
+      .from("appointments")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .gte(
@@ -185,7 +185,7 @@ async function loadSpaSettingsInput(
         new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
       ),
     sb
-      .from("emma_waitlist")
+      .from("waitlist")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId)
       .eq("status", "active"),
@@ -222,7 +222,7 @@ export async function generateRecommendationsForUser(args: {
     if (!rule.fires(input)) {
       // Rule no longer applies — clean up any prior active row.
       await sb
-        .from("emma_setting_recommendations")
+        .from("setting_recommendations")
         .delete()
         .eq("user_id", userId)
         .eq("setting_key", rule.settingKey)
@@ -238,7 +238,7 @@ export async function generateRecommendationsForUser(args: {
 
     // Idempotency — don't recreate identical active rows.
     const { data: existing } = await sb
-      .from("emma_setting_recommendations")
+      .from("setting_recommendations")
       .select("id, applied_at, dismissed_at, suggested_value")
       .eq("user_id", userId)
       .eq("setting_key", rule.settingKey)
@@ -255,7 +255,7 @@ export async function generateRecommendationsForUser(args: {
       }
       // Refresh the row with the latest values.
       await sb
-        .from("emma_setting_recommendations")
+        .from("setting_recommendations")
         .update({
           current_value: currentValue,
           suggested_value: suggestedValue,
@@ -272,7 +272,7 @@ export async function generateRecommendationsForUser(args: {
       continue;
     }
 
-    await sb.from("emma_setting_recommendations").insert({
+    await sb.from("setting_recommendations").insert({
       user_id: userId,
       setting_key: rule.settingKey,
       current_value: currentValue,
@@ -315,7 +315,7 @@ export const listRecommendations = createServerFn({ method: "POST" })
     // if the last generation is older than 1 hour. This is cheap
     // (rules-based eval over ~5 rules) so we can be liberal.
     const { data: latest } = await sb
-      .from("emma_setting_recommendations")
+      .from("setting_recommendations")
       .select("generated_at")
       .eq("user_id", effectiveUserId)
       .order("generated_at", { ascending: false })
@@ -333,7 +333,7 @@ export const listRecommendations = createServerFn({ method: "POST" })
     }
 
     const { data: rows, error } = await sb
-      .from("emma_setting_recommendations")
+      .from("setting_recommendations")
       .select(
         "id, setting_key, current_value, suggested_value, source, headline, body, projected_lift_usd, applied_at, dismissed_at, generated_at",
       )
@@ -368,7 +368,7 @@ export const applyRecommendation = createServerFn({ method: "POST" })
     const sb = admin();
 
     const { data: rec, error: readErr } = await sb
-      .from("emma_setting_recommendations")
+      .from("setting_recommendations")
       .select("id, setting_key, suggested_value")
       .eq("id", data.recommendationId)
       .eq("user_id", userId)
@@ -379,7 +379,7 @@ export const applyRecommendation = createServerFn({ method: "POST" })
 
     // Snapshot current policy for rollback.
     const { data: snapshot } = await sb
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .select("*")
       .eq("user_id", userId)
       .maybeSingle();
@@ -411,7 +411,7 @@ export const applyRecommendation = createServerFn({ method: "POST" })
     }
 
     const { error: upsertErr } = await sb
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .upsert(
         { user_id: userId, ...patch },
         { onConflict: "user_id" },
@@ -421,7 +421,7 @@ export const applyRecommendation = createServerFn({ method: "POST" })
     }
 
     await sb
-      .from("emma_setting_recommendations")
+      .from("setting_recommendations")
       .update({
         applied_at: new Date().toISOString(),
         rollback_snapshot: (snapshot as unknown as Json) ?? null,
@@ -440,7 +440,7 @@ export const dismissRecommendation = createServerFn({ method: "POST" })
     const sb = admin();
 
     await sb
-      .from("emma_setting_recommendations")
+      .from("setting_recommendations")
       .update({
         dismissed_at: new Date().toISOString(),
         dismissed_by: userId,
@@ -472,7 +472,7 @@ export async function computeBenchmarks(args: {
   // Count distinct spas with at least one verified recovery event in
   // the last 90 days (active spas).
   const { data: rows } = await sb
-    .from("emma_recovery_events")
+    .from("recovery_events")
     .select("user_id")
     .not("verified_at", "is", null)
     .gte(
@@ -487,7 +487,7 @@ export async function computeBenchmarks(args: {
 
   // TODO(v365.x): when cohort is sufficient, aggregate per-spa monthly
   // recovery by (segment, setting, value) and write to
-  // emma_setting_benchmarks. The generator will then prefer
+  // setting_benchmarks. The generator will then prefer
   // 'benchmark_data' source over 'starter_rule' when a benchmark row
   // exists for the setting.
 

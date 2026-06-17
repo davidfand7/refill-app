@@ -488,7 +488,7 @@ export type Database = {
         }
         Relationships: []
       }
-      emma_appointment_status_events: {
+      appointment_status_events: {
         Row: {
           appointment_id: string
           created_at: string
@@ -521,15 +521,15 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "emma_appointment_status_events_appointment_id_fkey"
+            foreignKeyName: "appointment_status_events_appointment_id_fkey"
             columns: ["appointment_id"]
             isOneToOne: false
-            referencedRelation: "emma_appointments"
+            referencedRelation: "appointments"
             referencedColumns: ["id"]
           },
         ]
       }
-      emma_appointments: {
+      appointments: {
         Row: {
           booking_email: string | null
           booking_name: string | null
@@ -604,28 +604,28 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "emma_appointments_patient_node_id_fkey"
+            foreignKeyName: "appointments_patient_node_id_fkey"
             columns: ["patient_node_id"]
             isOneToOne: false
             referencedRelation: "knowledge_nodes"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "emma_appointments_provider_id_fkey"
+            foreignKeyName: "appointments_provider_id_fkey"
             columns: ["provider_id"]
             isOneToOne: false
             referencedRelation: "scheduling_providers"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "emma_appointments_recovery_event_id_fkey"
+            foreignKeyName: "appointments_recovery_event_id_fkey"
             columns: ["recovery_event_id"]
             isOneToOne: false
-            referencedRelation: "emma_recovery_events"
+            referencedRelation: "recovery_events"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "emma_appointments_resource_id_fkey"
+            foreignKeyName: "appointments_resource_id_fkey"
             columns: ["resource_id"]
             isOneToOne: false
             referencedRelation: "scheduling_resources"
@@ -633,7 +633,7 @@ export type Database = {
           },
         ]
       }
-      emma_csv_dialect_cache: {
+      csv_dialect_cache: {
         Row: {
           alias_map: Json
           created_at: string
@@ -675,7 +675,7 @@ export type Database = {
         }
         Relationships: []
       }
-      emma_deposit_holds: {
+      deposit_holds: {
         Row: {
           amount_usd: number
           applied_at: string | null
@@ -735,14 +735,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "emma_deposit_holds_appointment_id_fkey"
+            foreignKeyName: "deposit_holds_appointment_id_fkey"
             columns: ["appointment_id"]
             isOneToOne: true
-            referencedRelation: "emma_appointments"
+            referencedRelation: "appointments"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "emma_deposit_holds_patient_node_id_fkey"
+            foreignKeyName: "deposit_holds_patient_node_id_fkey"
             columns: ["patient_node_id"]
             isOneToOne: false
             referencedRelation: "knowledge_nodes"
@@ -750,7 +750,7 @@ export type Database = {
           },
         ]
       }
-      emma_email_quarantine: {
+      email_quarantine: {
         Row: {
           created_at: string
           from_address: string | null
@@ -816,15 +816,15 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "emma_email_quarantine_light_mode_connection_id_fkey"
+            foreignKeyName: "email_quarantine_light_mode_connection_id_fkey"
             columns: ["light_mode_connection_id"]
             isOneToOne: false
-            referencedRelation: "emma_light_mode_connections"
+            referencedRelation: "light_mode_connections"
             referencedColumns: ["id"]
           },
         ]
       }
-      emma_invoices: {
+      invoices: {
         Row: {
           created_at: string
           generated_at: string
@@ -896,7 +896,7 @@ export type Database = {
         }
         Relationships: []
       }
-      emma_light_mode_connections: {
+      light_mode_connections: {
         Row: {
           created_at: string
           events_parsed_total: number
@@ -944,7 +944,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "emma_light_mode_connections_tenant_id_fkey"
+            foreignKeyName: "light_mode_connections_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -952,7 +952,7 @@ export type Database = {
           },
         ]
       }
-      emma_noshow_policies: {
+      noshow_policies: {
         Row: {
           created_at: string
           deposit_amount_usd: number | null
@@ -1030,7 +1030,7 @@ export type Database = {
         }
         Relationships: []
       }
-      emma_pattern_alerts: {
+      pattern_alerts: {
         Row: {
           body: string | null
           created_at: string
@@ -1072,7 +1072,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "emma_pattern_alerts_patient_node_id_fkey"
+            foreignKeyName: "pattern_alerts_patient_node_id_fkey"
             columns: ["patient_node_id"]
             isOneToOne: false
             referencedRelation: "knowledge_nodes"
@@ -1080,7 +1080,7 @@ export type Database = {
           },
         ]
       }
-      emma_preshow_message_templates: {
+      preshow_message_templates: {
         Row: {
           body_template: string
           created_at: string
@@ -1110,15 +1110,15 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "emma_preshow_message_templates_profile_id_fkey"
+            foreignKeyName: "preshow_message_templates_profile_id_fkey"
             columns: ["profile_id"]
             isOneToOne: false
-            referencedRelation: "emma_preshow_profiles"
+            referencedRelation: "preshow_profiles"
             referencedColumns: ["id"]
           },
         ]
       }
-      emma_preshow_profiles: {
+      preshow_profiles: {
         Row: {
           cadence_by_treatment_type: Json
           cadence_hours: number[]
@@ -1157,7 +1157,7 @@ export type Database = {
         }
         Relationships: []
       }
-      emma_pricing_plans: {
+      pricing_plans: {
         Row: {
           created_at: string
           id: string
@@ -1196,7 +1196,7 @@ export type Database = {
         }
         Relationships: []
       }
-      emma_recovery_events: {
+      recovery_events: {
         Row: {
           appointment_id: string | null
           attributed_revenue_usd: number | null
@@ -1253,28 +1253,28 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "emma_recovery_events_appointment_id_fkey"
+            foreignKeyName: "recovery_events_appointment_id_fkey"
             columns: ["appointment_id"]
             isOneToOne: false
-            referencedRelation: "emma_appointments"
+            referencedRelation: "appointments"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "emma_recovery_events_matched_transaction_id_fkey"
+            foreignKeyName: "recovery_events_matched_transaction_id_fkey"
             columns: ["matched_transaction_id"]
             isOneToOne: false
             referencedRelation: "patient_transactions"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "emma_recovery_events_patient_node_id_fkey"
+            foreignKeyName: "recovery_events_patient_node_id_fkey"
             columns: ["patient_node_id"]
             isOneToOne: false
             referencedRelation: "knowledge_nodes"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "emma_recovery_events_referred_by_rep_id_fkey"
+            foreignKeyName: "recovery_events_referred_by_rep_id_fkey"
             columns: ["referred_by_rep_id"]
             isOneToOne: false
             referencedRelation: "rep_accounts"
@@ -1282,7 +1282,7 @@ export type Database = {
           },
         ]
       }
-      emma_reliability_runs: {
+      reliability_runs: {
         Row: {
           completed_at: string
           created_at: string
@@ -1312,7 +1312,7 @@ export type Database = {
         }
         Relationships: []
       }
-      emma_reliability_status: {
+      reliability_status: {
         Row: {
           cancellations_6mo: number
           cancellations_lifetime: number
@@ -1363,7 +1363,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "emma_reliability_status_patient_node_id_fkey"
+            foreignKeyName: "reliability_status_patient_node_id_fkey"
             columns: ["patient_node_id"]
             isOneToOne: false
             referencedRelation: "knowledge_nodes"
@@ -1371,7 +1371,7 @@ export type Database = {
           },
         ]
       }
-      emma_rescue_attempts: {
+      rescue_attempts: {
         Row: {
           closed_at: string | null
           created_at: string
@@ -1416,22 +1416,22 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "emma_rescue_attempts_filled_by_offer_fk"
+            foreignKeyName: "rescue_attempts_filled_by_offer_fk"
             columns: ["filled_by_offer_id"]
             isOneToOne: false
-            referencedRelation: "emma_rescue_offers"
+            referencedRelation: "rescue_offers"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "emma_rescue_attempts_freed_appointment_id_fkey"
+            foreignKeyName: "rescue_attempts_freed_appointment_id_fkey"
             columns: ["freed_appointment_id"]
             isOneToOne: false
-            referencedRelation: "emma_appointments"
+            referencedRelation: "appointments"
             referencedColumns: ["id"]
           },
         ]
       }
-      emma_rescue_offers: {
+      rescue_offers: {
         Row: {
           appointment_id: string
           claimed_at: string | null
@@ -1482,29 +1482,29 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "emma_rescue_offers_appointment_id_fkey"
+            foreignKeyName: "rescue_offers_appointment_id_fkey"
             columns: ["appointment_id"]
             isOneToOne: false
-            referencedRelation: "emma_appointments"
+            referencedRelation: "appointments"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "emma_rescue_offers_patient_node_id_fkey"
+            foreignKeyName: "rescue_offers_patient_node_id_fkey"
             columns: ["patient_node_id"]
             isOneToOne: false
             referencedRelation: "knowledge_nodes"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "emma_rescue_offers_rescue_attempt_id_fkey"
+            foreignKeyName: "rescue_offers_rescue_attempt_id_fkey"
             columns: ["rescue_attempt_id"]
             isOneToOne: false
-            referencedRelation: "emma_rescue_attempts"
+            referencedRelation: "rescue_attempts"
             referencedColumns: ["id"]
           },
         ]
       }
-      emma_scheduler_connections: {
+      scheduler_connections: {
         Row: {
           access_token: string | null
           connected_at: string | null
@@ -1570,7 +1570,7 @@ export type Database = {
         }
         Relationships: []
       }
-      emma_scheduler_webhook_events: {
+      scheduler_webhook_events: {
         Row: {
           connection_id: string
           emma_appointment_id: string | null
@@ -1612,15 +1612,15 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "emma_scheduler_webhook_events_connection_id_fkey"
+            foreignKeyName: "scheduler_webhook_events_connection_id_fkey"
             columns: ["connection_id"]
             isOneToOne: false
-            referencedRelation: "emma_scheduler_connections"
+            referencedRelation: "scheduler_connections"
             referencedColumns: ["id"]
           },
         ]
       }
-      emma_sender_domains: {
+      sender_domains: {
         Row: {
           created_at: string
           dns_records: Json
@@ -1665,7 +1665,7 @@ export type Database = {
         }
         Relationships: []
       }
-      emma_setting_benchmarks: {
+      setting_benchmarks: {
         Row: {
           computed_at: string
           id: string
@@ -1698,7 +1698,7 @@ export type Database = {
         }
         Relationships: []
       }
-      emma_setting_recommendations: {
+      setting_recommendations: {
         Row: {
           applied_at: string | null
           body: string | null
@@ -1755,7 +1755,7 @@ export type Database = {
         }
         Relationships: []
       }
-      emma_waitlist: {
+      waitlist: {
         Row: {
           availability_windows: Json
           created_at: string
@@ -1809,22 +1809,22 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "emma_waitlist_patient_node_id_fkey"
+            foreignKeyName: "waitlist_patient_node_id_fkey"
             columns: ["patient_node_id"]
             isOneToOne: false
             referencedRelation: "knowledge_nodes"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "emma_waitlist_scheduled_appointment_id_fkey"
+            foreignKeyName: "waitlist_scheduled_appointment_id_fkey"
             columns: ["scheduled_appointment_id"]
             isOneToOne: false
-            referencedRelation: "emma_appointments"
+            referencedRelation: "appointments"
             referencedColumns: ["id"]
           },
         ]
       }
-      emma_waitlist_tokens: {
+      waitlist_tokens: {
         Row: {
           created_at: string
           last_used_at: string | null
@@ -1848,7 +1848,7 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "emma_waitlist_tokens_patient_node_id_fkey"
+            foreignKeyName: "waitlist_tokens_patient_node_id_fkey"
             columns: ["patient_node_id"]
             isOneToOne: false
             referencedRelation: "knowledge_nodes"
@@ -3552,7 +3552,7 @@ export type Database = {
             foreignKeyName: "scheduling_billable_events_appointment_id_fkey"
             columns: ["appointment_id"]
             isOneToOne: false
-            referencedRelation: "emma_appointments"
+            referencedRelation: "appointments"
             referencedColumns: ["id"]
           },
           {
@@ -3807,7 +3807,7 @@ export type Database = {
             foreignKeyName: "scheduling_reminder_sends_appointment_id_fkey"
             columns: ["appointment_id"]
             isOneToOne: false
-            referencedRelation: "emma_appointments"
+            referencedRelation: "appointments"
             referencedColumns: ["id"]
           },
         ]

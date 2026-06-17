@@ -12,7 +12,7 @@
  *      iMessage draft section per patient — matching the rescue-dispatcher's
  *      AUTO-SEND / Claude-Desktop-MCP framing so the same hourly cron at
  *      Karen's Mac picks it up and drafts blue-bubble iMessages.
- *   3. Sends the proxy email via Resend to `emma_noshow_policies
+ *   3. Sends the proxy email via Resend to `noshow_policies
  *      .rescue_proxy_email` (Karen's Apple-ID-linked inbox).
  *
  * iMessage MCP, NOT SMS. The path is: Refill → Resend email → Karen's Mac →
@@ -228,7 +228,7 @@ export const sendOptInInviteBatchFn = createServerFn({ method: "POST" })
     const [bundle, policy, patientsRes, catalog] = await Promise.all([
       getSpaProfileBundle(sb, effectiveUserId),
       sb
-        .from("emma_noshow_policies")
+        .from("noshow_policies")
         .select("rescue_proxy_email")
         .eq("user_id", effectiveUserId)
         .maybeSingle(),
@@ -312,7 +312,7 @@ export const sendOptInInviteBatchFn = createServerFn({ method: "POST" })
 
       try {
         const { data: existing } = await sb
-          .from("emma_waitlist")
+          .from("waitlist")
           .select("id, status, treatment_types, desired_service_ids")
           .eq("user_id", effectiveUserId)
           .eq("patient_node_id", patientNodeId)
@@ -332,7 +332,7 @@ export const sendOptInInviteBatchFn = createServerFn({ method: "POST" })
         if (existing) {
           // Re-invite (paused/revoked → paused). Seed the inferred desire only
           // if the row has no treatment_types yet — never clobber a prior pick.
-          const updatePatch: Database["public"]["Tables"]["emma_waitlist"]["Update"] =
+          const updatePatch: Database["public"]["Tables"]["waitlist"]["Update"] =
             {
               status: "paused",
               opt_in_source: "spa-manual",
@@ -352,13 +352,13 @@ export const sendOptInInviteBatchFn = createServerFn({ method: "POST" })
             updatePatch.desired_service_ids = inferredServiceIds;
           }
           const { error: updateErr } = await sb
-            .from("emma_waitlist")
+            .from("waitlist")
             .update(updatePatch)
             .eq("id", existing.id);
           if (updateErr) throw new Error(updateErr.message);
         } else {
           const { error: insertErr } = await sb
-            .from("emma_waitlist")
+            .from("waitlist")
             .insert({
               user_id: effectiveUserId,
               patient_node_id: patientNodeId,
@@ -585,7 +585,7 @@ export const getSmartInviteCohortFn = createServerFn({ method: "POST" })
     const appts = await selectAllRows<ApptRow>(
       (from, to) =>
         sb
-          .from("emma_appointments")
+          .from("appointments")
           .select("patient_node_id, scheduled_at, treatment_type, status")
           .eq("user_id", effectiveUserId)
           .order("scheduled_at", { ascending: false })
@@ -627,7 +627,7 @@ export const getSmartInviteCohortFn = createServerFn({ method: "POST" })
     }>(
       (from, to) =>
         sb
-          .from("emma_waitlist")
+          .from("waitlist")
           .select("patient_node_id, status")
           .eq("user_id", effectiveUserId)
           .range(from, to),
@@ -739,7 +739,7 @@ export const backfillWaitlistServiceLinksFn = createServerFn({ method: "POST" })
     }>(
       (from, to) =>
         sb
-          .from("emma_waitlist")
+          .from("waitlist")
           .select("id, patient_node_id, treatment_types, desired_service_ids")
           .eq("user_id", effectiveUserId)
           .range(from, to),
@@ -756,7 +756,7 @@ export const backfillWaitlistServiceLinksFn = createServerFn({ method: "POST" })
     }>(
       (from, to) =>
         sb
-          .from("emma_appointments")
+          .from("appointments")
           .select("patient_node_id, treatment_type, scheduled_at")
           .eq("user_id", effectiveUserId)
           .order("scheduled_at", { ascending: false })
@@ -794,7 +794,7 @@ export const backfillWaitlistServiceLinksFn = createServerFn({ method: "POST" })
         continue;
       }
 
-      const patch: Database["public"]["Tables"]["emma_waitlist"]["Update"] = {
+      const patch: Database["public"]["Tables"]["waitlist"]["Update"] = {
         desired_service_ids: serviceIds,
       };
       // Seed the inferred label as free-text too, so display + legacy matcher
@@ -802,7 +802,7 @@ export const backfillWaitlistServiceLinksFn = createServerFn({ method: "POST" })
       if (!hasStated && inferred) patch.treatment_types = [inferred];
 
       const { error } = await sb
-        .from("emma_waitlist")
+        .from("waitlist")
         .update(patch)
         .eq("id", r.id);
       if (error) throw new Error(error.message);

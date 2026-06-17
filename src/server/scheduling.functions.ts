@@ -278,7 +278,7 @@ async function loadEngineInputs(
           .range(from, to),
       ),
       sb
-        .from("emma_appointments")
+        .from("appointments")
         .select("scheduled_at, duration_min, status, slot_held_until")
         .eq("provider_id", providerId)
         .neq("status", "cancelled")
@@ -756,7 +756,7 @@ export const holdSlot = createServerFn({ method: "POST" })
     if (!provider) {
       return { ok: false, reason: "That provider isn't available.", code: "invalid" };
     }
-    // Native bookings stamp emma_appointments.user_id with the TENANT OWNER's
+    // Native bookings stamp appointments.user_id with the TENANT OWNER's
     // auth user (the account that owns the calendar). A provider needn't have
     // their own login — provider_id identifies the person; user_id is the tenant
     // linkage. Prefer a provider's own user_id, else fall back to the tenant
@@ -814,7 +814,7 @@ export const holdSlot = createServerFn({ method: "POST" })
     // 1. Release this provider's expired holds so a stale row can't block a slot
     //    the engine considers free.
     await sb
-      .from("emma_appointments")
+      .from("appointments")
       .update({ status: "cancelled", updated_at: new Date().toISOString() })
       .eq("provider_id", provider.id)
       .eq("status", "held")
@@ -868,7 +868,7 @@ export const holdSlot = createServerFn({ method: "POST" })
     const heldUntilIso = new Date(Date.now() + base.holdMinutes * 60_000).toISOString();
 
     const { data: held, error: insErr } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .insert({
         user_id: ownerUserId,
         provider_id: provider.id,
@@ -931,7 +931,7 @@ export const confirmBooking = createServerFn({ method: "POST" })
 
     // Race-safe flip: only a row that is STILL held and NOT past expiry confirms.
     const { data: updated, error } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .update({
         status: "confirmed",
         booking_name: data.name,
@@ -950,7 +950,7 @@ export const confirmBooking = createServerFn({ method: "POST" })
     if (!updated) {
       // Either already confirmed, expired, or never existed. Disambiguate for copy.
       const { data: existing } = await sb
-        .from("emma_appointments")
+        .from("appointments")
         .select("id, status, scheduled_at")
         .eq("booking_token", data.token)
         .maybeSingle();

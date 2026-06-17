@@ -119,7 +119,7 @@ export async function getOrMintWaitlistToken(
 ): Promise<string> {
   // Check first to avoid hitting the unique-violation path on the common case.
   const { data: existing } = await sb
-    .from("emma_waitlist_tokens")
+    .from("waitlist_tokens")
     .select("token")
     .eq("user_id", userId)
     .eq("patient_node_id", patientNodeId)
@@ -127,14 +127,14 @@ export async function getOrMintWaitlistToken(
   if (existing?.token) return existing.token;
 
   const { data: inserted, error } = await sb
-    .from("emma_waitlist_tokens")
+    .from("waitlist_tokens")
     .insert({ user_id: userId, patient_node_id: patientNodeId })
     .select("token")
     .single();
   if (error) {
     // Race: another caller minted between our SELECT and INSERT. Re-read.
     const { data: retried } = await sb
-      .from("emma_waitlist_tokens")
+      .from("waitlist_tokens")
       .select("token")
       .eq("user_id", userId)
       .eq("patient_node_id", patientNodeId)
@@ -182,7 +182,7 @@ export const getWaitlistOptInBrand = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<{ name: string } | null> => {
     const sb = admin();
     const { data: tokenRow } = await sb
-      .from("emma_waitlist_tokens")
+      .from("waitlist_tokens")
       .select("user_id")
       .eq("token", data.token)
       .maybeSingle();
@@ -199,7 +199,7 @@ export const getWaitlistOptInPayload = createServerFn({ method: "POST" })
     const sb = admin();
 
     const { data: tokenRow } = await sb
-      .from("emma_waitlist_tokens")
+      .from("waitlist_tokens")
       .select("user_id, patient_node_id")
       .eq("token", data.token)
       .maybeSingle();
@@ -207,7 +207,7 @@ export const getWaitlistOptInPayload = createServerFn({ method: "POST" })
 
     // Stamp last_used_at (best-effort).
     await sb
-      .from("emma_waitlist_tokens")
+      .from("waitlist_tokens")
       .update({ last_used_at: new Date().toISOString() })
       .eq("token", data.token);
 
@@ -230,7 +230,7 @@ export const getWaitlistOptInPayload = createServerFn({ method: "POST" })
         .eq("id", tokenRow.patient_node_id)
         .maybeSingle(),
       sb
-        .from("emma_waitlist")
+        .from("waitlist")
         .select(
           "status, intent_type, treatment_types, scheduled_appointment_id",
         )
@@ -240,7 +240,7 @@ export const getWaitlistOptInPayload = createServerFn({ method: "POST" })
       // v375: pull the spa's curated rescue_eligible_treatments so the
       // public picker shows the candidate set Karen has configured.
       sb
-        .from("emma_noshow_policies")
+        .from("noshow_policies")
         .select("rescue_eligible_treatments")
         .eq("user_id", tokenRow.user_id)
         .maybeSingle(),
@@ -254,7 +254,7 @@ export const getWaitlistOptInPayload = createServerFn({ method: "POST" })
     let scheduledAppointmentTreatment: string | null = null;
     if (existing?.scheduled_appointment_id) {
       const { data: apt } = await sb
-        .from("emma_appointments")
+        .from("appointments")
         .select("scheduled_at, treatment_type")
         .eq("id", existing.scheduled_appointment_id)
         .maybeSingle();
@@ -292,7 +292,7 @@ export const optInToWaitlist = createServerFn({ method: "POST" })
     const sb = admin();
 
     const { data: tokenRow } = await sb
-      .from("emma_waitlist_tokens")
+      .from("waitlist_tokens")
       .select("user_id, patient_node_id")
       .eq("token", data.token)
       .maybeSingle();
@@ -300,7 +300,7 @@ export const optInToWaitlist = createServerFn({ method: "POST" })
 
     // Upsert with on-conflict reactivate-if-revoked semantics.
     const { data: existing } = await sb
-      .from("emma_waitlist")
+      .from("waitlist")
       .select("id, status")
       .eq("user_id", tokenRow.user_id)
       .eq("patient_node_id", tokenRow.patient_node_id)
@@ -326,7 +326,7 @@ export const optInToWaitlist = createServerFn({ method: "POST" })
     if (existing) {
       if (existing.status === "active") return { ok: true, alreadyActive: true };
       // Reactivate from paused/revoked
-      const updatePatch: Database["public"]["Tables"]["emma_waitlist"]["Update"] =
+      const updatePatch: Database["public"]["Tables"]["waitlist"]["Update"] =
         {
           status: "active",
           revoked_at: null,
@@ -338,14 +338,14 @@ export const optInToWaitlist = createServerFn({ method: "POST" })
         updatePatch.desired_service_ids = pickedServiceIds ?? [];
       }
       const { error } = await sb
-        .from("emma_waitlist")
+        .from("waitlist")
         .update(updatePatch)
         .eq("id", existing.id);
       if (error) throw new Error(`Couldn't reactivate: ${error.message}`);
       return { ok: true, alreadyActive: false };
     }
 
-    const insertRow: Database["public"]["Tables"]["emma_waitlist"]["Insert"] = {
+    const insertRow: Database["public"]["Tables"]["waitlist"]["Insert"] = {
       user_id: tokenRow.user_id,
       patient_node_id: tokenRow.patient_node_id,
       status: "active",
@@ -355,7 +355,7 @@ export const optInToWaitlist = createServerFn({ method: "POST" })
       insertRow.treatment_types = patientPickedTreatments;
       insertRow.desired_service_ids = pickedServiceIds ?? [];
     }
-    const { error } = await sb.from("emma_waitlist").insert(insertRow);
+    const { error } = await sb.from("waitlist").insert(insertRow);
     if (error) throw new Error(`Couldn't opt in: ${error.message}`);
     return { ok: true, alreadyActive: false };
   });
@@ -368,14 +368,14 @@ export const revokeWaitlistOptIn = createServerFn({ method: "POST" })
     const sb = admin();
 
     const { data: tokenRow } = await sb
-      .from("emma_waitlist_tokens")
+      .from("waitlist_tokens")
       .select("user_id, patient_node_id")
       .eq("token", data.token)
       .maybeSingle();
     if (!tokenRow) throw new Error("Invalid link.");
 
     await sb
-      .from("emma_waitlist")
+      .from("waitlist")
       .update({
         status: "revoked",
         revoked_at: new Date().toISOString(),
@@ -397,7 +397,7 @@ export const listWaitlist = createServerFn({ method: "POST" })
     const sb = admin();
 
     const { data: rows, error } = await sb
-      .from("emma_waitlist")
+      .from("waitlist")
       .select(
         "id, patient_node_id, treatment_types, desired_service_ids, preferred_providers, status, opt_in_source, opted_in_at, revoked_at",
       )
@@ -465,7 +465,7 @@ export const markPatientOptedIn = createServerFn({ method: "POST" })
     const sb = admin();
 
     const { data: existing } = await sb
-      .from("emma_waitlist")
+      .from("waitlist")
       .select("id, status")
       .eq("user_id", userId)
       .eq("patient_node_id", data.patientNodeId)
@@ -473,7 +473,7 @@ export const markPatientOptedIn = createServerFn({ method: "POST" })
 
     if (existing) {
       const { error } = await sb
-        .from("emma_waitlist")
+        .from("waitlist")
         .update({
           status: "active",
           revoked_at: null,
@@ -483,7 +483,7 @@ export const markPatientOptedIn = createServerFn({ method: "POST" })
         .eq("id", existing.id);
       if (error) throw new Error(`Couldn't update: ${error.message}`);
     } else {
-      const { error } = await sb.from("emma_waitlist").insert({
+      const { error } = await sb.from("waitlist").insert({
         user_id: userId,
         patient_node_id: data.patientNodeId,
         status: "active",
@@ -503,7 +503,7 @@ export const markPatientOptedOut = createServerFn({ method: "POST" })
     const sb = admin();
 
     await sb
-      .from("emma_waitlist")
+      .from("waitlist")
       .update({
         status: "revoked",
         revoked_at: new Date().toISOString(),
@@ -515,7 +515,7 @@ export const markPatientOptedOut = createServerFn({ method: "POST" })
 
 // ─── deleteWaitlistRow (spa manual, hard delete) ──────────────────────────
 //
-// v374.1: hard-delete the emma_waitlist row for a (user, patient) pair.
+// v374.1: hard-delete the waitlist row for a (user, patient) pair.
 // Use case: wrong patient picked during bulk-seed, test row left behind,
 // duplicate cleanup. Different from markPatientOptedOut (soft revoke,
 // preserves audit trail) — this wipes the row entirely.
@@ -537,7 +537,7 @@ export const deleteWaitlistRow = createServerFn({ method: "POST" })
     const sb = admin();
 
     const { error } = await sb
-      .from("emma_waitlist")
+      .from("waitlist")
       .delete()
       .eq("id", data.waitlistRowId)
       .eq("user_id", userId);

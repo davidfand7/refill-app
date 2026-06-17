@@ -7,7 +7,7 @@
  * with their current one — same, but hopefully better — and only then cut over.
  *
  * The gap this closes: the live Acuity connector already streams APPOINTMENTS
- * into emma_appointments, but it pulls no STRUCTURE — so those appointments
+ * into appointments, but it pulls no STRUCTURE — so those appointments
  * carry only a free-text provider_name and never column-align in the native
  * grid, and there are no native services/providers to make SmartSpa look like
  * their Acuity. This fn pulls calendars + appointment-types and materializes
@@ -19,7 +19,7 @@
  *                             because a mirrored calendar is a visualization
  *                             row, not a login — not bookable until cutover)
  *   Acuity appointment-types→ services (name, duration, price, online_bookable)
- *   emma_appointments       → set native provider_id where provider_name
+ *   appointments       → set native provider_id where provider_name
  *                             matches a mirrored provider
  *
  * Idempotent by NAME (neither table has a name-unique constraint, so we
@@ -150,7 +150,7 @@ async function loadAcuityConnection(
   userId: string,
 ): Promise<AcuityConn | null> {
   const { data: row } = await sb
-    .from("emma_scheduler_connections")
+    .from("scheduler_connections")
     .select("access_token, platform_account_email, status")
     .eq("user_id", userId)
     .eq("platform", "acuity")
@@ -176,11 +176,11 @@ async function nativeCounts(sb: Sb, tenantId: string, userId: string): Promise<N
       .eq("tenant_id", tenantId)
       .eq("online_bookable", true),
     sb
-      .from("emma_appointments")
+      .from("appointments")
       .select("id", head)
       .eq("user_id", userId)
       .not("provider_id", "is", null),
-    sb.from("emma_appointments").select("id", head).eq("user_id", userId),
+    sb.from("appointments").select("id", head).eq("user_id", userId),
   ]);
   return {
     totalProviders: providers.count ?? 0,
@@ -436,7 +436,7 @@ export const stageAcuityMirrorFn = createServerFn({ method: "POST" })
       const pid = provByName.get(norm(cal.name));
       if (!pid || !cal.name) continue;
       const { data: updated } = await sb
-        .from("emma_appointments")
+        .from("appointments")
         .update({ provider_id: pid })
         .eq("user_id", effectiveUserId)
         .eq("provider_name", cal.name)
@@ -445,7 +445,7 @@ export const stageAcuityMirrorFn = createServerFn({ method: "POST" })
       linked += (updated ?? []).length;
     }
     const { count: stillUnlinked } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .select("id", { count: "exact", head: true })
       .eq("user_id", effectiveUserId)
       .is("provider_id", null);
@@ -460,7 +460,7 @@ export const stageAcuityMirrorFn = createServerFn({ method: "POST" })
     let hiddenByDefault = 0;
     for (const c of businessMatchCreated) {
       const { count: apptCount } = await sb
-        .from("emma_appointments")
+        .from("appointments")
         .select("id", { count: "exact", head: true })
         .eq("provider_id", c.id)
         .neq("status", "cancelled");

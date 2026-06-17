@@ -10,7 +10,7 @@
  *   - Per-event opt-in/out via Staff Profile settings.
  *
  * Until a Jane pilot tenant forwards real exemplars, this stub returns
- * `unknown` so inbound mail lands in emma_email_quarantine for review.
+ * `unknown` so inbound mail lands in email_quarantine for review.
  * The shipping doctrine (project-platforms-pre-built-architecture)
  * means the dispatch + UI surface exists in v1.42.0; parser activation
  * is a follow-up minor ship after exemplars land.

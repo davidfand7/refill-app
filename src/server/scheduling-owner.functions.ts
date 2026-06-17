@@ -390,7 +390,7 @@ export const getDayScheduleFn = createServerFn({ method: "POST" })
     const [{ data: apptRows }, { data: hoursRows }, blockRows, { data: serviceRows }] =
       await Promise.all([
         sb
-          .from("emma_appointments")
+          .from("appointments")
           .select(
             "id, provider_id, scheduled_at, duration_min, status, source, booking_name, patient_node_id, treatment_type",
           )
@@ -547,7 +547,7 @@ export const getRangeScheduleFn = createServerFn({ method: "POST" })
     const [{ data: apptRows }, { data: hoursRows }, blockRows, { data: serviceRows }] =
       await Promise.all([
         sb
-          .from("emma_appointments")
+          .from("appointments")
           .select(
             "id, provider_id, scheduled_at, duration_min, status, source, booking_name, patient_node_id, treatment_type",
           )
@@ -748,7 +748,7 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
     }
 
     const { data: created, error } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .insert({
         user_id: effectiveUserId,
         provider_id: providerId,
@@ -920,7 +920,7 @@ export const ownerUpdateAppointmentFn = createServerFn({ method: "POST" })
 
     // Ownership: the appointment must belong to one of this tenant's providers.
     const { data: appt } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .select("id, provider_id")
       .eq("id", data.appointmentId)
       .maybeSingle();
@@ -949,7 +949,7 @@ export const ownerUpdateAppointmentFn = createServerFn({ method: "POST" })
     if (data.patientPhone !== undefined) patch.booking_phone = data.patientPhone || null;
 
     const { data: updated, error } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .update(patch)
       .eq("id", data.appointmentId)
       .select("id")
@@ -991,7 +991,7 @@ export const ownerCancelAppointmentFn = createServerFn({ method: "POST" })
     const tenantProviderIds = (provs ?? []).map((p) => p.id);
 
     const { error } = await sb
-      .from("emma_appointments")
+      .from("appointments")
       .update({ status: "cancelled", updated_at: new Date().toISOString() })
       .eq("id", data.appointmentId)
       .in(
@@ -1064,7 +1064,7 @@ export const listManagedProvidersFn = createServerFn({ method: "POST" })
     const counts = await Promise.all(
       provs.map(async (p) => {
         const { count } = await sb
-          .from("emma_appointments")
+          .from("appointments")
           .select("id", { count: "exact", head: true })
           .eq("provider_id", p.id)
           .neq("status", "cancelled");

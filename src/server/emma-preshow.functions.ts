@@ -3,7 +3,7 @@
  *
  * The first of three no-show recovery agents. Pre-show watches every
  * upcoming appointment and fires a personalized reminder at each
- * cadence offset configured in emma_noshow_policies (default T-48h,
+ * cadence offset configured in noshow_policies (default T-48h,
  * T-24h, T-3h). Cadence tone + channel preference + opt-in footer come
  * from policy. Compliance rails (opted_out, banned) run identically to
  * campaign sends.
@@ -302,13 +302,13 @@ export async function dispatchPreShowReminder(args: {
   // 1) Load the appointment + policy in parallel.
   const [aptRes, policyRes] = await Promise.all([
     sb
-      .from("emma_appointments")
+      .from("appointments")
       .select("*")
       .eq("id", appointmentId)
       .eq("user_id", userId)
       .maybeSingle(),
     sb
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .select("*")
       .eq("user_id", userId)
       .maybeSingle(),
@@ -432,7 +432,7 @@ export async function dispatchPreShowReminder(args: {
   } | null = null;
   if (patientRoutedProfileId) {
     const { data: routedRow } = await sb
-      .from("emma_preshow_profiles")
+      .from("preshow_profiles")
       .select("id, tone, channel, cadence_hours, cadence_by_treatment_type")
       .eq("user_id", userId)
       .eq("id", patientRoutedProfileId)
@@ -441,7 +441,7 @@ export async function dispatchPreShowReminder(args: {
   }
   if (!profileRow) {
     const { data: defaultRow } = await sb
-      .from("emma_preshow_profiles")
+      .from("preshow_profiles")
       .select("id, tone, channel, cadence_hours, cadence_by_treatment_type")
       .eq("user_id", userId)
       .eq("is_default", true)
@@ -484,7 +484,7 @@ export async function dispatchPreShowReminder(args: {
   let customTemplateBody: string | null = null;
   if (profileRow) {
     const { data: tmplRow } = await sb
-      .from("emma_preshow_message_templates")
+      .from("preshow_message_templates")
       .select("body_template")
       .eq("profile_id", profileRow.id)
       .eq("offset_hours", offsetHours)

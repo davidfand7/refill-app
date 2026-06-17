@@ -80,8 +80,8 @@ function admin() {
 }
 
 type SupabaseAdmin = ReturnType<typeof admin>;
-type ProfileRow = Database["public"]["Tables"]["emma_preshow_profiles"]["Row"];
-type TemplateRow = Database["public"]["Tables"]["emma_preshow_message_templates"]["Row"];
+type ProfileRow = Database["public"]["Tables"]["preshow_profiles"]["Row"];
+type TemplateRow = Database["public"]["Tables"]["preshow_message_templates"]["Row"];
 type DefaultsRow = Database["public"]["Tables"]["agent_defaults"]["Row"];
 
 // ─── Zod validators ───────────────────────────────────────────────────────
@@ -183,7 +183,7 @@ export const listPreshowProfiles = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const { data: rows, error } = await sb
-      .from("emma_preshow_profiles")
+      .from("preshow_profiles")
       .select("*")
       .eq("user_id", effectiveUserId)
       .order("is_default", { ascending: false })
@@ -203,7 +203,7 @@ export const listPreshowTemplates = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const { data: rows, error } = await sb
-      .from("emma_preshow_message_templates")
+      .from("preshow_message_templates")
       .select("*")
       .eq("user_id", effectiveUserId)
       .order("profile_id", { ascending: true })
@@ -230,7 +230,7 @@ export const createPreshowProfile = createServerFn({ method: "POST" })
 
     if (data.cloneFromProfileId) {
       const { data: src, error: srcErr } = await sb
-        .from("emma_preshow_profiles")
+        .from("preshow_profiles")
         .select("*")
         .eq("id", data.cloneFromProfileId)
         .eq("user_id", effectiveUserId)
@@ -241,7 +241,7 @@ export const createPreshowProfile = createServerFn({ method: "POST" })
         tone = (src.tone ?? tone) as PreshowTone;
         channel = (src.channel ?? channel) as PreshowChannel;
         const { data: tmpls } = await sb
-          .from("emma_preshow_message_templates")
+          .from("preshow_message_templates")
           .select("*")
           .eq("profile_id", data.cloneFromProfileId)
           .eq("user_id", effectiveUserId);
@@ -250,7 +250,7 @@ export const createPreshowProfile = createServerFn({ method: "POST" })
     }
 
     const { data: row, error } = await sb
-      .from("emma_preshow_profiles")
+      .from("preshow_profiles")
       .insert({
         user_id: effectiveUserId,
         name: data.name.trim(),
@@ -271,7 +271,7 @@ export const createPreshowProfile = createServerFn({ method: "POST" })
         body_template: t.body_template,
       }));
       const { error: tErr } = await sb
-        .from("emma_preshow_message_templates")
+        .from("preshow_message_templates")
         .insert(inserts);
       if (tErr) {
         // Best-effort clone — log but don't fail the profile create.
@@ -293,7 +293,7 @@ export const updatePreshowProfile = createServerFn({ method: "POST" })
     });
     const sb = admin();
 
-    const updates: Database["public"]["Tables"]["emma_preshow_profiles"]["Update"] = {
+    const updates: Database["public"]["Tables"]["preshow_profiles"]["Update"] = {
       updated_at: new Date().toISOString(),
     };
     if (data.name !== undefined) updates.name = data.name.trim();
@@ -310,7 +310,7 @@ export const updatePreshowProfile = createServerFn({ method: "POST" })
     if (data.channel !== undefined) updates.channel = data.channel;
 
     const { data: row, error } = await sb
-      .from("emma_preshow_profiles")
+      .from("preshow_profiles")
       .update(updates)
       .eq("id", data.profileId)
       .eq("user_id", effectiveUserId)
@@ -340,7 +340,7 @@ export const setDefaultPreshowProfile = createServerFn({ method: "POST" })
 
     // 1. Clear is_default on every other profile for this spa.
     const { error: clearErr } = await sb
-      .from("emma_preshow_profiles")
+      .from("preshow_profiles")
       .update({ is_default: false, updated_at: new Date().toISOString() })
       .eq("user_id", effectiveUserId)
       .neq("id", data.profileId);
@@ -349,7 +349,7 @@ export const setDefaultPreshowProfile = createServerFn({ method: "POST" })
 
     // 2. Set the target profile to default.
     const { error: setErr } = await sb
-      .from("emma_preshow_profiles")
+      .from("preshow_profiles")
       .update({ is_default: true, updated_at: new Date().toISOString() })
       .eq("id", data.profileId)
       .eq("user_id", effectiveUserId);
@@ -372,7 +372,7 @@ export const deletePreshowProfile = createServerFn({ method: "POST" })
     // Refuse to delete the default profile — Karen must set another as
     // default first. The cron + dispatch fallback path needs a default.
     const { data: target, error: loadErr } = await sb
-      .from("emma_preshow_profiles")
+      .from("preshow_profiles")
       .select("is_default")
       .eq("id", data.profileId)
       .eq("user_id", effectiveUserId)
@@ -386,7 +386,7 @@ export const deletePreshowProfile = createServerFn({ method: "POST" })
     }
 
     const { error } = await sb
-      .from("emma_preshow_profiles")
+      .from("preshow_profiles")
       .delete()
       .eq("id", data.profileId)
       .eq("user_id", effectiveUserId);
@@ -406,7 +406,7 @@ export const upsertPreshowMessageTemplate = createServerFn({ method: "POST" })
     const sb = admin();
 
     const { data: row, error } = await sb
-      .from("emma_preshow_message_templates")
+      .from("preshow_message_templates")
       .upsert(
         {
           user_id: effectiveUserId,
@@ -434,7 +434,7 @@ export const deletePreshowMessageTemplate = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const { error } = await sb
-      .from("emma_preshow_message_templates")
+      .from("preshow_message_templates")
       .delete()
       .eq("id", data.templateId)
       .eq("user_id", effectiveUserId);
@@ -530,7 +530,7 @@ export const getPreshowPerformanceMetrics = createServerFn({ method: "POST" })
     // Confirmations: status_events transitioning to 'confirmed' triggered by
     // 'patient' or 'preshow-agent' (auto-confirm via response parsing).
     const { count: confirmedCount } = await sb
-      .from("emma_appointment_status_events")
+      .from("appointment_status_events")
       .select("id", { count: "exact", head: true })
       .eq("user_id", effectiveUserId)
       .eq("to_status", "confirmed")
@@ -539,7 +539,7 @@ export const getPreshowPerformanceMetrics = createServerFn({ method: "POST" })
     // Cancellations that came AFTER a preshow reminder (the Rescue agent's
     // signal). Counts to_status=cancelled events within the window.
     const { count: cancelledCount } = await sb
-      .from("emma_appointment_status_events")
+      .from("appointment_status_events")
       .select("id", { count: "exact", head: true })
       .eq("user_id", effectiveUserId)
       .eq("to_status", "cancelled")
@@ -547,7 +547,7 @@ export const getPreshowPerformanceMetrics = createServerFn({ method: "POST" })
 
     // Load the default profile to attribute counts to.
     const { data: defaultProfile } = await sb
-      .from("emma_preshow_profiles")
+      .from("preshow_profiles")
       .select("id")
       .eq("user_id", effectiveUserId)
       .eq("is_default", true)

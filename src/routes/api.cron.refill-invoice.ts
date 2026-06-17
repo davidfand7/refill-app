@@ -10,7 +10,7 @@
  * The heavy lifting lives in src/server/refill-billing.ts —
  * generateMonthlyInvoicesForAll computes the period window from "now"
  * (1st of last month → 1st of this month), fans out memberships per
- * tenant, aggregates verified emma_recovery_events, applies the plan's
+ * tenant, aggregates verified recovery_events, applies the plan's
  * revenue_share_pct + monthly_flat_usd, and upserts the invoice row.
  * Per-tenant failures are captured in the errors array; the cron
  * surfaces them in the response payload so Supabase Functions logs can

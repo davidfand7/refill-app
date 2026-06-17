@@ -3,7 +3,7 @@
  *
  * Per-patient reliability tier computed from appointment history.
  *
- * Tier rules (configurable per spa via emma_noshow_policies.reliability_tier_thresholds):
+ * Tier rules (configurable per spa via noshow_policies.reliability_tier_thresholds):
  *
  *   in_recovery — no_shows in last in_recovery_window_months >= in_recovery_threshold
  *                  (default: 3 no-shows in 6 months)
@@ -234,7 +234,7 @@ export async function recomputeReliabilityForPatient(args: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const looseSb = sb as unknown as { from(t: string): any };
   const { data: policy } = await looseSb
-    .from("emma_noshow_policies")
+    .from("noshow_policies")
     .select("reliability_tier_thresholds, noshow_rule_applies_reliability, noshow_notice_hours")
     .eq("user_id", userId)
     .maybeSingle();
@@ -253,7 +253,7 @@ export async function recomputeReliabilityForPatient(args: {
 
   // cancelled_at (v2.34.0) isn't in generated types yet — read via the loose view.
   const { data: appointments } = await looseSb
-    .from("emma_appointments")
+    .from("appointments")
     .select("status, scheduled_at, updated_at, cancelled_at")
     .eq("user_id", userId)
     .eq("patient_node_id", patientNodeId);
@@ -314,7 +314,7 @@ export async function recomputeReliabilityForPatient(args: {
 
   // 3) Read prior reliability row (for transition detection)
   const { data: prior } = await sb
-    .from("emma_reliability_status")
+    .from("reliability_status")
     .select("tier")
     .eq("user_id", userId)
     .eq("patient_node_id", patientNodeId)
@@ -324,7 +324,7 @@ export async function recomputeReliabilityForPatient(args: {
   // 4) Upsert the materialized row
   const nowIso = new Date().toISOString();
   const { error: upsertErr } = await sb
-    .from("emma_reliability_status")
+    .from("reliability_status")
     .upsert(
       {
         user_id: userId,
@@ -364,7 +364,7 @@ export async function recomputeReliabilityForPatient(args: {
     });
     if (alert) {
       await sb
-        .from("emma_pattern_alerts")
+        .from("pattern_alerts")
         .insert({
           user_id: userId,
           patient_node_id: patientNodeId,
@@ -408,7 +408,7 @@ export async function recomputeReliabilityForUser(args: {
   sb: SupabaseAdmin;
   userId: string;
   // v1.26.10 — distinguishes cron sweep from manual button click in the
-  // emma_reliability_runs log. Defaults to 'manual' so legacy callers that
+  // reliability_runs log. Defaults to 'manual' so legacy callers that
   // don't pass it (none in tree today) get the safer label.
   trigger?: "cron" | "manual";
 }): Promise<{
@@ -430,7 +430,7 @@ export async function recomputeReliabilityForUser(args: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const looseRule = sb as unknown as { from(t: string): any };
   const { data: rulePolicy } = await looseRule
-    .from("emma_noshow_policies")
+    .from("noshow_policies")
     .select("noshow_rule_applies_reliability")
     .eq("user_id", userId)
     .maybeSingle();
@@ -455,7 +455,7 @@ export async function recomputeReliabilityForUser(args: {
   // This snapshot is the missing context: if the patient_node_id isn't in
   // `priorPatientIds`, suppress the alert at step 6.
   const { data: priorRows } = await sb
-    .from("emma_reliability_status")
+    .from("reliability_status")
     .select("patient_node_id")
     .eq("user_id", userId);
   const priorPatientIds = new Set(
@@ -474,7 +474,7 @@ export async function recomputeReliabilityForUser(args: {
 
   // Step 2: Load policy thresholds (or use defaults).
   const { data: policy } = await sb
-    .from("emma_noshow_policies")
+    .from("noshow_policies")
     .select("reliability_tier_thresholds")
     .eq("user_id", userId)
     .maybeSingle();
@@ -484,7 +484,7 @@ export async function recomputeReliabilityForUser(args: {
 
   // Step 3: Read all reliability rows back. Counts are now fresh from step 1.
   const { data: rows, error: readErr } = await sb
-    .from("emma_reliability_status")
+    .from("reliability_status")
     .select("patient_node_id, tier, no_shows_6mo, total_visits")
     .eq("user_id", userId);
   if (readErr) {
@@ -544,7 +544,7 @@ export async function recomputeReliabilityForUser(args: {
     await Promise.all(
       chunk.map((u) =>
         sb
-          .from("emma_reliability_status")
+          .from("reliability_status")
           .update({ tier: u.newTier, recomputed_at: completedAt })
           .eq("user_id", userId)
           .eq("patient_node_id", u.patientNodeId),
@@ -596,7 +596,7 @@ export async function recomputeReliabilityForUser(args: {
 
   if (alertRows.length > 0) {
     const { error: alertErr } = await sb
-      .from("emma_pattern_alerts")
+      .from("pattern_alerts")
       .insert(alertRows);
     if (alertErr) {
       console.error("pattern_alerts batch insert failed:", alertErr.message);
@@ -648,7 +648,7 @@ async function recomputeReliabilityRuleAware(args: {
   const PAGE = 1000;
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await looseSb
-      .from("emma_appointments")
+      .from("appointments")
       .select("patient_node_id")
       .eq("user_id", userId)
       .not("patient_node_id", "is", null)
@@ -701,7 +701,7 @@ async function logReliabilityRun(
     trigger: "cron" | "manual";
   },
 ): Promise<void> {
-  const { error } = await sb.from("emma_reliability_runs").insert({
+  const { error } = await sb.from("reliability_runs").insert({
     user_id: row.userId,
     completed_at: row.completedAt,
     patients_recomputed: row.patientsRecomputed,
@@ -709,7 +709,7 @@ async function logReliabilityRun(
     trigger: row.trigger,
   });
   if (error) {
-    console.error("emma_reliability_runs insert failed:", error.message);
+    console.error("reliability_runs insert failed:", error.message);
   }
 }
 
@@ -773,7 +773,7 @@ export const listPatternAlerts = createServerFn({ method: "POST" })
     const sb = admin();
 
     let query = sb
-      .from("emma_pattern_alerts")
+      .from("pattern_alerts")
       .select(
         "id, patient_node_id, kind, from_tier, to_tier, headline, body, dismissed_at, created_at",
       )
@@ -820,7 +820,7 @@ export const dismissPatternAlert = createServerFn({ method: "POST" })
     const sb = admin();
 
     await sb
-      .from("emma_pattern_alerts")
+      .from("pattern_alerts")
       .update({
         dismissed_at: new Date().toISOString(),
         dismissed_by: effectiveUserId,
@@ -841,7 +841,7 @@ export const getReliabilityCard = createServerFn({ method: "POST" })
     const sb = admin();
 
     const { data: row } = await sb
-      .from("emma_reliability_status")
+      .from("reliability_status")
       .select(
         "tier, no_shows_6mo, total_visits, cancellations_6mo, grace_credits_used, last_activity_at, recomputed_at",
       )
@@ -870,7 +870,7 @@ export const getReliabilityCard = createServerFn({ method: "POST" })
 // Fetched once at mount, joined into matchesRules() client-side.
 //
 // v1.26.4: lifetime counts (no_shows_lifetime + cancellations_lifetime)
-// are now materialized on emma_reliability_status alongside the 6mo
+// are now materialized on reliability_status alongside the 6mo
 // columns, so this returns both. Surface chose to expose lifetime in the
 // toggle description so Karen sees the full history alongside the rolling
 // window. The rule itself still filters on the 6mo window today — switching
@@ -899,7 +899,7 @@ export const listReliabilityFlags = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const { data: rows, error } = await sb
-      .from("emma_reliability_status")
+      .from("reliability_status")
       .select(
         "patient_node_id, no_shows_6mo, cancellations_6mo, no_shows_lifetime, cancellations_lifetime",
       )
@@ -939,26 +939,26 @@ export const getReliabilityFreshness = createServerFn({ method: "POST" })
     const sb = admin();
 
     // v1.26.10 — three queries in parallel:
-    //   1. patientsTracked: count of rows in emma_reliability_status
-    //   2. lastRun: most recent emma_reliability_runs row (post-v1.26.10)
+    //   1. patientsTracked: count of rows in reliability_status
+    //   2. lastRun: most recent reliability_runs row (post-v1.26.10)
     //   3. latestRecomputedAtFallback: max(recomputed_at) — used only when
     //      no runs row exists yet (covers the gap between migration deploy
     //      and the first sweep that writes to the runs log).
     const [{ count }, { data: lastRunRow }, { data: latestFallbackRow }] =
       await Promise.all([
         sb
-          .from("emma_reliability_status")
+          .from("reliability_status")
           .select("id", { count: "exact", head: true })
           .eq("user_id", effectiveUserId),
         sb
-          .from("emma_reliability_runs")
+          .from("reliability_runs")
           .select("completed_at, patients_recomputed, transitions, trigger")
           .eq("user_id", effectiveUserId)
           .order("completed_at", { ascending: false })
           .limit(1)
           .maybeSingle(),
         sb
-          .from("emma_reliability_status")
+          .from("reliability_status")
           .select("recomputed_at")
           .eq("user_id", effectiveUserId)
           .order("recomputed_at", { ascending: false })

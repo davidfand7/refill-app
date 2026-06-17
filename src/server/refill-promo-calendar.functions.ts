@@ -972,7 +972,7 @@ export const draftOfferPushFn = createServerFn({ method: "POST" })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const any = sb as unknown as { from(t: string): any };
     const { data: policy } = await any
-      .from("emma_noshow_policies")
+      .from("noshow_policies")
       .select("rescue_proxy_email")
       .eq("user_id", effectiveUserId)
       .maybeSingle();

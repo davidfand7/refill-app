@@ -8,13 +8,13 @@
  * The handler:
  *   1. Validates the request shape + optional Resend webhook signature.
  *   2. Extracts the inbound slug from the `to` field's local-part.
- *   3. Looks up the matching emma_light_mode_connections row.
+ *   3. Looks up the matching light_mode_connections row.
  *   4. Dispatches the raw envelope through the per-platform parser
  *      (src/lib/email-parsers/index.ts).
- *   5. On a clean parse: upserts into emma_appointments (firing the
+ *   5. On a clean parse: upserts into appointments (firing the
  *      existing rescue + recognition trigger graph) and bumps the
  *      connection's events_parsed_total + last_event_at.
- *   6. On a quarantine: writes an emma_email_quarantine row holding
+ *   6. On a quarantine: writes an email_quarantine row holding
  *      the full raw envelope so retroactive reparsing remains possible
  *      after a parser fix.
  *   7. Always returns 200 so Resend doesn't retry forever — failures
@@ -149,7 +149,7 @@ export const Route = createFileRoute("/api/resend/inbound-lite")({
 
         // ── Slug routing
         if (!slug) {
-          await sbAny.from("emma_email_quarantine").insert({
+          await sbAny.from("email_quarantine").insert({
             from_address: env.fromAddress,
             to_address: env.toAddress,
             subject: env.subject,
@@ -162,7 +162,7 @@ export const Route = createFileRoute("/api/resend/inbound-lite")({
         }
 
         const { data: connection } = await sbAny
-          .from("emma_light_mode_connections")
+          .from("light_mode_connections")
           .select(
             "id,user_id,platform,status,events_parsed_total,events_quarantined_total",
           )
@@ -170,7 +170,7 @@ export const Route = createFileRoute("/api/resend/inbound-lite")({
           .maybeSingle();
 
         if (!connection) {
-          await sbAny.from("emma_email_quarantine").insert({
+          await sbAny.from("email_quarantine").insert({
             inbound_slug: slug,
             from_address: env.fromAddress,
             to_address: env.toAddress,
@@ -196,7 +196,7 @@ export const Route = createFileRoute("/api/resend/inbound-lite")({
         // owner doesn't need to hunt through their forwarded mail.
         if (looksLikeGmailVerification(env)) {
           const confirmUrl = extractGmailConfirmUrl(env);
-          await sbAny.from("emma_email_quarantine").insert({
+          await sbAny.from("email_quarantine").insert({
             light_mode_connection_id: connection.id as string,
             user_id: connection.user_id as string,
             platform: connection.platform as string,
@@ -214,7 +214,7 @@ export const Route = createFileRoute("/api/resend/inbound-lite")({
           // arrived (forward path is wired); status stays 'pending'
           // until a real booking event lands.
           await sbAny
-            .from("emma_light_mode_connections")
+            .from("light_mode_connections")
             .update({
               last_event_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
@@ -240,7 +240,7 @@ export const Route = createFileRoute("/api/resend/inbound-lite")({
 
         // ── Quarantine path
         if (result.event === "unknown" || result.appointments.length === 0) {
-          await sbAny.from("emma_email_quarantine").insert({
+          await sbAny.from("email_quarantine").insert({
             light_mode_connection_id: connection.id as string,
             user_id: connection.user_id as string,
             platform,
@@ -255,7 +255,7 @@ export const Route = createFileRoute("/api/resend/inbound-lite")({
             parser_confidence: result.confidence,
           });
           await sbAny
-            .from("emma_light_mode_connections")
+            .from("light_mode_connections")
             .update({
               events_quarantined_total:
                 ((connection.events_quarantined_total as number) ?? 0) + 1,
@@ -284,13 +284,13 @@ export const Route = createFileRoute("/api/resend/inbound-lite")({
             eventType: result.event,
           });
           const { error } = await sbAny
-            .from("emma_appointments")
+            .from("appointments")
             .insert(row);
           if (!error) upsertCount++;
         }
 
         await sbAny
-          .from("emma_light_mode_connections")
+          .from("light_mode_connections")
           .update({
             status: "active",
             events_parsed_total:
@@ -356,7 +356,7 @@ function appointmentToEmmaRow(args: {
     args.appt.externalId ??
     `lite:${args.platform}:${args.messageId ?? "no-msgid"}:${args.index}`;
 
-  // Map ParsedEventType → emma_appointments.status. The existing
+  // Map ParsedEventType → appointments.status. The existing
   // updateAppointmentStatus trigger graph picks up these statuses and
   // fires rescue / recognition downstream.
   let status: string = "scheduled";

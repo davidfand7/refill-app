@@ -66,24 +66,24 @@ export const getEngineHealthVitals = createServerFn({ method: "POST" })
       recovery7,
     ] = await Promise.all([
       sb
-        .from("emma_rescue_attempts")
+        .from("rescue_attempts")
         .select("triggered_at")
         .eq("user_id", userId)
         .order("triggered_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
       sb
-        .from("emma_rescue_attempts")
+        .from("rescue_attempts")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
         .gte("triggered_at", day1),
       sb
-        .from("emma_rescue_attempts")
+        .from("rescue_attempts")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
         .gte("triggered_at", day7),
       sb
-        .from("emma_rescue_offers")
+        .from("rescue_offers")
         .select("claimed_at")
         .eq("user_id", userId)
         .not("claimed_at", "is", null)
@@ -91,31 +91,31 @@ export const getEngineHealthVitals = createServerFn({ method: "POST" })
         .limit(1)
         .maybeSingle(),
       sb
-        .from("emma_rescue_offers")
+        .from("rescue_offers")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
         .not("claimed_at", "is", null)
         .gte("claimed_at", day1),
       sb
-        .from("emma_rescue_offers")
+        .from("rescue_offers")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
         .not("claimed_at", "is", null)
         .gte("claimed_at", day7),
       sb
-        .from("emma_recovery_events")
+        .from("recovery_events")
         .select("created_at")
         .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
       sb
-        .from("emma_recovery_events")
+        .from("recovery_events")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
         .gte("created_at", day1),
       sb
-        .from("emma_recovery_events")
+        .from("recovery_events")
         .select("id", { count: "exact", head: true })
         .eq("user_id", userId)
         .gte("created_at", day7),
