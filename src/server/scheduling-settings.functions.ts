@@ -67,6 +67,30 @@ export async function getTenantOwnerUserId(sb: Sb, tenantId: string): Promise<st
   return (data?.user_id as string | undefined) ?? null;
 }
 
+/**
+ * v2.72.0 — true when the tenant's calendar is owned by an external PMS we
+ * mirror READ-ONLY (Acuity). The sync is one-way (Acuity → SmartSpa), so native
+ * self-booking can't safely confirm and any /s/<slug> link is a dead end for
+ * these spas. Used to (a) gate the native booking page + write-path, and
+ * (b) suppress outbound /s/<slug> links from rebook/promo nudges. Any
+ * non-disconnected Acuity connection counts (a broken/stale one is MORE reason
+ * to stay closed). Mirrors loadAcuityConnection's status set. Reversible:
+ * disconnect Acuity → native opens back up.
+ */
+export async function tenantBooksOnExternalPms(sb: Sb, tenantId: string): Promise<boolean> {
+  const ownerUserId = await getTenantOwnerUserId(sb, tenantId);
+  if (!ownerUserId) return false;
+  const { data } = await sb
+    .from("emma_scheduler_connections")
+    .select("id")
+    .eq("user_id", ownerUserId)
+    .eq("platform", "acuity")
+    .in("status", ["connected", "reauth_needed", "error"])
+    .limit(1)
+    .maybeSingle();
+  return !!data;
+}
+
 // ── Shared shapes ────────────────────────────────────────────────────────────
 
 export interface SchedulingHoursDraft {
@@ -162,6 +186,10 @@ export interface SchedulingSetupBundle {
   dateOverridesByProvider: Record<string, DateOverrideDraft[]>;
   /** Tenant's manual category order (category names; unlisted fall back to default). */
   categoryOrder: string[];
+  /** v2.74.0 — true when the calendar is owned by an external PMS (Acuity) we
+   *  mirror read-only; native self-booking is gated, so the owner's "share your
+   *  booking link" section hides rather than handing out a dead /s/<slug> link. */
+  externalPms: boolean;
 }
 
 /** A whole-day availability override for one provider on one calendar date. */
@@ -420,6 +448,7 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
       providerServices,
       dateOverridesByProvider,
       categoryOrder: settingsRow?.category_order ?? [],
+      externalPms: await tenantBooksOnExternalPms(sb, tenantId),
     };
   });
 

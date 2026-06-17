@@ -36,7 +36,7 @@ function fmtEnds(iso: string | null): string | null {
 type State =
   | { screen: "loading" }
   | { screen: "error"; message: string }
-  | { screen: "ready"; spaName: string; deals: PublicDeal[] };
+  | { screen: "ready"; spaName: string; deals: PublicDeal[]; bookingEnabled: boolean };
 
 function DealsPage() {
   const { slug } = Route.useParams();
@@ -52,7 +52,7 @@ function DealsPage() {
           setState({ screen: "error", message: res.reason });
           return;
         }
-        setState({ screen: "ready", spaName: res.spaName, deals: res.deals });
+        setState({ screen: "ready", spaName: res.spaName, deals: res.deals, bookingEnabled: res.bookingEnabled });
       } catch {
         if (!cancelled) setState({ screen: "error", message: "Couldn't load offers." });
       }
@@ -104,7 +104,9 @@ function DealsPage() {
               >
                 <Tag className="mx-auto mb-2 h-6 w-6" style={{ color: "#8a9098" }} />
                 <p className="text-[14px]" style={{ color: "#5a6068" }}>
-                  No current offers — but you can still book an appointment any time.
+                  {state.bookingEnabled
+                    ? "No current offers — but you can still book an appointment any time."
+                    : "No current offers right now. Contact the practice to book your next visit."}
                 </p>
               </div>
             ) : (
@@ -114,7 +116,9 @@ function DealsPage() {
                   // A Special with a mappable service becomes a deep-link: tap it
                   // → land in the booker with that service already chosen. Offers
                   // with no mappable service stay static (info only).
-                  const bookable = !!deal.serviceName;
+                  // v2.74.0 — external-PMS (Acuity) spas gate native booking, so
+                  // deep-link Book CTAs would dead-end; show the offer statically.
+                  const bookable = !!deal.serviceName && state.bookingEnabled;
                   const body = (
                     <div className="flex items-center gap-3">
                       <div
@@ -192,15 +196,17 @@ function DealsPage() {
               </ul>
             )}
 
-            <Link
-              to="/s/$slug"
-              params={{ slug }}
-              className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-[15px] font-semibold transition hover:opacity-95"
-              style={{ background: "#056048", color: "#fbfaf7" }}
-            >
-              <CalendarCheck className="h-4.5 w-4.5" />
-              Book an appointment
-            </Link>
+            {state.bookingEnabled && (
+              <Link
+                to="/s/$slug"
+                params={{ slug }}
+                className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl px-5 py-3.5 text-[15px] font-semibold transition hover:opacity-95"
+                style={{ background: "#056048", color: "#fbfaf7" }}
+              >
+                <CalendarCheck className="h-4.5 w-4.5" />
+                Book an appointment
+              </Link>
+            )}
             <p className="mt-3 text-center text-[11px]" style={{ color: "#8a9098" }}>
               Offers are applied at your visit.
             </p>

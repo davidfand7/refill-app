@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.74.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.74.0 &mdash; Stop sending patients to a dead-end booking link.</strong> v2.72.0 gated native self-booking for external-PMS (Acuity) spas &mdash; but several surfaces still <em>handed out</em> the now-gated <code>/s/&lt;slug&gt;</code> link, dead-ending patients on the &ldquo;unavailable&rdquo; page. This sweeps them all: the <strong>rebook nudge</strong> and <strong>promo push</strong> SMS drop the &ldquo;Book/Rebook here&rdquo; link (the &ldquo;Reply and I&rsquo;ll find you a time&rdquo; CTA still stands &mdash; the human rebooks via Acuity, the act-layer model); the public <strong>deals page</strong> drops its per-offer + bottom Book buttons (offers still show, statically); and the owner&rsquo;s <strong>booking-settings</strong> page replaces the &ldquo;share your booking link&rdquo; box with an honest note (&ldquo;your calendar is managed in Acuity&hellip; SmartSpa watches it and acts on cancellations to recover revenue&rdquo;). The <code>/book/&lt;token&gt;</code> intent flow is untouched (it&rsquo;s already owner-mediated, fine for Acuity spas). The gate helper <code>tenantBooksOnExternalPms</code> moved to <code>scheduling-settings.functions.ts</code> so all callers share one source of truth. All conditional + reversible; SmartSpa-primary spas keep every booking link. <strong>Touched</strong>: <code>scheduling-settings.functions.ts</code>, <code>scheduling.functions.ts</code>, <code>reschedule.functions.ts</code>, <code>refill-promo-calendar.functions.ts</code>, <code>deals.$slug.tsx</code>, <code>app.refill.calendar.booking.tsx</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.73.0",
     date: "June 2026",
     items: [

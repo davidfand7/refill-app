@@ -51,7 +51,7 @@ import {
   recordCrossSellWin,
 } from "@/server/refill-promo-calendar.functions";
 import { recordRescheduleWinIfNudged } from "@/server/reschedule.functions";
-import { getTenantOwnerUserId } from "@/server/scheduling-settings.functions";
+import { getTenantOwnerUserId, tenantBooksOnExternalPms } from "@/server/scheduling-settings.functions";
 import { resolveBrand, resolveBrandForTenant, toPublicBrand, type PublicBrand } from "@/server/brand-resolver";
 import { REFILL_BRAND, mergeBrand } from "@/lib/brand";
 import { bestActiveOfferForName, badgeableOffers, type AddOnOffer } from "@/lib/promo-calendar";
@@ -106,24 +106,6 @@ interface BaseContext {
 // recovery loop — is untouched; this gates ONLY the patient-facing write path.)
 const EXTERNAL_PMS_BOOKING_REASON =
   "Online self-booking isn't available for this practice. Please contact the practice directly to schedule your appointment.";
-
-/** True when the tenant's calendar is owned by an external PMS we mirror
- *  read-only — in which case native self-booking must stay closed. Any
- *  non-disconnected Acuity connection counts (a broken/stale one is MORE reason
- *  not to self-book, not less). Mirrors loadAcuityConnection's status set. */
-async function tenantBooksOnExternalPms(sb: Sb, tenantId: string): Promise<boolean> {
-  const ownerUserId = await getTenantOwnerUserId(sb, tenantId);
-  if (!ownerUserId) return false;
-  const { data } = await sb
-    .from("emma_scheduler_connections")
-    .select("id")
-    .eq("user_id", ownerUserId)
-    .eq("platform", "acuity")
-    .in("status", ["connected", "reauth_needed", "error"])
-    .limit(1)
-    .maybeSingle();
-  return !!data;
-}
 
 async function loadBaseContext(
   sb: Sb,

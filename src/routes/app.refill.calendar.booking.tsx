@@ -124,8 +124,23 @@ function BookingSettingsPage() {
             </div>
 
             <div className="space-y-6">
-            {/* ── Your public booking link ── */}
-            {draft.slug && (
+            {/* ── External-PMS note (v2.74.0): calendar lives in Acuity, so we
+                 don't hand out a native /s/<slug> link that would dead-end. ── */}
+            {draft.slug && draft.externalPms && (
+              <section className="rounded-xl border border-rule bg-white px-5 py-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Link2 className="h-4 w-4 text-emerald shrink-0" />
+                  <h3 className="text-[14px] font-semibold text-ink">Booking link</h3>
+                </div>
+                <p className="text-[13px] text-ink-soft leading-relaxed">
+                  Your calendar is managed in your connected scheduler (Acuity), so SmartSpa
+                  doesn't hand out its own booking link. Patients keep booking through your
+                  existing system — SmartSpa watches it and acts on cancellations to recover revenue.
+                </p>
+              </section>
+            )}
+            {/* ── Your public booking link (SmartSpa-primary spas only) ── */}
+            {draft.slug && !draft.externalPms && (
               <section className="rounded-xl border border-rule bg-white px-5 py-4">
                 <button
                   type="button"

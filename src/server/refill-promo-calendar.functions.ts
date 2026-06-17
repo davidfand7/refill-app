@@ -18,7 +18,7 @@ import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
-import { getTenantIdForUser } from "@/server/scheduling-settings.functions";
+import { getTenantIdForUser, tenantBooksOnExternalPms } from "@/server/scheduling-settings.functions";
 import { recordRecoveryEvent } from "@/server/emma-attribution.functions";
 import {
   parsePromoCalendar,
@@ -283,7 +283,9 @@ export type PublicDeal = {
 
 export type PublicDealsResult =
   | { ok: false; reason: string }
-  | { ok: true; spaName: string; slug: string; deals: PublicDeal[] };
+  // v2.74.0 — bookingEnabled is false for external-PMS (Acuity) spas, where
+  // native /s/<slug> booking is gated; the deals page then drops its Book CTAs.
+  | { ok: true; spaName: string; slug: string; deals: PublicDeal[]; bookingEnabled: boolean };
 
 const publicDealsInput = z.object({ slug: z.string().min(1).max(120) });
 
@@ -327,7 +329,8 @@ export const getPublicDealsFn = createServerFn({ method: "POST" })
       seen.add(key);
       return true;
     });
-    return { ok: true, spaName: tenant.name as string, slug: data.slug, deals };
+    const bookingEnabled = !(await tenantBooksOnExternalPms(sb, tenant.id));
+    return { ok: true, spaName: tenant.name as string, slug: data.slug, deals, bookingEnabled };
   });
 
 // ─── Spa-authored offers (v2.0.0) ──────────────────────────────────────────
@@ -989,7 +992,11 @@ export const draftOfferPushFn = createServerFn({ method: "POST" })
       .select("slug")
       .eq("id", tenantId)
       .maybeSingle();
-    const slug = (tenantRow as { slug?: string } | null)?.slug ?? "";
+    let slug = (tenantRow as { slug?: string } | null)?.slug ?? "";
+    // v2.74.0 — external-PMS (Acuity) spas gate native booking, so a /s/<slug>
+    // "Book here" link dead-ends. Drop it; the "Reply and I'll get you on the
+    // calendar" CTA still closes the loop (human books via Acuity).
+    if (slug && (await tenantBooksOnExternalPms(sb, tenantId))) slug = "";
 
     const targets = await listOfferCohortTargets(sb, effectiveUserId, cohort);
     const built: Array<{ name: string; phone: string; body: string }> = [];

@@ -16,7 +16,7 @@ import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
-import { getTenantIdForUser } from "@/server/scheduling-settings.functions";
+import { getTenantIdForUser, tenantBooksOnExternalPms } from "@/server/scheduling-settings.functions";
 import { resolveSpaName } from "@/server/emma-spa-profile";
 import { recordAgentAction, recordMessagingActivity } from "@/server/messaging-activity";
 import { recordRecoveryEvent } from "@/server/emma-attribution.functions";
@@ -752,7 +752,12 @@ export const draftRescheduleNudges = createServerFn({ method: "POST" })
       .select("slug")
       .eq("id", tenantId)
       .maybeSingle();
-    const slug = (tenantRow as { slug?: string } | null)?.slug ?? "";
+    let slug = (tenantRow as { slug?: string } | null)?.slug ?? "";
+    // v2.74.0 — an external-PMS (Acuity) spa gates native self-booking, so a
+    // /s/<slug> "Rebook here" link dead-ends on the "unavailable" page. Drop the
+    // link for those spas; the "Reply and I'll find you a time" CTA still stands
+    // (the human rebooks via Acuity — the act-layer model).
+    if (slug && (await tenantBooksOnExternalPms(sb, tenantId))) slug = "";
 
     const built: Array<{
       name: string;
