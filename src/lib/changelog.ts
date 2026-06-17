@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.76.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.76.0 &mdash; <code>emma_</code> retirement, phase 2: rewrite DB function bodies + drop the compat views.</strong> v2.75.0 renamed the tables and left a <code>security_invoker</code> compatibility VIEW under each old <code>emma_</code> name so DB function/trigger bodies (which reference table names as TEXT and don&rsquo;t auto-update on a table rename) kept working. This phase finishes the job: a single atomic migration rewrites every <code>public</code> function whose body still references an <code>emma_</code> table &mdash; pulling each definition via <code>pg_get_functiondef</code>, whole-word-replacing the 24 table tokens (<code>\\m...\\M</code> so the deliberately-kept <code>emma_appointment_id</code> COLUMN and <code>emma_sweep_cron</code> job are never touched), and <code>CREATE OR REPLACE</code>-ing the corrected body &mdash; then drops all <code>emma_*</code> compatibility views. Atomic (rolls back on any malformed rewrite), idempotent, and order-safe (functions rewritten before views dropped). DB-only; app code already runs on bare names since v2.75.0. Migration: <code>20260618030000_v2_76_0_emma_retire_phase2_functions_drop_views.sql</code> (apply via Supabase dashboard). After this, the only <code>emma_</code> left anywhere is the intentional residue: the <code>emma_appointment_id</code> column + the <code>emma_sweep_cron</code> job.",
+    ],
+  },
+  {
     version: "v2.75.0",
     date: "June 2026",
     items: [
