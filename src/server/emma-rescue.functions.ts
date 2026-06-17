@@ -3148,7 +3148,7 @@ export const simulateRescueDispatchFn = createServerFn({ method: "POST" })
   .handler(
     async ({
       data,
-    }): Promise<RescueDispatchResult & { testAppointmentId: string }> => {
+    }): Promise<RescueDispatchResult & { testAppointmentId: string; slotDurationMin: number }> => {
       const { resolveEffectiveUserId } = await import("@/server/auth-helpers");
       const { effectiveUserId } = await resolveEffectiveUserId({
         accessToken: data.accessToken,
@@ -3208,6 +3208,27 @@ export const simulateRescueDispatchFn = createServerFn({ method: "POST" })
         }
       }
 
+      // v2.64.4 — use the freed service's REAL catalog duration when the caller
+      // didn't pass one, so a "Tox" sim is a faithful 15-min slot (not a flat
+      // 30). Without this the duration gate can't be tested: a 30-min sim slot
+      // wrongly admits a 45-min Filler patient. Resolve the freed treatment →
+      // catalog → its duration (min across matches = the tightest/most accurate
+      // slot); fall back to 30 if it doesn't resolve.
+      const freedTreatment = (data.treatmentType ?? "Tox").trim() || "Tox";
+      let slotDuration = data.durationMin ?? 30;
+      if (data.durationMin == null) {
+        try {
+          const simCatalog = await loadServiceCatalogForUser(sb, effectiveUserId);
+          const resolvedFreed = resolveTreatmentsToServiceIds([freedTreatment], simCatalog);
+          const durations = resolvedFreed.serviceIds
+            .map((id) => simCatalog.find((c) => c.id === id)?.durationMin)
+            .filter((d): d is number => typeof d === "number" && d > 0);
+          if (durations.length > 0) slotDuration = Math.min(...durations);
+        } catch (e) {
+          console.error("[rescue-sim] freed-duration resolve failed; using 30:", e);
+        }
+      }
+
       // Loose cast: booking_name / cancelled_at landed in later migrations than
       // the generated types know (same pattern the reschedule + ingest paths use).
       const { data: inserted, error } = await (
@@ -3219,8 +3240,8 @@ export const simulateRescueDispatchFn = createServerFn({ method: "POST" })
           scheduled_at: scheduledAt,
           status: "cancelled",
           cancelled_at: new Date(nowMs).toISOString(),
-          treatment_type: (data.treatmentType ?? "Tox").trim() || "Tox",
-          duration_min: data.durationMin ?? 30,
+          treatment_type: freedTreatment,
+          duration_min: slotDuration,
           provider_id: providerId,
           provider_name: providerName,
           booking_name: "__Rescue Sim__",
@@ -3240,6 +3261,6 @@ export const simulateRescueDispatchFn = createServerFn({ method: "POST" })
         userId: effectiveUserId,
         appointmentId: testAppointmentId,
       });
-      return { ...result, testAppointmentId };
+      return { ...result, testAppointmentId, slotDurationMin: slotDuration };
     },
   );

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.64.4",
+    date: "June 2026",
+    items: [
+      "<strong>v2.64.4 &mdash; &ldquo;Simulate a cancellation&rdquo; now uses the service&rsquo;s real duration.</strong> The test slot was hardcoded to 30 minutes, so simulating a Tox cancellation (really 15 min) didn&rsquo;t faithfully test the duration gate &mdash; a 45-min filler patient could slip into a 30-min slot. Now the sim looks up the freed treatment&rsquo;s actual catalog duration, so a Tox sim is a true 15-min slot and a Filler patient is correctly excluded. The confirmation toast now shows the slot length (&ldquo;Rescue fired on a 15-min slot&rdquo;) so you can see exactly what was tested. <strong>Touched</strong>: <code>simulateRescueDispatchFn</code> (resolve freed duration), rescue page toast.",
+    ],
+  },
+  {
     version: "v2.64.3",
     date: "June 2026",
     items: [

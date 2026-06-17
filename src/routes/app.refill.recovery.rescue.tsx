@@ -85,7 +85,7 @@ function RescueAgentPage() {
       });
       if (res.ok) {
         toast.success(
-          `Rescue fired — ${res.offersSent} offer${res.offersSent === 1 ? "" : "s"} sent to the proxy inbox. (test slot ${res.testAppointmentId.slice(0, 8)})`,
+          `Rescue fired on a ${res.slotDurationMin}-min slot — ${res.offersSent} offer${res.offersSent === 1 ? "" : "s"} sent to the proxy inbox. (test slot ${res.testAppointmentId.slice(0, 8)})`,
         );
       } else {
         toast.warning(`Rescue didn't send: ${res.reason ?? "unknown"}`);
