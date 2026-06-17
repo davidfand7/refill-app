@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.67.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.67.0 &mdash; &ldquo;Your Brand&rdquo; spreads to the waitlist + booking pages.</strong> v2.66.0 flipped the first white-label surface (the rescue-claim page); this extends it to the other two patient-facing surfaces a spa shares by link. The <strong>waitlist opt-in page</strong> (<code>/waitlist/optin/&hellip;</code>) now renders the spa&rsquo;s logo/letter-mark + brand name, accent-colored &ldquo;count me in&rdquo; button + highlights, an optional &ldquo;powered by SmartSpa&rdquo; footer (suppressed when the spa removes it), and a white-labeled <code>og:site_name</code> in the iMessage/Mail link preview. The <strong>public booking page</strong> (<code>/s/&lt;slug&gt;</code>) gains a brand header (logo + name on every step) + the suppressible powered-by footer + a real branded link preview (the page had no preview meta at all before). Brand is keyed by <code>user_id</code> while booking is keyed by <code>tenant_id</code>, so the booking resolver maps tenant&rarr;owner via the same lookup native bookings already use. All three surfaces flow through one shared <code>PublicBrand</code> shape + the single <code>resolveBrand</code>/<code>mergeBrand</code> gate, which keeps SmartSpa for any spa that isn&rsquo;t entitled + live. <strong>Deliberately deferred</strong>: deep accent-theming of the booking page&rsquo;s interactive states (selected chips, step pills) stays SmartSpa-green this pass &mdash; a focused tighten. <strong>Touched</strong>: <code>brand-resolver.ts</code> (shared <code>PublicBrand</code> + <code>toPublicBrand</code>), <code>emma-waitlist.functions.ts</code> + <code>waitlist.optin.$token.tsx</code>, <code>scheduling.functions.ts</code> + <code>s.$slug.tsx</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.66.0",
     date: "June 2026",
     items: [

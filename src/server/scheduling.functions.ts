@@ -52,6 +52,8 @@ import {
 } from "@/server/refill-promo-calendar.functions";
 import { recordRescheduleWinIfNudged } from "@/server/reschedule.functions";
 import { getTenantOwnerUserId } from "@/server/scheduling-settings.functions";
+import { resolveBrand, toPublicBrand, type PublicBrand } from "@/server/brand-resolver";
+import { REFILL_BRAND, mergeBrand } from "@/lib/brand";
 import { bestActiveOfferForName, badgeableOffers, type AddOnOffer } from "@/lib/promo-calendar";
 import {
   asResourceType,
@@ -375,8 +377,30 @@ export type PublicBookingContext =
       /** Whether to show prices on the public page (off → hide $, no "Best value"). */
       showPrices: boolean;
       services: PublicServiceOption[];
+      /** v2.66.0 — "Your Brand" white-label (project_your_brand_white_label).
+       * Plain SmartSpa unless the tenant owner is entitled + active. */
+      brand: PublicBrand;
     }
   | { ok: false; reason: string };
+
+// v2.66.0 — lightweight brand-only lookup for the booking route's <head> loader,
+// so link previews show the spa's brand name (og:site_name) when white-labeled.
+// Mirrors getRescueOfferBrand / getWaitlistOptInBrand.
+export const getPublicBookingBrandFn = createServerFn({ method: "GET" })
+  .inputValidator((input: unknown) => slugInput.parse(input))
+  .handler(async ({ data }): Promise<{ name: string } | null> => {
+    const sb = admin();
+    const { data: tenant } = await sb
+      .from("tenants")
+      .select("id")
+      .ilike("slug", data.slug)
+      .maybeSingle();
+    if (!tenant) return null;
+    const ownerUserId = await getTenantOwnerUserId(sb, tenant.id);
+    if (!ownerUserId) return null;
+    const resolved = await resolveBrand(sb, ownerUserId);
+    return { name: resolved.name };
+  });
 
 export const getPublicBookingContextFn = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => slugInput.parse(input))
@@ -532,6 +556,14 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
       }
     }
 
+    // v2.66.0 — resolve the tenant owner's brand for the booking page.
+    // Brand is keyed by user_id, booking by tenant_id, so map via the same
+    // owner lookup native bookings use. Degrades to SmartSpa on any miss.
+    const ownerUserId = await getTenantOwnerUserId(sb, tenant.id);
+    const resolvedBrand = ownerUserId
+      ? await resolveBrand(sb, ownerUserId)
+      : null;
+
     return {
       ok: true,
       tenantId: tenant.id,
@@ -541,6 +573,9 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
       categoryOrder,
       showPrices,
       services: serviceOptions,
+      brand: resolvedBrand
+        ? toPublicBrand(resolvedBrand)
+        : toPublicBrand(mergeBrand(REFILL_BRAND, null)),
     };
   });
 

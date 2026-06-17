@@ -28,6 +28,7 @@ import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
+import { resolveBrand, toPublicBrand, type PublicBrand } from "@/server/brand-resolver";
 import { loadServiceCatalogForUser } from "@/server/refill-catalog";
 import { resolveTreatmentsToServiceIds } from "@/lib/treatment-catalog-resolver";
 
@@ -67,6 +68,9 @@ export type WaitlistOptInPayload = {
   // set the patient picks from. Empty array = spa hasn't configured a
   // policy list yet, picker is hidden, fall back to catchall semantics.
   availableTreatments: string[];
+  // v2.66.0 — "Your Brand" white-label (project_your_brand_white_label). Plain
+  // SmartSpa unless the spa is entitled + active; the spa's own brand when it is.
+  brand: PublicBrand;
 };
 
 // ─── Admin client ─────────────────────────────────────────────────────────
@@ -170,6 +174,23 @@ const markPatientInput = z.object({
   patientNodeId: z.string().uuid(),
 });
 
+// v2.66.0 — lightweight brand-only lookup for the opt-in route's <head> loader,
+// so link previews show the spa's brand name (og:site_name) when white-labeled.
+// Mirrors getRescueOfferBrand.
+export const getWaitlistOptInBrand = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => tokenInput.parse(input))
+  .handler(async ({ data }): Promise<{ name: string } | null> => {
+    const sb = admin();
+    const { data: tokenRow } = await sb
+      .from("emma_waitlist_tokens")
+      .select("user_id")
+      .eq("token", data.token)
+      .maybeSingle();
+    if (!tokenRow) return null;
+    const resolved = await resolveBrand(sb, tokenRow.user_id);
+    return { name: resolved.name };
+  });
+
 // ─── getWaitlistOptInPayload (public, token-only) ─────────────────────────
 
 export const getWaitlistOptInPayload = createServerFn({ method: "POST" })
@@ -243,11 +264,16 @@ export const getWaitlistOptInPayload = createServerFn({ method: "POST" })
       }
     }
 
+    // v2.66.0 — resolve the spa's brand for the opt-in page. Degrades to
+    // SmartSpa on failure, so it never blocks the invite.
+    const resolved = await resolveBrand(sb, tokenRow.user_id);
+
     return {
       spaName: spa?.title?.trim() || "your spa",
       patientFirstName: extractFirstName(patient?.title ?? null),
       alreadyOptedIn: status === "active",
       alreadyRevoked: status === "revoked",
+      brand: toPublicBrand(resolved),
       intentType:
         (existing?.intent_type as "catchall" | "earlier_appointment") ??
         "catchall",

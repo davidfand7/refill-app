@@ -25,6 +25,38 @@ import {
 
 type LooseClient = { from(t: string): any };
 
+/**
+ * The brand fields a PUBLIC patient-facing page needs to white-label itself —
+ * the subset of ResolvedBrand that crosses the wire on a public payload (no
+ * assistantName / whiteLabelActive, which are owner-side concerns). Shared by
+ * the waitlist opt-in + booking pages; the rescue claim page predates this and
+ * carries its own structurally-identical ClaimBrand.
+ */
+export type PublicBrand = {
+  name: string;
+  accent: string;
+  logoUrl: string | null;
+  logoMark: string;
+  removePoweredBy: boolean;
+};
+
+/** Narrow a ResolvedBrand to the public-page subset. */
+export function toPublicBrand(b: {
+  name: string;
+  accent: string;
+  logoUrl: string | null;
+  logoMark: string;
+  removePoweredBy: boolean;
+}): PublicBrand {
+  return {
+    name: b.name,
+    accent: b.accent,
+    logoUrl: b.logoUrl,
+    logoMark: b.logoMark,
+    removePoweredBy: b.removePoweredBy,
+  };
+}
+
 /** Columns the merge needs from the brand_settings row. */
 type BrandSettingsRow = {
   assistant_name: string | null;

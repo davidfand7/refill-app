@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import {
   getPublicBookingContextFn,
+  getPublicBookingBrandFn,
   listAvailableSlots,
   holdSlot,
   confirmBooking,
@@ -44,6 +45,31 @@ export const Route = createFileRoute("/s/$slug")({
   validateSearch: (search: Record<string, unknown>): { service?: string } => ({
     service: typeof search.service === "string" ? search.service : undefined,
   }),
+  // v2.66.0 — resolve the spa's brand name server-side so the booking link's
+  // preview (og:site_name) carries the spa's brand when white-labeled. The page
+  // had no head meta before this. Degrades to SmartSpa on any failure.
+  loader: async ({ params }) => {
+    try {
+      const brand = await getPublicBookingBrandFn({ data: { slug: params.slug } });
+      return { brandName: brand?.name ?? "SmartSpa" };
+    } catch {
+      return { brandName: "SmartSpa" };
+    }
+  },
+  head: ({ loaderData }) => {
+    const siteName = loaderData?.brandName ?? "SmartSpa";
+    return {
+      meta: [
+        { title: `Book with ${siteName}` },
+        { name: "description", content: "Pick a time that works for you — book online in under a minute." },
+        { property: "og:title", content: `Book with ${siteName}` },
+        { property: "og:description", content: "Pick a time that works for you — book online in under a minute." },
+        { property: "og:site_name", content: siteName },
+        { property: "og:type", content: "website" },
+        { name: "twitter:card", content: "summary" },
+      ],
+    };
+  },
 });
 
 type Ctx = Extract<PublicBookingContext, { ok: true }>;
@@ -403,6 +429,32 @@ function PublicBookingPage() {
   return (
     <main className="min-h-screen bg-[#fafaf7] text-stone-900 flex items-start justify-center px-5 py-12 sm:py-16">
       <div className="w-full max-w-md sm:max-w-4xl">
+        {/* v2.66.0 — "Your Brand" white-label header (logo or letter mark + name),
+            shown on every screen once the context (and its brand) has loaded. */}
+        {ctx?.brand && (
+          <div className="flex items-center justify-center mb-5">
+            {ctx.brand.logoUrl ? (
+              <img
+                src={ctx.brand.logoUrl}
+                alt={ctx.brand.name}
+                className="h-9 max-w-[200px] object-contain"
+              />
+            ) : (
+              <div className="inline-flex items-center gap-2">
+                <span
+                  className="h-7 w-7 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                  style={{ backgroundColor: ctx.brand.accent }}
+                >
+                  {ctx.brand.logoMark}
+                </span>
+                <span className="text-[15px] font-semibold text-stone-900">
+                  {ctx.brand.name}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {screen === "loading" && (
           <div className="flex items-center gap-3 text-stone-500">
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -934,6 +986,13 @@ function PublicBookingPage() {
               );
             })()}
           </div>
+        )}
+
+        {/* v2.66.0 — "powered by SmartSpa", suppressed when white-label removes it. */}
+        {ctx?.brand && !ctx.brand.removePoweredBy && (
+          <p className="text-[11px] text-stone-400 text-center mt-6">
+            powered by SmartSpa
+          </p>
         )}
       </div>
     </main>

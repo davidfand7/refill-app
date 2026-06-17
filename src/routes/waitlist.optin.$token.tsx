@@ -33,14 +33,28 @@ import {
 } from "lucide-react";
 import {
   getWaitlistOptInPayload,
+  getWaitlistOptInBrand,
   optInToWaitlist,
   revokeWaitlistOptIn,
   type WaitlistOptInPayload,
 } from "@/server/emma-waitlist.functions";
+import type { PublicBrand } from "@/server/brand-resolver";
 
 export const Route = createFileRoute("/waitlist/optin/$token")({
   component: WaitlistOptInPage,
-  head: () => ({
+  // v2.66.0 — resolve the spa's brand name server-side so link-preview scrapers
+  // get the spa's brand in og:site_name when white-labeled. Degrades to SmartSpa.
+  loader: async ({ params }) => {
+    try {
+      const brand = await getWaitlistOptInBrand({ data: { token: params.token } });
+      return { brandName: brand?.name ?? "SmartSpa" };
+    } catch {
+      return { brandName: "SmartSpa" };
+    }
+  },
+  head: ({ loaderData }) => {
+    const siteName = loaderData?.brandName ?? "SmartSpa";
+    return {
     meta: [
       { title: "Join the waitlist" },
       {
@@ -54,7 +68,7 @@ export const Route = createFileRoute("/waitlist/optin/$token")({
         content:
           "Get a text the moment a great slot opens up. Tap to join — reply STOP anytime to leave.",
       },
-      { property: "og:site_name", content: "SmartSpa" },
+      { property: "og:site_name", content: siteName },
       { property: "og:type", content: "website" },
       {
         property: "og:image",
@@ -64,7 +78,7 @@ export const Route = createFileRoute("/waitlist/optin/$token")({
       { property: "og:image:height", content: "630" },
       {
         property: "og:image:alt",
-        content: "SmartSpa — join the waitlist",
+        content: `${siteName} — join the waitlist`,
       },
       { name: "twitter:title", content: "Join the waitlist" },
       {
@@ -78,15 +92,16 @@ export const Route = createFileRoute("/waitlist/optin/$token")({
         content: "https://getrefill.app/brand/refill-og-patient.png",
       },
     ],
-  }),
+    };
+  },
 });
 
 type LoadState =
   | { kind: "loading" }
   | { kind: "invalid"; message: string | null }
   | { kind: "ready"; payload: WaitlistOptInPayload }
-  | { kind: "confirmed"; spaName: string; firstName: string | null }
-  | { kind: "declined"; spaName: string };
+  | { kind: "confirmed"; spaName: string; firstName: string | null; brand: PublicBrand }
+  | { kind: "declined"; spaName: string; brand: PublicBrand };
 
 function WaitlistOptInPage() {
   const { token } = useParams({ from: "/waitlist/optin/$token" });
@@ -126,6 +141,7 @@ function WaitlistOptInPage() {
         kind: "confirmed",
         spaName: state.payload.spaName,
         firstName: state.payload.patientFirstName,
+        brand: state.payload.brand,
       });
     } catch (e) {
       setState({
@@ -142,7 +158,7 @@ function WaitlistOptInPage() {
     setBusy(true);
     try {
       await revokeWaitlistOptIn({ data: { token } });
-      setState({ kind: "declined", spaName: state.payload.spaName });
+      setState({ kind: "declined", spaName: state.payload.spaName, brand: state.payload.brand });
     } catch (e) {
       setState({
         kind: "invalid",
@@ -153,9 +169,45 @@ function WaitlistOptInPage() {
     }
   }
 
+  // v2.66.0 — "Your Brand" white-label. The brand rides on the payload (and is
+  // carried into the confirmed/declined terminal states). Defaults keep the
+  // loading / invalid states on the SmartSpa accent.
+  const brand: PublicBrand | null =
+    state.kind === "ready"
+      ? state.payload.brand
+      : state.kind === "confirmed" || state.kind === "declined"
+        ? state.brand
+        : null;
+  const accent = brand?.accent ?? "#056048";
+
   return (
     <div className="min-h-screen bg-[#fbfaf7] text-[#1c2024] flex flex-col items-center justify-center p-6 font-[-apple-system,BlinkMacSystemFont,'Helvetica_Neue',system-ui,sans-serif]">
       <div className="w-full max-w-md bg-white border border-[#e2dfd6] rounded-2xl p-6 sm:p-8 shadow-sm">
+        {/* v2.66.0 — brand header (logo image or letter mark + name). */}
+        {brand && (
+          <div className="flex items-center justify-center mb-4">
+            {brand.logoUrl ? (
+              <img
+                src={brand.logoUrl}
+                alt={brand.name}
+                className="h-9 max-w-[180px] object-contain"
+              />
+            ) : (
+              <div className="inline-flex items-center gap-2">
+                <span
+                  className="h-7 w-7 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                  style={{ backgroundColor: accent }}
+                >
+                  {brand.logoMark}
+                </span>
+                <span className="text-[15px] font-semibold text-[#1c2024]">
+                  {brand.name}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {state.kind === "loading" && (
           <div className="flex items-center gap-2 text-sm text-[#5a6068] justify-center py-6">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -180,7 +232,7 @@ function WaitlistOptInPage() {
 
         {state.kind === "ready" && state.payload.alreadyOptedIn && (
           <div className="text-center py-2">
-            <CheckCircle2 className="h-10 w-10 text-[#056048] mx-auto mb-3" />
+            <CheckCircle2 className="h-10 w-10 mx-auto mb-3" style={{ color: accent }} />
             <h1 className="text-xl font-semibold mb-1">You're already in</h1>
             <p className="text-sm text-[#5a6068]">
               You're on{" "}
@@ -215,13 +267,13 @@ function WaitlistOptInPage() {
           !state.payload.alreadyRevoked && (
             <>
               <div className="flex items-center justify-center mb-3">
-                <HeartHandshake className="h-10 w-10 text-[#056048]" />
+                <HeartHandshake className="h-10 w-10" style={{ color: accent }} />
               </div>
               <h1 className="text-xl font-semibold text-center mb-1">
                 {state.payload.patientFirstName
                   ? `${state.payload.patientFirstName}, join `
                   : "Join "}
-                <span className="text-[#056048]">
+                <span style={{ color: accent }}>
                   {state.payload.spaName}
                 </span>
                 's waitlist?
@@ -235,7 +287,8 @@ function WaitlistOptInPage() {
                 type="button"
                 onClick={() => void handleConfirm()}
                 disabled={busy}
-                className="w-full rounded-md bg-[#056048] text-white px-4 py-3 text-sm font-semibold hover:bg-[#044a38] transition disabled:opacity-50"
+                style={{ backgroundColor: accent }}
+                className="w-full rounded-md text-white px-4 py-3 text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
               >
                 {busy ? (
                   <span className="inline-flex items-center gap-1.5">
@@ -263,7 +316,7 @@ function WaitlistOptInPage() {
 
         {state.kind === "confirmed" && (
           <div className="text-center py-2">
-            <CheckCircle2 className="h-10 w-10 text-[#056048] mx-auto mb-3" />
+            <CheckCircle2 className="h-10 w-10 mx-auto mb-3" style={{ color: accent }} />
             <h1 className="text-xl font-semibold mb-1">
               {state.firstName ? `${state.firstName}, you're in` : "You're in"}
             </h1>
@@ -287,6 +340,13 @@ function WaitlistOptInPage() {
               you change your mind, just let them know directly.
             </p>
           </div>
+        )}
+
+        {/* v2.66.0 — "powered by SmartSpa", suppressed when white-label removes it. */}
+        {brand && !brand.removePoweredBy && (
+          <p className="text-[10px] text-[#a3a8ae] text-center mt-5">
+            powered by SmartSpa
+          </p>
         )}
       </div>
     </div>
