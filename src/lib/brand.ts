@@ -96,7 +96,7 @@ export const brand = REFILL_BRAND;
 // hard number shown yet); set `amount` when the number is decided.
 export const WHITE_LABEL_PRICING = {
   /** Dollars per month. null → render the "pricing coming soon" variant. */
-  amount: null as number | null,
+  amount: 29 as number | null,
   interval: "mo" as const,
   currencySymbol: "$",
 } as const;

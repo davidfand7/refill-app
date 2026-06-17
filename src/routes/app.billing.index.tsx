@@ -347,7 +347,7 @@ function ScoreboardCard({ ledger }: { ledger: BillingLedger | null }) {
       </div>
 
       <div className="px-5 sm:px-6 py-5">
-        {winCount === 0 && ledger.pendingCount === 0 ? (
+        {winCount === 0 && ledger.pendingCount === 0 && fee <= 0 ? (
           <p className="text-sm text-ink-soft">
             No wins yet this month — so <span className="font-semibold text-foreground">$0</span>.
             Every booking SmartSpa creates for you shows up here, and you only ever
@@ -420,7 +420,7 @@ function ScoreboardCard({ ledger }: { ledger: BillingLedger | null }) {
         </ul>
 
         {/* The math behind it — demoted to an audit detail */}
-        {(activeLines.length > 0 || ledger.monthlyBaseUsd > 0) && (
+        {(activeLines.length > 0 || ledger.monthlyBaseUsd > 0 || ledger.whiteLabelAddonUsd > 0) && (
           <details className="mt-4 text-[12px]">
             <summary className="cursor-pointer text-emerald hover:underline">
               The math behind it — {money(fee)}{" "}
@@ -429,6 +429,12 @@ function ScoreboardCard({ ledger }: { ledger: BillingLedger | null }) {
             <div className="mt-2 space-y-1.5 rounded-lg bg-white/60 p-3">
               {ledger.monthlyBaseUsd > 0 && (
                 <Row label="Monthly base" value={money(ledger.monthlyBaseUsd)} />
+              )}
+              {ledger.whiteLabelAddonUsd > 0 && (
+                <Row
+                  label="Your Brand — white-label"
+                  value={money(ledger.whiteLabelAddonUsd)}
+                />
               )}
               {activeLines.map((l) => (
                 <Row

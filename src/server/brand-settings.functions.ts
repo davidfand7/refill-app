@@ -146,3 +146,43 @@ export const setBrandSettingsFn = createServerFn({ method: "POST" })
     if (error) throw new Error(`Couldn't save brand settings: ${error.message}`);
     return { ok: true };
   });
+
+// ─── setWhiteLabelAddonFn — self-serve start/cancel of the paid add-on ───────
+//
+// v2.68.0. This is the ONLY owner-facing path that writes `entitled`: it IS the
+// subscription. `entitled = true` means "subscribed to the $29/mo white-label
+// add-on" — the monthly invoice generator bills it (whiteLabelAddonUsdForTenant
+// in refill-billing.ts) and resolveBrand honors the paid fields. No hard
+// card-on-file gate here: the monthly invoice push is already graceful when no
+// card is on file (drafts pile up until one is added), matching the base-fee
+// behavior — so we let the owner turn it on and nudge them to add a card in the
+// UI rather than block. Cancelling (active:false) flips entitled off; the spa
+// reverts to SmartSpa and stops being billed from the next period.
+const addonInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  active: z.boolean(),
+});
+
+export const setWhiteLabelAddonFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => addonInput.parse(raw))
+  .handler(async ({ data }): Promise<{ ok: true; entitled: boolean }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const { error } = await (admin() as unknown as LooseClient)
+      .from("brand_settings")
+      .upsert(
+        {
+          user_id: effectiveUserId,
+          entitled: data.active,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      );
+    if (error) {
+      throw new Error(`Couldn't update the white-label add-on: ${error.message}`);
+    }
+    return { ok: true, entitled: data.active };
+  });

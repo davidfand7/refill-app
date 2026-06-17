@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.68.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.68.0 &mdash; &ldquo;Your Brand&rdquo; goes self-serve: turn white-label on yourself for $29/mo.</strong> Until now the white-label add-on was unlocked manually (a SQL flip); this makes it a one-tap upgrade. On <strong>Settings &rarr; Your Brand</strong>, a spa can now <strong>Start white-label &mdash; $29/mo</strong> (and cancel anytime) right from the page. Turning it on activates the brand immediately and adds a flat <strong>$29/mo</strong> line to the spa&rsquo;s existing monthly invoice &mdash; no separate subscription, it rides the same Stripe customer + card already used for the per-booking fees. The charge is wired through the <em>single</em> billing math (<code>loadEffectiveFeeConfig</code> &rarr; <code>computeInvoiceTotal</code>), so the <strong>billing scoreboard</strong>, the recovery-dashboard <strong>preview</strong>, and the actual <strong>monthly invoice</strong> can never disagree &mdash; the add-on shows as its own line (&ldquo;Your Brand &mdash; white-label&rdquo;) everywhere. The monthly cron also unions in subscribed spas that have no other billable activity, so the $29 is never silently skipped. Price lives in one config constant. <strong>Honest framing kept</strong>: the give still ships first &mdash; any spa can fully set up + live-preview its brand for free; you only pay to flip it on for patients. <strong>Touched</strong>: <code>brand.ts</code> (price = $29), <code>brand-settings.functions.ts</code> (<code>setWhiteLabelAddonFn</code>), <code>billing-fee-core.ts</code> (add-on in the shared fee config + total), <code>refill-billing.ts</code> (invoice line + cron union + preview), <code>refill-fee-rules.functions.ts</code> (ledger), <code>app.refill.settings.brand.tsx</code> (self-serve start/cancel), <code>app.billing.index.tsx</code> (scoreboard line). No migration.",
+    ],
+  },
+  {
     version: "v2.67.0",
     date: "June 2026",
     items: [

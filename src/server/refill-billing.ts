@@ -50,6 +50,7 @@ import {
   readTenantStripeCustomerId,
   type StripeMode,
 } from "@/lib/stripe-mode";
+import { WHITE_LABEL_PRICING } from "@/lib/brand";
 import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
 import {
@@ -472,10 +473,31 @@ export async function generateMonthlyInvoiceForTenant(args: {
   // Annual caps need YTD-already-charged for this metric (from closed invoices
   // earlier this calendar year). Strictly-before periodStart → idempotent.
   const priorChargedThisYearByMetric = await loadPriorChargedThisYear(sb, tenantId, periodStart);
+  // totalDueUsd already includes the white-label add-on (loadEffectiveFeeConfig
+  // resolves cfg.whiteLabelAddonUsd; computeInvoiceTotal folds it into the total),
+  // so the cron, the billing ledger, and the dashboard preview can't drift.
   const { totalDueUsd, lines } = computeInvoiceTotal(cfg, agg, { priorChargedThisYearByMetric });
 
+  // v2.68.0 — record the "Your Brand" white-label add-on as its own fee_breakdown
+  // entry for the invoice's historical itemization (the charge already rides the
+  // single Stripe line via totalDueUsd). Stored loosely (Json column) since it
+  // isn't a typed recovered-revenue LedgerLine.
+  const whiteLabelUsd = cfg.whiteLabelAddonUsd ?? 0;
+  const feeBreakdown: unknown[] = [...lines];
+  if (whiteLabelUsd > 0) {
+    feeBreakdown.push({
+      metricKey: "white_label_addon",
+      label: "Your Brand — white-label",
+      mode: "flat",
+      charge: whiteLabelUsd,
+      count: 1,
+      enabled: true,
+    });
+  }
+
   // Back-compat rollups for the legacy invoice columns + the metric-charge
-  // subtotal (total minus the monthly base).
+  // subtotal (total minus the flat fees — base + add-on — leaving the
+  // recovered-revenue share only).
   let recoveredRevenueUsd = 0;
   let recoveredRevenueCount = 0;
   for (const a of agg.values()) {
@@ -483,11 +505,11 @@ export async function generateMonthlyInvoiceForTenant(args: {
     recoveredRevenueCount += a.count;
   }
   recoveredRevenueUsd = +recoveredRevenueUsd.toFixed(2);
-  const metricChargesUsd = +(totalDueUsd - cfg.monthlyBaseUsd).toFixed(2);
+  const metricChargesUsd = +(totalDueUsd - cfg.monthlyBaseUsd - whiteLabelUsd).toFixed(2);
 
-  // Nothing billable this period → skip (no empty draft rows). Replaces the
-  // old "no active plan" gate now that plans aren't the rate-source.
-  if (totalDueUsd <= 0 && recoveredRevenueCount === 0) {
+  // Nothing billable this period → skip (no empty draft rows). The white-label
+  // add-on counts as billable, so a subscribed spa with zero wins still invoices.
+  if (totalDueUsd <= 0 && recoveredRevenueCount === 0 && whiteLabelUsd <= 0) {
     return { created: false, reason: "No billable wins this period." };
   }
 
@@ -506,7 +528,7 @@ export async function generateMonthlyInvoiceForTenant(args: {
         revenue_share_pct: null,
         monthly_flat_usd: null,
         monthly_base_usd: cfg.monthlyBaseUsd,
-        fee_breakdown: lines as unknown as Json,
+        fee_breakdown: feeBreakdown as unknown as Json,
         recovered_revenue_count: recoveredRevenueCount,
         recovered_revenue_usd: recoveredRevenueUsd,
         share_due_usd: metricChargesUsd,
@@ -567,9 +589,10 @@ export async function generateMonthlyInvoiceForTenant(args: {
             year: "numeric",
             timeZone: "UTC",
           });
+          const addonNote = whiteLabelUsd > 0 ? ` + Your Brand $${whiteLabelUsd}` : "";
           const description = `Refill — ${periodLabel} (${recoveredRevenueCount} win${
             recoveredRevenueCount === 1 ? "" : "s"
-          } → $${totalDueUsd.toLocaleString()})`;
+          }${addonNote} → $${totalDueUsd.toLocaleString()})`;
 
           // v1.7.1 — switched to invoice-scoped-items pattern. v1.7 used
           // the "pending pool" pattern (create InvoiceItem with no invoice,
@@ -721,7 +744,37 @@ export async function generateMonthlyInvoicesForAll(args: {
       .order("tenant_id", { ascending: true })
       .range(from, to),
   );
-  const tenantIds = Array.from(new Set(plans.map((p) => p.tenant_id)));
+  const tenantIdSet = new Set(plans.map((p) => p.tenant_id));
+
+  // v2.68.0 — also invoice spas subscribed to the "Your Brand" white-label
+  // add-on even if they have NO active pricing-plan row, so the $29/mo never
+  // silently goes uncharged (feedback_silent_truncation_audit). brand_settings
+  // is keyed by user_id → map to tenant_id via tenant_memberships. Loose cast
+  // (table not in generated types); paginated.
+  if (WHITE_LABEL_PRICING.amount && WHITE_LABEL_PRICING.amount > 0) {
+    const entitledRows = await fetchAllRows<{ user_id: string }>((from, to) =>
+      (sb as unknown as { from(t: string): any })
+        .from("brand_settings")
+        .select("user_id")
+        .eq("entitled", true)
+        .order("user_id", { ascending: true })
+        .range(from, to),
+    );
+    const entitledUserIds = entitledRows.map((r) => r.user_id);
+    if (entitledUserIds.length) {
+      const memberships = await fetchAllRows<{ tenant_id: string }>((from, to) =>
+        sb
+          .from("tenant_memberships")
+          .select("tenant_id")
+          .in("user_id", entitledUserIds)
+          .order("tenant_id", { ascending: true })
+          .range(from, to),
+      );
+      for (const m of memberships) tenantIdSet.add(m.tenant_id);
+    }
+  }
+
+  const tenantIds = Array.from(tenantIdSet);
 
   let invoiced = 0;
   const errors: string[] = [];
@@ -791,8 +844,11 @@ export type RefillInvoicePreview = {
   mtdRecoveredUsd: number;
   /** Total verified wins across metrics. */
   mtdRecoveredCount: number;
-  /** monthly_base + Σ(metric charges) — what the spa would owe if the period
-   *  closed today. Anchored in code (fee-rules model), not the UI. */
+  /** v2.68.0 — "Your Brand" white-label flat add-on this period ($0 unless the
+   *  spa is subscribed). Included in totalDueUsd. */
+  whiteLabelAddonUsd: number;
+  /** monthly_base + white-label add-on + Σ(metric charges) — what the spa would
+   *  owe if the period closed today. Anchored in code (fee-rules model), not the UI. */
   totalDueUsd: number;
 };
 
@@ -834,6 +890,7 @@ export const getInvoicePreview = createServerFn({ method: "POST" })
       lines,
       mtdRecoveredUsd: +mtdRecoveredUsd.toFixed(2),
       mtdRecoveredCount,
+      whiteLabelAddonUsd: cfg.whiteLabelAddonUsd ?? 0,
       totalDueUsd,
     };
   });

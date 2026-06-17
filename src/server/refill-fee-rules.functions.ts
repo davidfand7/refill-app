@@ -95,6 +95,9 @@ export type BillingLedger = {
   periodStart: string;
   periodEnd: string;
   monthlyBaseUsd: number;
+  /** v2.68.0 — "Your Brand" white-label flat add-on this period ($0 unless
+   *  subscribed). A flat fee alongside monthlyBaseUsd; included in totalDueUsd. */
+  whiteLabelAddonUsd: number;
   lines: LedgerLine[];
   wins: LedgerWin[];
   totalDueUsd: number;
@@ -374,6 +377,7 @@ export const getBillingLedger = createServerFn({ method: "POST" })
       periodStart: periodStart.toISOString(),
       periodEnd: periodEnd.toISOString(),
       monthlyBaseUsd: cfg.monthlyBaseUsd,
+      whiteLabelAddonUsd: cfg.whiteLabelAddonUsd ?? 0,
       lines,
       wins,
       totalDueUsd,

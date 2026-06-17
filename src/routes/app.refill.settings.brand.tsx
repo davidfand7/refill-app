@@ -39,6 +39,7 @@ import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
   getBrandSettingsFn,
   setBrandSettingsFn,
+  setWhiteLabelAddonFn,
   type BrandSettingsBundle,
 } from "@/server/brand-settings.functions";
 import {
@@ -75,6 +76,7 @@ function BrandPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [addonBusy, setAddonBusy] = useState(false);
   const [entitled, setEntitled] = useState(false);
   const [server, setServer] = useState<Draft>(EMPTY_DRAFT);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
@@ -163,6 +165,33 @@ function BrandPage() {
     }
   }
 
+  // v2.68.0 — self-serve start/cancel of the paid white-label add-on. Flips
+  // `entitled` (which both unlocks the paid fields and triggers the $29/mo line
+  // on the monthly invoice). No hard card gate — the invoice push is graceful
+  // without one; the banner nudges the owner to add a card in Billing.
+  async function toggleAddon(active: boolean) {
+    if (addonBusy) return;
+    setAddonBusy(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) throw new Error("Not signed in.");
+      await setWhiteLabelAddonFn({
+        data: { accessToken: token, viewAsUserId, active },
+      });
+      setEntitled(active);
+      toast.success(
+        active
+          ? "White-label is on — set your brand below and flip it live."
+          : "White-label add-on cancelled.",
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't update the add-on.");
+    } finally {
+      setAddonBusy(false);
+    }
+  }
+
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
 
@@ -220,27 +249,63 @@ function BrandPage() {
                 </span>
               </div>
 
-              {/* Entitlement banner */}
+              {/* Entitlement banner + self-serve start/cancel */}
               {entitled ? (
-                <div className="flex items-start gap-2 rounded-lg border border-emerald/30 bg-emerald-soft/50 px-3 py-2.5 text-[12px] text-emerald">
-                  <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
-                  <span>
-                    White-label is unlocked for your spa. Fill it in below and
-                    flip <strong>Make my brand live</strong> on — patients will
-                    see your brand everywhere.
-                  </span>
+                <div className="rounded-lg border border-emerald/30 bg-emerald-soft/50 px-3 py-2.5 space-y-2">
+                  <div className="flex items-start gap-2 text-[12px] text-emerald">
+                    <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
+                    <span>
+                      White-label is active ({whiteLabelPriceLabel()}, billed on
+                      your monthly invoice). Fill it in below and flip{" "}
+                      <strong>Make my brand live</strong> on — patients will see
+                      your brand everywhere.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void toggleAddon(false)}
+                    disabled={addonBusy}
+                    className="text-[12px] text-ink-soft hover:text-ink underline underline-offset-2 disabled:opacity-50"
+                  >
+                    {addonBusy ? "Working…" : "Cancel add-on"}
+                  </button>
                 </div>
               ) : (
-                <div className="flex items-start gap-2 rounded-lg border border-amber/30 bg-amber-soft/50 px-3 py-2.5 text-[12px] text-ink">
-                  <Lock className="h-4 w-4 mt-0.5 shrink-0 text-amber" />
-                  <span>
-                    Set it all up and preview it now for free — it goes live the
-                    moment you upgrade.{" "}
-                    <strong className="text-amber">
-                      {whiteLabelPriceLabel()}
-                    </strong>
-                    .
-                  </span>
+                <div className="rounded-lg border border-amber/30 bg-amber-soft/50 px-3 py-2.5 space-y-2.5">
+                  <div className="flex items-start gap-2 text-[12px] text-ink">
+                    <Lock className="h-4 w-4 mt-0.5 shrink-0 text-amber" />
+                    <span>
+                      Set it all up and preview it free below — then turn it on to
+                      go live for patients.{" "}
+                      <strong className="text-amber">
+                        {whiteLabelPriceLabel()}
+                      </strong>
+                      , billed on your usual monthly invoice (make sure a card is
+                      on file in{" "}
+                      <a href="/app/billing" className="underline underline-offset-2">
+                        Billing
+                      </a>
+                      ).
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void toggleAddon(true)}
+                    disabled={addonBusy}
+                    className="inline-flex items-center gap-1.5 rounded-md bg-amber px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-50"
+                  >
+                    {addonBusy ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Starting…
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Start white-label — {whiteLabelPriceLabel()}
+                      </>
+                    )}
+                  </button>
                 </div>
               )}
 

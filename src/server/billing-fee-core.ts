@@ -21,6 +21,7 @@ import {
   type CapPeriod,
   type FeeMode,
 } from "@/lib/billing-metrics";
+import { WHITE_LABEL_PRICING } from "@/lib/brand";
 
 type Sb = SupabaseClient<Database>;
 
@@ -36,6 +37,11 @@ export type FeeRule = {
 export type EffectiveFeeConfig = {
   monthlyBaseUsd: number;
   rules: Map<string, FeeRule>;
+  /** v2.68.0 — "Your Brand" white-label flat add-on for this tenant this period
+   * (WHITE_LABEL_PRICING.amount when the owner is subscribed, else 0). A flat
+   * fee alongside monthlyBaseUsd — added to the total in computeInvoiceTotal so
+   * the cron, the billing ledger, and the dashboard preview all agree. */
+  whiteLabelAddonUsd: number;
 };
 
 export type LedgerLine = {
@@ -89,12 +95,13 @@ export async function loadEffectiveFeeConfig(
   sb: Sb,
   tenantId: string,
 ): Promise<EffectiveFeeConfig> {
-  const [{ data: cfg }, { data: ruleRows }] = await Promise.all([
+  const [{ data: cfg }, { data: ruleRows }, whiteLabelAddonUsd] = await Promise.all([
     sb.from("billing_config").select("monthly_base_usd").eq("tenant_id", tenantId).maybeSingle(),
     sb
       .from("billing_fee_rules")
       .select("metric_key, mode, amount, enabled, cap_usd, cap_period")
       .eq("tenant_id", tenantId),
+    loadWhiteLabelAddonUsd(sb, tenantId),
   ]);
   const byMetric = new Map<string, FeeRule>();
   for (const r of ruleRows ?? []) {
@@ -120,7 +127,37 @@ export async function loadEffectiveFeeConfig(
   return {
     monthlyBaseUsd: cfg ? Number(cfg.monthly_base_usd) : 0,
     rules: byMetric,
+    whiteLabelAddonUsd,
   };
+}
+
+/**
+ * v2.68.0 — the "Your Brand" white-label flat add-on (in dollars) for a tenant.
+ * Brand entitlement is keyed by the tenant OWNER's user_id (the earliest
+ * tenant_membership — the same owner native bookings stamp), so we map
+ * tenant→owner then read brand_settings.entitled. Returns the configured price
+ * when subscribed, else 0. brand_settings isn't in the generated types yet, and
+ * neither read is tenant-resolution of the caller — both are tenant-scoped DB
+ * reads like the rest of this module — so the "no tenant resolution" rule holds.
+ */
+async function loadWhiteLabelAddonUsd(sb: Sb, tenantId: string): Promise<number> {
+  const amount = WHITE_LABEL_PRICING.amount;
+  if (!amount || amount <= 0) return 0;
+  const { data: owner } = await sb
+    .from("tenant_memberships")
+    .select("user_id, created_at")
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const ownerUserId = (owner?.user_id as string | undefined) ?? null;
+  if (!ownerUserId) return 0;
+  const { data } = await (sb as unknown as { from(t: string): any })
+    .from("brand_settings")
+    .select("entitled")
+    .eq("user_id", ownerUserId)
+    .maybeSingle();
+  return data?.entitled ? amount : 0;
 }
 
 /**
@@ -181,7 +218,10 @@ export function computeInvoiceTotal(
   opts?: { priorChargedThisYearByMetric?: Map<string, number> },
 ): { totalDueUsd: number; lines: LedgerLine[] } {
   const lines: LedgerLine[] = [];
-  let total = cfg.monthlyBaseUsd;
+  // Flat fees: monthly base + the white-label add-on. The add-on is surfaced as
+  // its own field on the ledger/preview (parallel to monthlyBaseUsd), not as a
+  // per-win LedgerLine, so the metric lines stay metric-only.
+  let total = cfg.monthlyBaseUsd + (cfg.whiteLabelAddonUsd ?? 0);
   for (const m of BILLABLE_METRICS) {
     const rule = cfg.rules.get(m.key)!;
     const a = agg.get(m.key) ?? { count: 0, revenueUsd: 0 };
