@@ -39,6 +39,7 @@ import {
   type WaitlistOptInPayload,
 } from "@/server/emma-waitlist.functions";
 import type { PublicBrand } from "@/server/brand-resolver";
+import { PublicBrandHeader } from "@/components/refill/PublicBrandHeader";
 
 export const Route = createFileRoute("/waitlist/optin/$token")({
   component: WaitlistOptInPage,
@@ -183,30 +184,8 @@ function WaitlistOptInPage() {
   return (
     <div className="min-h-screen bg-[#fbfaf7] text-[#1c2024] flex flex-col items-center justify-center p-6 font-[-apple-system,BlinkMacSystemFont,'Helvetica_Neue',system-ui,sans-serif]">
       <div className="w-full max-w-md bg-white border border-[#e2dfd6] rounded-2xl p-6 sm:p-8 shadow-sm">
-        {/* v2.66.0 — brand header (logo image or letter mark + name). */}
-        {brand && (
-          <div className="flex items-center justify-center mb-4">
-            {brand.logoUrl ? (
-              <img
-                src={brand.logoUrl}
-                alt={brand.name}
-                className="h-9 max-w-[180px] object-contain"
-              />
-            ) : (
-              <div className="inline-flex items-center gap-2">
-                <span
-                  className="h-7 w-7 rounded-full flex items-center justify-center text-white font-bold text-sm"
-                  style={{ backgroundColor: accent }}
-                >
-                  {brand.logoMark}
-                </span>
-                <span className="text-[15px] font-semibold text-[#1c2024]">
-                  {brand.name}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
+        {/* v2.66.0 — brand header. v2.70.0 — shared component w/ logo-404 fallback. */}
+        {brand && <PublicBrandHeader brand={brand} />}
 
         {state.kind === "loading" && (
           <div className="flex items-center gap-2 text-sm text-[#5a6068] justify-center py-6">

@@ -36,6 +36,7 @@ import {
   type PublicSlot,
 } from "@/server/scheduling.functions";
 import { categoryLabel, orderedCategoryRank } from "@/lib/service-categories";
+import { PublicBrandHeader } from "@/components/refill/PublicBrandHeader";
 
 export const Route = createFileRoute("/s/$slug")({
   component: PublicBookingPage,
@@ -429,30 +430,15 @@ function PublicBookingPage() {
   return (
     <main className="min-h-screen bg-[#fafaf7] text-stone-900 flex items-start justify-center px-5 py-12 sm:py-16">
       <div className="w-full max-w-md sm:max-w-4xl">
-        {/* v2.66.0 — "Your Brand" white-label header (logo or letter mark + name),
-            shown on every screen once the context (and its brand) has loaded. */}
+        {/* v2.66.0 — "Your Brand" white-label header, shown on every screen once
+            the context (and its brand) has loaded. v2.70.0 — shared component
+            with a logo-404 fallback. */}
         {ctx?.brand && (
-          <div className="flex items-center justify-center mb-5">
-            {ctx.brand.logoUrl ? (
-              <img
-                src={ctx.brand.logoUrl}
-                alt={ctx.brand.name}
-                className="h-9 max-w-[200px] object-contain"
-              />
-            ) : (
-              <div className="inline-flex items-center gap-2">
-                <span
-                  className="h-7 w-7 rounded-full flex items-center justify-center text-white font-bold text-sm"
-                  style={{ backgroundColor: ctx.brand.accent }}
-                >
-                  {ctx.brand.logoMark}
-                </span>
-                <span className="text-[15px] font-semibold text-stone-900">
-                  {ctx.brand.name}
-                </span>
-              </div>
-            )}
-          </div>
+          <PublicBrandHeader
+            brand={ctx.brand}
+            nameClassName="text-stone-900"
+            wrapperClassName="mb-5"
+          />
         )}
 
         {screen === "loading" && (

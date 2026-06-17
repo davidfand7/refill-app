@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.70.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.70.0 &mdash; White-label polish: logo never breaks, billing copy reads right.</strong> Two small round-up fixes closing loose ends from the &ldquo;Your Brand&rdquo; work. <strong>(A) Logo-404 safety net:</strong> the patient pages (rescue claim, waitlist opt-in, booking) rendered a spa&rsquo;s logo image with no failure handling &mdash; a typo&rsquo;d or expired logo URL left a broken-image gap mid-flow. They now share one <code>PublicBrandHeader</code> component that falls back to the spa&rsquo;s letter-mark + name the instant a logo fails to load, so the brand never vanishes. (Email keeps its alt-text fallback, the correct pattern there since mail clients don&rsquo;t run <code>onError</code>.) <strong>(B) Billing copy:</strong> the billing scoreboard&rsquo;s &ldquo;The math behind it&rdquo; line read &ldquo;<em>$29.00 charges this month</em>&rdquo; (treating a dollar amount as a count); now it reads &ldquo;<em>$29.00 this month</em>.&rdquo; <strong>Touched</strong>: new <code>PublicBrandHeader.tsx</code>, the 3 patient routes, <code>app.billing.index.tsx</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.69.0",
     date: "June 2026",
     items: [

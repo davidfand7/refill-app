@@ -423,8 +423,7 @@ function ScoreboardCard({ ledger }: { ledger: BillingLedger | null }) {
         {(activeLines.length > 0 || ledger.monthlyBaseUsd > 0 || ledger.whiteLabelAddonUsd > 0) && (
           <details className="mt-4 text-[12px]">
             <summary className="cursor-pointer text-emerald hover:underline">
-              The math behind it — {money(fee)}{" "}
-              {fee === 1 ? "charge" : "charges"} this month
+              The math behind it — {money(fee)} this month
             </summary>
             <div className="mt-2 space-y-1.5 rounded-lg bg-white/60 p-3">
               {ledger.monthlyBaseUsd > 0 && (
