@@ -102,9 +102,7 @@ insert into public._schema_migrations (version, name, backfilled) values
   ('20260617000000', 'tenants_delivery_channel', true),
   ('20260618000000', 'v417_admin_personas', true),
   ('20260618010000', 'v417_admin_testing_identity', true),
-  ('20260618020000', 'v2_75_0_retire_emma_table_prefix', true),
   ('20260618020000', 'v417_admin_refill_next', true),
-  ('20260618030000', 'v2_76_0_emma_retire_phase2_functions_drop_views', true),
   ('20260618030000', 'v417_persona_bridge_metadata', true),
   ('20260619000000', 'unified_admin_p1a_app_role_expansion', true),
   ('20260619010000', 'unified_admin_p1b_backfill_and_tables', true),
@@ -174,7 +172,9 @@ insert into public._schema_migrations (version, name, backfilled) values
   ('20260814000000', 'v2_58_0_local_agent_heartbeat', true),
   ('20260815000000', 'v2_63_0_waitlist_desired_service_ids', true),
   ('20260816000000', 'v2_64_0_rescue_offer_service', true),
-  ('20260816010000', 'v2_66_0_brand_settings', true)
+  ('20260816010000', 'v2_66_0_brand_settings', true),
+  ('20260816020000', 'v2_75_0_retire_emma_table_prefix', true),
+  ('20260816030000', 'v2_76_0_emma_retire_phase2_functions_drop_views', true)
 on conflict (version) do nothing;
 
 -- Record THIS migration (the ledger itself).

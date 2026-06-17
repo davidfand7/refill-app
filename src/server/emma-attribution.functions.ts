@@ -213,14 +213,27 @@ export async function reconcileRecoveryEventsForUser(args: {
   // v2.29.0: skip already-expired provisionals — they're dead and must never
   // late-match (the stale-charge fairness risk). expired_at isn't in the
   // generated Supabase types yet → loose-cast the column filter.
-  const { data: unverified } = await sb
-    .from("recovery_events")
-    .select("id, patient_node_id, created_at, appointment_id")
-    .eq("user_id", userId)
-    .is("verified_at", null)
-    .is("expired_at" as never, null)
-    .not("patient_node_id", "is", null);
-  if (!unverified || unverified.length === 0) {
+  // v2.78.0 — page past the 1,000-row cap so a busy spa's reconcile covers EVERY
+  // unverified event (a truncated read silently stopped matching past row 1,000,
+  // leaving real recoveries unbilled). (The per-event txn lookup in the loop below
+  // is a known N+1 — batching it is queued for the perf pass.)
+  const unverified = await fetchAllRows<{
+    id: string;
+    patient_node_id: string | null;
+    created_at: string;
+    appointment_id: string | null;
+  }>((from, to) =>
+    sb
+      .from("recovery_events")
+      .select("id, patient_node_id, created_at, appointment_id")
+      .eq("user_id", userId)
+      .is("verified_at", null)
+      .is("expired_at" as never, null)
+      .not("patient_node_id", "is", null)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
+  if (unverified.length === 0) {
     // Even with nothing to match, still run the expiry sweep below so dead
     // provisionals stop being re-scanned forever.
     const expired = await expireDeadProvisionals(sb, userId, windowMs);
@@ -565,21 +578,32 @@ export const getRecoveryStats = createServerFn({ method: "POST" })
     const [monthRes, priorMonthRes, lifetimeRes, provisionalRes] =
       await Promise.all([
         // Current-month verified — pull appointment_id so we can group by
-        // treatment_type after a single join below.
-        sb
-          .from("recovery_events")
-          .select("attributed_revenue_usd, appointment_id")
-          .eq("user_id", effectiveUserId)
-          .gte("verified_at", monthStart.toISOString())
-          .not("verified_at", "is", null),
-        // Prior-month verified — just the totals for MoM delta.
-        sb
-          .from("recovery_events")
-          .select("attributed_revenue_usd")
-          .eq("user_id", effectiveUserId)
-          .gte("verified_at", priorMonthStart.toISOString())
-          .lt("verified_at", monthStart.toISOString())
-          .not("verified_at", "is", null),
+        // treatment_type after a single join below. v2.78.0 — paginated like the
+        // lifetime sibling: a spa with >1,000 verified events in one month would
+        // otherwise under-SUM month revenue → under-bill on the $5 meter.
+        fetchAllRows<{ attributed_revenue_usd: number | null; appointment_id: string | null }>(
+          (from, to) =>
+            sb
+              .from("recovery_events")
+              .select("attributed_revenue_usd, appointment_id")
+              .eq("user_id", effectiveUserId)
+              .gte("verified_at", monthStart.toISOString())
+              .not("verified_at", "is", null)
+              .order("id", { ascending: true })
+              .range(from, to),
+        ),
+        // Prior-month verified — just the totals for MoM delta (also paginated).
+        fetchAllRows<{ attributed_revenue_usd: number | null }>((from, to) =>
+          sb
+            .from("recovery_events")
+            .select("attributed_revenue_usd")
+            .eq("user_id", effectiveUserId)
+            .gte("verified_at", priorMonthStart.toISOString())
+            .lt("verified_at", monthStart.toISOString())
+            .not("verified_at", "is", null)
+            .order("id", { ascending: true })
+            .range(from, to),
+        ),
         // v1.92.0: lifetime verified revenue feeds the recovery dashboard (and
         // pay-for-performance billing) — page past the 1,000-row cap so the
         // SUM is the real lifetime total, not a truncated slice that underbills.
@@ -600,8 +624,8 @@ export const getRecoveryStats = createServerFn({ method: "POST" })
           .gte("created_at", monthStart.toISOString()),
       ]);
 
-    const monthRows = monthRes.data ?? [];
-    const priorMonthRows = priorMonthRes.data ?? [];
+    const monthRows = monthRes;
+    const priorMonthRows = priorMonthRes;
     const lifetimeRows = lifetimeRes;
 
     const monthVerifiedUsd = monthRows.reduce(

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.78.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.78.0 &mdash; Tier-0 correctness fixes from the code scout (billing accuracy + the migration ledger).</strong> Three correctness issues a fresh code scout surfaced. <strong>(1) Migration-ledger collision:</strong> the two emma_ migrations were mis-timestamped <code>20260618…</code>, colliding EXACTLY with two existing <code>v417</code> migrations &mdash; and since <code>version</code> is the ledger&rsquo;s primary key, the v2.77 backfill&rsquo;s <code>on conflict do nothing</code> silently dropped the two <code>v417</code> rows from <code>_schema_migrations</code>. Renamed the emma files to their correct forward sequence (<code>20260816020000/030000</code>) and added a ledger-correction migration so all four are recorded under unique versions. <strong>(2) Month-revenue under-bill:</strong> the current- &amp; prior-month <code>recovery_events</code> reads that feed the $5 pay-for-performance meter weren&rsquo;t paginated (only the lifetime sibling was), so a spa with &gt;1,000 verified events in a month would under-SUM revenue &rarr; under-bill. Now both page via <code>fetchAllRows</code>. <strong>(3) Reconcile truncation:</strong> the attribution reconcile loaded unverified events with no <code>.range()</code> (silently capped at 1,000), so a busy spa stopped matching/billing past row 1,000 &mdash; now paginated so every event reconciles. (The per-event txn lookup in that loop is a known N+1, batching queued for the perf pass.) Truncation tripwire re-frozen 189&rarr;188. <strong>Touched</strong>: <code>emma-attribution.functions.ts</code>, the ledger migration + correction migration, 2 emma migration renames. Apply the new <code>20260817010000_v2_78_0_ledger_collision_fix.sql</code> migration to reconcile the live ledger.",
+    ],
+  },
+  {
     version: "v2.77.0",
     date: "June 2026",
     items: [
