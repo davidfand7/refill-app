@@ -95,11 +95,45 @@ interface BaseContext {
   };
 }
 
+// v2.72.0 — native self-booking safety gate (the native↔Acuity seam).
+// A spa whose real calendar lives in an external PMS (Acuity) is mirrored into
+// SmartSpa READ-ONLY — the sync is one-way (Acuity → SmartSpa) and we never
+// write back. So a native /s/<slug> booking would "confirm" a slot the provider
+// can never see on their actual calendar: a confirmed ghost. Native booking is
+// only honest for SmartSpa-PRIMARY spas, so we gate it off whenever a live
+// external scheduler connection exists. Fully reversible: disconnect Acuity and
+// native self-booking opens back up. (The one-way feed — the cancellation-
+// recovery loop — is untouched; this gates ONLY the patient-facing write path.)
+const EXTERNAL_PMS_BOOKING_REASON =
+  "Online self-booking isn't available for this practice. Please contact the practice directly to schedule your appointment.";
+
+/** True when the tenant's calendar is owned by an external PMS we mirror
+ *  read-only — in which case native self-booking must stay closed. Any
+ *  non-disconnected Acuity connection counts (a broken/stale one is MORE reason
+ *  not to self-book, not less). Mirrors loadAcuityConnection's status set. */
+async function tenantBooksOnExternalPms(sb: Sb, tenantId: string): Promise<boolean> {
+  const ownerUserId = await getTenantOwnerUserId(sb, tenantId);
+  if (!ownerUserId) return false;
+  const { data } = await sb
+    .from("emma_scheduler_connections")
+    .select("id")
+    .eq("user_id", ownerUserId)
+    .eq("platform", "acuity")
+    .in("status", ["connected", "reauth_needed", "error"])
+    .limit(1)
+    .maybeSingle();
+  return !!data;
+}
+
 async function loadBaseContext(
   sb: Sb,
   tenantId: string,
   serviceId: string,
 ): Promise<{ ok: true; base: BaseContext } | { ok: false; reason: string }> {
+  // Safety gate first — an external-PMS spa must never reach a hold/confirm.
+  if (await tenantBooksOnExternalPms(sb, tenantId)) {
+    return { ok: false, reason: EXTERNAL_PMS_BOOKING_REASON };
+  }
   const [{ data: settingsRow }, { data: svc }] = await Promise.all([
     sb.from("scheduling_settings").select("*").eq("tenant_id", tenantId).maybeSingle(),
     sb
@@ -412,6 +446,12 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
       .ilike("slug", data.slug) // slug charset is [a-z0-9-]; case-insensitive exact
       .maybeSingle();
     if (!tenant) return { ok: false, reason: "We couldn't find that practice." };
+
+    // v2.72.0 — external-PMS spas (Acuity-mirrored, read-only) can't safely take
+    // native self-bookings; show an honest "unavailable" card, not open slots.
+    if (await tenantBooksOnExternalPms(sb, tenant.id)) {
+      return { ok: false, reason: EXTERNAL_PMS_BOOKING_REASON };
+    }
 
     const { data: settings } = await sb
       .from("scheduling_settings")

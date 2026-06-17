@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.72.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.72.0 &mdash; Safety gate: no native self-booking for spas that run on an external calendar.</strong> Found during a live walk of the booking page: a patient could book a slot on <code>/s/&lt;slug&gt;</code>, get a &ldquo;You&rsquo;re booked&rdquo; confirmation + email, and <strong>never land on the provider&rsquo;s actual calendar</strong>. Root cause: for a spa whose real schedule lives in an external PMS (Acuity), the sync is <strong>one-way</strong> &mdash; Acuity &rarr; SmartSpa, read-only &mdash; and SmartSpa never writes back. The native slot engine also only treats an appointment as &ldquo;busy&rdquo; if it shares the exact native <code>provider_id</code> with a real timestamp, so untimed/unlinked mirrored appointments are invisible to it &rarr; it offered slots the provider was actually booked for. That&rsquo;s a confirmed ghost &mdash; a trust failure. <strong>Fix:</strong> native self-booking is now gated off whenever the spa has a live external-scheduler connection (<code>emma_scheduler_connections</code>, Acuity). The public booking page shows an honest &ldquo;contact the practice to schedule&rdquo; card instead of open slots, and the hold/confirm write-path refuses too (defense-in-depth). Native booking stays fully available for SmartSpa-PRIMARY spas; the one-way feed and the cancellation-recovery loop are completely untouched; fully reversible (disconnect Acuity &rarr; native opens). Real two-way Acuity writeback is the future unlock, scoped separately. <strong>Touched</strong>: <code>scheduling.functions.ts</code> (new <code>tenantBooksOnExternalPms</code> gate in <code>loadBaseContext</code> + <code>getPublicBookingContextFn</code>). No migration.",
+    ],
+  },
+  {
     version: "v2.71.0",
     date: "June 2026",
     items: [
