@@ -82,6 +82,9 @@ type ScheduleMode = "soonest" | "day";
 const RANGE_DAYS = 30;
 const FIRST = "first" as const; // "first available" sentinel for provider choice
 const BEST = "best" as const; // "best deal" sentinel (cheapest provider with an opening)
+// SmartSpa's house green — the default booking accent when a spa hasn't set its
+// own. Keeps non-white-labeled pages visually identical to before v2.71.0.
+const BRAND_DEFAULT_ACCENT = "#056048";
 
 function PublicBookingPage() {
   const { slug } = Route.useParams();
@@ -114,6 +117,15 @@ function PublicBookingPage() {
   const providers = selService?.providers ?? [];
   const multiProvider = providers.length > 1;
   const showPrices = ctx?.showPrices !== false;
+
+  // v2.71.0 — "Your Brand" accent tighten. The booking flow's selected/active
+  // states (smart cards, add-on checks, schedule toggle, held-time summary,
+  // confirmation, step circles) honor the spa's brand accent. Tailwind can't
+  // take a runtime hex, so these accent moments use inline styles derived here.
+  // Defaults to SmartSpa green, so a spa without a custom accent is unchanged.
+  const accent = ctx?.brand?.accent ?? BRAND_DEFAULT_ACCENT;
+  const accentSoftBg = hexAlpha(accent, 0.08);
+  const accentSoftBorder = hexAlpha(accent, 0.45);
 
   // Add-ons offered with the chosen service. Each selection extends the visit
   // (combined duration drives the slot engine; combined price shows on confirm).
@@ -468,6 +480,7 @@ function PublicBookingPage() {
                 done={!!selService}
                 open={openSection === "service"}
                 onToggle={() => setOpenSection("service")}
+                accent={accent}
               />
               {openSection === "service" && (
                 <div className="px-4 py-4 space-y-2 bg-stone-50/40">
@@ -516,7 +529,7 @@ function PublicBookingPage() {
                                 </span>
                               )}
                               {showPrices && s.feeCredit && !s.isFree && (
-                                <span className="block text-[12px] text-emerald-700 mt-0.5">
+                                <span className="block text-[12px] mt-0.5" style={{ color: accent }}>
                                   Fee applied toward your treatment
                                 </span>
                               )}
@@ -546,6 +559,7 @@ function PublicBookingPage() {
                     done={!!providerChoice}
                     open={openSection === "provider"}
                     onToggle={() => setOpenSection("provider")}
+                    accent={accent}
                   />
                   {openSection === "provider" && (
                     <div className="px-4 py-4 space-y-2 bg-stone-50/40">
@@ -555,13 +569,14 @@ function PublicBookingPage() {
                             key="first"
                             type="button"
                             onClick={() => chooseProvider(FIRST)}
-                            className="w-full text-left rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 hover:border-emerald-500 transition-colors flex items-center justify-between gap-3"
+                            className="w-full text-left rounded-lg border px-4 py-3 transition-colors flex items-center justify-between gap-3"
+                            style={{ borderColor: accent, backgroundColor: accentSoftBg }}
                           >
                             <span className="flex items-center gap-2.5 min-w-0">
-                              <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <Sparkles className="w-4 h-4 shrink-0" style={{ color: accent }} />
                               <span className="min-w-0">
                                 <span className="block text-[15px] font-medium text-stone-900">Anyone</span>
-                                <span className="block text-[13px] text-emerald-700">Any available provider</span>
+                                <span className="block text-[13px]" style={{ color: accent }}>Any available provider</span>
                               </span>
                             </span>
                             {showPrices && (
@@ -630,6 +645,7 @@ function PublicBookingPage() {
                     done={addonsTouched}
                     open={openSection === "addons"}
                     onToggle={() => setOpenSection("addons")}
+                    accent={accent}
                   />
                   {openSection === "addons" && (
                     <div className="px-4 py-4 space-y-2 bg-stone-50/40">
@@ -644,16 +660,16 @@ function PublicBookingPage() {
                             type="button"
                             onClick={() => toggleAddon(a.id)}
                             className={`w-full text-left rounded-lg border px-4 py-3 transition-colors flex items-center justify-between gap-3 ${
-                              checked
-                                ? "border-emerald-500 bg-emerald-50"
-                                : "border-stone-200 bg-white hover:border-stone-900"
+                              checked ? "" : "border-stone-200 bg-white hover:border-stone-900"
                             }`}
+                            style={checked ? { borderColor: accent, backgroundColor: accentSoftBg } : undefined}
                           >
                             <span className="flex items-center gap-2.5 min-w-0">
                               <span
                                 className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
-                                  checked ? "border-emerald-600 bg-emerald-600" : "border-stone-300 bg-white"
+                                  checked ? "" : "border-stone-300 bg-white"
                                 }`}
+                                style={checked ? { borderColor: accent, backgroundColor: accent } : undefined}
                               >
                                 {checked && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
                               </span>
@@ -698,6 +714,7 @@ function PublicBookingPage() {
                     done={!!scheduleMode}
                     open={openSection === "when"}
                     onToggle={() => setOpenSection("when")}
+                    accent={accent}
                   />
                   {openSection === "when" && (
                     <div className="px-4 py-4 space-y-3 bg-stone-50/40">
@@ -708,16 +725,18 @@ function PublicBookingPage() {
                             setScheduleMode("soonest");
                             setPickedDay("");
                           }}
-                          className={`rounded-lg border px-3 py-3 text-left transition-colors ${scheduleMode === "soonest" ? "border-emerald-500 bg-emerald-50" : "border-stone-200 bg-white hover:border-stone-900"}`}
+                          className={`rounded-lg border px-3 py-3 text-left transition-colors ${scheduleMode === "soonest" ? "" : "border-stone-200 bg-white hover:border-stone-900"}`}
+                          style={scheduleMode === "soonest" ? { borderColor: accent, backgroundColor: accentSoftBg } : undefined}
                         >
-                          <Sparkles className="w-4 h-4 text-emerald-600 mb-1" />
+                          <Sparkles className="w-4 h-4 mb-1" style={{ color: accent }} />
                           <span className="block text-[14px] font-medium text-stone-900">Soonest available</span>
                           <span className="block text-[12px] text-stone-500">First openings, all days</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => setScheduleMode("day")}
-                          className={`rounded-lg border px-3 py-3 text-left transition-colors ${scheduleMode === "day" ? "border-emerald-500 bg-emerald-50" : "border-stone-200 bg-white hover:border-stone-900"}`}
+                          className={`rounded-lg border px-3 py-3 text-left transition-colors ${scheduleMode === "day" ? "" : "border-stone-200 bg-white hover:border-stone-900"}`}
+                          style={scheduleMode === "day" ? { borderColor: accent, backgroundColor: accentSoftBg } : undefined}
                         >
                           <CalendarCheck className="w-4 h-4 text-stone-600 mb-1" />
                           <span className="block text-[14px] font-medium text-stone-900">Pick a day</span>
@@ -839,32 +858,32 @@ function PublicBookingPage() {
               }}
             />
 
-            <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 mb-5">
-              <div className="flex items-center gap-2 text-emerald-900 text-[13px] font-medium">
+            <div className="rounded-lg border px-4 py-3 mb-5" style={{ backgroundColor: accentSoftBg, borderColor: accentSoftBorder }}>
+              <div className="flex items-center gap-2 text-[13px] font-medium" style={{ color: accent }}>
                 <Clock className="w-3.5 h-3.5" />
                 {selService?.name}
-                {heldProviderName && <span className="text-emerald-700 font-normal">· with {heldProviderName}</span>}
+                {heldProviderName && <span className="font-normal opacity-80">· with {heldProviderName}</span>}
               </div>
-              <div className="text-emerald-800 text-[15px] font-semibold mt-0.5">
+              <div className="text-[15px] font-semibold mt-0.5" style={{ color: accent }}>
                 {fmtDayHeading(held.slot.startIso, tz)} at {fmtTime(held.slot.startIso, tz)}
               </div>
               {chosenAddons.length > 0 && (
-                <div className="mt-2 pt-2 border-t border-emerald-200 space-y-0.5">
+                <div className="mt-2 pt-2 border-t space-y-0.5" style={{ borderColor: accentSoftBorder }}>
                   {chosenAddons.map((a) => (
-                    <div key={a.id} className="flex items-center justify-between text-emerald-800 text-[12px]">
+                    <div key={a.id} className="flex items-center justify-between text-[12px]" style={{ color: accent }}>
                       <span>+ {a.name}</span>
                       <span className="tabular-nums">
                         +{a.durationMin} min{showPrices ? ` · ${a.isFree ? "Free" : `$${a.price}`}` : ""}
                       </span>
                     </div>
                   ))}
-                  <div className="flex items-center justify-between text-emerald-900 text-[12px] font-semibold pt-0.5">
+                  <div className="flex items-center justify-between text-[12px] font-semibold pt-0.5" style={{ color: accent }}>
                     <span>{heldTotalDuration} min total</span>
                     {showPrices && <span className="tabular-nums">${heldTotalPrice}</span>}
                   </div>
                 </div>
               )}
-              <div className="text-emerald-700 text-[12px] mt-1.5">
+              <div className="text-[12px] mt-1.5 opacity-80" style={{ color: accent }}>
                 Held for you for a few minutes — finish below to confirm.
               </div>
             </div>
@@ -930,8 +949,8 @@ function PublicBookingPage() {
         {/* ── Done ── */}
         {screen === "confirmed" && ctx && confirmed && (
           <div className="bg-white border border-stone-200 rounded-xl p-7 shadow-sm sm:max-w-lg sm:mx-auto">
-            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center mb-4">
-              <CheckCircle2 className="w-5 h-5 text-emerald-700" />
+            <div className="w-10 h-10 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: accentSoftBg }}>
+              <CheckCircle2 className="w-5 h-5" style={{ color: accent }} />
             </div>
             <h1 className="text-2xl font-semibold text-stone-900 leading-tight">You're booked!</h1>
             <p className="mt-3 text-stone-600 leading-relaxed text-[15px]">
@@ -985,6 +1004,18 @@ function PublicBookingPage() {
   );
 }
 
+/** A "#RRGGBB" brand accent → an "rgba(r,g,b,a)" string for soft tints. Falls
+ *  back to the SmartSpa green on a malformed hex (defensive — the accent is
+ *  validated on save, but a public page should never throw on bad data). */
+function hexAlpha(hex: string, alpha: number): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  const h = m ? m[1] : BRAND_DEFAULT_ACCENT.slice(1);
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 /** "Free", "$350", or "from $320" when providers price the service differently. */
 function priceLabel(s: PublicServiceOption): string {
   if (s.isFree) return "Free";
@@ -1001,6 +1032,7 @@ function SectionRow({
   done,
   open,
   onToggle,
+  accent,
 }: {
   n: number;
   label: string;
@@ -1009,6 +1041,7 @@ function SectionRow({
   done: boolean;
   open: boolean;
   onToggle: () => void;
+  accent: string;
 }) {
   return (
     <button
@@ -1019,8 +1052,9 @@ function SectionRow({
       <span className="flex items-center gap-3 min-w-0">
         <span
           className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-[12px] font-semibold tabular-nums ${
-            done ? "bg-emerald-600 text-white" : open ? "bg-stone-900 text-white" : "bg-stone-200 text-stone-500"
+            done ? "text-white" : open ? "bg-stone-900 text-white" : "bg-stone-200 text-stone-500"
           }`}
+          style={done ? { backgroundColor: accent } : undefined}
         >
           {n}
         </span>

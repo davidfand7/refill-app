@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.71.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.71.0 &mdash; &ldquo;Your Brand&rdquo; accent reaches the whole booking flow.</strong> The public booking page (<code>/s/&lt;slug&gt;</code>) already wore the spa&rsquo;s name + logo + powered-by line, but every <em>selected/active</em> state was still hardcoded SmartSpa green &mdash; so a white-label spa with, say, a navy or rose accent got a green-highlighted flow. Now the booking page resolves <code>brand.accent</code> and threads it through every accent moment: the &ldquo;Anyone&rdquo; smart card, the add-on checkboxes, the Soonest/Pick-a-day toggle, the held-time summary card, the &ldquo;You&rsquo;re booked&rdquo; check, and the numbered step circles. Tailwind can&rsquo;t take a runtime hex, so these use inline styles derived from the accent (solid for borders/fills, an 8% tint for backgrounds). <strong>Defaults to the SmartSpa house green</strong> (<code>#056048</code>), so any spa without a custom accent looks unchanged. A malformed hex degrades to green rather than throwing &mdash; a public page never breaks on bad brand data. <strong>Touched</strong>: <code>s.$slug.tsx</code> (20 accent sites + new <code>hexAlpha</code> helper). No migration.",
+    ],
+  },
+  {
     version: "v2.70.0",
     date: "June 2026",
     items: [
