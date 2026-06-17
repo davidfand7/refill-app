@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.77.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.77.0 &mdash; Migration ledger: always know what&rsquo;s applied, never fear a re-run.</strong> Because we apply migrations by Supabase dashboard-paste (no local DB creds &rarr; no <code>supabase db push</code>), Supabase&rsquo;s automatic <code>schema_migrations</code> tracking was never maintained &mdash; nothing recorded which migrations had run. New <code>public._schema_migrations</code> ledger (<code>version</code>, <code>name</code>, <code>applied_at</code>, <code>backfilled</code>) closes that gap: <code>select * from public._schema_migrations order by applied_at, version</code> shows exactly what&rsquo;s applied and when, right in the table editor. The ledger migration backfills all 154 existing migrations (marked <code>backfilled=true</code>; the app is live so they&rsquo;re applied) and self-records. <strong>Standing convention going forward</strong>: every migration (a) starts with the <code>create table if not exists public._schema_migrations</code> bootstrap and (b) ends with a one-line self-record <code>insert &hellip; on conflict (version) do nothing</code>. Paired with idempotent bodies, re-running any migration is a visible no-op &mdash; never an overwrite. Migration: <code>20260817000000_v2_77_0_migration_ledger.sql</code>. (Also noted: the two emma_ migrations carry early <code>20260618</code> timestamps that sort before the current sequence head &mdash; cosmetic only under dashboard-paste; the ledger uses the correct forward timestamp.)",
+    ],
+  },
+  {
     version: "v2.76.0",
     date: "June 2026",
     items: [
