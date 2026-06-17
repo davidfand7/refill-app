@@ -78,7 +78,7 @@ function NewCampaignPage() {
         title="Pick a starting point"
         description="Eight templates cover the workflows most spas run. Pick one to scaffold the cohort + offer + copy — you can edit everything before sending."
         breadcrumbs={[
-          { label: "Emma", to: "/app/refill" },
+          { label: "SmartSpa", to: "/app/refill" },
           { label: "Campaigns", to: "/app/refill/campaigns" },
           { label: "New" },
         ]}

@@ -684,7 +684,7 @@ function PatientsPage() {
               <h2 className="text-lg font-semibold">No patients yet</h2>
               <p className="text-sm text-ink-soft leading-relaxed max-w-md mx-auto">
                 Export <em>Sales by Patient Detail</em> from QuickBooks and drop
-                it in. Emma turns it into a searchable patient book in seconds.
+                it in. SmartSpa turns it into a searchable patient book in seconds.
               </p>
             </div>
             <Link

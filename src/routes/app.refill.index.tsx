@@ -151,8 +151,8 @@ function KarenDashboard() {
       <div>
         <PageHeader
           eyebrow="SmartSpa"
-          title="Emma"
-          description="Manage what Emma knows about your spa."
+          title="Spa Settings"
+          description="Manage what SmartSpa knows about your spa."
         />
         <div className="px-6 lg:px-10 py-10">
           <EmptyState
@@ -170,8 +170,8 @@ function KarenDashboard() {
       <div>
         <PageHeader
           eyebrow="SmartSpa"
-          title="Emma"
-          description="Once you've claimed a spa, Emma's knowledge lives here."
+          title="Spa Settings"
+          description="Once you've claimed a spa, SmartSpa's knowledge lives here."
         />
         <div className="px-6 lg:px-10 py-10">
           <div className="max-w-xl mx-auto rounded-2xl border border-border bg-card p-8 text-center space-y-4">
@@ -181,7 +181,7 @@ function KarenDashboard() {
             <div className="space-y-1">
               <h2 className="text-lg font-semibold">No spa claimed yet</h2>
               <p className="text-sm text-ink-soft leading-relaxed">
-                Paste your spa's website and we'll set Emma up in 60 seconds.
+                Paste your spa's website and we'll set SmartSpa up in 60 seconds.
               </p>
             </div>
             <Link
@@ -483,7 +483,7 @@ function ActivationBanner() {
           </span>
         </div>
         <p className="text-xs text-ink-soft leading-relaxed">
-          Emma has your spa loaded but isn't replying to customer texts yet. We're
+          SmartSpa has your spa loaded but isn't replying to customer texts yet. We're
           coordinating Hosted Messaging activation with your carrier — this is a
           1-3 week paperwork process that runs in parallel with the work you do
           here. We'll reach out to schedule activation; nothing for you to do today.
@@ -663,8 +663,8 @@ function ProfileEditor({
             className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-ring"
           />
           <p className="text-[11px] text-ink-soft">
-            Emma will follow these. Add cancellation, deposits, age rules,
-            anything she should enforce.
+            SmartSpa will follow these. Add cancellation, deposits, age rules,
+            anything it should enforce.
           </p>
         </EditCard>
       </div>

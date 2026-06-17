@@ -28,7 +28,7 @@ function BookerInstallPage() {
   const search = useSearch({ from: "/app/refill/calendar/booker-install" });
   const shell = useShell();
   const brandHeader = shell === "refill" ? "Refill" : "SmartSpa";
-  const brandName = shell === "refill" ? "Refill" : "Emma";
+  const brandName = shell === "refill" ? "Refill" : "SmartSpa";
 
   const [locationId, setLocationId] = useState("");
   const [submitting, setSubmitting] = useState(false);

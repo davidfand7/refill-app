@@ -242,7 +242,7 @@ export const createSenderDomain = createServerFn({ method: "POST" })
         user_id: userId,
         domain,
         from_local_part: data.fromLocalPart ?? "hello",
-        from_display_name: data.fromDisplayName ?? "Emma",
+        from_display_name: data.fromDisplayName ?? "SmartSpa",
         resend_domain_id: resp.id,
         status,
         dns_records: records as unknown as Json,
@@ -425,5 +425,5 @@ export async function resolveSpaFromEmail(userId: string): Promise<string> {
   if (process.env.REFILL_FROM_ENABLED === "1") {
     return "Refill <hello@getrefill.app>";
   }
-  return "Emma <hello@notify.openagentic.site>";
+  return "SmartSpa <hello@notify.openagentic.site>";
 }

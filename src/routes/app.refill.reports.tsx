@@ -129,7 +129,7 @@ function EmptyReports() {
         No campaign activity yet
       </h2>
       <p className="text-sm text-ink-soft mb-5 max-w-md mx-auto">
-        Once Emma sends your first blast, this page fills in with how many
+        Once SmartSpa sends your first blast, this page fills in with how many
         patients opened, clicked, booked, and showed up.
       </p>
       <Link

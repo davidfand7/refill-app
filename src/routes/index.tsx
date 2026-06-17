@@ -212,7 +212,7 @@ function RefillLanding() {
             className="text-[17px] sm:text-[18px] leading-[1.6] max-w-xl mx-auto mb-10"
             style={{ color: "#5a6068" }}
           >
-            Refill catches the appointments your front desk doesn't have time
+            SmartSpa catches the appointments your front desk doesn't have time
             to chase, fills them automatically, and only bills when we recover
             real money for you.
           </p>
@@ -262,10 +262,10 @@ function EmmaLanding() {
   useSignedInRedirect("/app/refill");
   return (
     <VerticalLanding
-      brand="Emma"
+      brand="SmartSpa"
       Icon={Briefcase}
       tagline="The brain your spa already wishes it had."
-      body="Emma reads your website, learns your services, and answers questions like an owner-trained assistant — without you typing it all out."
+      body="SmartSpa reads your website, learns your services, and answers questions like an owner-trained assistant — without you typing it all out."
       ctaLabel="Claim your business"
       ctaTo="/claim-your-business"
     />

@@ -40,7 +40,7 @@ export type ServicesEditCardProps = {
 };
 
 const DEFAULT_EMPTY_COPY = (
-  <>Add the treatments you offer. Emma uses these in her replies.</>
+  <>Add the treatments you offer. SmartSpa uses these in its replies.</>
 );
 
 export function ServicesEditCard({
@@ -201,7 +201,7 @@ export function ServicesEditCard({
             </div>
           ))}
           <p className="text-[11px] text-ink-soft italic leading-relaxed">
-            Tap to add. Emma answers customer questions better when she knows
+            Tap to add. SmartSpa answers customer questions better when it knows
             specific brand names, not just categories.
           </p>
         </div>
@@ -233,7 +233,7 @@ export function ServicesEditCard({
       </div>
       <p className="text-[11px] text-ink-soft">
         <BadgeCheck className="inline h-3 w-3 text-emerald mr-0.5" />
-        markers indicate services Emma recognizes from her product database.
+        markers indicate services SmartSpa recognizes from its product database.
       </p>
     </div>
   );

@@ -72,7 +72,7 @@ function VagaroInstallPage() {
   const shell = useShell();
   const isRefill = shell === "refill";
   const brandHeader = isRefill ? "Refill" : "SmartSpa";
-  const brandName = isRefill ? "Refill" : "Emma";
+  const brandName = isRefill ? "Refill" : "SmartSpa";
 
   const [apiKey, setApiKey] = useState("");
   const [submitting, setSubmitting] = useState(false);

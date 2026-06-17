@@ -142,7 +142,7 @@ function CampaignsPage() {
             <div className="space-y-1.5">
               <h2 className="text-lg font-semibold">No campaigns yet</h2>
               <p className="text-sm text-ink-soft leading-relaxed max-w-md mx-auto">
-                Start with a template — Emma builds the cohort, drafts the
+                Start with a template — SmartSpa builds the cohort, drafts the
                 messages, and reads the replies. You stay in control of every
                 send.
               </p>

@@ -139,12 +139,12 @@ function spaName(tenant: TenantRow): string {
 function composeDay3(tenant: TenantRow): DripEmailRendered {
   const name = spaName(tenant);
   return wrapDripEmail({
-    subject: `How's your first week with Refill, ${name}?`,
+    subject: `How's your first week with SmartSpa, ${name}?`,
     preheader: "Quick check-in from Karen at Rejuv.",
-    headline: `How's your first week with Refill, ${name}?`,
+    headline: `How's your first week with SmartSpa, ${name}?`,
     bodyParagraphs: [
       `Hi ${name} team,`,
-      "Karen here — RN and owner of Rejuv Skin Spa, and one of the spa owners who's been using Refill since the beginning.",
+      "Karen here — RN and owner of Rejuv Skin Spa, and one of the spa owners who's been using SmartSpa since the beginning.",
       "You signed up three days ago. How's it going? Any snags getting set up, questions about the dashboard, or feedback on what you'd want next?",
       "**Hit reply — I read every message.** Your feedback shapes what we build next.",
     ],
@@ -159,8 +159,8 @@ function composeDay7(tenant: TenantRow): DripEmailRendered {
     headline: `One week in, ${name}.`,
     bodyParagraphs: [
       `Hi ${name} team,`,
-      "Karen again. One full week with Refill — wanted to check in.",
-      "**Quick favor**: hit reply with one of these — (a) something you wish Refill did, (b) something that's surprised you so far, or (c) a question about how anything works.",
+      "Karen again. One full week with SmartSpa — wanted to check in.",
+      "**Quick favor**: hit reply with one of these — (a) something you wish SmartSpa did, (b) something that's surprised you so far, or (c) a question about how anything works.",
       "Your answer goes straight to David and me. We're rolling new features every week based on what spa owners actually tell us, and your inputs land in real product decisions.",
     ],
   });
@@ -169,14 +169,14 @@ function composeDay7(tenant: TenantRow): DripEmailRendered {
 function composeDay14(tenant: TenantRow): DripEmailRendered {
   const name = spaName(tenant);
   return wrapDripEmail({
-    subject: `You're halfway through your Refill trial, ${name}`,
+    subject: `You're halfway through your SmartSpa trial, ${name}`,
     preheader: "Two weeks in — here's what's coming.",
     headline: `Halfway there, ${name}.`,
     bodyParagraphs: [
       `Hi ${name} team,`,
       "Two weeks in. Hard to believe.",
-      "If you've had any cancellations come through, you've already seen the engine work — catching them, drafting the rescue offer, getting the slot refilled before the front desk could lift a finger. (If you haven't had any cancellations yet, lucky you — it'll happen, and Refill will be ready.)",
-      "We're shipping a recovered-revenue dashboard in the next couple of weeks — running total of what Refill caught for you, plus the cancellations you didn't have to chase. I'll send the link the moment it's live.",
+      "If you've had any cancellations come through, you've already seen the engine work — catching them, drafting the rescue offer, getting the slot refilled before the front desk could lift a finger. (If you haven't had any cancellations yet, lucky you — it'll happen, and SmartSpa will be ready.)",
+      "We're shipping a recovered-revenue dashboard in the next couple of weeks — running total of what SmartSpa caught for you, plus the cancellations you didn't have to chase. I'll send the link the moment it's live.",
       "**Anything tripping you up? Hit reply.** I read every message.",
     ],
   });
@@ -185,14 +185,14 @@ function composeDay14(tenant: TenantRow): DripEmailRendered {
 function composeDay21(tenant: TenantRow): DripEmailRendered {
   const name = spaName(tenant);
   return wrapDripEmail({
-    subject: `One week left in your Refill trial, ${name}`,
+    subject: `One week left in your SmartSpa trial, ${name}`,
     preheader: "Two questions before your trial wraps.",
     headline: `One week left, ${name}.`,
     bodyParagraphs: [
       `Hi ${name} team,`,
       "Three weeks down. Your trial wraps in 7 days.",
       "**Two questions before then**:",
-      "(1) Has Refill earned its keep? If yes, we'll keep the engine running — David and I will reach out next week to walk you through plan options personally.",
+      "(1) Has SmartSpa earned its keep? If yes, we'll keep the engine running — David and I will reach out next week to walk you through plan options personally.",
       "(2) Any feedback you've been sitting on? Now's the moment — we listen hardest at the end of trials.",
       "Hit reply — same inbox, same Karen.",
     ],
@@ -202,15 +202,15 @@ function composeDay21(tenant: TenantRow): DripEmailRendered {
 function composeDay28(tenant: TenantRow): DripEmailRendered {
   const name = spaName(tenant);
   return wrapDripEmail({
-    subject: `Your Refill trial wraps in 2 days, ${name}`,
+    subject: `Your SmartSpa trial wraps in 2 days, ${name}`,
     preheader: "If you'd like to keep going — let's talk.",
     headline: `2 days left, ${name}.`,
     bodyParagraphs: [
       `Hi ${name} team,`,
-      "Day 28. Your Refill trial wraps in 2 days.",
+      "Day 28. Your SmartSpa trial wraps in 2 days.",
       "If you'd like to keep going past then, **hit reply** — David and I will walk you through the plan options personally. No checkout flow, no credit card form, just a conversation about what works for your spa.",
-      "Most spas stay on our performance plan — free + just $5 for each booking Refill creates for you, no flat fee, you only pay when we put money back in your books. But there are alternatives if that doesn't fit your numbers.",
-      "Either way, even if you decide Refill isn't for you, we'd love a quick \"here's why\" on reply. Those notes shape the product more than anything else.",
+      "Most spas stay on our performance plan — free + just $5 for each booking SmartSpa creates for you, no flat fee, you only pay when we put money back in your books. But there are alternatives if that doesn't fit your numbers.",
+      "Either way, even if you decide SmartSpa isn't for you, we'd love a quick \"here's why\" on reply. Those notes shape the product more than anything else.",
     ],
   });
 }

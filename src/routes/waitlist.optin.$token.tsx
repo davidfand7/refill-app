@@ -54,7 +54,7 @@ export const Route = createFileRoute("/waitlist/optin/$token")({
         content:
           "Get a text the moment a great slot opens up. Tap to join — reply STOP anytime to leave.",
       },
-      { property: "og:site_name", content: "Refill" },
+      { property: "og:site_name", content: "SmartSpa" },
       { property: "og:type", content: "website" },
       {
         property: "og:image",
@@ -64,7 +64,7 @@ export const Route = createFileRoute("/waitlist/optin/$token")({
       { property: "og:image:height", content: "630" },
       {
         property: "og:image:alt",
-        content: "Refill — join the waitlist",
+        content: "SmartSpa — join the waitlist",
       },
       { name: "twitter:title", content: "Join the waitlist" },
       {

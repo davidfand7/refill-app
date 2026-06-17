@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.65.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.65.0 &mdash; Brand alignment: one name everywhere a person looks.</strong> The app header already said <strong>SmartSpa</strong>, but the old <em>Emma</em> assistant persona was still leaking into ~25 user-facing strings (empty-states on Rescue, Campaigns, Patients, Reports, Recovery, the services editor, calendar-install pages, breadcrumbs) and the patient-facing link previews still read <em>Refill</em>. This pass finishes the rebrand on every surface a human actually sees: the assistant is now <strong>SmartSpa</strong> (de-gendered to plain product voice &mdash; &ldquo;SmartSpa offers it to your waitlist,&rdquo; not &ldquo;Emma&hellip; she&rdquo;); the patient <strong>rescue-claim and waitlist link previews</strong> now say <strong>SmartSpa</strong>; Karen&rsquo;s trial-drip and offer emails now name <strong>SmartSpa</strong> as the product (Karen stays the human signature); the landing hero, README, and new-sender default display-name all align. Also fixed an inverted brand default on the Acuity-connections page. <strong>Deliberately unchanged</strong>: <em>Refill</em> stays the name of the recovery <em>Solution</em> (the Recovery nav chip, the <code>shell===&ldquo;refill&rdquo;</code> deployment); the <code>getrefill.app</code> domain + transactional from-addresses stay put until the daylight DNS/email cutover; and the internal <code>emma_*</code> table/cron/route identifiers are infra (a separate rename, not user-facing). <strong>Touched</strong>: user-facing strings across <code>src/routes</code>, <code>src/components</code>, and the email composers (<code>refill-drip.ts</code>, <code>refill-offers.ts</code>, <code>refill-setup.functions.ts</code>, <code>emma-sender.functions.ts</code>). No migration.",
+    ],
+  },
+  {
     version: "v2.64.4",
     date: "June 2026",
     items: [

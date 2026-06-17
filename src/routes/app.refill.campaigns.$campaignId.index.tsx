@@ -112,7 +112,7 @@ function CampaignDetailPage() {
         title={campaign?.title ?? (loading ? "Loading…" : "Campaign")}
         description={campaign?.description ?? undefined}
         breadcrumbs={[
-          { label: "Emma", to: "/app/refill" },
+          { label: "SmartSpa", to: "/app/refill" },
           { label: "Campaigns", to: "/app/refill/campaigns" },
           { label: campaign?.title ?? "Campaign" },
         ]}
@@ -309,7 +309,7 @@ function NextStepsCard({ templateKind }: { templateKind: TemplateKind }) {
         <li className="flex items-start gap-2">
           <Users className="h-3 w-3 mt-0.5 text-emerald shrink-0" />
           <span>
-            <strong>Phase 3 — Blast composer</strong>: per-patient Emma drafts,
+            <strong>Phase 3 — Blast composer</strong>: per-patient SmartSpa drafts,
             review, send via SMS + email.
           </span>
         </li>

@@ -69,7 +69,7 @@ function SenderSettingsPage() {
   const shell = useShell();
   const isRefill = shell === "refill";
   const brandHeader = isRefill ? "Refill" : "SmartSpa";
-  const brandName = isRefill ? "Refill" : "Emma";
+  const brandName = isRefill ? "Refill" : "SmartSpa";
   const platformDefault = platformDefaultFor(brandName);
 
   const [domains, setDomains] = useState<EmmaSenderDomain[] | null>(null);
@@ -202,7 +202,7 @@ function SenderSettingsPage() {
           </div>
         )}
 
-        {/* Live preview — what Emma is sending from right now. */}
+        {/* Live preview — what SmartSpa is sending from right now. */}
         <section className="rounded-xl border border-border bg-card p-5">
           <div className="flex items-center gap-2 text-xs font-medium tracking-wider text-ink-soft uppercase mb-2">
             <Mail className="h-3.5 w-3.5" />

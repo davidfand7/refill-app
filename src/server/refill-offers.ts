@@ -259,8 +259,8 @@ function composeIncentiveOfferEmail(
       headline = `A few more days on us, ${name}.`;
       bodyParagraphs = [
         `Hi ${name} team,`,
-        `Karen here. David and I want to extend your Refill trial by **${days} more days** — no strings, no commitment.`,
-        "Use the time to keep watching the engine work. If a no-show hits while you're extended, you'll see Refill recover it just like you would on the paid plan.",
+        `Karen here. David and I want to extend your SmartSpa trial by **${days} more days** — no strings, no commitment.`,
+        "Use the time to keep watching the engine work. If a no-show hits while you're extended, you'll see SmartSpa recover it just like you would on the paid plan.",
         validClause ? `${validClause} Just hit reply and we'll lock it in.` : "Hit reply to lock it in.",
         "— Karen",
       ];
@@ -274,7 +274,7 @@ function composeIncentiveOfferEmail(
       headline = `${pct}% revenue share for ${months} months, ${name}.`;
       bodyParagraphs = [
         `Hi ${name} team,`,
-        `Karen here. We're offering ${name} a **reduced share — ${pct}% for the first ${months} months** of your Refill subscription.`,
+        `Karen here. We're offering ${name} a **reduced share — ${pct}% for the first ${months} months** of your SmartSpa subscription.`,
         "Same engine, same recovery, lower share back to us. Our way of thanking the spas who came in early.",
         validClause ? `${validClause} Hit reply and we'll set it up.` : "Hit reply and we'll set it up.",
         "— Karen",
@@ -286,7 +286,7 @@ function composeIncentiveOfferEmail(
       headline = `$${usd} credit on us, ${name}.`;
       bodyParagraphs = [
         `Hi ${name} team,`,
-        `Karen here. We've added a **$${usd} credit** to your Refill account. It'll apply against your first invoice when you move to a paid plan — no expiration if you stay on trial through it.`,
+        `Karen here. We've added a **$${usd} credit** to your SmartSpa account. It'll apply against your first invoice when you move to a paid plan — no expiration if you stay on trial through it.`,
         validClause,
         "Hit reply if you have any questions.",
         "— Karen",
@@ -297,7 +297,7 @@ function composeIncentiveOfferEmail(
       const description = String(
         (offer.terms as { description?: unknown }).description ?? "",
       );
-      headline = `A note from Karen at Refill.`;
+      headline = `A note from Karen at SmartSpa.`;
       bodyParagraphs = [
         `Hi ${name} team,`,
         description,

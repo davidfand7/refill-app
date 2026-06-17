@@ -170,9 +170,9 @@ async function sendIntakeNotification(
     return;
   }
 
-  const subject = `🔔 New Refill setup intent — ${data.practiceName}`;
+  const subject = `🔔 New SmartSpa setup intent — ${data.practiceName}`;
   const text = [
-    `New Refill setup intent just landed.`,
+    `New SmartSpa setup intent just landed.`,
     ``,
     `Practice: ${data.practiceName}`,
     `Email: ${data.email}`,
@@ -197,7 +197,7 @@ async function sendIntakeNotification(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: `Refill intake <${FROM_MAILBOX}>`,
+        from: `SmartSpa intake <${FROM_MAILBOX}>`,
         to: NOTIFY_RECIPIENTS,
         reply_to: data.email,
         subject,

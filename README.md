@@ -1,6 +1,6 @@
-# Refill
+# SmartSpa
 
-No-show recovery for med-spas. Standalone product, separated from the openagenticv4 monorepo on 2026-05-24.
+The patient-profitability OS for med-spas. (Refill is the no-show-recovery Solution within it.) Standalone product, separated from the openagenticv4 monorepo on 2026-05-24.
 
 ## Stack
 

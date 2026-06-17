@@ -208,9 +208,9 @@ function ContactsPage() {
       <PageHeader wide
         eyebrow="SmartSpa · Patients"
         title="Contacts"
-        description="Connect phone and email to every patient so Emma can reach them."
+        description="Connect phone and email to every patient so SmartSpa can reach them."
         breadcrumbs={[
-          { label: "Emma", to: "/app/refill" },
+          { label: "SmartSpa", to: "/app/refill" },
           { label: "Patients", to: "/app/refill/patients" },
           { label: "Contacts" },
         ]}
@@ -480,7 +480,7 @@ function UploadCard({
       <p className="text-sm text-ink-soft max-w-md mx-auto leading-relaxed">
         Export your client list from your scheduling software (with First
         Name, Last Name, Phone, Email, Days Since Last Appointment, Banned).
-        Emma matches it to your QuickBooks patients.
+        SmartSpa matches it to your QuickBooks patients.
       </p>
       <div className="mt-5">
         <input

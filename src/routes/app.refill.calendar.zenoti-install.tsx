@@ -28,7 +28,7 @@ function ZenotiInstallPage() {
   const search = useSearch({ from: "/app/refill/calendar/zenoti-install" });
   const shell = useShell();
   const brandHeader = shell === "refill" ? "Refill" : "SmartSpa";
-  const brandName = shell === "refill" ? "Refill" : "Emma";
+  const brandName = shell === "refill" ? "Refill" : "SmartSpa";
 
   const [centerId, setCenterId] = useState("");
   const [submitting, setSubmitting] = useState(false);

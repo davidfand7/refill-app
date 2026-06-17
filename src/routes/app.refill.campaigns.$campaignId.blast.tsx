@@ -298,9 +298,9 @@ function BlastComposerPage() {
       <PageHeader
         eyebrow="SmartSpa · Blast composer"
         title={result?.campaignTitle ?? (loading ? "Loading…" : "Compose")}
-        description="Review every draft, then send. Each send respects banned + opted-out + velocity + quiet hours — Emma never breaks compliance."
+        description="Review every draft, then send. Each send respects banned + opted-out + velocity + quiet hours — SmartSpa never breaks compliance."
         breadcrumbs={[
-          { label: "Emma", to: "/app/refill" },
+          { label: "SmartSpa", to: "/app/refill" },
           { label: "Campaigns", to: "/app/refill/campaigns" },
           {
             label: result?.campaignTitle ?? "Campaign",
@@ -564,7 +564,7 @@ function ScheduleModal({
             {campaignTitle}
           </h2>
           <p className="text-xs text-ink-soft mt-1">
-            Emma will queue {counts.total} message{counts.total === 1 ? "" : "s"}{" "}
+            SmartSpa will queue {counts.total} message{counts.total === 1 ? "" : "s"}{" "}
             ({counts.sms} SMS · {counts.email} email) to dispatch at the time you pick.
           </p>
         </div>
@@ -993,7 +993,7 @@ function TargetRow({
         {generating ? (
           <div className="flex items-center gap-2 text-xs text-ink-soft py-6">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Emma is drafting…
+            SmartSpa is drafting…
           </div>
         ) : genError ? (
           <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs">

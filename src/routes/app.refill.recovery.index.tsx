@@ -85,7 +85,7 @@ function RecoveryDashboard() {
   const shell = useShell();
   const isRefill = shell === "refill";
   const brandHeader = isRefill ? "Refill" : "SmartSpa";
-  const brandName = isRefill ? "Refill" : "Emma";
+  const brandName = isRefill ? "Refill" : "SmartSpa";
 
   // v1.26.8: admin viewing-as plumbing. All 7 server fns called from this
   // page now accept viewAsUserId (emma-attribution + emma-deposits swept
@@ -394,7 +394,7 @@ function RecoveryDashboard() {
               </h2>
               <p className="text-sm text-ink-soft max-w-md mx-auto mb-5">
                 When the rescue agent fills a freed slot — or a future recovery
-                agent rebooks a no-show — Emma logs the save here. Verified
+                agent rebooks a no-show — SmartSpa logs the save here. Verified
                 revenue flows into the percentage pricing math.
               </p>
               <Link
@@ -916,7 +916,7 @@ function DepositsTab({
             Deposit-credit is OFF by default
           </h3>
           <p className="text-xs text-ink-soft leading-relaxed">
-            Emma never punishes your patients unless you tell us to. When
+            SmartSpa never punishes your patients unless you tell us to. When
             enabled, eligible patients are asked to authorize a deposit that
             becomes credit toward their treatment at the visit. v364 logs
             intent only — no money moves yet. v364.x adds the Stripe card-hold flow.

@@ -390,7 +390,7 @@ function AppointmentsPage() {
               No appointments yet
             </h2>
             <p className="text-sm text-ink-soft max-w-md mx-auto">
-              Export your schedule from your PMS as CSV and upload above. Emma will
+              Export your schedule from your PMS as CSV and upload above. SmartSpa will
               start running reminder cadences as soon as the first appointment lands.
             </p>
           </div>

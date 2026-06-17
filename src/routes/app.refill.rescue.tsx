@@ -252,7 +252,7 @@ function RescuePage() {
       <PageHeader
         eyebrow="SmartSpa"
         title="Rescue"
-        description="When a slot frees up, Emma offers it to your waitlist. First tap wins. Track every attempt + who's on the list."
+        description="When a slot frees up, SmartSpa offers it to your waitlist. First tap wins. Track every attempt + who's on the list."
         breadcrumbs={[
           { label: "SmartSpa", to: "/app/refill" },
           { label: "Rescue" },
@@ -436,7 +436,7 @@ function ActivityTab({ activity }: { activity: RescueActivityItem[] | null }) {
       <EmptyCard
         icon={CalendarClock}
         title="No rescue activity yet"
-        body="When an appointment is cancelled with a future date, Emma will fire a rescue to your waitlist. You'll see the play-by-play here."
+        body="When an appointment is cancelled with a future date, SmartSpa will fire a rescue to your waitlist. You'll see the play-by-play here."
         cta={{
           label: "Configure rescue agent",
           to: "/app/refill/settings/noshow",
@@ -542,7 +542,7 @@ function WaitlistTab({
       <EmptyCard
         icon={Heart}
         title="No one on the list yet"
-        body="Every Emma message includes an opt-in footer. Patients who tap it join your waitlist automatically. You can also opt-in patients manually from their profile."
+        body="Every SmartSpa message includes an opt-in footer. Patients who tap it join your waitlist automatically. You can also opt-in patients manually from their profile."
         cta={{
           label: "Configure opt-in footer",
           to: "/app/refill/settings/noshow",
@@ -633,7 +633,7 @@ function RecommendationsCard({
       <div className="flex items-center gap-2 mb-3">
         <Lightbulb className="h-4 w-4 text-emerald" />
         <h3 className="text-sm font-semibold text-foreground">
-          Emma recommends
+          SmartSpa recommends
         </h3>
         <span className="text-[11px] text-ink-soft ml-auto">
           {recommendations.length} suggestion{recommendations.length === 1 ? "" : "s"}
@@ -744,7 +744,7 @@ function PatternsTab({
       <EmptyCard
         icon={Sparkles}
         title="No patterns to surface yet"
-        body="Emma watches every appointment status change. When a patient hits VIP, becomes chronic-no-show, or returns to good standing, you'll see it here."
+        body="SmartSpa watches every appointment status change. When a patient hits VIP, becomes chronic-no-show, or returns to good standing, you'll see it here."
       />
     );
   }
