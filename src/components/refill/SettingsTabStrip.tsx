@@ -9,7 +9,7 @@
  */
 
 import { Link } from "@tanstack/react-router";
-import { UserCog, AtSign, Building2, Mail, Receipt, GitMerge, BarChart3, Activity } from "lucide-react";
+import { UserCog, AtSign, Building2, Mail, Receipt, GitMerge, BarChart3, Activity, Palette } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // The "Account" Solution (Spine back-office). Folded in over v2.1.0–v2.1.2:
@@ -21,6 +21,7 @@ type SettingsTab =
   | "account"
   | "sender"
   | "spa-profile"
+  | "brand"
   | "light-mode"
   | "billing"
   | "attribution";
@@ -36,6 +37,7 @@ const TABS: Array<{
   { key: "account", to: "/app/refill/settings/account", label: "Login", icon: UserCog },
   { key: "sender", to: "/app/refill/settings/sender", label: "Sender", icon: AtSign },
   { key: "spa-profile", to: "/app/refill/settings/spa-profile", label: "Spa profile", icon: Building2 },
+  { key: "brand", to: "/app/refill/settings/brand", label: "Your Brand", icon: Palette },
   { key: "light-mode", to: "/app/refill/settings/light-mode", label: "Lite mode", icon: Mail },
   { key: "billing", to: "/app/billing", label: "Billing", icon: Receipt },
   { key: "attribution", to: "/app/billing/attribution", label: "Attribution", icon: GitMerge },

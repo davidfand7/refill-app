@@ -20,35 +20,53 @@ import {
 import {
   claimRescueSlot,
   getRescueOfferPayload,
+  getRescueOfferBrand,
   type RescueOfferPayload,
 } from "@/server/emma-rescue.functions";
 
 export const Route = createFileRoute("/rescue/claim/$token")({
   component: RescueClaimPage,
+  // v2.66.0 — resolve the spa's brand name server-side so link-preview scrapers
+  // (iMessage / Mail / Slack) get the SPA's brand in the head, not "SmartSpa",
+  // when the spa is white-labeled. Degrades to SmartSpa on any failure.
+  loader: async ({ params }) => {
+    try {
+      const brand = await getRescueOfferBrand({ data: { token: params.token } });
+      return { brandName: brand?.name ?? "SmartSpa" };
+    } catch {
+      return { brandName: "SmartSpa" };
+    }
+  },
   // v379.1 — branded link-preview meta for iMessage / iOS Mail / Messages /
   // Slack / etc. The root route's defaults (Agentiport homepage card) are
   // wrong for a patient receiving a rescue offer SMS or iMessage; this
   // override gives a Refill-branded card that actually previews the offer.
   // Server-rendered via TanStack Start so link-preview scrapers see it
   // without executing JS.
-  head: () => ({
-    meta: [
-      { title: "Your appointment slot just opened up" },
-      { name: "description", content: "A spot just freed up. Tap to grab it before someone else does." },
-      { property: "og:title", content: "Your appointment slot just opened up" },
-      { property: "og:description", content: "A spot just freed up. Tap to grab it before someone else does." },
-      { property: "og:site_name", content: "SmartSpa" },
-      { property: "og:type", content: "website" },
-      { property: "og:image", content: "https://getrefill.app/brand/refill-og-patient.png" },
-      { property: "og:image:width", content: "1200" },
-      { property: "og:image:height", content: "630" },
-      { property: "og:image:alt", content: "SmartSpa — your appointment slot just opened up" },
-      { name: "twitter:title", content: "Your appointment slot just opened up" },
-      { name: "twitter:description", content: "A spot just freed up. Tap to grab it before someone else does." },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:image", content: "https://getrefill.app/brand/refill-og-patient.png" },
-    ],
-  }),
+  head: ({ loaderData }) => {
+    // v2.66.0 — og:site_name + alt carry the spa's brand for a white-labeled
+    // spa (loaderData.brandName), falling back to SmartSpa. The OG card IMAGE
+    // stays the shared SmartSpa asset for now; per-spa OG images are slice 4.
+    const siteName = loaderData?.brandName ?? "SmartSpa";
+    return {
+      meta: [
+        { title: "Your appointment slot just opened up" },
+        { name: "description", content: "A spot just freed up. Tap to grab it before someone else does." },
+        { property: "og:title", content: "Your appointment slot just opened up" },
+        { property: "og:description", content: "A spot just freed up. Tap to grab it before someone else does." },
+        { property: "og:site_name", content: siteName },
+        { property: "og:type", content: "website" },
+        { property: "og:image", content: "https://getrefill.app/brand/refill-og-patient.png" },
+        { property: "og:image:width", content: "1200" },
+        { property: "og:image:height", content: "630" },
+        { property: "og:image:alt", content: `${siteName} — your appointment slot just opened up` },
+        { name: "twitter:title", content: "Your appointment slot just opened up" },
+        { name: "twitter:description", content: "A spot just freed up. Tap to grab it before someone else does." },
+        { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:image", content: "https://getrefill.app/brand/refill-og-patient.png" },
+      ],
+    };
+  },
 });
 
 function RescueClaimPage() {
@@ -128,9 +146,41 @@ function RescueClaimPage() {
   })();
   const showProvider = !!displayProviderName;
 
+  // v2.66.0 — "Your Brand" white-label. The payload carries the spa's resolved
+  // brand (plain SmartSpa unless the spa is entitled + active). Defaults below
+  // keep the loading / error states on the SmartSpa accent.
+  const brand = payload && payload !== "loading" ? payload.brand : null;
+  const accent = brand?.accent ?? "#056048";
+
   return (
     <div className="min-h-screen bg-[#fbfaf7] text-[#1c2024] flex flex-col items-center justify-center p-6 font-[-apple-system,BlinkMacSystemFont,'Helvetica_Neue',system-ui,sans-serif]">
       <div className="w-full max-w-md bg-white border border-[#e2dfd6] rounded-2xl p-6 sm:p-8 shadow-sm">
+        {/* v2.66.0 — brand header (logo image or letter mark). Only shown once
+            the brand has resolved, so loading/error stay clean. */}
+        {brand && (
+          <div className="flex items-center justify-center mb-4">
+            {brand.logoUrl ? (
+              <img
+                src={brand.logoUrl}
+                alt={brand.name}
+                className="h-9 max-w-[180px] object-contain"
+              />
+            ) : (
+              <div className="inline-flex items-center gap-2">
+                <span
+                  className="h-7 w-7 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                  style={{ backgroundColor: accent }}
+                >
+                  {brand.logoMark}
+                </span>
+                <span className="text-[15px] font-semibold text-[#1c2024]">
+                  {brand.name}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
         {payload === "loading" && (
           <div className="flex items-center gap-2 text-sm text-[#5a6068] justify-center py-6">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -152,7 +202,7 @@ function RescueClaimPage() {
         {payload && payload !== "loading" && payload.status === "claimable" && (
           <>
             <div className="flex items-center justify-center mb-3">
-              <CalendarClock className="h-10 w-10 text-[#056048]" />
+              <CalendarClock className="h-10 w-10" style={{ color: accent }} />
             </div>
             <h1 className="text-xl font-semibold text-center mb-1">
               {payload.patientFirstName ? `${payload.patientFirstName}, ` : ""}
@@ -160,7 +210,7 @@ function RescueClaimPage() {
               {showProvider && (
                 <>
                   {" "}with{" "}
-                  <span className="text-[#056048]">
+                  <span style={{ color: accent }}>
                     {displayProviderName}
                   </span>
                 </>
@@ -180,7 +230,8 @@ function RescueClaimPage() {
               type="button"
               onClick={() => void confirm()}
               disabled={busy}
-              className="w-full rounded-md bg-[#056048] text-white px-4 py-3 text-sm font-semibold hover:bg-[#044a38] transition disabled:opacity-50"
+              style={{ backgroundColor: accent }}
+              className="w-full rounded-md text-white px-4 py-3 text-sm font-semibold hover:opacity-90 transition disabled:opacity-50"
             >
               {busy ? (
                 <span className="inline-flex items-center gap-1.5">
@@ -199,7 +250,7 @@ function RescueClaimPage() {
 
         {payload && payload !== "loading" && payload.status === "already_claimed_by_you" && (
           <div className="text-center py-2">
-            <CheckCircle2 className="h-10 w-10 text-[#056048] mx-auto mb-3" />
+            <CheckCircle2 className="h-10 w-10 mx-auto mb-3" style={{ color: accent }} />
             <h1 className="text-xl font-semibold mb-1">You're on the books</h1>
             <p className="text-sm text-[#5a6068]">
               {when && (
@@ -253,6 +304,14 @@ function RescueClaimPage() {
               comes up.
             </p>
           </div>
+        )}
+
+        {/* v2.66.0 — "powered by SmartSpa" credit, suppressed when the spa's
+            paid white-label removes it. */}
+        {brand && !brand.removePoweredBy && (
+          <p className="text-[10px] text-[#a3a8ae] text-center mt-5">
+            powered by SmartSpa
+          </p>
         )}
       </div>
     </div>

@@ -86,3 +86,117 @@ export const REFILL_BRAND: BrandConfig = {
 
 /** Default export for callers expecting a single brand object. */
 export const brand = REFILL_BRAND;
+
+// ─── "Your Brand" white-label pricing (v2.66.0) ──────────────────────────────
+//
+// The paid add-on price, wired as ONE constant per the locked decision —
+// Grasshopper sets the real number later. Everything that quotes the price
+// (the Your Brand settings page, future billing) reads from here, so the
+// number lives in exactly one place. `null` amount = "price TBD" copy (no
+// hard number shown yet); set `amount` when the number is decided.
+export const WHITE_LABEL_PRICING = {
+  /** Dollars per month. null → render the "pricing coming soon" variant. */
+  amount: null as number | null,
+  interval: "mo" as const,
+  currencySymbol: "$",
+} as const;
+
+/** Human-friendly price label, e.g. "$49/mo" or "Pricing coming soon". */
+export function whiteLabelPriceLabel(): string {
+  const { amount, interval, currencySymbol } = WHITE_LABEL_PRICING;
+  if (amount == null) return "Pricing coming soon";
+  return `${currencySymbol}${amount}/${interval}`;
+}
+
+// ─── "Your Brand" white-label merge (v2.66.0) ────────────────────────────────
+//
+// project_your_brand_white_label. A per-spa override read from the
+// brand_settings table (src/server/brand-resolver.ts) is merged OVER
+// REFILL_BRAND to produce what a patient actually sees. This merge is the
+// SINGLE place the free/paid gate lives, so it stays pure + testable here
+// rather than scattered across every surface that renders a brand.
+//
+// THE GATE:
+//   - assistant_name is FREE — it applies whenever set, no entitlement needed.
+//   - brand_display_name / accent_color / logo_url / remove_powered_by are PAID
+//     — they apply only when whiteLabelActive (entitled AND brandingActive).
+//     Off → the patient sees plain SmartSpa, even if the fields are filled in.
+
+/** Raw per-spa override, normalized from the brand_settings row. */
+export type BrandOverride = {
+  /** FREE: assistant/sender persona name. */
+  assistantName: string | null;
+  /** PAID: the spa's own product name, replacing SmartSpa. */
+  brandDisplayName: string | null;
+  /** PAID: CSS hex accent. */
+  accentColor: string | null;
+  /** PAID: absolute logo image URL. */
+  logoUrl: string | null;
+  /** PAID: suppress the "powered by SmartSpa" footer/badge. */
+  removePoweredBy: boolean;
+  /** Owner's master switch for the paid white-label. */
+  brandingActive: boolean;
+  /** Server/billing-controlled entitlement. */
+  entitled: boolean;
+};
+
+/** What a patient-facing surface renders, after the free/paid gate. */
+export type ResolvedBrand = {
+  /** Product/brand name shown to patients + in emails. */
+  name: string;
+  /** Single character for the logo badge (first letter of the brand name). */
+  logoMark: string;
+  /** Assistant/sender persona name (free tier). Falls back to the brand name. */
+  assistantName: string;
+  /** Accent hex for CTAs + highlights. */
+  accent: string;
+  /** Absolute logo image URL, or null → render the letter/word mark. */
+  logoUrl: string | null;
+  /** When true, suppress the "powered by SmartSpa" footer/badge. */
+  removePoweredBy: boolean;
+  /** True when the paid white-label is live (entitled AND active). */
+  whiteLabelActive: boolean;
+};
+
+/**
+ * Merge a per-spa override over REFILL_BRAND, applying the free/paid gate.
+ * Pure — no DB, no env. Pass `null` (no row) to get the plain SmartSpa brand
+ * (still resolves assistantName to the brand name).
+ */
+export function mergeBrand(
+  base: BrandConfig,
+  override: BrandOverride | null,
+): ResolvedBrand {
+  const whiteLabelActive = !!override?.entitled && !!override?.brandingActive;
+
+  const brandDisplay = override?.brandDisplayName?.trim() || null;
+  const name = whiteLabelActive && brandDisplay ? brandDisplay : base.name;
+
+  // FREE: assistant name applies regardless of entitlement. Falls back to the
+  // (possibly white-labeled) brand name so a sender persona is never empty.
+  const assistantName = override?.assistantName?.trim() || name;
+
+  const accentOverride = override?.accentColor?.trim() || null;
+  const accent =
+    whiteLabelActive && accentOverride ? accentOverride : base.visual.accent;
+
+  const logoOverride = override?.logoUrl?.trim() || null;
+  const logoUrl = whiteLabelActive ? logoOverride : null;
+
+  const removePoweredBy = whiteLabelActive && !!override?.removePoweredBy;
+
+  // Badge mark = first letter of the brand name (uppercased); falls back to the
+  // base mark when the name somehow yields no letter.
+  const firstChar = name.trim().charAt(0).toUpperCase();
+  const logoMark = firstChar || base.logoMark;
+
+  return {
+    name,
+    logoMark,
+    assistantName,
+    accent,
+    logoUrl,
+    removePoweredBy,
+    whiteLabelActive,
+  };
+}

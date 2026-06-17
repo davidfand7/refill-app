@@ -44,6 +44,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { sendSms } from "@/server/sms-provider";
 import { fetchAllRows } from "@/server/paginate";
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
+import { resolveBrand } from "@/server/brand-resolver";
 import { recordMessagingActivity, recordAgentAction } from "@/server/messaging-activity";
 import {
   checkRecentContact,
@@ -90,6 +91,20 @@ export type RescueOfferPayload = {
   ownerDisplayName: string | null;
   scheduledAt: string;
   durationMin: number;
+  /** v2.66.0 — "Your Brand" white-label. The resolved brand for THIS spa
+   * (project_your_brand_white_label). Plain SmartSpa when the spa isn't
+   * entitled/active; the spa's own name/accent/logo when it is. The claim
+   * page styles itself from these. */
+  brand: ClaimBrand;
+};
+
+/** The brand fields the public claim page renders (subset of ResolvedBrand). */
+export type ClaimBrand = {
+  name: string;
+  accent: string;
+  logoUrl: string | null;
+  logoMark: string;
+  removePoweredBy: boolean;
 };
 
 export type RescueClaimResult = {
@@ -1417,6 +1432,24 @@ const tokenInput = z.object({
   token: z.string().uuid(),
 });
 
+// v2.66.0 — lightweight brand-only lookup for the claim route's <head> loader,
+// so iMessage / Mail link previews show the SPA's brand name (og:site_name)
+// for a white-labeled spa, not "SmartSpa". Kept separate from the full payload
+// fn (which runs several queries) since a preview scraper needs only the name.
+export const getRescueOfferBrand = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => tokenInput.parse(input))
+  .handler(async ({ data }): Promise<{ name: string } | null> => {
+    const sb = admin();
+    const { data: offer } = await sb
+      .from("emma_rescue_offers")
+      .select("user_id")
+      .eq("token", data.token)
+      .maybeSingle();
+    if (!offer) return null;
+    const resolved = await resolveBrand(sb, offer.user_id);
+    return { name: resolved.name };
+  });
+
 export const getRescueOfferPayload = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => tokenInput.parse(input))
   .handler(async ({ data }): Promise<RescueOfferPayload | null> => {
@@ -1512,6 +1545,12 @@ export const getRescueOfferPayload = createServerFn({ method: "POST" })
     }
 
     const resolvedOwnerDisplayName = owner?.title?.trim() || null;
+
+    // v2.66.0 — resolve the spa's brand so the claim page can white-label
+    // itself (project_your_brand_white_label). resolveBrand degrades to plain
+    // SmartSpa on any failure, so this never blocks the offer.
+    const resolved = await resolveBrand(sb, offer.user_id);
+
     return {
       spaName: spa?.title?.trim() || "your spa",
       patientFirstName: extractFirstName(patient?.title ?? null),
@@ -1528,6 +1567,13 @@ export const getRescueOfferPayload = createServerFn({ method: "POST" })
       ownerDisplayName: resolvedOwnerDisplayName,
       scheduledAt: apt.scheduled_at,
       durationMin: apt.duration_min,
+      brand: {
+        name: resolved.name,
+        accent: resolved.accent,
+        logoUrl: resolved.logoUrl,
+        logoMark: resolved.logoMark,
+        removePoweredBy: resolved.removePoweredBy,
+      },
     };
   });
 

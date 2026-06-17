@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.66.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.66.0 &mdash; &ldquo;Your Brand&rdquo;: make the patient experience yours.</strong> v2.65.0 gave every spa a tasteful, fully <strong>SmartSpa</strong>-branded experience for free; this is the paid flip on top of it. A new <strong>Settings &rarr; Your Brand</strong> tab with a live preview, split into two tiers. <strong>Free, on every plan:</strong> name your assistant. <strong>Paid white-label add-on:</strong> replace the SmartSpa name with your own, set your accent color, drop in your logo, and remove the &ldquo;powered by SmartSpa&rdquo; credit &mdash; applied across patient-facing surfaces. Give-before-you-get: a non-entitled spa can fully set up <em>and preview</em> its brand for free; it goes live the moment they upgrade. First surface flipped: the patient <strong>rescue-claim page</strong> &mdash; logo/letter mark, brand name, accent-colored button + highlights, optional powered-by removal, and a white-labeled <code>og:site_name</code> in the link preview (iMessage / Mail). The free/paid gate lives in exactly one pure function (<code>mergeBrand</code>) consumed via one server resolver (<code>resolveBrand</code>), so every future surface (waitlist opt-in, booking, emails) inherits it. Pricing is a single config constant for later. <strong>New:</strong> <code>brand_settings</code> table + RLS, <code>src/lib/brand.ts</code> merge, <code>src/server/brand-resolver.ts</code>, <code>src/server/brand-settings.functions.ts</code>, <code>app.refill.settings.brand.tsx</code>. <strong>Touched</strong>: rescue claim page + <code>getRescueOfferPayload</code> (brand on the payload). Migration: <code>brand_settings</code> (entitlement flipped per-spa via SQL until billing wires up).",
+    ],
+  },
+  {
     version: "v2.65.0",
     date: "June 2026",
     items: [
