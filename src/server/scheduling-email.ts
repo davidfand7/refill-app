@@ -11,7 +11,10 @@
  * "Rejuv Skin Spa <karen@getrefill.app>".
  */
 
-import { wrapDripEmail } from "@/lib/email-templates/refill-drip-shell";
+import {
+  wrapDripEmail,
+  type DripEmailBrand,
+} from "@/lib/email-templates/refill-drip-shell";
 
 /** Bare address from "Name <addr>" (or the string itself if already bare). */
 function bareAddress(fromLine: string): string {
@@ -95,6 +98,11 @@ export interface BookingEmailArgs {
   durationMin?: number;
   /** Chosen add-ons, snapshotted at booking. Prices intentionally omitted. */
   addOns?: { name: string; durationMin: number }[];
+  /** v2.69.0 — per-spa white-label brand (project_your_brand_white_label).
+   * When the spa is entitled + active, the from-name + email chrome + footer
+   * become the spa's; omitted/SmartSpa otherwise. The patient-facing display
+   * name (from-line, body, sign-off) prefers brand.name over spaName. */
+  brand?: DripEmailBrand;
 }
 
 /**
@@ -122,21 +130,24 @@ export async function sendBookingConfirmation(
   args: BookingEmailArgs,
 ): Promise<{ ok: boolean; error?: string }> {
   const { to, spaName, startIso, timezone } = args;
+  // Patient-facing name prefers the white-label brand over the tenant name.
+  const displayName = args.brand?.name?.trim() || spaName;
   const rendered = wrapDripEmail({
-    subject: `Your appointment at ${spaName} is confirmed`,
+    subject: `Your appointment at ${displayName} is confirmed`,
     headline: "You're booked!",
+    brand: args.brand,
     bodyParagraphs: [
-      `Your appointment with **${spaName}** is confirmed for **${fmtDate(
+      `Your appointment with **${displayName}** is confirmed for **${fmtDate(
         startIso,
         timezone,
       )}** at **${fmtTime(startIso, timezone)}**.`,
       ...appointmentDetailParagraphs(args),
       "Need to make a change? Just reply to this email and we'll help.",
     ],
-    signoff: `— ${spaName}`,
+    signoff: `— ${displayName}`,
   });
   const r = await sendViaResend({
-    from: fromForSpa(spaName),
+    from: fromForSpa(displayName),
     to,
     subject: rendered.subject,
     html: rendered.html,
@@ -150,21 +161,23 @@ export async function sendBookingReminder(
   args: BookingEmailArgs,
 ): Promise<{ ok: boolean; error?: string }> {
   const { to, spaName, startIso, timezone } = args;
+  const displayName = args.brand?.name?.trim() || spaName;
   const rendered = wrapDripEmail({
-    subject: `Reminder: your appointment at ${spaName}`,
+    subject: `Reminder: your appointment at ${displayName}`,
     headline: "See you soon!",
+    brand: args.brand,
     bodyParagraphs: [
-      `This is a friendly reminder of your appointment with **${spaName}** on **${fmtDate(
+      `This is a friendly reminder of your appointment with **${displayName}** on **${fmtDate(
         startIso,
         timezone,
       )}** at **${fmtTime(startIso, timezone)}**.`,
       ...appointmentDetailParagraphs(args),
       "Need to reschedule? Just reply to this email.",
     ],
-    signoff: `— ${spaName}`,
+    signoff: `— ${displayName}`,
   });
   const r = await sendViaResend({
-    from: fromForSpa(spaName),
+    from: fromForSpa(displayName),
     to,
     subject: rendered.subject,
     html: rendered.html,

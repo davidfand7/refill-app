@@ -18,6 +18,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import { sendBookingReminder } from "@/server/scheduling-email";
+import {
+  resolveBrandForTenant,
+  toPublicBrand,
+  type PublicBrand,
+} from "@/server/brand-resolver";
 
 const CANDIDATE_HORIZON_HOURS = 72; // covers any reasonable per-tenant lead
 const MIN_LEAD_MINUTES = 60; // don't "remind" for near-imminent bookings
@@ -129,6 +134,15 @@ export const Route = createFileRoute("/api/cron/scheduling-reminders")({
           for (const t of tens ?? []) nameByTenant.set(t.id, t.name);
         }
 
+        // v2.69.0 — resolve each tenant's white-label brand ONCE for this batch
+        // (not per-appointment) so reminders carry the spa's brand when entitled.
+        const brandByTenant = new Map<string, PublicBrand>();
+        await Promise.all(
+          tenantIds.map(async (tid) => {
+            brandByTenant.set(tid, toPublicBrand(await resolveBrandForTenant(sb, tid)));
+          }),
+        );
+
         let dispatched = 0;
         let skipped = 0;
         let retryQueued = 0; // sends that failed + had their claim released to retry next run
@@ -183,6 +197,7 @@ export const Route = createFileRoute("/api/cron/scheduling-reminders")({
               providerName: provName.get(a.provider_id) ?? null,
               durationMin: a.duration_min ?? undefined,
               addOns: addonsByAppt.get(a.id) ?? [],
+              brand: brandByTenant.get(tenantId),
             });
             sent = r.ok;
             if (!r.ok) sendErr = r.error ?? "unknown";

@@ -30,6 +30,7 @@ import { recordRescheduleWinIfNudged } from "@/server/reschedule.functions";
 import { bestActiveOfferForName, badgeableOffers, type AddOnOffer } from "@/lib/promo-calendar";
 import { zonedWallClockToUtc, zonedDateParts, todayIsoInTz } from "@/lib/scheduling-slots";
 import { sendBookingConfirmation } from "@/server/scheduling-email";
+import { resolveBrandForTenant, toPublicBrand } from "@/server/brand-resolver";
 import { asResourceType, assignFreeResource } from "@/server/scheduling-resources";
 
 function admin() {
@@ -797,6 +798,8 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
       ]);
       const provRow = prov as { name?: string; display_name?: string | null } | null;
       try {
+        // v2.69.0 — white-label the confirmation when the spa is entitled.
+        const emailBrand = toPublicBrand(await resolveBrandForTenant(sb, tenantId));
         await sendBookingConfirmation({
           to: data.patientEmail,
           spaName: t?.name ?? "Your appointment",
@@ -806,6 +809,7 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
           providerName: provRow?.display_name?.trim() || provRow?.name || null,
           durationMin: effectiveDuration,
           addOns: chosenAddons.map((a) => ({ name: a.name, durationMin: a.durationMin })),
+          brand: emailBrand,
         });
       } catch (e) {
         console.error("[scheduling-email] owner-booking confirmation send failed:", e);

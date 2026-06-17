@@ -16,9 +16,27 @@
  * is the deliberate brand move.
  */
 
+/**
+ * v2.69.0 — per-spa white-label brand for transactional emails
+ * (project_your_brand_white_label). When supplied (booking confirmation /
+ * reminder for an entitled spa), the header wordmark/badge/accent + footer
+ * become the spa's; "powered by SmartSpa" is suppressed when removePoweredBy.
+ * Omitted (the default for owner-acquisition drips) → the SmartSpa shell,
+ * byte-identical to before. Structurally compatible with PublicBrand.
+ */
+export interface DripEmailBrand {
+  name: string;
+  accent: string;
+  logoMark: string;
+  logoUrl: string | null;
+  removePoweredBy: boolean;
+}
+
 export interface DripEmailContent {
   /** Email subject line. */
   subject: string;
+  /** Optional per-spa white-label brand. Omitted → SmartSpa shell. */
+  brand?: DripEmailBrand;
   /** Optional preheader (inbox preview snippet — invisible after the open). */
   preheader?: string;
   /** Big headline at the top of the card. Plain text; no HTML. */
@@ -51,6 +69,22 @@ export function wrapDripEmail(content: DripEmailContent): DripEmailRendered {
   const safeHeadline = escapeHtml(content.headline);
   const safePreheader = escapeHtml(content.preheader ?? "");
 
+  // v2.69.0 — white-label resolution. No brand → SmartSpa shell (unchanged).
+  const brand = content.brand ?? null;
+  const accent = brand?.accent || "#056048";
+  const wordmark = brand?.name || "SmartSpa";
+  const mark = (brand?.logoMark || "S").slice(0, 1);
+  // SmartSpa shows its tagline; a white-labeled spa shows just its name.
+  const showTagline = !brand;
+  // Footer credit: drips + non-removed spas show a credit; a removePoweredBy
+  // spa shows none. Drips credit "getrefill.app"; a white-labeled spa that
+  // keeps the credit shows the softer "powered by SmartSpa".
+  const footerCredit = !brand
+    ? "getrefill.app"
+    : brand.removePoweredBy
+      ? null
+      : "powered by SmartSpa";
+
   // ── Plain text ─────────────────────────────────────────────────────────
   // %CTA% in the body becomes "<label>: <href>" in plain text so the
   // copy still reads naturally to text-only recipients.
@@ -67,13 +101,18 @@ export function wrapDripEmail(content: DripEmailContent): DripEmailRendered {
     textBody,
     "",
     signoff,
-    "SmartSpa / " + BRAND_TAGLINE,
-    "https://getrefill.app",
+    // SmartSpa shell keeps its tagline + URL; a white-labeled spa shows only
+    // its retained credit (if any).
+    ...(!brand
+      ? ["SmartSpa / " + BRAND_TAGLINE, "https://getrefill.app"]
+      : footerCredit
+        ? [footerCredit, "https://getrefill.app"]
+        : []),
   ].join("\n");
 
   // ── HTML ──────────────────────────────────────────────────────────────
   const ctaHtml = content.cta
-    ? `<div style="margin:20px 0;text-align:center;"><a href="${escapeAttr(content.cta.href)}" style="display:inline-block;background:#056048;color:#fbfaf7;text-decoration:none;font-size:14px;font-weight:600;padding:11px 22px;border-radius:6px;">${escapeHtml(content.cta.label)}</a></div>`
+    ? `<div style="margin:20px 0;text-align:center;"><a href="${escapeAttr(content.cta.href)}" style="display:inline-block;background:${accent};color:#fbfaf7;text-decoration:none;font-size:14px;font-weight:600;padding:11px 22px;border-radius:6px;">${escapeHtml(content.cta.label)}</a></div>`
     : "";
 
   const htmlBody = content.bodyParagraphs
@@ -107,11 +146,15 @@ export function wrapDripEmail(content: DripEmailContent): DripEmailRendered {
         <tr><td style="padding:0 0 24px 0;">
           <table role="presentation" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="background:#056048;width:36px;height:36px;border-radius:8px;text-align:center;vertical-align:middle;color:#fbfaf7;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:600;line-height:36px;">S</td>
+              ${
+                brand?.logoUrl
+                  ? `<td style="vertical-align:middle;"><img src="${escapeAttr(brand.logoUrl)}" alt="${escapeAttr(wordmark)}" height="36" style="max-height:36px;max-width:200px;display:block;border:0;"></td>`
+                  : `<td style="background:${accent};width:36px;height:36px;border-radius:8px;text-align:center;vertical-align:middle;color:#fbfaf7;font-family:Georgia,'Times New Roman',serif;font-size:20px;font-weight:600;line-height:36px;">${escapeHtml(mark)}</td>
               <td style="padding-left:12px;vertical-align:middle;">
-                <div style="color:#056048;font-family:Georgia,'Times New Roman',serif;font-size:15px;font-weight:600;letter-spacing:-0.01em;">SmartSpa</div>
-                <div style="color:#8a9098;font-size:11px;">/ ${BRAND_TAGLINE}</div>
-              </td>
+                <div style="color:${accent};font-family:Georgia,'Times New Roman',serif;font-size:15px;font-weight:600;letter-spacing:-0.01em;">${escapeHtml(wordmark)}</div>
+                ${showTagline ? `<div style="color:#8a9098;font-size:11px;">/ ${BRAND_TAGLINE}</div>` : ""}
+              </td>`
+              }
             </tr>
           </table>
         </td></tr>
@@ -120,9 +163,13 @@ export function wrapDripEmail(content: DripEmailContent): DripEmailRendered {
           ${htmlBody}
           <p style="margin:24px 0 0 0;color:#5a6068;font-size:14px;line-height:1.55;">${escapeHtml(signoff)}</p>
         </td></tr>
-        <tr><td style="padding:20px 4px 0 4px;color:#8a9098;font-size:12px;line-height:1.55;">
-          <a href="https://getrefill.app" style="color:#056048;text-decoration:none;">getrefill.app</a>
-        </td></tr>
+        ${
+          footerCredit
+            ? `<tr><td style="padding:20px 4px 0 4px;color:#8a9098;font-size:12px;line-height:1.55;">
+          <a href="https://getrefill.app" style="color:${accent};text-decoration:none;">${escapeHtml(footerCredit)}</a>
+        </td></tr>`
+            : ""
+        }
       </table>
     </td></tr>
   </table>

@@ -104,3 +104,25 @@ export async function resolveBrand(
     entitled: !!row.entitled,
   });
 }
+
+/**
+ * Resolve a brand by TENANT id. Brand is keyed by user_id, but several
+ * surfaces (booking, transactional email) work in tenant space — so map
+ * tenant→owner (earliest tenant_membership, the same owner native bookings
+ * stamp) then resolve. Degrades to plain SmartSpa when there's no owner row.
+ */
+export async function resolveBrandForTenant(
+  sb: SupabaseClient,
+  tenantId: string,
+): Promise<ResolvedBrand> {
+  const { data: owner } = await sb
+    .from("tenant_memberships")
+    .select("user_id, created_at")
+    .eq("tenant_id", tenantId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const ownerUserId = (owner?.user_id as string | undefined) ?? null;
+  if (!ownerUserId) return mergeBrand(REFILL_BRAND, null);
+  return resolveBrand(sb, ownerUserId);
+}

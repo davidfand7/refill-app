@@ -52,7 +52,7 @@ import {
 } from "@/server/refill-promo-calendar.functions";
 import { recordRescheduleWinIfNudged } from "@/server/reschedule.functions";
 import { getTenantOwnerUserId } from "@/server/scheduling-settings.functions";
-import { resolveBrand, toPublicBrand, type PublicBrand } from "@/server/brand-resolver";
+import { resolveBrand, resolveBrandForTenant, toPublicBrand, type PublicBrand } from "@/server/brand-resolver";
 import { REFILL_BRAND, mergeBrand } from "@/lib/brand";
 import { bestActiveOfferForName, badgeableOffers, type AddOnOffer } from "@/lib/promo-calendar";
 import {
@@ -979,6 +979,10 @@ export const confirmBooking = createServerFn({ method: "POST" })
     // booking is already committed, so a send failure must NOT crash the
     // handler and show the patient an error for a booking that succeeded.
     try {
+      // v2.69.0 — white-label the confirmation email when the spa is entitled.
+      const emailBrand = tenantId
+        ? toPublicBrand(await resolveBrandForTenant(sb, tenantId))
+        : undefined;
       await sendBookingConfirmation({
         to: data.email,
         spaName,
@@ -988,6 +992,7 @@ export const confirmBooking = createServerFn({ method: "POST" })
         providerName,
         durationMin: updated.duration_min ?? undefined,
         addOns: apptAddons,
+        brand: emailBrand,
       });
     } catch (e) {
       console.error("[scheduling-email] confirmation send failed:", e);

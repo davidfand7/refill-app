@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.69.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.69.0 &mdash; &ldquo;Your Brand&rdquo; reaches the inbox: white-labeled booking emails.</strong> The patient transactional emails &mdash; <strong>booking confirmation</strong> + <strong>appointment reminder</strong> &mdash; now carry an entitled spa&rsquo;s brand instead of SmartSpa. The <strong>from-name</strong> shows the spa&rsquo;s brand (e.g. &ldquo;Rejuv Skin Spa&rdquo;), and the email chrome adopts the spa&rsquo;s <strong>logo/letter-mark, accent color, and name</strong> in the header, with the &ldquo;SmartSpa&rdquo; footer credit dropped when the spa has removed it. The shared email shell gained an optional brand parameter, so the <strong>owner-acquisition trial drips stay 100% SmartSpa</strong> (byte-identical) &mdash; only the patient-facing booking emails white-label. Brand is resolved per-tenant (mapped to the owner), cached once per reminder-cron batch so a busy night doesn&rsquo;t re-resolve per email. <strong>Deliberately unchanged</strong>: the sending <em>address</em> stays the verified <code>@getrefill.app</code> mailbox (only the display name brands) &mdash; a per-spa sending <em>domain</em> is the deferred custom-domain tier. <strong>Touched</strong>: <code>refill-drip-shell.ts</code> (optional brand in header/footer/CTA), <code>scheduling-email.ts</code> (brand on confirmation + reminder), <code>brand-resolver.ts</code> (<code>resolveBrandForTenant</code>), and the three callers (<code>scheduling.functions</code>, <code>scheduling-owner.functions</code>, the reminder cron). No migration.",
+    ],
+  },
+  {
     version: "v2.68.0",
     date: "June 2026",
     items: [
