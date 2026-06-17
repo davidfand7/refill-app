@@ -99,12 +99,12 @@ import { Route as AppRefillWaitlistBulkRouteImport } from './routes/app.refill.w
 import { Route as AppRefillSettingsZenotiInstallRouteImport } from './routes/app.refill.settings.zenoti-install'
 import { Route as AppRefillSettingsVagaroInstallRouteImport } from './routes/app.refill.settings.vagaro-install'
 import { Route as AppRefillSettingsSpaProfileRouteImport } from './routes/app.refill.settings.spa-profile'
-import { Route as AppRefillSettingsBrandRouteImport } from './routes/app.refill.settings.brand'
 import { Route as AppRefillSettingsSenderRouteImport } from './routes/app.refill.settings.sender'
 import { Route as AppRefillSettingsSchedulerRouteImport } from './routes/app.refill.settings.scheduler'
 import { Route as AppRefillSettingsNoshowRouteImport } from './routes/app.refill.settings.noshow'
 import { Route as AppRefillSettingsLightModeRouteImport } from './routes/app.refill.settings.light-mode'
 import { Route as AppRefillSettingsHealthRouteImport } from './routes/app.refill.settings.health'
+import { Route as AppRefillSettingsBrandRouteImport } from './routes/app.refill.settings.brand'
 import { Route as AppRefillSettingsBoulevardInstallRouteImport } from './routes/app.refill.settings.boulevard-install'
 import { Route as AppRefillSettingsBookingRouteImport } from './routes/app.refill.settings.booking'
 import { Route as AppRefillSettingsBookerInstallRouteImport } from './routes/app.refill.settings.booker-install'
@@ -621,11 +621,6 @@ const AppRefillSettingsSpaProfileRoute =
     path: '/settings/spa-profile',
     getParentRoute: () => AppRefillRoute,
   } as any)
-const AppRefillSettingsBrandRoute = AppRefillSettingsBrandRouteImport.update({
-  id: '/settings/brand',
-  path: '/settings/brand',
-  getParentRoute: () => AppRefillRoute,
-} as any)
 const AppRefillSettingsSenderRoute = AppRefillSettingsSenderRouteImport.update({
   id: '/settings/sender',
   path: '/settings/sender',
@@ -651,6 +646,11 @@ const AppRefillSettingsLightModeRoute =
 const AppRefillSettingsHealthRoute = AppRefillSettingsHealthRouteImport.update({
   id: '/settings/health',
   path: '/settings/health',
+  getParentRoute: () => AppRefillRoute,
+} as any)
+const AppRefillSettingsBrandRoute = AppRefillSettingsBrandRouteImport.update({
+  id: '/settings/brand',
+  path: '/settings/brand',
   getParentRoute: () => AppRefillRoute,
 } as any)
 const AppRefillSettingsBoulevardInstallRoute =
@@ -1127,13 +1127,13 @@ export interface FileRoutesByFullPath {
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
   '/app/refill/settings/booking': typeof AppRefillSettingsBookingRoute
   '/app/refill/settings/boulevard-install': typeof AppRefillSettingsBoulevardInstallRoute
+  '/app/refill/settings/brand': typeof AppRefillSettingsBrandRoute
   '/app/refill/settings/health': typeof AppRefillSettingsHealthRoute
   '/app/refill/settings/light-mode': typeof AppRefillSettingsLightModeRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
   '/app/refill/settings/spa-profile': typeof AppRefillSettingsSpaProfileRoute
-  '/app/refill/settings/brand': typeof AppRefillSettingsBrandRoute
   '/app/refill/settings/vagaro-install': typeof AppRefillSettingsVagaroInstallRoute
   '/app/refill/settings/zenoti-install': typeof AppRefillSettingsZenotiInstallRoute
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
@@ -1275,13 +1275,13 @@ export interface FileRoutesByTo {
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
   '/app/refill/settings/booking': typeof AppRefillSettingsBookingRoute
   '/app/refill/settings/boulevard-install': typeof AppRefillSettingsBoulevardInstallRoute
+  '/app/refill/settings/brand': typeof AppRefillSettingsBrandRoute
   '/app/refill/settings/health': typeof AppRefillSettingsHealthRoute
   '/app/refill/settings/light-mode': typeof AppRefillSettingsLightModeRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
   '/app/refill/settings/spa-profile': typeof AppRefillSettingsSpaProfileRoute
-  '/app/refill/settings/brand': typeof AppRefillSettingsBrandRoute
   '/app/refill/settings/vagaro-install': typeof AppRefillSettingsVagaroInstallRoute
   '/app/refill/settings/zenoti-install': typeof AppRefillSettingsZenotiInstallRoute
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
@@ -1432,13 +1432,13 @@ export interface FileRoutesById {
   '/app/refill/settings/booker-install': typeof AppRefillSettingsBookerInstallRoute
   '/app/refill/settings/booking': typeof AppRefillSettingsBookingRoute
   '/app/refill/settings/boulevard-install': typeof AppRefillSettingsBoulevardInstallRoute
+  '/app/refill/settings/brand': typeof AppRefillSettingsBrandRoute
   '/app/refill/settings/health': typeof AppRefillSettingsHealthRoute
   '/app/refill/settings/light-mode': typeof AppRefillSettingsLightModeRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
   '/app/refill/settings/spa-profile': typeof AppRefillSettingsSpaProfileRoute
-  '/app/refill/settings/brand': typeof AppRefillSettingsBrandRoute
   '/app/refill/settings/vagaro-install': typeof AppRefillSettingsVagaroInstallRoute
   '/app/refill/settings/zenoti-install': typeof AppRefillSettingsZenotiInstallRoute
   '/app/refill/waitlist/bulk': typeof AppRefillWaitlistBulkRoute
@@ -1590,13 +1590,13 @@ export interface FileRouteTypes {
     | '/app/refill/settings/booker-install'
     | '/app/refill/settings/booking'
     | '/app/refill/settings/boulevard-install'
+    | '/app/refill/settings/brand'
     | '/app/refill/settings/health'
     | '/app/refill/settings/light-mode'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
     | '/app/refill/settings/sender'
     | '/app/refill/settings/spa-profile'
-    | '/app/refill/settings/brand'
     | '/app/refill/settings/vagaro-install'
     | '/app/refill/settings/zenoti-install'
     | '/app/refill/waitlist/bulk'
@@ -1738,13 +1738,13 @@ export interface FileRouteTypes {
     | '/app/refill/settings/booker-install'
     | '/app/refill/settings/booking'
     | '/app/refill/settings/boulevard-install'
+    | '/app/refill/settings/brand'
     | '/app/refill/settings/health'
     | '/app/refill/settings/light-mode'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
     | '/app/refill/settings/sender'
     | '/app/refill/settings/spa-profile'
-    | '/app/refill/settings/brand'
     | '/app/refill/settings/vagaro-install'
     | '/app/refill/settings/zenoti-install'
     | '/app/refill/waitlist/bulk'
@@ -1894,13 +1894,13 @@ export interface FileRouteTypes {
     | '/app/refill/settings/booker-install'
     | '/app/refill/settings/booking'
     | '/app/refill/settings/boulevard-install'
+    | '/app/refill/settings/brand'
     | '/app/refill/settings/health'
     | '/app/refill/settings/light-mode'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
     | '/app/refill/settings/sender'
     | '/app/refill/settings/spa-profile'
-    | '/app/refill/settings/brand'
     | '/app/refill/settings/vagaro-install'
     | '/app/refill/settings/zenoti-install'
     | '/app/refill/waitlist/bulk'
@@ -2614,13 +2614,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillSettingsSpaProfileRouteImport
       parentRoute: typeof AppRefillRoute
     }
-    '/app/refill/settings/brand': {
-      id: '/app/refill/settings/brand'
-      path: '/settings/brand'
-      fullPath: '/app/refill/settings/brand'
-      preLoaderRoute: typeof AppRefillSettingsBrandRouteImport
-      parentRoute: typeof AppRefillRoute
-    }
     '/app/refill/settings/sender': {
       id: '/app/refill/settings/sender'
       path: '/settings/sender'
@@ -2654,6 +2647,13 @@ declare module '@tanstack/react-router' {
       path: '/settings/health'
       fullPath: '/app/refill/settings/health'
       preLoaderRoute: typeof AppRefillSettingsHealthRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
+    '/app/refill/settings/brand': {
+      id: '/app/refill/settings/brand'
+      path: '/settings/brand'
+      fullPath: '/app/refill/settings/brand'
+      preLoaderRoute: typeof AppRefillSettingsBrandRouteImport
       parentRoute: typeof AppRefillRoute
     }
     '/app/refill/settings/boulevard-install': {
@@ -3215,13 +3215,13 @@ interface AppRefillRouteChildren {
   AppRefillSettingsBookerInstallRoute: typeof AppRefillSettingsBookerInstallRoute
   AppRefillSettingsBookingRoute: typeof AppRefillSettingsBookingRoute
   AppRefillSettingsBoulevardInstallRoute: typeof AppRefillSettingsBoulevardInstallRoute
+  AppRefillSettingsBrandRoute: typeof AppRefillSettingsBrandRoute
   AppRefillSettingsHealthRoute: typeof AppRefillSettingsHealthRoute
   AppRefillSettingsLightModeRoute: typeof AppRefillSettingsLightModeRoute
   AppRefillSettingsNoshowRoute: typeof AppRefillSettingsNoshowRoute
   AppRefillSettingsSchedulerRoute: typeof AppRefillSettingsSchedulerRoute
   AppRefillSettingsSenderRoute: typeof AppRefillSettingsSenderRoute
   AppRefillSettingsSpaProfileRoute: typeof AppRefillSettingsSpaProfileRoute
-  AppRefillSettingsBrandRoute: typeof AppRefillSettingsBrandRoute
   AppRefillSettingsVagaroInstallRoute: typeof AppRefillSettingsVagaroInstallRoute
   AppRefillSettingsZenotiInstallRoute: typeof AppRefillSettingsZenotiInstallRoute
   AppRefillWaitlistBulkRoute: typeof AppRefillWaitlistBulkRoute
@@ -3265,13 +3265,13 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillSettingsBookingRoute: AppRefillSettingsBookingRoute,
   AppRefillSettingsBoulevardInstallRoute:
     AppRefillSettingsBoulevardInstallRoute,
+  AppRefillSettingsBrandRoute: AppRefillSettingsBrandRoute,
   AppRefillSettingsHealthRoute: AppRefillSettingsHealthRoute,
   AppRefillSettingsLightModeRoute: AppRefillSettingsLightModeRoute,
   AppRefillSettingsNoshowRoute: AppRefillSettingsNoshowRoute,
   AppRefillSettingsSchedulerRoute: AppRefillSettingsSchedulerRoute,
   AppRefillSettingsSenderRoute: AppRefillSettingsSenderRoute,
   AppRefillSettingsSpaProfileRoute: AppRefillSettingsSpaProfileRoute,
-  AppRefillSettingsBrandRoute: AppRefillSettingsBrandRoute,
   AppRefillSettingsVagaroInstallRoute: AppRefillSettingsVagaroInstallRoute,
   AppRefillSettingsZenotiInstallRoute: AppRefillSettingsZenotiInstallRoute,
   AppRefillWaitlistBulkRoute: AppRefillWaitlistBulkRoute,
