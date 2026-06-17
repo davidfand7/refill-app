@@ -127,7 +127,7 @@ const STARTER_RULES: StarterRule[] = [
     suggestedValue: () => "true",
     headline: () => "Enable the same-day rescue agent",
     body: (i) =>
-      `You have ${i.waitlist_size} patients on your waitlist but the rescue agent is off. When an appointment cancels, Emma offers the freed slot to the top 5 fit-patients via SMS — first tap wins. Most spas recover 40-50% of cancelled-slot revenue this way.`,
+      `You have ${i.waitlist_size} patients on your waitlist but the rescue agent is off. When an appointment cancels, SmartSpa offers the freed slot to the top 5 fit-patients via SMS — first tap wins. Most spas recover 40-50% of cancelled-slot revenue this way.`,
     projectedLiftUsdPerMonth: 1800,
   },
   // Rule 3: warm tone for high-engagement

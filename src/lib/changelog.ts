@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.73.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.73.0 &mdash; Retire the last user-visible &ldquo;Emma&rdquo; references &rarr; SmartSpa.</strong> &ldquo;Emma&rdquo; is the legacy assistant codename; it survived only in a handful of owner-facing notification strings. Rebranded all six rendered copy sites to SmartSpa: the reliability notifications (&ldquo;<em>SmartSpa flagged X as in-recovery</em>&rdquo;, &ldquo;<em>SmartSpa never asks VIPs for deposits</em>&rdquo;, &ldquo;<em>SmartSpa&rsquo;s pre-show reminders adopt a warmer tone</em>&rdquo;, &ldquo;<em>SmartSpa still treats them normally</em>&rdquo;), the same-day-rescue recommendation (&ldquo;<em>SmartSpa offers the freed slot&hellip;</em>&rdquo;), and the spa-profile save toast (&ldquo;<em>Saved. SmartSpa&rsquo;s brain is up to date.</em>&rdquo;). <strong>Deliberately untouched</strong>: internal <code>emma_*</code> table names and <code>Emma*</code> TypeScript types &mdash; those are plumbing no user ever sees, and renaming 23 live tables (~480 refs + RLS + migrations) would be pure risk for zero user-facing gain. <strong>Touched</strong>: <code>emma-reliability.functions.ts</code>, <code>emma-intelligence.functions.ts</code>, <code>app.refill.index.tsx</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.72.0",
     date: "June 2026",
     items: [

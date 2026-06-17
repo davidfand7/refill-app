@@ -168,14 +168,14 @@ function composeAlert(args: {
     return {
       kind: "in_recovery_triggered",
       headline: `Pattern: ${who} has ${noShows6mo} no-shows in the last 6 months`,
-      body: `Emma flagged ${who} as in-recovery. Consider asking them to confirm in advance for their next booking, or talk to them at their next visit. Their status returns to normal once the 6-month window rolls past their no-shows.`,
+      body: `SmartSpa flagged ${who} as in-recovery. Consider asking them to confirm in advance for their next booking, or talk to them at their next visit. Their status returns to normal once the 6-month window rolls past their no-shows.`,
     };
   }
   if (toTier === "vip") {
     return {
       kind: "vip_unlocked",
       headline: `${who} just hit VIP status (${totalVisits} visits)`,
-      body: `${who} is one of your most loyal patients. Consider a thank-you note, an exclusive offer, or first access to new treatments. Emma never asks VIPs for deposits regardless of policy.`,
+      body: `${who} is one of your most loyal patients. Consider a thank-you note, an exclusive offer, or first access to new treatments. SmartSpa never asks VIPs for deposits regardless of policy.`,
     };
   }
   if (toTier === "regular") {
@@ -189,7 +189,7 @@ function composeAlert(args: {
     return {
       kind: "regular_unlocked",
       headline: `${who} crossed ${totalVisits} visits — now a Regular`,
-      body: `Reliable repeat patient. Emma's pre-show reminders will adopt a warmer tone (less formal confirmation language).`,
+      body: `Reliable repeat patient. SmartSpa's pre-show reminders will adopt a warmer tone (less formal confirmation language).`,
     };
   }
   if (toTier === "trusted") {
@@ -203,7 +203,7 @@ function composeAlert(args: {
     return {
       kind: "tier_demoted",
       headline: `${who} dropped from ${fromTier} to trusted`,
-      body: `Possibly due to a stale account or the rolling window passing some visits. Emma still treats them normally.`,
+      body: `Possibly due to a stale account or the rolling window passing some visits. SmartSpa still treats them normally.`,
     };
   }
   return null;

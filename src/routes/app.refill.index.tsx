@@ -578,7 +578,7 @@ function ProfileEditor({
         },
       });
       onProfileUpdate(updated);
-      toast.success("Saved. Emma's brain is up to date.");
+      toast.success("Saved. SmartSpa's brain is up to date.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't save changes.");
     } finally {
