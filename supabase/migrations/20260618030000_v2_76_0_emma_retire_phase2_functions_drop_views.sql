@@ -35,12 +35,16 @@ declare
   dropped int := 0;
 begin
   -- 1) Rewrite every public function whose body references an emma_ table name.
+  -- prokind in ('f','p') = normal functions + procedures only. pg_get_functiondef
+  -- THROWS on aggregate ('a') / window ('w') functions, and the CASE guard ensures
+  -- it's never even called for them (regardless of planner evaluation order).
   for fn in
     select p.oid, p.proname, pg_get_functiondef(p.oid) as def
     from pg_proc p
     join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
-      and pg_get_functiondef(p.oid) ~ 'emma_'
+      and p.prokind in ('f', 'p')
+      and case when p.prokind in ('f', 'p') then pg_get_functiondef(p.oid) else '' end ~ 'emma_'
   loop
     newdef := fn.def;
     foreach t in array emma_tables loop
