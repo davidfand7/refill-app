@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.79.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.79.0 &mdash; Tier-1 cleanup (low-risk wins from the code scout).</strong> Dependency + dead-code hygiene, no behavior change. <strong>Removed 6 unused npm dependencies</strong> (verified zero imports anywhere): <code>@dnd-kit/core</code> + <code>@dnd-kit/sortable</code> + <code>@dnd-kit/utilities</code> (drag uses the local <code>use-drag-autoscroll</code>), <code>@composio/core</code> (only ever a UI label string), <code>pdf-lib</code>, and <code>resend</code> (email goes through the REST API via <code>fetch</code>, the SDK was never imported). Kept <code>@tanstack/router-plugin</code> (possible build peer &mdash; not worth the risk for one package). <strong>Deleted 2 dead files</strong>: <code>src/lib/toast.ts</code> (callers import <code>toast</code> from <code>sonner</code> directly) and <code>src/lib/provider-service.ts</code> (its resolver logic was inlined elsewhere). tsc + truncation tripwires green. (~15 dead named functions + the centralize-helpers and <code>admin()</code>-consolidation refactors are the next, larger Tier-1 passes.)",
+    ],
+  },
+  {
     version: "v2.78.0",
     date: "June 2026",
     items: [
