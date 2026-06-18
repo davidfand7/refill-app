@@ -19,24 +19,13 @@
 import { admin } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import { getTenantIdForUser, resolveEffectiveUserId } from "@/server/auth-helpers";
 import { BUILTIN_CATEGORY_VALUES, normalizeCategory } from "@/lib/service-categories";
 
 type Sb = ReturnType<typeof admin>;
 
-/** Resolve the caller's tenant (earliest membership = their Refill tenant). */
-export async function getTenantIdForUser(sb: Sb, userId: string): Promise<string> {
-  const { data, error } = await sb
-    .from("tenant_memberships")
-    .select("tenant_id, created_at")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw new Error(`Tenant lookup failed: ${error.message}`);
-  if (!data) throw new Error("No Refill tenant — finish onboarding before opening scheduling.");
-  return data.tenant_id;
-}
+const SCHEDULING_NO_TENANT_MSG =
+  "No Refill tenant — finish onboarding before opening scheduling.";
 
 /**
  * The auth user that owns a tenant — its earliest membership (the founder).
@@ -302,7 +291,7 @@ export const getSchedulingSetupFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
     const providerId = await ensureSetup(sb, tenantId, effectiveUserId);
 
     // All providers (active + inactive) so the list can show/reactivate any.
@@ -461,7 +450,7 @@ export const upsertDateOverrideFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
     // Provider must belong to this tenant.
     const { data: prov } = await sb
       .from("scheduling_providers")
@@ -518,7 +507,7 @@ export const deleteDateOverrideFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
     // Scope the delete to this tenant's providers (FK has no tenant column).
     const { data: provRows } = await sb
       .from("scheduling_providers")
@@ -553,7 +542,7 @@ export const reorderServicesFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
     // Position each id by its index; tenant-scoped so a stray id can't touch
     // another tenant's rows. Check every result — a swallowed failure here
     // would leave the persisted order out of sync with the UI's optimistic
@@ -594,7 +583,7 @@ export const reorderCategoriesFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
     const { error } = await sb
       .from("scheduling_settings")
       .update({ category_order: data.order })
@@ -618,7 +607,7 @@ export const getCategoryOrderFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
     const { data: row } = await sb
       .from("scheduling_settings")
       .select("category_order")
@@ -687,7 +676,7 @@ export const saveSchedulingSetupFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
     await ensureSetup(sb, tenantId, effectiveUserId);
     const nowIso = new Date().toISOString();
 
@@ -783,7 +772,7 @@ export const createProviderFn = createServerFn({ method: "POST" })
         viewAsUserId: data.viewAsUserId,
       });
       const sb = admin();
-      const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+      const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
       await ensureSetup(sb, tenantId, effectiveUserId);
 
       const { data: created, error } = await sb
@@ -835,7 +824,7 @@ export const updateProviderFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
 
     // Ownership guard + last-active-provider guard.
     const { data: providers } = await sb
@@ -892,7 +881,7 @@ export const createResourceFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
 
     const { data: created, error } = await sb
       .from("scheduling_resources")
@@ -929,7 +918,7 @@ export const updateResourceFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
 
     const patch: { name?: string; type?: ResourceType; is_active?: boolean; updated_at: string } = {
       updated_at: new Date().toISOString(),
@@ -983,7 +972,7 @@ export const setProviderServiceOverrideFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
 
     // Ownership: provider + service must both belong to this tenant.
     const [{ data: prov }, { data: svc }] = await Promise.all([
@@ -1159,7 +1148,7 @@ export const assignProviderServiceFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
     const { data: prov } = await sb
       .from("scheduling_providers")
       .select("id")
@@ -1204,7 +1193,7 @@ export const assignProviderServicesBulkFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
     const { data: prov } = await sb
       .from("scheduling_providers")
       .select("id")
@@ -1291,7 +1280,7 @@ export const createBookableServiceFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
 
     // Dedup: this "Add service" box lives inside the Bookable-services card,
     // where non-bookable services are hidden by default. A user typing the name
@@ -1357,7 +1346,7 @@ export const deleteBookableServiceFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
     const { error } = await sb
       .from("services")
       .delete()
@@ -1388,7 +1377,7 @@ export const renameServiceCategoryFn = createServerFn({ method: "POST" })
     });
     if (!data.to) throw new Error("New category name is required.");
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SCHEDULING_NO_TENANT_MSG);
     if (normalizeCategory(data.from) === data.to) return { renamed: 0, to: data.to };
     const { data: rows, error } = await sb
       .from("services")

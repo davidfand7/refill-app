@@ -31,7 +31,11 @@ import { admin } from "./admin-client";
 import { z } from "zod";
 
 import type { Database, Json } from "@/integrations/supabase/types";
-import { assertUserIsAdmin, resolveEffectiveUserId } from "@/server/auth-helpers";
+import {
+  assertUserIsAdmin,
+  getTenantIdForUser,
+  resolveEffectiveUserId,
+} from "@/server/auth-helpers";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -82,23 +86,8 @@ export type AdminWishlistRequest = WishlistRequest & {
 
 type SupabaseAdmin = ReturnType<typeof admin>;
 
-async function getTenantIdForUser(
-  sb: SupabaseAdmin,
-  userId: string,
-): Promise<string> {
-  const { data, error } = await sb
-    .from("tenant_memberships")
-    .select("tenant_id, created_at")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw new Error(`Tenant lookup failed: ${error.message}`);
-  if (!data) {
-    throw new Error("No Refill tenant — finish onboarding before submitting a wishlist request.");
-  }
-  return data.tenant_id;
-}
+const WISHLIST_NO_TENANT_MSG =
+  "No Refill tenant — finish onboarding before submitting a wishlist request.";
 
 // ─── Hydration ────────────────────────────────────────────────────────────
 
@@ -192,7 +181,7 @@ export const submitWishlistRequest = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, WISHLIST_NO_TENANT_MSG);
     const { data: inserted, error } = await (sb as unknown as {
       from: (table: string) => {
         insert: (row: Record<string, unknown>) => {
@@ -652,7 +641,7 @@ export const aiDraftWishlistDescription = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    await getTenantIdForUser(sb, effectiveUserId); // tenant-gate the AI cost
+    await getTenantIdForUser(sb, effectiveUserId, WISHLIST_NO_TENANT_MSG); // tenant-gate the AI cost
 
     try {
       const response = await getAnthropicClient().messages.create({
@@ -689,7 +678,7 @@ export const aiPolishWishlistDescription = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    await getTenantIdForUser(sb, effectiveUserId);
+    await getTenantIdForUser(sb, effectiveUserId, WISHLIST_NO_TENANT_MSG);
 
     try {
       const response = await getAnthropicClient().messages.create({
@@ -738,7 +727,7 @@ export const aiEstimateWishlistBuild = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    await getTenantIdForUser(sb, effectiveUserId);
+    await getTenantIdForUser(sb, effectiveUserId, WISHLIST_NO_TENANT_MSG);
 
     try {
       const response = await getAnthropicClient().messages.create({

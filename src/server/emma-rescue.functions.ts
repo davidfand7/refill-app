@@ -3206,7 +3206,7 @@ export const simulateRescueDispatchFn = createServerFn({ method: "POST" })
       let providerName: string | null = null;
       if (data.providerId !== null) {
         try {
-          const { getTenantIdForUser } = await import("@/server/refill-catalog");
+          const { getTenantIdForUser } = await import("@/server/auth-helpers");
           const tenantId = await getTenantIdForUser(sb, effectiveUserId);
           if (data.providerId) {
             const { data: named } = await sb

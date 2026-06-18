@@ -51,7 +51,11 @@ import {
   type StripeMode,
 } from "@/lib/stripe-mode";
 import { WHITE_LABEL_PRICING } from "@/lib/brand";
-import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
+import {
+  getTenantIdForUser,
+  resolveEffectiveUserId,
+  verifyAuth,
+} from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
 import {
   loadEffectiveFeeConfig,
@@ -121,29 +125,8 @@ type SupabaseAdmin = ReturnType<typeof admin>;
 
 // ─── Tenant resolution ────────────────────────────────────────────────────
 
-/**
- * Resolve the single tenant a user owns. v391 assumes 1 user → 1 tenant per
- * the v387 wizard's single-tenant-per-user rule. If the user has multiple
- * memberships, returns the oldest (created_at ASC) — this is a defensive
- * fallback; the wizard guards against this state at claim time.
- *
- * Throws if the user has NO tenant membership (UI must drive them through
- * the onboarding wizard first; billing is post-trial).
- */
-export async function getTenantIdForUser(sb: SupabaseAdmin, userId: string): Promise<string> {
-  const { data, error } = await sb
-    .from("tenant_memberships")
-    .select("tenant_id, created_at")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw new Error(`Tenant lookup failed: ${error.message}`);
-  if (!data) {
-    throw new Error("No Refill tenant — finish onboarding before viewing billing.");
-  }
-  return data.tenant_id;
-}
+const BILLING_NO_TENANT_MSG =
+  "No Refill tenant — finish onboarding before viewing billing.";
 
 // ─── Zod ──────────────────────────────────────────────────────────────────
 
@@ -178,7 +161,7 @@ export const applyPricingPlan = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, BILLING_NO_TENANT_MSG);
     const econ = PLAN_ECONOMICS[data.plan];
 
     // Close any existing active plan for this tenant.
@@ -232,7 +215,7 @@ export const getActivePlan = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, BILLING_NO_TENANT_MSG);
 
     const { data: row } = await sb
       .from("refill_pricing_plans")
@@ -265,7 +248,7 @@ export const listInvoices = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, BILLING_NO_TENANT_MSG);
 
     const { data: rows, error } = await sb
       .from("refill_invoices")
@@ -330,7 +313,7 @@ export const getPaymentMethodStatus = createServerFn({ method: "POST" })
 
     const userId = await verifyAuth(data.accessToken);
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, userId);
+    const tenantId = await getTenantIdForUser(sb, userId, BILLING_NO_TENANT_MSG);
 
     const { data: tenant } = await sb
       .from("tenants")
@@ -849,7 +832,7 @@ export const getInvoicePreview = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, BILLING_NO_TENANT_MSG);
 
     const now = new Date();
     const periodStart = new Date(

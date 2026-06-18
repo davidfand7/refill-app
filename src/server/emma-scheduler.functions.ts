@@ -25,8 +25,7 @@ import { admin } from "./admin-client";
 import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
-import { verifyAuth } from "@/server/auth-helpers";
-import { getTenantIdForUser } from "@/server/scheduling-settings.functions";
+import { getTenantIdForUser, verifyAuth } from "@/server/auth-helpers";
 import {
   buildAcuityAuthorizeUrl,
   listAllAcuityAppointmentsInWindow,

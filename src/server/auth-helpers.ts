@@ -98,6 +98,28 @@ export async function assertUserIsAdmin(
 }
 
 /**
+ * Resolve a user's tenant id (earliest membership). Throws `notFoundMsg`
+ * if the user has no tenant. Canonical replacement for the per-file copies;
+ * pass a context-specific notFoundMsg to preserve tailored onboarding copy.
+ */
+export async function getTenantIdForUser(
+  sb: SbClient,
+  userId: string,
+  notFoundMsg = "No Refill tenant — finish onboarding first.",
+): Promise<string> {
+  const { data, error } = await sb
+    .from("tenant_memberships")
+    .select("tenant_id, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`Tenant lookup failed: ${error.message}`);
+  if (!data) throw new Error(notFoundMsg);
+  return data.tenant_id;
+}
+
+/**
  * Role-aware gate for the Refill Rep Platform. Returns the verified userId
  * plus identity flags for the two principals who can act in the outreach
  * system: admins (any user_roles.role='admin') and active reps (any active

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.82.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.82.0 &mdash; Tier-1 tidy: delete 8 genuinely-dead functions + consolidate the tenant-lookup helper.</strong> Two behavior-preserving cleanups in one pass. <strong>(1) Dead code:</strong> removed 8 functions confirmed to have zero callers anywhere &mdash; <code>formatBytes</code>, <code>initTheme</code>, <code>metricLabel</code>, <code>describeRate</code>, <code>describeCadence</code>, <code>flywheelHeadline</code>, <code>ambiguityReason</code>, and the entire 348-line <code>src/lib/seed.ts</code> (old-app demo seeding, nothing imported it). <strong>(2) <code>getTenantIdForUser</code>:</strong> five files each carried a byte-similar copy of the same tenant-membership lookup, differing only in the not-found error message. Collapsed them into one canonical <code>getTenantIdForUser(sb, userId, notFoundMsg?)</code> in <code>auth-helpers.ts</code> &mdash; the four owner-facing surfaces (catalog, billing, scheduling, wishlist) pass their tailored onboarding copy verbatim so the human-facing messages are unchanged; <code>light-mode</code>&rsquo;s genuinely-different nullable owner-only variant was left alone. <strong>The methodology lesson worth recording:</strong> the initial dead-list flagged a 9th function, <code>summarizeRewardEntries</code>, as dead &mdash; it is NOT. Its only caller lives in a file that <code>grep</code>/<code>rg</code> treat as <em>binary</em> (it contains a <code>&quot;\\0&quot;</code> null-character separator literal), so default text search silently skips it &mdash; a false-negative of the exact silent-truncation class we audit for. A tsc break caught the bad delete; we reverted it and re-verified every candidate in <code>grep -a</code> text mode. Net &minus;437 lines. <strong>tsc baseline re-frozen 251 &rarr; 164</strong> (the deleted code carried ~87 pre-existing baselined errors; tightening the floor so future regressions can&rsquo;t hide in the slack). Truncation tripwire 188.",
+    ],
+  },
+  {
     version: "v2.81.0",
     date: "June 2026",
     items: [

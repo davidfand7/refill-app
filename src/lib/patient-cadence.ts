@@ -92,17 +92,3 @@ export function computeOverdue(
     isLapsed: daysSinceLastVisit > win.lapsedDays,
   };
 }
-
-/** Human label for the patient detail page and Today card subhead. */
-export function describeCadence(kind: ProductKind): string {
-  switch (kind) {
-    case "toxin":
-      return "every ~4 months";
-    case "filler":
-      return "every ~12 months";
-    case "biostimulator":
-      return "every ~18 months";
-    default:
-      return "";
-  }
-}

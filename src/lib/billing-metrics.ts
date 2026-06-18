@@ -99,10 +99,6 @@ export const BILLABLE_METRICS: BillableMetricDef[] = [
 
 export const DEFAULT_FEE_MODE: FeeMode = "flat";
 
-export function metricLabel(key: string): string {
-  return BILLABLE_METRICS.find((m) => m.key === key)?.label ?? key;
-}
-
 /**
  * Price one metric's wins. flat → amount × count; percent → amount (a
  * fraction, 0.12 = 12%) × the metric's attributed revenue.
@@ -115,12 +111,6 @@ export function priceMetric(
 ): number {
   if (mode === "percent") return +(amount * revenueUsd).toFixed(2);
   return +(amount * count).toFixed(2);
-}
-
-/** Human-readable rate, e.g. "$5 / win" or "12% of revenue". */
-export function describeRate(mode: FeeMode | string, amount: number): string {
-  if (mode === "percent") return `${+(amount * 100).toFixed(2)}% of revenue`;
-  return `$${amount.toFixed(2)} / win`;
 }
 
 /** Human-readable cap, e.g. "max $250 / year". null = uncapped. */

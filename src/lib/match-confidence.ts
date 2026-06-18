@@ -84,12 +84,3 @@ export function resolveMatch(input: MatchInput): MatchResolution {
   // Genuine competition — do not guess.
   return { tier: "ambiguous", nodeId: null, candidateIds: union, signals };
 }
-
-/** Human-readable reason for the hold, used in the own-it card copy. */
-export function ambiguityReason(signals: MatchSignal[]): string {
-  const has = (s: MatchSignal) => signals.includes(s);
-  if (has("email")) return "share an email address";
-  if (has("phone")) return "share a phone number";
-  if (has("name")) return "have the same name";
-  return "look like the same person";
-}

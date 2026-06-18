@@ -16,7 +16,3 @@ export function applyTheme(theme: Theme) {
   root.classList.toggle("dark", isDark);
   localStorage.setItem(STORAGE_KEY, theme);
 }
-
-export function initTheme() {
-  applyTheme(getStoredTheme());
-}

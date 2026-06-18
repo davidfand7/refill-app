@@ -35,8 +35,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { admin } from "./admin-client";
 import { z } from "zod";
 
-import { resolveEffectiveUserId } from "@/server/auth-helpers";
-import { getTenantIdForUser } from "@/server/scheduling-settings.functions";
+import { getTenantIdForUser, resolveEffectiveUserId } from "@/server/auth-helpers";
 import {
   listAcuityCalendars,
   listAcuityAppointmentTypes,

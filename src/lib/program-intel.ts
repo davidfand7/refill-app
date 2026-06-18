@@ -305,12 +305,3 @@ export function moveHeadline(m: RebateMove): string {
  * and hit the rebate AND recover the patients."
  */
 export type FlywheelMove = RebateMove & { lapsedInCohort: number | null };
-
-export function flywheelHeadline(m: FlywheelMove): string {
-  if (m.lapsedInCohort == null || m.lapsedInCohort <= 0) return moveHeadline(m);
-  return `You're ${m.unitsShort} ${m.productLabel} short of ${rewardPhrase(m)} — and you have ${
-    m.lapsedInCohort
-  } lapsed patient${
-    m.lapsedInCohort === 1 ? "" : "s"
-  } due. Recall them and you hit the rebate and recover the patients.`;
-}

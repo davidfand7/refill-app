@@ -18,9 +18,9 @@
 import { admin } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import { getTenantIdForUser, resolveEffectiveUserId } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
-import { ensureSetup, getTenantIdForUser } from "@/server/scheduling-settings.functions";
+import { ensureSetup } from "@/server/scheduling-settings.functions";
 import {
   loadTenantPromoOffers,
   recordCrossSellWin,

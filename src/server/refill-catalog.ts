@@ -22,7 +22,11 @@ import { normalizeCategory } from "@/lib/service-categories";
 import { z } from "zod";
 
 import { parseServiceListCsv } from "@/lib/catalog-csv";
-import { assertUserIsAdmin, resolveEffectiveUserId } from "@/server/auth-helpers";
+import {
+  assertUserIsAdmin,
+  getTenantIdForUser,
+  resolveEffectiveUserId,
+} from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
 
 // ─── Public types ─────────────────────────────────────────────────────────
@@ -69,20 +73,8 @@ export type Product = {
 
 type SupabaseAdmin = ReturnType<typeof admin>;
 
-export async function getTenantIdForUser(sb: SupabaseAdmin, userId: string): Promise<string> {
-  const { data, error } = await sb
-    .from("tenant_memberships")
-    .select("tenant_id, created_at")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (error) throw new Error(`Tenant lookup failed: ${error.message}`);
-  if (!data) {
-    throw new Error("No Refill tenant — finish onboarding before opening the catalog.");
-  }
-  return data.tenant_id;
-}
+const CATALOG_NO_TENANT_MSG =
+  "No Refill tenant — finish onboarding before opening the catalog.";
 
 /**
  * Lightweight catalog load for the treatment→service resolver (v2.63.0). Lives
@@ -105,7 +97,7 @@ export async function loadServiceCatalogForUser(
 ): Promise<ServiceCatalogLite[]> {
   let tenantId: string;
   try {
-    tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
   } catch {
     return [];
   }
@@ -238,7 +230,7 @@ export const listProductsFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     const rows = await fetchAllRows<ProductRow>((from, to) => {
       let query = sb.from("products").select("*").eq("tenant_id", tenantId);
       if (!data.includeHidden) query = query.is("hidden_at", null);
@@ -260,7 +252,7 @@ export const setProductHiddenFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     const { data: row, error } = await sb
       .from("products")
       .update({ hidden_at: data.hidden ? new Date().toISOString() : null })
@@ -284,7 +276,7 @@ export const createProductFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     const { data: row, error } = await sb
       .from("products")
       .insert({
@@ -315,7 +307,7 @@ export const updateProductFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     const { data: row, error } = await sb
       .from("products")
       .update({
@@ -347,7 +339,7 @@ export const deleteProductFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     const { error } = await sb
       .from("products")
       .delete()
@@ -476,7 +468,7 @@ export const listServicesFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     const rows = await fetchAllRows<ServiceRow>((from, to) => {
       let query = sb.from("services").select("*").eq("tenant_id", tenantId);
       if (!data.includeHidden) query = query.is("hidden_at", null);
@@ -498,7 +490,7 @@ export const setServiceHiddenFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     const { data: row, error } = await sb
       .from("services")
       .update({ hidden_at: data.hidden ? new Date().toISOString() : null })
@@ -522,7 +514,7 @@ export const createServiceFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     const { data: row, error } = await sb
       .from("services")
       .insert({
@@ -559,7 +551,7 @@ export const updateServiceFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     // Editing a manual COGS field keeps cogs_source = 'manual'. v1.29.3
     // will introduce the auto-derive path that flips it to 'derived'.
     const { data: row, error } = await sb
@@ -827,7 +819,7 @@ export const recategorizeServicesFromBrandsFn = createServerFn({ method: "POST" 
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     const brands = await loadAllCanonicalBrands(sb);
     const { data: services, error } = await sb
       .from("services")
@@ -890,7 +882,7 @@ export const recategorizeProductsFromBrandsFn = createServerFn({ method: "POST" 
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     const brands = await loadAllCanonicalBrands(sb);
     const { data: products, error } = await sb
       .from("products")
@@ -970,7 +962,7 @@ export const deleteServiceFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     // Delete the service tenant-scoped; .select() confirms it was really this
     // tenant's before we touch child rows by service_id.
     const { data: deleted, error } = await sb
@@ -1200,7 +1192,7 @@ export const listServiceProductsFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     const service = await loadServiceById(sb, data.serviceId, tenantId);
     const links = await loadLinksForService(sb, data.serviceId, tenantId);
     return { service, links };
@@ -1216,7 +1208,7 @@ export const linkProductToServiceFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     // Validate both service + product belong to this tenant.
     const { data: svc, error: svcErr } = await sb
       .from("services")
@@ -1263,7 +1255,7 @@ export const updateServiceProductQuantityFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     // Verify the link belongs to a service in this tenant.
     const { data: linkRow, error: linkErr } = await sb
       .from("service_products")
@@ -1297,7 +1289,7 @@ export const unlinkServiceProductFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     const { data: linkRow, error: linkErr } = await sb
       .from("service_products")
       .select(`service_id, services!inner(tenant_id)`)
@@ -1409,7 +1401,7 @@ export const ingestServicesCsvFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
 
     const parsed = parseServiceListCsv(data.csv);
     // v1.30.1 — load canonical brands once for product-row auto-routing
@@ -1659,7 +1651,7 @@ export const setServiceCogsSourceFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     if (data.cogsSource === "derived") {
       const derived = await computeDerivedCogs(sb, data.serviceId, tenantId);
       const { error } = await sb
@@ -1738,7 +1730,7 @@ export const addServicesFromLibraryFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     const { data: libRows } = await sb
       .from("service_library")
       .select("id, category, name, default_duration_min")
@@ -1794,7 +1786,7 @@ export const getServiceAddonIdsFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     const { data: rows } = await sb
       .from("service_addons")
       .select("addon_service_id")
@@ -1822,7 +1814,7 @@ export const setServiceAddonsFn = createServerFn({ method: "POST" })
       viewAsUserId: data.viewAsUserId,
     });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
     // Replace the whole set for this base service (simplest correct semantics).
     await sb
       .from("service_addons")

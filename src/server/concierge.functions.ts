@@ -22,8 +22,7 @@ import { admin } from "./admin-client";
 import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
-import { resolveEffectiveUserId } from "@/server/auth-helpers";
-import { getTenantIdForUser } from "@/server/refill-billing";
+import { getTenantIdForUser, resolveEffectiveUserId } from "@/server/auth-helpers";
 
 const getConciergeStateInput = z.object({
   accessToken: z.string().min(1),
