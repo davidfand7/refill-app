@@ -19,42 +19,16 @@
  * table lookup) so admin status stays consistent between client + server.
  */
 
-import { admin, type SbClient } from "./admin-client";
+import { admin } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { verifyAuth } from "@/server/auth-helpers";
+import { requireAdmin } from "@/server/auth-helpers";
 import {
   DRIP_DAYS,
   sendTrialDripByDay,
   type DripDay,
 } from "@/server/refill-drip";
-
-// ─── service-role admin client (module-private) ──────────────────────────
-
-
-/**
- * Verify the caller is an admin per the user_roles table — same gate the
- * client-side useIsAdmin hook reads. Throws on miss with a user-facing
- * message because the admin route shouldn&apos;t even be reachable for non-
- * admins (the hook redirects), so reaching this fn means tampering.
- */
-async function requireAdmin(sb: SbClient, accessToken: string): Promise<string> {
-  const userId = await verifyAuth(accessToken);
-  const { data: roleRow, error } = await sb
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (error) {
-    throw new Error(`Couldn't verify admin role: ${error.message}`);
-  }
-  if (!roleRow) {
-    throw new Error("Admin role required.");
-  }
-  return userId;
-}
 
 // ─── listAllTrialTenants ─────────────────────────────────────────────────
 
@@ -85,7 +59,7 @@ export const listAllTrialTenants = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => listInput.parse(raw))
   .handler(async ({ data }): Promise<{ tenants: TrialTenantRow[] }> => {
     const sb = admin();
-    await requireAdmin(sb, data.accessToken);
+    await requireAdmin(data.accessToken);
 
     const { data: tenants, error: tenantsErr } = await sb
       .from("tenants")
@@ -181,7 +155,7 @@ export const adminSendDripToTenant = createServerFn({ method: "POST" })
       | { ok: false; reason: string }
     > => {
       const sb = admin();
-      await requireAdmin(sb, data.accessToken);
+      await requireAdmin(data.accessToken);
       return sendTrialDripByDay(data.day as DripDay, data.tenantId);
     },
   );

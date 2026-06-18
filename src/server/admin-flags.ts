@@ -17,22 +17,8 @@ import { admin } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { verifyAuth } from "@/server/auth-helpers";
+import { requireAdmin } from "@/server/auth-helpers";
 import { writeAuditEvent } from "@/server/audit-log";
-
-async function assertAdmin(accessToken: string): Promise<string> {
-  const callerUserId = await verifyAuth(accessToken);
-  const sb = admin();
-  const { data, error } = await sb
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", callerUserId)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (error) throw new Error(`Couldn't verify admin: ${error.message}`);
-  if (!data) throw new Error("Admin only.");
-  return callerUserId;
-}
 
 export type FeatureFlagRow = {
   id: string;
@@ -52,7 +38,7 @@ const listFlagsInput = z.object({
 export const listFlags = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => listFlagsInput.parse(raw))
   .handler(async ({ data }): Promise<{ flags: FeatureFlagRow[] }> => {
-    await assertAdmin(data.accessToken);
+    await requireAdmin(data.accessToken);
     const sb = admin();
     const { data: rows, error } = await sb
       .from("feature_flags")
@@ -87,7 +73,7 @@ const upsertFlagInput = z.object({
 export const upsertFlag = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => upsertFlagInput.parse(raw))
   .handler(async ({ data }): Promise<{ id: string }> => {
-    const callerUserId = await assertAdmin(data.accessToken);
+    const callerUserId = await requireAdmin(data.accessToken);
     const sb = admin();
 
     // Sanity: scope=global requires scopeId=null; other scopes require scopeId set.
@@ -138,7 +124,7 @@ const deleteFlagInput = z.object({
 export const deleteFlag = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => deleteFlagInput.parse(raw))
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const callerUserId = await assertAdmin(data.accessToken);
+    const callerUserId = await requireAdmin(data.accessToken);
     const sb = admin();
 
     // Fetch row for audit-log payload pre-delete.

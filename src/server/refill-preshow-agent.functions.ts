@@ -21,7 +21,7 @@ import { admin } from "./admin-client";
 import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
-import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
+import { requireAdmin, resolveEffectiveUserId } from "@/server/auth-helpers";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -432,20 +432,6 @@ export const deletePreshowMessageTemplate = createServerFn({ method: "POST" })
   });
 
 // ─── getAgentDefaults (admin-only read) ───────────────────────────────────
-
-async function requireAdmin(accessToken: string): Promise<string> {
-  const callerUserId = await verifyAuth(accessToken);
-  const sb = admin();
-  const { data: roleRow, error } = await sb
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", callerUserId)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (error) throw new Error(`Couldn't verify admin: ${error.message}`);
-  if (!roleRow) throw new Error("Admin role required.");
-  return callerUserId;
-}
 
 export const getAgentDefaults = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => agentKindInput.parse(raw))

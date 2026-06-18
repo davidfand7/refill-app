@@ -24,32 +24,12 @@
  * Established 2026-05-20 (v393, post-v392 wrap session).
  */
 
-import { admin, type SbClient } from "./admin-client";
+import { admin } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
-import { requireRepOrAdmin, verifyAuth } from "@/server/auth-helpers";
-
-// ─── service-role admin client (module-private) ──────────────────────────
-
-
-async function requireAdmin(sb: SbClient, accessToken: string): Promise<string> {
-  const userId = await verifyAuth(accessToken);
-  const { data: roleRow, error } = await sb
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (error) {
-    throw new Error(`Couldn't verify admin role: ${error.message}`);
-  }
-  if (!roleRow) {
-    throw new Error("Admin role required.");
-  }
-  return userId;
-}
+import { requireAdmin, requireRepOrAdmin } from "@/server/auth-helpers";
 
 // ─── Public types ────────────────────────────────────────────────────────
 
@@ -271,7 +251,7 @@ export const updateOutreachTemplate = createServerFn({ method: "POST" })
   .handler(
     async ({ data }): Promise<OutreachTemplate> => {
       const sb = admin();
-      const userId = await requireAdmin(sb, data.accessToken);
+      const userId = await requireAdmin(data.accessToken);
 
       // Fetch the row being edited (must be active — we don't allow editing
       // historical rows via this surface).
@@ -339,7 +319,7 @@ export const bulkUpsertOutreachTemplates = createServerFn({ method: "POST" })
       errors: string[];
     }> => {
       const sb = admin();
-      const userId = await requireAdmin(sb, data.accessToken);
+      const userId = await requireAdmin(data.accessToken);
 
       let upserted = 0;
       const errors: string[] = [];

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.81.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.81.0 &mdash; Tier-1 refactor: one canonical admin authorization gate.</strong> Security-sensitive structural cleanup, behavior preserved. Eleven server files each carried their own copy of an admin-role gate under three different names &mdash; <code>assertAdmin</code> (4 files), <code>requireAdmin</code> (4), <code>requireAdminRole</code> (1) &mdash; plus a second &ldquo;assert an already-resolved userId is admin&rdquo; variant in 2 more. All of them ran the same <code>user_roles</code> role=&lsquo;admin&rsquo; check; the names and error strings had simply drifted. Collapsed them into two canonical exports in the existing <code>src/server/auth-helpers.ts</code>: <code>requireAdmin(accessToken) &rarr; userId</code> (verify token + assert admin) and <code>assertUserIsAdmin(sb, userId) &rarr; void</code> (assert a known userId). <strong>The discipline that matters here:</strong> this touches authorization, so the gate was independently re-counted before and after &mdash; <strong>34 gate calls in, 34 gate calls out</strong> (27 <code>requireAdmin</code> + 7 <code>assertUserIsAdmin</code>), proving not a single check was dropped, only renamed/relocated. The 4 call sites that needlessly passed an <code>sb</code> client now let the helper make its own. Retired names fully gone (zero <code>assertAdmin</code>/<code>requireAdminRole</code> definitions remain). Net &minus;133 lines. Done in an isolated worktree; tsc frozen at 251, truncation at 188. (<code>getTenantIdForUser</code> consolidation deliberately split into a separate pass &mdash; its onboarding error messages and a nullable owner-only variant genuinely differ; the <code>loose()</code>/<code>LooseClient</code> escape-hatch scatter is being left alone as low-value/high-noise.)",
+    ],
+  },
+  {
     version: "v2.80.0",
     date: "June 2026",
     items: [

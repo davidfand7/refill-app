@@ -22,7 +22,7 @@ import { normalizeCategory } from "@/lib/service-categories";
 import { z } from "zod";
 
 import { parseServiceListCsv } from "@/lib/catalog-csv";
-import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import { assertUserIsAdmin, resolveEffectiveUserId } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
 
 // ─── Public types ─────────────────────────────────────────────────────────
@@ -739,16 +739,6 @@ const listBrandsInput = z.object({
 // All canonical-brand mutations require admin role. The lookup-only path
 // (read) is authenticated-only via RLS; service-role writes flow through
 // these server fns which gate on app_role = 'admin'.
-async function requireAdmin(sb: SupabaseAdmin, userId: string): Promise<void> {
-  const { data, error } = await sb
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (error) throw new Error(`Role check failed: ${error.message}`);
-  if (!data) throw new Error("Admin role required.");
-}
 
 export const listCanonicalBrandsFn = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => listBrandsInput.parse(raw))
@@ -760,7 +750,7 @@ export const listCanonicalBrandsFn = createServerFn({ method: "POST" })
     // Read is admin-only via this fn (the table itself is readable by any
     // authenticated user via RLS — the admin gate here keeps the admin
     // CRUD surface focused).
-    await requireAdmin(sb, effectiveUserId);
+    await assertUserIsAdmin(sb, effectiveUserId);
     return loadAllCanonicalBrands(sb);
   });
 
@@ -771,7 +761,7 @@ export const createCanonicalBrandFn = createServerFn({ method: "POST" })
       accessToken: data.accessToken,
     });
     const sb = admin();
-    await requireAdmin(sb, effectiveUserId);
+    await assertUserIsAdmin(sb, effectiveUserId);
     const { data: row, error } = await sb
       .from("canonical_brands")
       .insert({
@@ -795,7 +785,7 @@ export const updateCanonicalBrandFn = createServerFn({ method: "POST" })
       accessToken: data.accessToken,
     });
     const sb = admin();
-    await requireAdmin(sb, effectiveUserId);
+    await assertUserIsAdmin(sb, effectiveUserId);
     const { data: row, error } = await sb
       .from("canonical_brands")
       .update({
@@ -820,7 +810,7 @@ export const deleteCanonicalBrandFn = createServerFn({ method: "POST" })
       accessToken: data.accessToken,
     });
     const sb = admin();
-    await requireAdmin(sb, effectiveUserId);
+    await assertUserIsAdmin(sb, effectiveUserId);
     const { error } = await sb
       .from("canonical_brands")
       .delete()

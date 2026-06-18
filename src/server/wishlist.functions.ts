@@ -31,7 +31,7 @@ import { admin } from "./admin-client";
 import { z } from "zod";
 
 import type { Database, Json } from "@/integrations/supabase/types";
-import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import { assertUserIsAdmin, resolveEffectiveUserId } from "@/server/auth-helpers";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -98,20 +98,6 @@ async function getTenantIdForUser(
     throw new Error("No Refill tenant — finish onboarding before submitting a wishlist request.");
   }
   return data.tenant_id;
-}
-
-async function requireAdmin(
-  sb: SupabaseAdmin,
-  userId: string,
-): Promise<void> {
-  const { data, error } = await sb
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (error) throw new Error(`Role check failed: ${error.message}`);
-  if (!data) throw new Error("Admin role required.");
 }
 
 // ─── Hydration ────────────────────────────────────────────────────────────
@@ -324,7 +310,7 @@ export const addReplyToWishlistRequest = createServerFn({ method: "POST" })
     if (existing.user_id === effectiveUserId) {
       fromRole = "owner";
     } else {
-      await requireAdmin(sb, callerUserId);
+      await assertUserIsAdmin(sb, callerUserId);
       fromRole = "admin";
     }
 
@@ -373,7 +359,7 @@ export const listAllWishlistRequests = createServerFn({ method: "POST" })
       accessToken: data.accessToken,
     });
     const sb = admin();
-    await requireAdmin(sb, effectiveUserId);
+    await assertUserIsAdmin(sb, effectiveUserId);
 
     // Pull requests + join tenant + submitter info for the inbox display.
     type QueryBuilder = {
@@ -449,7 +435,7 @@ export const updateWishlistRequestStatus = createServerFn({ method: "POST" })
       accessToken: data.accessToken,
     });
     const sb = admin();
-    await requireAdmin(sb, effectiveUserId);
+    await assertUserIsAdmin(sb, effectiveUserId);
 
     const patch: Record<string, unknown> = { status: data.status };
     // Allow nulling these fields (e.g., re-opening a shipped request).

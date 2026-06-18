@@ -11,7 +11,7 @@
  * Write path: /app/admin/nav-features uses listNavFeatures (registry),
  * listTenantNavOverrides (per-tenant) + setTenantNavOverride /
  * clearTenantNavOverride / setNavFeatureDefault. Admin-gated via
- * requireAdminRole.
+ * requireAdmin.
  *
  * Why two tables instead of just "default | per-tenant" enum on one row:
  * tenant count grows; carrying a row per (tenant × feature) only for
@@ -20,25 +20,11 @@
  * default. Same shape as agent_defaults pattern.
  */
 
-import { admin, type SbClient } from "./admin-client";
+import { admin } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { accessTokenInput, verifyAuth } from "@/server/auth-helpers";
-
-
-async function requireAdminRole(sb: SbClient, accessToken: string): Promise<string> {
-  const userId = await verifyAuth(accessToken);
-  const { data, error } = await sb
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (error) throw new Error(`Role check failed: ${error.message}`);
-  if (!data) throw new Error("Admin role required.");
-  return userId;
-}
+import { accessTokenInput, requireAdmin, verifyAuth } from "@/server/auth-helpers";
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
@@ -110,7 +96,7 @@ export const listNavFeatures = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => accessTokenInput.parse(raw))
   .handler(async ({ data }): Promise<{ features: NavFeatureRow[] }> => {
     const sb = admin();
-    await requireAdminRole(sb, data.accessToken);
+    await requireAdmin(data.accessToken);
     const { data: rows, error } = await sb
       .from("nav_features")
       .select("*")
@@ -140,7 +126,7 @@ export const listTenantNavOverrides = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => tenantOverridesInput.parse(raw))
   .handler(async ({ data }): Promise<{ overrides: TenantNavOverrideRow[] }> => {
     const sb = admin();
-    await requireAdminRole(sb, data.accessToken);
+    await requireAdmin(data.accessToken);
     const { data: rows, error } = await sb
       .from("tenant_nav_overrides")
       .select("*")
@@ -168,7 +154,7 @@ export const listAllTenantsForNavOverride = createServerFn({ method: "POST" })
       tenants: Array<{ id: string; name: string; slug: string | null; isDemo: boolean }>;
     }> => {
       const sb = admin();
-      await requireAdminRole(sb, data.accessToken);
+      await requireAdmin(data.accessToken);
       const { data: rows, error } = await sb
         .from("tenants")
         .select("id, name, slug, is_demo")
@@ -197,7 +183,7 @@ export const setTenantNavOverride = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => setOverrideInput.parse(raw))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const sb = admin();
-    const adminUserId = await requireAdminRole(sb, data.accessToken);
+    const adminUserId = await requireAdmin(data.accessToken);
     const { error } = await sb
       .from("tenant_nav_overrides")
       .upsert(
@@ -225,7 +211,7 @@ export const clearTenantNavOverride = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => clearOverrideInput.parse(raw))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const sb = admin();
-    await requireAdminRole(sb, data.accessToken);
+    await requireAdmin(data.accessToken);
     const { error } = await sb
       .from("tenant_nav_overrides")
       .delete()
@@ -246,7 +232,7 @@ export const setNavFeatureDefault = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => setDefaultInput.parse(raw))
   .handler(async ({ data }): Promise<{ ok: true }> => {
     const sb = admin();
-    await requireAdminRole(sb, data.accessToken);
+    await requireAdmin(data.accessToken);
     const { error } = await sb
       .from("nav_features")
       .update({

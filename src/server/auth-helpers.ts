@@ -17,6 +17,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
+import { admin, type SbClient } from "./admin-client";
 
 /**
  * Minimum input shape for any authed server fn. Compose into your fn's full
@@ -56,6 +57,44 @@ export async function verifyAuth(accessToken: string): Promise<string> {
     );
   }
   return claimsResp.claims.sub;
+}
+
+/**
+ * Verify an access token AND assert the caller has the admin role.
+ * Returns the caller's userId. Throws if the token is invalid or the
+ * caller is not an admin. (Canonical replacement for the per-file
+ * assertAdmin / requireAdmin / requireAdminRole gates.)
+ */
+export async function requireAdmin(accessToken: string): Promise<string> {
+  const userId = await verifyAuth(accessToken);
+  const sb = admin();
+  const { data, error } = await sb
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .maybeSingle();
+  if (error) throw new Error(`Couldn't verify admin: ${error.message}`);
+  if (!data) throw new Error("Admin only.");
+  return userId;
+}
+
+/**
+ * Assert an ALREADY-RESOLVED userId has the admin role (no token verify,
+ * no return). Canonical replacement for the (sb, userId) => void gates.
+ */
+export async function assertUserIsAdmin(
+  sb: SbClient,
+  userId: string,
+): Promise<void> {
+  const { data, error } = await sb
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .eq("role", "admin")
+    .maybeSingle();
+  if (error) throw new Error(`Couldn't verify admin: ${error.message}`);
+  if (!data) throw new Error("Admin only.");
 }
 
 /**

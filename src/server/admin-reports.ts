@@ -10,21 +10,7 @@ import { admin } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { verifyAuth } from "@/server/auth-helpers";
-
-async function assertAdmin(accessToken: string): Promise<string> {
-  const callerUserId = await verifyAuth(accessToken);
-  const sb = admin();
-  const { data, error } = await sb
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", callerUserId)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (error) throw new Error(`Couldn't verify admin: ${error.message}`);
-  if (!data) throw new Error("Admin only.");
-  return callerUserId;
-}
+import { requireAdmin } from "@/server/auth-helpers";
 
 // ─── Per-tenant report ───────────────────────────────────────────────────
 
@@ -49,7 +35,7 @@ const reportInput = z.object({
 export const getTenantReport = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => reportInput.parse(raw))
   .handler(async ({ data }): Promise<{ rows: TenantReportRow[] }> => {
-    await assertAdmin(data.accessToken);
+    await requireAdmin(data.accessToken);
     const sb = admin();
 
     const { data: tenants, error: tenErr } = await sb
@@ -162,7 +148,7 @@ export type RepReportRow = {
 export const getRepReport = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => reportInput.parse(raw))
   .handler(async ({ data }): Promise<{ rows: RepReportRow[] }> => {
-    await assertAdmin(data.accessToken);
+    await requireAdmin(data.accessToken);
     const sb = admin();
 
     const { data: reps, error: repErr } = await sb

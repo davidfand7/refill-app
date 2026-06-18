@@ -26,27 +26,13 @@
  * input types — the boundary is the DB.
  */
 
-import { admin, type SbClient } from "./admin-client";
+import { admin } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import type { Database, Json } from "@/integrations/supabase/types";
-import { verifyAuth } from "@/server/auth-helpers";
+import { requireAdmin } from "@/server/auth-helpers";
 import { wrapDripEmail } from "@/lib/email-templates/refill-drip-shell";
-
-
-async function requireAdmin(sb: SbClient, accessToken: string): Promise<string> {
-  const userId = await verifyAuth(accessToken);
-  const { data: roleRow, error } = await sb
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (error) throw new Error(`Couldn't verify admin role: ${error.message}`);
-  if (!roleRow) throw new Error("Admin role required.");
-  return userId;
-}
 
 // ─── Sender + reply config (mirrors refill-drip.ts) ──────────────────────
 
@@ -127,7 +113,7 @@ export const createIncentiveOffer = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => createInput.parse(raw))
   .handler(async ({ data }): Promise<{ offer: OfferRow }> => {
     const sb = admin();
-    const userId = await requireAdmin(sb, data.accessToken);
+    const userId = await requireAdmin(data.accessToken);
     const validatedTerms = validateTermsForType(
       data.offerType as OfferType,
       data.terms,
@@ -178,7 +164,7 @@ export const listOffersForTenant = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => listInput.parse(raw))
   .handler(async ({ data }): Promise<{ offers: OfferWithStatus[] }> => {
     const sb = admin();
-    await requireAdmin(sb, data.accessToken);
+    await requireAdmin(data.accessToken);
 
     const { data: offers, error: offersErr } = await sb
       .from("incentive_offers")
@@ -325,7 +311,7 @@ export const sendOfferToTenant = createServerFn({ method: "POST" })
       }
 
       const sb = admin();
-      await requireAdmin(sb, data.accessToken);
+      await requireAdmin(data.accessToken);
 
       const { data: offer, error: offerErr } = await sb
         .from("incentive_offers")

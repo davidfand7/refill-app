@@ -24,27 +24,9 @@ import { admin } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { verifyAuth } from "@/server/auth-helpers";
+import { requireAdmin } from "@/server/auth-helpers";
 import { writeAuditEvent } from "@/server/audit-log";
 import type { PlatformRole } from "@/server/role-helpers";
-
-async function assertAdmin(accessToken: string): Promise<string> {
-  const callerUserId = await verifyAuth(accessToken);
-  const sb = admin();
-  const { data, error } = await sb
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", callerUserId)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (error) {
-    throw new Error(`Couldn't verify admin: ${error.message}`);
-  }
-  if (!data) {
-    throw new Error("Admin only.");
-  }
-  return callerUserId;
-}
 
 // ─── listUsers ───────────────────────────────────────────────────────────
 
@@ -65,7 +47,7 @@ const listUsersInput = z.object({
 export const listUsers = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => listUsersInput.parse(raw))
   .handler(async ({ data }): Promise<{ users: AdminUserRow[] }> => {
-    await assertAdmin(data.accessToken);
+    await requireAdmin(data.accessToken);
     const sb = admin();
 
     const [authRes, rolesRes, repsRes, tmRes] = await Promise.all([
@@ -161,7 +143,7 @@ export const createUser = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => createUserInput.parse(raw))
   .handler(
     async ({ data }): Promise<{ userId: string }> => {
-      const callerUserId = await assertAdmin(data.accessToken);
+      const callerUserId = await requireAdmin(data.accessToken);
       const sb = admin();
 
       const createRes = await sb.auth.admin.createUser({
@@ -209,7 +191,7 @@ const sendPasswordResetInput = z.object({
 export const sendPasswordReset = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => sendPasswordResetInput.parse(raw))
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const callerUserId = await assertAdmin(data.accessToken);
+    const callerUserId = await requireAdmin(data.accessToken);
     const sb = admin();
 
     const { data: userRes, error: userErr } = await sb.auth.admin.getUserById(
@@ -254,7 +236,7 @@ const roleMutationInput = z.object({
 export const grantRole = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => roleMutationInput.parse(raw))
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const callerUserId = await assertAdmin(data.accessToken);
+    const callerUserId = await requireAdmin(data.accessToken);
     const sb = admin();
 
     const { error } = await sb
@@ -280,7 +262,7 @@ export const grantRole = createServerFn({ method: "POST" })
 export const revokeRole = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => roleMutationInput.parse(raw))
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const callerUserId = await assertAdmin(data.accessToken);
+    const callerUserId = await requireAdmin(data.accessToken);
     const sb = admin();
 
     const { error } = await sb
@@ -312,7 +294,7 @@ const deleteUserInput = z.object({
 export const deleteUser = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => deleteUserInput.parse(raw))
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const callerUserId = await assertAdmin(data.accessToken);
+    const callerUserId = await requireAdmin(data.accessToken);
     if (callerUserId === data.targetUserId) {
       throw new Error("Can't delete yourself — sign in as another admin first.");
     }
