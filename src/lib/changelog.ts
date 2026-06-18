@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.83.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.83.0 &mdash; Connection-health: the circuit breaker now reacts to REAL backend traffic, not just a 30-second idle probe.</strong> The app already had a circuit breaker + an <code>OfflineBanner</code> that flips to a gray &ldquo;You&rsquo;re offline&rdquo; / amber &ldquo;Backend is unreachable&rdquo; banner &mdash; but its <code>recordSupabaseSuccess</code>/<code>recordSupabaseFailure</code> hooks were dead code, never wired. So a real outage wasn&rsquo;t noticed until the slow 30 s probe happened to catch it. <strong>Now every browser-side Supabase request feeds the breaker</strong> via a single <code>global.fetch</code> hook on the client, so a burst of real failures trips &ldquo;degraded&rdquo; immediately. <strong>Honest failure attribution (the load-bearing detail):</strong> only a network-level error, a 5xx, or a 429 counts as a failure. Any real HTTP response &mdash; including a 4xx like an expired token, an empty <code>single()</code> 406, or a 409 conflict &mdash; proves the backend is reachable and is recorded as a SUCCESS. A naive <code>response.ok</code> check would have flipped the banner to &ldquo;degraded&rdquo; on a perfectly healthy connection every time a token expired or a query returned no rows &mdash; the exact false-alarm the connection-health doctrine exists to prevent. <strong>Architecture:</strong> extracted the breaker into a dependency-free <code>src/lib/circuit-breaker.ts</code> leaf so the Supabase client can feed it without an import cycle in init-critical code; <code>networkHealth.ts</code> keeps the idle probe but now just issues synthetic traffic for the one fetch-hook classifier to observe (no more double-counting the probe&rsquo;s own request). tsc 164, truncation 188, full vite build clean. <em>To see it: open DevTools &rarr; Network &rarr; Offline, and the amber/gray banner appears.</em> (Server-side <code>admin()</code> backend health is a separate surface, not wired here.)",
+    ],
+  },
+  {
     version: "v2.82.0",
     date: "June 2026",
     items: [

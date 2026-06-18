@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 import { cookieStorage, subscribeCookieStorageChanges } from "@/lib/cookie-storage";
+import {
+  recordSupabaseFailure,
+  recordSupabaseSuccess,
+} from "@/lib/circuit-breaker";
 
 function createSupabaseClient() {
   // Vite replaces import.meta.env at build time for client bundles;
@@ -24,6 +28,28 @@ function createSupabaseClient() {
       storage: typeof window !== "undefined" ? cookieStorage : undefined,
       persistSession: true,
       autoRefreshToken: true,
+    },
+    global: {
+      // Feed the connection-health circuit breaker from real query traffic
+      // (src/lib/circuit-breaker.ts). Only a network-level error, a 5xx, or a
+      // 429 counts as a failure — any real HTTP response (including a 4xx like
+      // an expired token, an empty single() 406, or a 409 conflict) proves the
+      // backend is reachable and is recorded as a success. This avoids a false
+      // "degraded" banner when the connection is actually fine.
+      fetch: async (input, init) => {
+        try {
+          const res = await fetch(input, init);
+          if (res.status >= 500 || res.status === 429) {
+            recordSupabaseFailure();
+          } else {
+            recordSupabaseSuccess();
+          }
+          return res;
+        } catch (err) {
+          recordSupabaseFailure();
+          throw err;
+        }
+      },
     },
   });
 }

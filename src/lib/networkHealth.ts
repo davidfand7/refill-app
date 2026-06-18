@@ -1,54 +1,34 @@
 /**
- * Network health — circuit breaker + offline detection.
+ * Network health — periodic Supabase reachability probe.
  *
- * Tracks two signals:
- *  1. `navigator.onLine` — browser reports no network at all.
- *  2. Consecutive Supabase failures — network is up but backend is unreachable
- *     or overloaded ("degraded"). After 3 consecutive failures within a 60s
- *     window the circuit "opens" for 30 s before allowing a retry.
+ * Keeps the circuit breaker (src/lib/circuit-breaker.ts) current EVEN WHILE THE
+ * USER IS IDLE. Real query traffic feeds the breaker via the `global.fetch`
+ * hook in src/integrations/supabase/client.ts; that hook is the single place
+ * that classifies a response as success/failure. This probe simply issues a
+ * cheap synthetic query every 30 s so the hook has something to observe when
+ * the app is otherwise quiet — it does NOT classify the result itself (doing so
+ * would double-count the very request the hook already saw).
  *
- * Consumers call `getNetworkStatus()` for a synchronous snapshot or
- * `subscribeNetworkStatus(cb)` to receive change events.
+ * The public network-status API lives in circuit-breaker.ts and is re-exported
+ * here so existing consumers (`@/lib/networkHealth`) keep working unchanged.
+ * Importing this module is what starts the probe loop.
  */
 
 import { supabase } from "@/integrations/supabase/client";
 
-export type NetworkStatus = "online" | "degraded" | "offline";
-
-// ── Internal state ─────────────────────────────────────────────────────────────
+export {
+  getNetworkStatus,
+  subscribeNetworkStatus,
+  recordSupabaseFailure,
+  recordSupabaseSuccess,
+  isCircuitOpen,
+  type NetworkStatus,
+} from "@/lib/circuit-breaker";
 
 const isBrowser = typeof window !== "undefined";
-
-let status: NetworkStatus = isBrowser && !navigator.onLine ? "offline" : "online";
-let consecutiveFailures = 0;
-let circuitOpenUntil = 0; // epoch ms
-const listeners = new Set<(s: NetworkStatus) => void>();
-
-function emit(next: NetworkStatus) {
-  if (next === status) return;
-  status = next;
-  listeners.forEach((cb) => cb(next));
-}
-
-// ── Browser online/offline events ──────────────────────────────────────────────
-
-if (isBrowser) {
-  window.addEventListener("online", () => {
-    consecutiveFailures = 0;
-    circuitOpenUntil = 0;
-    emit("online");
-    scheduleHealthCheck(0); // immediate probe after coming back online
-  });
-
-  window.addEventListener("offline", () => emit("offline"));
-}
-
-// ── Periodic health check ──────────────────────────────────────────────────────
+const HEALTH_INTERVAL_MS = 30_000; // 30 s between idle probes
 
 let healthTimer: ReturnType<typeof setTimeout> | null = null;
-const HEALTH_INTERVAL_MS = 30_000; // 30 s
-const CIRCUIT_OPEN_MS = 30_000;    // 30 s open before half-open retry
-const FAILURE_THRESHOLD = 3;
 
 function scheduleHealthCheck(delayMs = HEALTH_INTERVAL_MS) {
   if (healthTimer) clearTimeout(healthTimer);
@@ -56,65 +36,30 @@ function scheduleHealthCheck(delayMs = HEALTH_INTERVAL_MS) {
 }
 
 async function runHealthCheck() {
-  // Skip if browser reports offline.
+  // The online/offline listeners in circuit-breaker.ts already own the
+  // browser-offline state; no point probing when there's no network.
   if (isBrowser && !navigator.onLine) {
-    emit("offline");
     scheduleHealthCheck();
     return;
   }
 
-  // Circuit is open — don't probe yet.
-  if (Date.now() < circuitOpenUntil) {
-    scheduleHealthCheck(Math.max(0, circuitOpenUntil - Date.now()));
-    return;
-  }
-
   try {
-    // Lightest possible read: single row, no joins. Refill cleave 2026-05-25:
-    // was 'agents' (Agentiport-only, dropped during cleave); swapped to 'tenants'
-    // which is load-bearing in refill-prod. RLS filters to the caller's rows so
-    // even an empty result is a healthy probe.
-    const { error } = await supabase.from("tenants").select("id").limit(1);
-    if (error) throw error;
-    consecutiveFailures = 0;
-    emit("online");
+    // Lightest possible read: single row, no joins. We don't inspect the
+    // result — the fetch hook in client.ts classifies this request's
+    // reachability (network error / 5xx / 429 → failure, any real response →
+    // success). The probe exists only to generate that observation while idle.
+    await supabase.from("tenants").select("id").limit(1);
   } catch {
-    consecutiveFailures += 1;
-    if (consecutiveFailures >= FAILURE_THRESHOLD) {
-      circuitOpenUntil = Date.now() + CIRCUIT_OPEN_MS;
-      emit("degraded");
-    }
+    // A network-level throw is already recorded by the fetch hook; swallow
+    // here so the loop keeps running.
   }
 
   scheduleHealthCheck();
 }
 
 // Start the background loop (browser only).
-if (isBrowser) scheduleHealthCheck(5_000); // first probe after 5 s
-
-// ── Public API ─────────────────────────────────────────────────────────────────
-
-export function getNetworkStatus(): NetworkStatus {
-  return status;
-}
-
-export function recordSupabaseFailure() {
-  consecutiveFailures += 1;
-  if (consecutiveFailures >= FAILURE_THRESHOLD) {
-    circuitOpenUntil = Date.now() + CIRCUIT_OPEN_MS;
-    emit("degraded");
-  }
-}
-
-export function recordSupabaseSuccess() {
-  if (consecutiveFailures > 0) {
-    consecutiveFailures = 0;
-    circuitOpenUntil = 0;
-    if (!isBrowser || navigator.onLine) emit("online");
-  }
-}
-
-export function subscribeNetworkStatus(cb: (s: NetworkStatus) => void): () => void {
-  listeners.add(cb);
-  return () => listeners.delete(cb);
+if (isBrowser) {
+  // Re-probe immediately when the browser says we're back online.
+  window.addEventListener("online", () => scheduleHealthCheck(0));
+  scheduleHealthCheck(5_000); // first probe after 5 s
 }
