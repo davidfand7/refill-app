@@ -24,9 +24,8 @@
  * role contexts).
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { admin } from "./admin-client";
 
-import type { Database } from "@/integrations/supabase/types";
 
 export type AuditAction =
   // P1 backfill (written from SQL — not a runtime action)
@@ -65,18 +64,6 @@ export type AuditEvent = {
    * a logs surface. */
   payload?: Record<string, unknown>;
 };
-
-function admin() {
-  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  if (!url || !key) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-  }
-  return createClient<Database>(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 /**
  * Write one row to admin_audit_log. Returns the inserted row id (uuid)

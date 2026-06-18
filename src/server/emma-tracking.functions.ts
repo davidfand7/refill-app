@@ -29,19 +29,7 @@
  * mislead the metric.
  */
 
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/integrations/supabase/types";
-
-function admin() {
-  const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!SUPABASE_URL || !SERVICE_KEY) {
-    throw new Error("Server is missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
-  }
-  return createClient<Database>(SUPABASE_URL, SERVICE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
+import { admin } from "./admin-client";
 
 export type TrackingResult =
   | { ok: true; matched: true; action: "opened" | "clicked" | "ignored_duplicate" }

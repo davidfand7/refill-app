@@ -26,23 +26,9 @@
  * reply text than lose a message, so the append path is the right call.
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { admin } from "./admin-client";
 
-import type { Database } from "@/integrations/supabase/types";
 
-type SbClient = ReturnType<typeof createClient<Database>>;
-
-function admin(): SbClient {
-  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  if (!url || !key) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-  }
-  return createClient<Database>(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

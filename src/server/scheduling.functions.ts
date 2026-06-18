@@ -30,10 +30,9 @@
  * the inline release here just keeps the happy path correct between sweeps.
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { admin } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import type { Database } from "@/integrations/supabase/types";
 import { fetchAllRows } from "@/server/paginate";
 import {
   todayIsoInTz,
@@ -62,17 +61,6 @@ import {
   resourceFreeAt,
   type ResourceType,
 } from "@/server/scheduling-resources";
-
-function admin() {
-  const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!SUPABASE_URL || !SERVICE_KEY) {
-    throw new Error("Server is missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
-  }
-  return createClient<Database>(SUPABASE_URL, SERVICE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 type Sb = ReturnType<typeof admin>;
 

@@ -6,24 +6,11 @@
  * restriction — admin is the only role that sees this view.
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { admin } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import type { Database } from "@/integrations/supabase/types";
 import { verifyAuth } from "@/server/auth-helpers";
-
-function admin() {
-  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  if (!url || !key) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-  }
-  return createClient<Database>(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 async function assertAdmin(accessToken: string): Promise<string> {
   const callerUserId = await verifyAuth(accessToken);

@@ -18,11 +18,10 @@
  * resolveEffectiveUserId via user_roles service-role check).
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { admin } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
 
 // Mirrors the app_role enum after v1.22.1 migration 20260619000000_unified
@@ -72,18 +71,6 @@ const getEffectiveRolesInput = z.object({
    * before honoring; non-admin callers passing this get a 403. */
   viewAsUserId: z.string().uuid().optional(),
 });
-
-function admin() {
-  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  if (!url || !key) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-  }
-  return createClient<Database>(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 function deriveShell(roles: ReadonlySet<PlatformRole>): Shell | null {
   // Priority: admin > spa-owner > rep > developer.

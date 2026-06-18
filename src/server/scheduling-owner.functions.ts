@@ -15,10 +15,9 @@
  * tz helpers from the slot engine so day boundaries are DST-correct.
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { admin } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
 import { ensureSetup, getTenantIdForUser } from "@/server/scheduling-settings.functions";
@@ -32,17 +31,6 @@ import { zonedWallClockToUtc, zonedDateParts, todayIsoInTz } from "@/lib/schedul
 import { sendBookingConfirmation } from "@/server/scheduling-email";
 import { resolveBrandForTenant, toPublicBrand } from "@/server/brand-resolver";
 import { asResourceType, assignFreeResource } from "@/server/scheduling-resources";
-
-function admin() {
-  const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  if (!SUPABASE_URL || !SERVICE_KEY) {
-    throw new Error("Server is missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
-  }
-  return createClient<Database>(SUPABASE_URL, SERVICE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 /** Parse a Postgres tstzrange literal ["lo","hi") → {startMs,endMs}. */
 function parseRange(lit: string | null): { startMs: number; endMs: number } | null {

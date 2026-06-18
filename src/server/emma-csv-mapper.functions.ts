@@ -26,7 +26,7 @@
 
 import { createHash } from "node:crypto";
 
-import { createClient } from "@supabase/supabase-js";
+import { admin, type SbClient } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
@@ -52,19 +52,6 @@ export type AiMappingResult = {
 
 // ─── Module-private supabase admin ────────────────────────────────────────
 
-type SbClient = ReturnType<typeof createClient<Database>>;
-
-function admin(): SbClient {
-  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  if (!url || !key) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-  }
-  return createClient<Database>(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 // ─── Hashing + validation ─────────────────────────────────────────────────
 

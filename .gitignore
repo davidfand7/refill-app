@@ -15,3 +15,6 @@ dist/
 # (Uncomment to ignore if we change strategy)
 # src/routeTree.gen.ts
 supabase/.temp/
+
+# Agent worktrees (isolated git worktrees created by Claude Code agents)
+.claude/worktrees/

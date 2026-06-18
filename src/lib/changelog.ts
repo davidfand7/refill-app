@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.80.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.80.0 &mdash; Tier-1 refactor: one service-role Supabase client (the <code>admin()</code> consolidation).</strong> Pure structural cleanup, zero behavior change. <strong>75 server files</strong> each declared their own near-identical <code>function admin()</code> factory (service-role <code>createClient</code> + a local <code>SbClient</code> type alias) &mdash; ~980 lines of copy-paste. Collapsed all of them into one shared <code>src/server/admin-client.ts</code> that exports <code>admin()</code> + the <code>SbClient</code> type; every caller now imports from <code>./admin-client</code>. <strong>The load-bearing detail:</strong> the bodies had drifted &mdash; ~44 files read only <code>SUPABASE_URL</code>/<code>SUPABASE_SERVICE_ROLE_KEY</code> while ~32 added <code>?? VITE_SUPABASE_URL</code> / <code>?? SUPABASE_SERVICE_KEY</code> fallbacks. The shared helper carries the <strong>union</strong> of both, so it&rsquo;s a strict superset &mdash; no env path any file relied on was dropped (a regression tsc could not have caught). Also shed the now-orphaned <code>createClient</code> import from all 75 and the dead <code>Database</code> import from 41 where it was referenced only inside the deleted block. <strong>Net &minus;903 lines.</strong> Done in an isolated worktree, independently verified before merge: tsc frozen at 251, truncation tripwire at 188, zero <code>function admin(</code> stragglers, zero broken refs. (Next Tier-1 pass: centralize <code>requireAdmin</code>/<code>assertAdmin</code>/<code>getTenantIdForUser</code>/<code>loose()</code> into auth-helpers.)",
+    ],
+  },
+  {
     version: "v2.79.0",
     date: "June 2026",
     items: [

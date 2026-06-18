@@ -27,7 +27,7 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { createClient } from "@supabase/supabase-js";
+import { admin } from "./admin-client";
 import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
@@ -43,17 +43,6 @@ import { daysSince } from "@/lib/patient-cadence";
 import type { RewardStatusNorm } from "@/lib/manufacturer-reward-csv";
 
 // ─── Service-role client (mirrors the other ingest fns) ────────────────────
-
-function admin() {
-  const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!SUPABASE_URL || !SERVICE_KEY) {
-    throw new Error("Server is missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
-  }
-  return createClient<Database>(SUPABASE_URL, SERVICE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 // A patient is "idle" (eligible-but-not-coming-in) after this many days
 // without a visit. Matches the synthesis "eligible + idle 3 months".

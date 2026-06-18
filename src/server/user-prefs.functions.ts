@@ -29,7 +29,8 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { admin } from "./admin-client";
 import { z } from "zod";
 import {
   accessTokenInput,
@@ -52,17 +53,6 @@ const ADMIN_EMAILS_NEVER_AUTOSTAMP = new Set([
   "davidfand303@gmail.com",
   "admin@openagentic.app",
 ]);
-
-function admin(): SupabaseClient<Database> {
-  const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!SUPABASE_URL || !SERVICE_KEY) {
-    throw new Error("Server is missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
-  }
-  return createClient<Database>(SUPABASE_URL, SERVICE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 /**
  * Internal helper for auto-stamp hooks. Inserts a row if none exists; updates

@@ -46,7 +46,7 @@
  * Established 2026-05-20 (v394, post-v393 ship).
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { admin, type SbClient } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
@@ -57,19 +57,6 @@ import { requireRepOrAdmin } from "@/server/auth-helpers";
 
 // ─── service-role admin client (module-private) ──────────────────────────
 
-type SbClient = ReturnType<typeof createClient<Database>>;
-
-function admin(): SbClient {
-  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  if (!url || !key) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-  }
-  return createClient<Database>(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 // v397 Phase 2E: local requireAdmin removed — all callers now go through
 // requireRepOrAdmin from auth-helpers (admin sends keep Karen persona; rep

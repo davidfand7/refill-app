@@ -12,10 +12,9 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { createClient } from "@supabase/supabase-js";
+import { admin } from "./admin-client";
 import { z } from "zod";
 
-import type { Database } from "@/integrations/supabase/types";
 import { verifyAuth } from "@/server/auth-helpers";
 
 export type VitalsRow = {
@@ -32,17 +31,6 @@ export type EngineHealthVitals = {
 };
 
 const input = z.object({ accessToken: z.string().min(1) });
-
-function admin() {
-  const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!SUPABASE_URL || !SERVICE_KEY) {
-    throw new Error("Server is missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
-  }
-  return createClient<Database>(SUPABASE_URL, SERVICE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 export const getEngineHealthVitals = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => input.parse(raw))

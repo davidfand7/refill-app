@@ -24,7 +24,7 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { createClient } from "@supabase/supabase-js";
+import { admin } from "./admin-client";
 import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
@@ -58,18 +58,6 @@ const PUBLIC_REFILL_ORIGIN =
 export const DEFAULT_INVITE_TEMPLATE = `Hi {first_name}! It's {owner_name} from {spa_name}. Quick invite — I'm starting a "first dibs" list for when slots open up unexpectedly (cancellation, reschedule, last-minute opening). Want me to text you first when a great one frees up? Tap to join: {opt_in_url}
 
 Reply STOP anytime to leave.`;
-
-function admin() {
-  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  if (!url || !key) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-  }
-  return createClient<Database>(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 type SupabaseAdmin = ReturnType<typeof admin>;
 

@@ -13,7 +13,7 @@
  * (refill-tenants.ts) — the inverse of this file.
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { admin, type SbClient } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
@@ -23,19 +23,6 @@ import { selectAllRows } from "@/lib/supabase-paginate";
 import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 import { mintReferralToken } from "@/server/referral-tokens";
 
-type SbClient = ReturnType<typeof createClient<Database>>;
-
-function admin(): SbClient {
-  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  if (!url || !key) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-  }
-  return createClient<Database>(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 const authInput = z.object({
   accessToken: z.string().min(1),

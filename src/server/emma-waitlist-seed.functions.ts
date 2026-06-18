@@ -22,11 +22,10 @@
  * tiered-blast ships. No change to the v373 row shape needed for that.
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { admin } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import type { Database } from "@/integrations/supabase/types";
 import { verifyAuth } from "@/server/auth-helpers";
 
 const PUBLIC_REFILL_ORIGIN =
@@ -34,18 +33,6 @@ const PUBLIC_REFILL_ORIGIN =
 const PUBLIC_EMMA_ORIGIN =
   process.env.PUBLIC_SCAN_URL?.replace(/\/scan$/, "") ??
   "https://openagentic.site";
-
-function admin() {
-  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  if (!url || !key) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-  }
-  return createClient<Database>(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 // ─── List candidate patients (with phone/email) for the admin picker ──────
 

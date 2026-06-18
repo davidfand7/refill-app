@@ -11,10 +11,9 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { createClient } from "@supabase/supabase-js";
+import { admin } from "./admin-client";
 import { z } from "zod";
 
-import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import { getTenantIdForUser, tenantBooksOnExternalPms } from "@/server/scheduling-settings.functions";
 import { resolveSpaName } from "@/server/emma-spa-profile";
@@ -27,17 +26,6 @@ import { classifyAppointmentOutcome } from "@/lib/noshow-classify";
 /** A reschedule win is attributable only when the rebooking lands within this
  *  window of the nudge — beyond it, the booking isn't credibly ours. */
 const RESCHEDULE_ATTRIBUTION_DAYS = 30;
-
-function admin() {
-  const SUPABASE_URL = process.env.SUPABASE_URL;
-  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!SUPABASE_URL || !SERVICE_KEY) {
-    throw new Error("Server is missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY.");
-  }
-  return createClient<Database>(SUPABASE_URL, SERVICE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 type AnySb = ReturnType<typeof admin>;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

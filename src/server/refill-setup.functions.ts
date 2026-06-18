@@ -13,11 +13,10 @@
  * better than a half-baked self-serve. This intake is the bridge.
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { admin } from "./admin-client";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import type { Database } from "@/integrations/supabase/types";
 
 // Phase 0 (2026-05-19): per the Refill-Standalone-Architecture risk register,
 // hello@getrefill.app only goes live once SPF/DKIM/DMARC verifies + Gmail
@@ -36,18 +35,6 @@ const NOTIFY_RECIPIENTS = (
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
-
-function admin() {
-  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
-  if (!url || !key) {
-    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-  }
-  return createClient<Database>(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 const submitInput = z.object({
   email: z.string().email().max(320),
