@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.90.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.90.0 &mdash; getrefill.app now redirects to smartspa.app (surgically).</strong> The front-door cutover&rsquo;s visible finish: a browser that loads any page on the <code>getrefill.app</code> (or <code>www.getrefill.app</code>) apex is redirected to the same path on <code>smartspa.app</code>. <strong>Deliberately surgical</strong> &mdash; a blanket redirect would have broken live non-browser traffic that still targets getrefill.app, so the worker only bounces a request when ALL of these hold: it&rsquo;s a <code>GET</code>/<code>HEAD</code>, on the bare apex/www (not <code>app.getrefill.app</code> or other subdomains &mdash; the cross-host app bridge stays put), a top-level <strong>navigation</strong> (<code>Sec-Fetch-Mode: navigate</code> / <code>Accept: text/html</code>, so asset + data + server-fn fetches pass through), and <strong>not</strong> under <code>/api/*</code>. That last exclusion is load-bearing: the local-agent <code>/api/agent/heartbeat</code> POSTs, Resend/Twilio webhooks, and any API client on getrefill.app keep working untouched (those clients don&rsquo;t follow redirects). Uses <strong>302 (temporary)</strong> with <code>Cache-Control: no-store</code> during the transition so it&rsquo;s fully reversible &mdash; upgrade to 301 once smartspa.app has settled. Old booking/email links (<code>getrefill.app/s/&lt;slug&gt;</code>) now land on <code>smartspa.app/s/&lt;slug&gt;</code> with the path preserved; newly generated links already point at smartspa.app directly (v2.89.0). <strong>Touched</strong>: <code>src/worker.ts</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.89.0",
     date: "June 2026",
     items: [
