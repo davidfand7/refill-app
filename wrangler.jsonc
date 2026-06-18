@@ -11,6 +11,11 @@
   "vars": {
     "REFILL_FROM_ENABLED": "1",
     "REFILL_PUBLIC_ORIGIN": "https://getrefill.app",
+    // v2.88.0 — inbound reply domain moved to smartspa.app (Resend receiving
+    // enabled + MX live). Flips outbound Reply-To (drip + outreach) AND inbound
+    // parseReplyToToken together (all read this one env). From-addresses stay on
+    // getrefill.app for now (deferred warming call). reply+<token>@smartspa.app.
+    "REFILL_DRIP_REPLY_DOMAIN": "smartspa.app",
     "SUPABASE_URL": "https://pxgzbibcmbxxqycuplga.supabase.co",
     "SUPABASE_PUBLISHABLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB4Z3piaWJjbWJ4eHF5Y3VwbGdhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2Mjg5MTEsImV4cCI6MjA5NTIwNDkxMX0.bi65GEEz_3maHXswJ_fv3MayEKn4Wh_WBPSi02dFTQU",
     "SQUARE_ENV": "sandbox",

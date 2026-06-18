@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.88.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.88.0 &mdash; Inbound replies go live on smartspa.app: the reply loop is fully connected.</strong> v2.87.0 shipped the catcher (the <code>/api/resend/inbound</code> route); this ship plugs in the domain and turns it on. <strong>(1) Receiving enabled</strong> on the (already sending-verified) <code>smartspa.app</code> Resend domain &mdash; the inbound MX (<code>inbound-smtp.us-east-1.amazonaws.com</code>, priority 10) was written straight into Cloudflare via Resend's Cloudflare auto-configure (no API token, no manual DNS), and confirmed live on two independent resolvers. <strong>(2) Webhook</strong> wired: Resend's <code>email.received</code> event now POSTs to <code>https://smartspa.app/api/resend/inbound</code>. <strong>(3) Signature enforced</strong>: the webhook signing secret is set as the worker secret <code>RESEND_INBOUND_SIGNING_SECRET</code> &mdash; verified by an unsigned probe returning <code>401 bad_signature</code> while a properly-shaped event routes cleanly. <strong>(4) Reply domain flipped</strong>: <code>REFILL_DRIP_REPLY_DOMAIN</code> &rarr; <code>smartspa.app</code>, which a single env read swings across all three touchpoints at once &mdash; outbound drip Reply-To, outbound outreach Reply-To, and inbound <code>parseReplyToToken</code> &mdash; so a spa owner or prospect who hits reply lands as <code>reply+&lt;eventId&gt;@smartspa.app</code>, gets received by Resend, posted to our route, and stamped onto the originating engagement row. <strong>From-addresses stay on getrefill.app for now</strong> (deferred sending-domain warming &mdash; Reply-To can differ from From without deliverability cost). First brick of the broader getrefill.app&rarr;smartspa.app front-door cutover, which is already ~80% done (smartspa.app has long served the same worker as a custom domain). <strong>Touched</strong>: <code>wrangler.jsonc</code> (the env flip), <code>changelog.ts</code>. No code change &mdash; the pipeline was already built. No migration.",
+    ],
+  },
+  {
     version: "v2.87.0",
     date: "June 2026",
     items: [
