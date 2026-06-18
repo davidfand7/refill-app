@@ -47,10 +47,14 @@ export const Route = createFileRoute("/s/$slug")({
   validateSearch: (search: Record<string, unknown>): { service?: string; preview?: boolean } => ({
     service: typeof search.service === "string" ? search.service : undefined,
     // v2.84.0 — ?preview unlocks the native flow for the spa owner/admin even on
-    // an external-PMS (Acuity) spa, so they can test the booking experience. Any
-    // truthy value enables it; the server still requires a valid owner/admin token.
+    // an external-PMS (Acuity) spa, so they can test the booking experience. The
+    // mere PRESENCE of the key enables it (bare `?preview` parses as ""), unless
+    // explicitly disabled; the server still requires a valid owner/admin token.
     preview:
-      search.preview === true || search.preview === "1" || search.preview === "true"
+      search.preview !== undefined &&
+      search.preview !== false &&
+      search.preview !== "0" &&
+      search.preview !== "false"
         ? true
         : undefined,
   }),
