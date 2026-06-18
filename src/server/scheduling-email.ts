@@ -15,6 +15,7 @@ import {
   wrapDripEmail,
   type DripEmailBrand,
 } from "@/lib/email-templates/refill-drip-shell";
+import { postResendEmail } from "@/server/resend-send";
 
 /** Bare address from "Name <addr>" (or the string itself if already bare). */
 function bareAddress(fromLine: string): string {
@@ -57,26 +58,19 @@ async function sendViaResend(args: {
   const RESEND_API_KEY = process.env.RESEND_API_KEY;
   if (!RESEND_API_KEY) return { ok: false, error: "RESEND_API_KEY not configured" };
   try {
-    const resp = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${RESEND_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: args.from,
-        to: args.to,
-        subject: args.subject,
-        html: args.html,
-        tags: [
-          { name: "product", value: "refill" },
-          { name: "stream", value: "scheduling" },
-        ],
-      }),
+    const r = await postResendEmail({
+      apiKey: RESEND_API_KEY,
+      from: args.from,
+      to: args.to,
+      subject: args.subject,
+      html: args.html,
+      tags: [
+        { name: "product", value: "refill" },
+        { name: "stream", value: "scheduling" },
+      ],
     });
-    if (!resp.ok) {
-      const body = await resp.text().catch(() => "");
-      return { ok: false, error: `Resend ${resp.status}: ${body.slice(0, 200)}` };
+    if (!r.ok) {
+      return { ok: false, error: `Resend ${r.status}: ${r.body.slice(0, 200)}` };
     }
     return { ok: true };
   } catch (e) {

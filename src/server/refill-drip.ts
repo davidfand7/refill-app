@@ -43,6 +43,7 @@ import {
   wrapDripEmail,
   type DripEmailRendered,
 } from "@/lib/email-templates/refill-drip-shell";
+import { postResendEmail } from "@/server/resend-send";
 
 // ─── Service-role admin client (module-private) ──────────────────────────
 
@@ -270,36 +271,28 @@ export async function sendTrialDripByDay(
   const replyTo = buildReplyTo(eventId);
 
   try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: KAREN_FROM,
-        to: [ownerEmail],
-        reply_to: replyTo,
-        subject,
-        text,
-        html,
-        tags: [
-          { name: "type", value: "refill-drip" },
-          { name: "drip_day", value: String(day) },
-          { name: "tenant_slug", value: tenant.slug.slice(0, 60) },
-        ],
-      }),
+    const res = await postResendEmail({
+      apiKey,
+      from: KAREN_FROM,
+      to: [ownerEmail],
+      replyTo,
+      subject,
+      text,
+      html,
+      tags: [
+        { name: "type", value: "refill-drip" },
+        { name: "drip_day", value: String(day) },
+        { name: "tenant_slug", value: tenant.slug.slice(0, 60) },
+      ],
       signal: AbortSignal.timeout(20_000),
     });
     if (!res.ok) {
-      const body = await res.text().catch(() => "");
       return {
         ok: false,
-        reason: `Resend ${res.status}: ${body.slice(0, 200)}`,
+        reason: `Resend ${res.status}: ${res.body.slice(0, 200)}`,
       };
     }
-    const json = (await res.json().catch(() => ({}))) as { id?: string };
-    const messageId = json.id ?? null;
+    const messageId = res.id;
 
     const { error: insertErr } = await sb
       .from("tenant_engagement_events")

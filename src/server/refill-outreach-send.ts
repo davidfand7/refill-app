@@ -54,6 +54,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { DIRECT_COMMISSION_RATE, formatRate } from "@/lib/rep-economics";
 import { selectAllRows } from "@/lib/supabase-paginate";
 import { requireRepOrAdmin } from "@/server/auth-helpers";
+import { postResendEmail } from "@/server/resend-send";
 
 // ─── service-role admin client (module-private) ──────────────────────────
 
@@ -647,12 +648,13 @@ export async function dispatchOneOutreachEmail(
     );
   }
 
-  const resendBody = {
+  const sent = await postResendEmail({
+    apiKey: RESEND_API_KEY,
     from: ctx.fromLine,
     to: r.recipientEmail,
     subject: renderedSubject,
     html: renderedBody,
-    reply_to: replyTo,
+    replyTo,
     tags: [
       { name: "product", value: "refill" },
       { name: "stream", value: "outreach" },
@@ -661,28 +663,17 @@ export async function dispatchOneOutreachEmail(
       { name: "audience", value: ctx.audience },
       { name: "purpose", value: ctx.purpose },
     ],
-  };
-
-  const resp = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(resendBody),
   });
 
-  if (!resp.ok) {
-    const errText = await resp.text().catch(() => "");
+  if (!sent.ok) {
     await sb
       .from("outreach_engagement_events")
       .update({ resend_email_id: null })
       .eq("id", row.id);
-    throw new Error(`Resend POST failed (${resp.status}): ${errText.slice(0, 300)}`);
+    throw new Error(`Resend POST failed (${sent.status}): ${sent.body.slice(0, 300)}`);
   }
 
-  const resendData = (await resp.json().catch(() => ({}))) as { id?: string };
-  const resendEmailId = resendData.id ?? null;
+  const resendEmailId = sent.id;
 
   if (resendEmailId) {
     await sb

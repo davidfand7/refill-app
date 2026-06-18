@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.85.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.85.0 &mdash; One Resend send-seam: the hand-rolled <code>fetch(\"https://api.resend.com/emails\")</code> is being consolidated into a single helper.</strong> Every transactional + outreach email in the app POSTs to the same Resend endpoint with the same auth header, the same JSON body shape, and the same <code>!resp.ok</code> &rarr; status+body-snippet handling &mdash; copy-pasted across <strong>17 call sites</strong> (a scout first reported only 3; a direct grep found the other 14 &mdash; a textbook bounded-search undercount, caught by the grep backstop). This ship introduces <code>src/server/resend-send.ts</code> &rarr; <code>postResendEmail()</code> and migrates the first three senders onto it: the trial-drip cron (<code>refill-drip.ts</code>), rep outreach (<code>refill-outreach-send.ts</code>), and scheduling confirmation/reminder email (<code>scheduling-email.ts</code>). <strong>Behavior-preserving by design:</strong> the helper returns a STRUCTURED result for any HTTP outcome (so each caller keeps its own throw-vs-return), <strong>re-throws</strong> network/transport errors (so existing try/catch or bare propagation is unchanged), parses the message <code>id</code> on success, and returns the raw <code>status</code>+<code>body</code> so each caller formats its own error string at its own slice length. The genuinely per-caller logic &mdash; engagement-event inserts and their ordering relative to the send &mdash; was deliberately left untouched. <strong>Honest scope:</strong> 3 of 17 done; the remaining 14 call sites (recall, rescue, blast, preshow, promo, waitlist-invite, reschedule, scan-followup, data-export, offers, setup, writeback, allocation) are a verified follow-up migration, folded in careful batches &mdash; not a blind sweep, since each has its own surrounding control flow. tsc 164, truncation 188. No migration.",
+    ],
+  },
+  {
     version: "v2.84.0",
     date: "June 2026",
     items: [
