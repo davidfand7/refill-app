@@ -10,7 +10,12 @@
   },
   "vars": {
     "REFILL_FROM_ENABLED": "1",
-    "REFILL_PUBLIC_ORIGIN": "https://getrefill.app",
+    // v2.89.0 — front-door cutover: public-link origin is now smartspa.app
+    // (booking /s/<slug>, password-reset, offer-push, recall-digest links all
+    // generate on smartspa.app, which serves the same worker). getrefill.app
+    // keeps serving in parallel — existing links unbroken. From-addresses stay
+    // on getrefill.app (deferred warming).
+    "REFILL_PUBLIC_ORIGIN": "https://smartspa.app",
     // v2.88.0 — inbound reply domain moved to smartspa.app (Resend receiving
     // enabled + MX live). Flips outbound Reply-To (drip + outreach) AND inbound
     // parseReplyToToken together (all read this one env). From-addresses stay on

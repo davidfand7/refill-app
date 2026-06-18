@@ -22,12 +22,17 @@ function cookieDomain(): string | undefined {
   if (typeof window === "undefined") return undefined;
   const host = window.location.hostname;
   if (isLocalhost(host)) return undefined; // browser sets cookie on localhost without explicit domain
-  // Only force the .getrefill.app domain when actually on getrefill.app.
-  // On workers.dev / preview URLs, forcing Domain=.getrefill.app makes the
-  // browser silently REJECT the cookie → session never persists across page
+  // Only force an explicit cookie Domain when actually on one of our apex
+  // domains. On workers.dev / preview URLs, forcing Domain=.getrefill.app makes
+  // the browser silently REJECT the cookie → session never persists across page
   // loads → useIsAdmin & friends see no auth on /app/admin hard-refresh.
+  // v2.89.0 — smartspa.app is now a first-class apex (front-door cutover), so it
+  // gets its own .smartspa.app scope; sessions share across its subdomains too.
   if (host === "getrefill.app" || host.endsWith(".getrefill.app")) {
     return COOKIE_DOMAIN_PROD;
+  }
+  if (host === "smartspa.app" || host.endsWith(".smartspa.app")) {
+    return ".smartspa.app";
   }
   return undefined;
 }

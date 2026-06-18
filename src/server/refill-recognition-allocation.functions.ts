@@ -793,7 +793,7 @@ export const dispatchAllocationBatch = createServerFn({ method: "POST" })
           // Auth = unguessable UUID + tenant-scoped lookup at the
           // endpoint. No bearer token in the email body.
           const publicOrigin =
-            process.env.REFILL_PUBLIC_ORIGIN ?? "https://getrefill.app";
+            process.env.REFILL_PUBLIC_ORIGIN ?? "https://smartspa.app";
           const callbackUrl = (suggestionId: string) =>
             `${publicOrigin}/api/recognition/sent/${suggestionId}`;
           const draftBlocks = drafts

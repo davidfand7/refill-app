@@ -207,7 +207,7 @@ export const sendPasswordReset = createServerFn({ method: "POST" })
 
     // Route through the origin env so the smartspa.app cutover flips this with
     // everything else (identical today — env is still getrefill.app).
-    const origin = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://getrefill.app").replace(/\/+$/, "");
+    const origin = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://smartspa.app").replace(/\/+$/, "");
     const resetRes = await sb.auth.resetPasswordForEmail(targetEmail, {
       redirectTo: `${origin}/reset-password`,
     });

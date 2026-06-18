@@ -1038,7 +1038,7 @@ export const setExpectedSourceFn = createServerFn({ method: "POST" })
 // from under a running pinger.
 
 const PUBLIC_ORIGIN =
-  process.env.REFILL_PUBLIC_ORIGIN ?? "https://getrefill.app";
+  process.env.REFILL_PUBLIC_ORIGIN ?? "https://smartspa.app";
 
 function localAgentTbl(sb: ReturnType<typeof admin>) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

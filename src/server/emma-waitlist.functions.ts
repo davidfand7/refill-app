@@ -90,7 +90,7 @@ type SupabaseAdmin = ReturnType<typeof admin>;
  * Mirrors buildRescueClaimUrl.
  */
 export function buildWaitlistOptInUrl(token: string): string {
-  const base = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://getrefill.app").replace(/\/+$/, "");
+  const base = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://smartspa.app").replace(/\/+$/, "");
   return `${base}/waitlist/optin/${token}`;
 }
 

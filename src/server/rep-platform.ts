@@ -207,12 +207,12 @@ export type ReferralLink = {
 };
 
 function buildLongReferralUrl(token: string): string {
-  const base = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://getrefill.app").replace(/\/+$/, "");
+  const base = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://smartspa.app").replace(/\/+$/, "");
   return `${base}/onboard?ref=${encodeURIComponent(token)}`;
 }
 
 function buildShortReferralUrl(slug: string): string {
-  const base = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://getrefill.app").replace(/\/+$/, "");
+  const base = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://smartspa.app").replace(/\/+$/, "");
   return `${base}/r/${slug}`;
 }
 

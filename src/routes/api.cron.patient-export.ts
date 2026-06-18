@@ -52,7 +52,7 @@ export const Route = createFileRoute("/api/cron/patient-export")({
         const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
         const SCHEDULER_SECRET = process.env.SCHEDULER_SECRET;
         const PUBLIC_ORIGIN =
-          process.env.REFILL_PUBLIC_ORIGIN ?? "https://getrefill.app";
+          process.env.REFILL_PUBLIC_ORIGIN ?? "https://smartspa.app";
         if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
           return jsonResp(500, { error: "Server not configured." });
         }

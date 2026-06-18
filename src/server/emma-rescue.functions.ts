@@ -139,7 +139,7 @@ function buildRescueClaimUrl(token: string): string {
   // successful end-to-end live cancel 2026-05-26 1:02 PM MT — the rescue
   // email landed correctly but the embedded URL pointed at a dead host.
   // Pattern matches src/server/rep-platform.ts.
-  const base = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://getrefill.app").replace(/\/+$/, "");
+  const base = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://smartspa.app").replace(/\/+$/, "");
   return `${base}/rescue/claim/${token}`;
 }
 

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.89.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.89.0 &mdash; Front-door cutover to smartspa.app (phase 1): generated links + session cookies move over.</strong> smartspa.app has long served the same worker as a custom domain; this turns it into the real front door. <strong>(1) Public-link origin flipped</strong>: <code>REFILL_PUBLIC_ORIGIN</code> &rarr; <code>https://smartspa.app</code>, plus all 14 of its <code>?? \"https://getrefill.app\"</code> fallback defaults across 10 files (admin password-reset, reschedule, connection-health, waitlist, rep-platform, promo-calendar, rescue, recognition-allocation, recall-digest + patient-export crons) &mdash; so every booking (<code>/s/&lt;slug&gt;</code>), reset, offer-push and recall link the app generates now points at smartspa.app (which serves the same app). <strong>(2) smartspa.app is now a first-class cookie domain</strong>: both cookie helpers (<code>cookie-storage.ts</code> auth-storage + <code>product-context.ts</code> <code>cookieDomainFor</code>) were host-pinned to <code>.getrefill.app</code> &mdash; the latter returned it <em>unconditionally</em>, which the browser silently rejects on smartspa.app (and on workers.dev/preview), so init/onboarding cookies never set there. They now scope to <code>.smartspa.app</code> on smartspa.app, keep <code>.getrefill.app</code> on getrefill.app, and fall back to host-only off our apexes &mdash; fixing session persistence on the new front door. <strong>getrefill.app keeps serving in parallel</strong> &mdash; every existing booking/email link still resolves; nothing is cut off. <strong>Deliberately deferred</strong> (separate care): the <code>app.getrefill.app</code> app-host migration, the <code>{slug}.getrefill.app</code> vanity-URL display strings (gated on a <code>*.smartspa.app</code> wildcard), the <code>og:image</code>, and from-addresses (<code>karen@</code>/<code>recall@</code>/<code>offers@getrefill.app</code> &mdash; deferred sending-domain warming). <strong>One external finish step</strong> (gates clean auth redirects): Supabase &rarr; Auth &rarr; URL Configuration &mdash; set Site URL to smartspa.app + add it to Redirect URLs, else reset/magic-link redirects fall back to the current Site URL domain. <strong>Touched</strong>: <code>wrangler.jsonc</code>, the 10 fallback files, <code>cookie-storage.ts</code>, <code>product-context.ts</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.88.0",
     date: "June 2026",
     items: [

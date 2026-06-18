@@ -698,7 +698,7 @@ function escHtml(s: string): string {
 /** One warm, no-blame rebook nudge — same copy whether they cancelled or
  *  no-showed (v1; a split per kind is a later refinement). */
 function composeRescheduleBody(firstName: string, spaName: string, slug: string): string {
-  const host = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://getrefill.app")
+  const host = (process.env.REFILL_PUBLIC_ORIGIN ?? "https://smartspa.app")
     .replace(/^https?:\/\//, "")
     .replace(/\/+$/, "");
   const link = slug ? ` Rebook here: ${host}/s/${slug}` : "";
