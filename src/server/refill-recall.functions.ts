@@ -39,6 +39,7 @@ import { recordRecoveryEvent } from "@/server/emma-attribution.functions";
 import { recordMessagingActivity, recordAgentAction } from "@/server/messaging-activity";
 import { isSendingPaused } from "@/server/sending-pause";
 import { loadBlockedNodeIds } from "@/server/patient-contactability";
+import { postResendEmail } from "@/server/resend-send";
 import { daysSince } from "@/lib/patient-cadence";
 import type { RewardStatusNorm } from "@/lib/manufacturer-reward-csv";
 
@@ -679,23 +680,17 @@ export const draftRecallOutreachFn = createServerFn({ method: "POST" })
     const text = `${spaName} — Recall outreach\n\nPaste into Claude Desktop with the iMessage MCP. Claude drafts each iMessage below; review and tap Send.\n\n${built.map((d) => `── To: ${d.phone} (${d.fullName}) ──\n\n${d.body}`).join("\n\n")}`;
 
     try {
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${resendKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: process.env.REFILL_FROM_EMAIL ?? "recall@getrefill.app",
-          to: [proxyEmail],
-          subject,
-          text,
-          html,
-          tags: [
-            { name: "type", value: "refill-recall-dispatch" },
-            { name: "tenant", value: effectiveUserId },
-          ],
-        }),
+      const res = await postResendEmail({
+        apiKey: resendKey,
+        from: process.env.REFILL_FROM_EMAIL ?? "recall@getrefill.app",
+        to: [proxyEmail],
+        subject,
+        text,
+        html,
+        tags: [
+          { name: "type", value: "refill-recall-dispatch" },
+          { name: "tenant", value: effectiveUserId },
+        ],
         signal: AbortSignal.timeout(20_000),
       });
       if (!res.ok) {
@@ -704,7 +699,7 @@ export const draftRecallOutreachFn = createServerFn({ method: "POST" })
           drafted: built.length,
           skippedNoPhone,
           sentTo: null,
-          error: `Resend ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`,
+          error: `Resend ${res.status}: ${res.body.slice(0, 200)}`,
         };
       }
     } catch (e) {
@@ -874,29 +869,23 @@ export async function sendRecallDigestForUser(
   const { subject, text, html } = composeRecallDigestEmail({ spaName, view, ctaUrl });
 
   try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: process.env.REFILL_FROM_EMAIL ?? "recall@getrefill.app",
-        to: [email],
-        subject,
-        text,
-        html,
-        tags: [
-          { name: "type", value: "refill-recall-digest" },
-          { name: "tenant", value: userId },
-        ],
-      }),
+    const res = await postResendEmail({
+      apiKey: resendKey,
+      from: process.env.REFILL_FROM_EMAIL ?? "recall@getrefill.app",
+      to: [email],
+      subject,
+      text,
+      html,
+      tags: [
+        { name: "type", value: "refill-recall-digest" },
+        { name: "tenant", value: userId },
+      ],
       signal: AbortSignal.timeout(20_000),
     });
     if (!res.ok) {
       return {
         status: "error",
-        error: `Resend ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`,
+        error: `Resend ${res.status}: ${res.body.slice(0, 200)}`,
       };
     }
   } catch (e) {

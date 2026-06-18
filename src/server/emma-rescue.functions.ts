@@ -44,6 +44,7 @@ import type { Database } from "@/integrations/supabase/types";
 import { sendSms } from "@/server/sms-provider";
 import { fetchAllRows } from "@/server/paginate";
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
+import { postResendEmail } from "@/server/resend-send";
 import { resolveBrand } from "@/server/brand-resolver";
 import { recordMessagingActivity, recordAgentAction } from "@/server/messaging-activity";
 import {
@@ -1227,34 +1228,24 @@ export async function dispatchRescueAttempt(args: {
           offers: offerLines,
         });
         try {
-          const res = await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${resendKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              from: fromEmail,
-              to: [proxyEmail],
-              subject: email.subject,
-              text: email.text,
-              html: email.html,
-              tags: [
-                { name: "type", value: "emma-rescue-proxy" },
-                { name: "attempt_id", value: attempt.id },
-              ],
-            }),
+          const res = await postResendEmail({
+            apiKey: resendKey,
+            from: fromEmail,
+            to: [proxyEmail],
+            subject: email.subject,
+            text: email.text,
+            html: email.html,
+            tags: [
+              { name: "type", value: "emma-rescue-proxy" },
+              { name: "attempt_id", value: attempt.id },
+            ],
             signal: AbortSignal.timeout(15_000),
           });
           if (res.ok) {
-            const json = (await res.json().catch(() => ({}))) as {
-              id?: string;
-            };
-            proxyEmailMessageId = json.id ?? null;
+            proxyEmailMessageId = res.id ?? null;
           } else {
-            const errBody = await res.text().catch(() => "");
             console.error(
-              `[rescue proxy] Email send failed: ${res.status} ${errBody.slice(0, 200)}`,
+              `[rescue proxy] Email send failed: ${res.status} ${res.body.slice(0, 200)}`,
             );
           }
         } catch (e) {

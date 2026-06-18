@@ -37,6 +37,7 @@ import type { ProductKind } from "@/lib/product-manufacturer-map";
 import { doListOverdue } from "@/server/patient-ingest.functions";
 import { fetchAllRows } from "@/server/paginate";
 import { resolveSpaName } from "@/server/emma-spa-profile";
+import { postResendEmail } from "@/server/resend-send";
 import { todayIsoInTz } from "@/lib/scheduling-slots";
 
 type AnySb = ReturnType<typeof createClient<Database>>;
@@ -1029,23 +1030,17 @@ export const draftOfferPushFn = createServerFn({ method: "POST" })
     const resendKey = process.env.RESEND_API_KEY;
     if (!resendKey) throw new Error("Server is missing RESEND_API_KEY.");
     try {
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${resendKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: process.env.REFILL_FROM_EMAIL ?? "offers@getrefill.app",
-          to: [proxyEmail],
-          subject,
-          text,
-          html,
-          tags: [
-            { name: "type", value: "refill-offer-push" },
-            { name: "tenant", value: effectiveUserId },
-          ],
-        }),
+      const res = await postResendEmail({
+        apiKey: resendKey,
+        from: process.env.REFILL_FROM_EMAIL ?? "offers@getrefill.app",
+        to: [proxyEmail],
+        subject,
+        text,
+        html,
+        tags: [
+          { name: "type", value: "refill-offer-push" },
+          { name: "tenant", value: effectiveUserId },
+        ],
         signal: AbortSignal.timeout(20_000),
       });
       if (!res.ok) {
@@ -1053,7 +1048,7 @@ export const draftOfferPushFn = createServerFn({ method: "POST" })
           drafted: built.length,
           skippedNoPhone,
           sentTo: null,
-          error: `Resend ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`,
+          error: `Resend ${res.status}: ${res.body.slice(0, 200)}`,
         };
       }
     } catch (e) {

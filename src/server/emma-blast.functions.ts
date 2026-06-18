@@ -26,6 +26,7 @@ import { z } from "zod";
 
 import type { Database, Json } from "@/integrations/supabase/types";
 import { verifyAuth } from "@/server/auth-helpers";
+import { postResendEmail } from "@/server/resend-send";
 import { fetchAllRows } from "@/server/paginate";
 import { patientOptOutStatus } from "@/server/patient-contactability";
 import { callGeminiOneShot } from "@/server/gemini-oneshot";
@@ -1061,42 +1062,34 @@ export async function dispatchOutreach({
         };
       } else {
         try {
-          const res = await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${resendKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              from: fromEmail,
-              to: [patientSummary.email!],
-              subject: composed.subject,
-              text: composed.text,
-              html: composed.html,
-              // v354 — engagement tracking. Resend fires email.opened
-              // and email.clicked webhook events handled at
-              // /api/resend/inbound. Open tracking inserts a 1x1
-              // pixel; click tracking rewrites in-body URLs through
-              // a tracking redirect (transparent to recipient, ~80ms
-              // hop, original destination unchanged). Both stamp
-              // patient_outreach for Phase 9 reporting.
-              tracking: { opens: true, clicks: true },
-              tags: [
-                { name: "type", value: "emma-campaign" },
-                { name: "campaign_id", value: campaignId },
-              ],
-            }),
+          const res = await postResendEmail({
+            apiKey: resendKey,
+            from: fromEmail,
+            to: [patientSummary.email!],
+            subject: composed.subject,
+            text: composed.text,
+            html: composed.html,
+            // v354 — engagement tracking. Resend fires email.opened
+            // and email.clicked webhook events handled at
+            // /api/resend/inbound. Open tracking inserts a 1x1
+            // pixel; click tracking rewrites in-body URLs through
+            // a tracking redirect (transparent to recipient, ~80ms
+            // hop, original destination unchanged). Both stamp
+            // patient_outreach for Phase 9 reporting.
+            tracking: { opens: true, clicks: true },
+            tags: [
+              { name: "type", value: "emma-campaign" },
+              { name: "campaign_id", value: campaignId },
+            ],
             signal: AbortSignal.timeout(15_000),
           });
           if (!res.ok) {
-            const errBody = await res.text().catch(() => "");
             dispatchError = {
               reason: "from_unavailable",
-              message: `resend: ${res.status} ${errBody.slice(0, 200)}`,
+              message: `resend: ${res.status} ${res.body.slice(0, 200)}`,
             };
           } else {
-            const json = (await res.json().catch(() => ({}))) as { id?: string };
-            messageId = json.id ?? null;
+            messageId = res.id ?? null;
           }
         } catch (e) {
           dispatchError = {

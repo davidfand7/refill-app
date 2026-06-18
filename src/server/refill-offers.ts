@@ -27,6 +27,7 @@
  */
 
 import { admin } from "./admin-client";
+import { postResendEmail } from "@/server/resend-send";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
@@ -369,36 +370,28 @@ export const sendOfferToTenant = createServerFn({ method: "POST" })
       const replyTo = buildReplyTo(eventId);
 
       try {
-        const res = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: KAREN_FROM,
-            to: [ownerEmail],
-            reply_to: replyTo,
-            subject,
-            text,
-            html,
-            tags: [
-              { name: "type", value: "refill-offer" },
-              { name: "offer_type", value: offerRow.offerType },
-              { name: "tenant_slug", value: tenant.slug.slice(0, 60) },
-            ],
-          }),
+        const result = await postResendEmail({
+          apiKey,
+          from: KAREN_FROM,
+          to: [ownerEmail],
+          replyTo,
+          subject,
+          text,
+          html,
+          tags: [
+            { name: "type", value: "refill-offer" },
+            { name: "offer_type", value: offerRow.offerType },
+            { name: "tenant_slug", value: tenant.slug.slice(0, 60) },
+          ],
           signal: AbortSignal.timeout(20_000),
         });
-        if (!res.ok) {
-          const body = await res.text().catch(() => "");
+        if (!result.ok) {
           return {
             ok: false,
-            reason: `Resend ${res.status}: ${body.slice(0, 200)}`,
+            reason: `Resend ${result.status}: ${result.body.slice(0, 200)}`,
           };
         }
-        const json = (await res.json().catch(() => ({}))) as { id?: string };
-        const messageId = json.id ?? null;
+        const messageId = result.id ?? null;
 
         // Log to tenant_engagement_events. source_drip_id points back to
         // the offer row so v391+ analytics can chain offer → send → reply.

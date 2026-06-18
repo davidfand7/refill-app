@@ -28,6 +28,7 @@ import { createClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/integrations/supabase/types";
 import { REFILL_BRAND, type BrandConfig } from "@/lib/brand";
+import { postResendEmail } from "@/server/resend-send";
 
 // ─── Sender config ────────────────────────────────────────────────────────
 
@@ -408,44 +409,36 @@ export async function sendScanFollowUpEmail(
   const { subject, text, html } = composeScanFollowUpEmail(lead, reportUrl);
 
   try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: fromAddress,
-        to: [lead.email],
-        reply_to: REPLY_TO_EMAIL,
-        subject,
-        text,
-        html,
-        tags: [
-          { name: "type", value: "scan-followup" },
-          { name: "brand", value: brand.name.toLowerCase() },
-          {
-            name: "has_report",
-            value: reportUrl !== null ? "yes" : "no",
-          },
-          {
-            name: "platform",
-            value: (lead.detected_platform ?? "unknown")
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "-")
-              .slice(0, 40),
-          },
-          { name: "was_ai_mapped", value: String(lead.was_ai_mapped) },
-        ],
-      }),
+    const result = await postResendEmail({
+      apiKey,
+      from: fromAddress,
+      to: [lead.email],
+      replyTo: REPLY_TO_EMAIL,
+      subject,
+      text,
+      html,
+      tags: [
+        { name: "type", value: "scan-followup" },
+        { name: "brand", value: brand.name.toLowerCase() },
+        {
+          name: "has_report",
+          value: reportUrl !== null ? "yes" : "no",
+        },
+        {
+          name: "platform",
+          value: (lead.detected_platform ?? "unknown")
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .slice(0, 40),
+        },
+        { name: "was_ai_mapped", value: String(lead.was_ai_mapped) },
+      ],
       signal: AbortSignal.timeout(20_000),
     });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`Resend ${res.status}: ${body.slice(0, 300)}`);
+    if (!result.ok) {
+      throw new Error(`Resend ${result.status}: ${result.body.slice(0, 300)}`);
     }
-    const json = (await res.json().catch(() => ({}))) as { id?: string };
-    const messageId = json.id ?? null;
+    const messageId = result.id ?? null;
 
     await sb
       .from("csv_scanner_leads")
@@ -510,33 +503,25 @@ export async function sendScanReturnLinkEmail(
 </body></html>`;
 
   try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: fromAddress,
-        to: [email],
-        reply_to: REPLY_TO_EMAIL,
-        subject,
-        text,
-        html,
-        tags: [{ name: "type", value: "scan-return-link" }],
-      }),
+    const result = await postResendEmail({
+      apiKey,
+      from: fromAddress,
+      to: [email],
+      replyTo: REPLY_TO_EMAIL,
+      subject,
+      text,
+      html,
+      tags: [{ name: "type", value: "scan-return-link" }],
       signal: AbortSignal.timeout(20_000),
     });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`Resend ${res.status}: ${body.slice(0, 300)}`);
+    if (!result.ok) {
+      throw new Error(`Resend ${result.status}: ${result.body.slice(0, 300)}`);
     }
-    const json = (await res.json().catch(() => ({}))) as { id?: string };
     await sb
       .from("csv_scanner_leads")
       .update({
         followup_sent_at: new Date().toISOString(),
-        followup_message_id: json.id ?? null,
+        followup_message_id: result.id ?? null,
         followup_error: null,
       })
       .eq("id", leadId);

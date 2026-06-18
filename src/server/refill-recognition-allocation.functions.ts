@@ -31,6 +31,7 @@ import type { Database, Json } from "@/integrations/supabase/types";
 import type { PatientSummary } from "@/lib/patient-csv";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
+import { postResendEmail } from "@/server/resend-send";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -819,30 +820,23 @@ export const dispatchAllocationBatch = createServerFn({ method: "POST" })
           const text = `${spaName} — Recognition allocations\n\nPaste into Claude Desktop with iMessage MCP.\nClaude: after drafting each iMessage, POST the URL listed below it so the queue updates.\n\n${drafts.map((d) => `── To: ${d.phone} (${d.patientName}, ${d.cohort}, ${d.brand}) ──\n\n${d.body}\n\nAfter drafting, POST: ${callbackUrl(d.suggestionId)}`).join("\n\n")}`;
 
           try {
-            const res = await fetch("https://api.resend.com/emails", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${resendKey}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                from: process.env.REFILL_FROM_EMAIL ?? "recognition@getrefill.app",
-                to: [proxyEmail],
-                subject,
-                text,
-                html,
-                tags: [
-                  { name: "type", value: "refill-recognition-dispatch" },
-                  { name: "tenant", value: effectiveUserId },
-                ],
-              }),
+            const result = await postResendEmail({
+              apiKey: resendKey,
+              from: process.env.REFILL_FROM_EMAIL ?? "recognition@getrefill.app",
+              to: [proxyEmail],
+              subject,
+              text,
+              html,
+              tags: [
+                { name: "type", value: "refill-recognition-dispatch" },
+                { name: "tenant", value: effectiveUserId },
+              ],
               signal: AbortSignal.timeout(20_000),
             });
-            if (res.ok) {
-              const json = (await res.json().catch(() => ({}))) as { id?: string };
-              proxyEmailMessageId = json.id ?? null;
+            if (result.ok) {
+              proxyEmailMessageId = result.id ?? null;
             } else {
-              sendError = `Resend ${res.status}: ${await res.text().catch(() => "")}`;
+              sendError = `Resend ${result.status}: ${result.body}`;
             }
           } catch (e) {
             sendError = e instanceof Error ? e.message : String(e);

@@ -21,6 +21,7 @@ import { recordAgentAction, recordMessagingActivity } from "@/server/messaging-a
 import { recordRecoveryEvent } from "@/server/emma-attribution.functions";
 import { resolvePatientNodeByContact } from "@/server/refill-promo-calendar.functions";
 import { fetchAllRows } from "@/server/paginate";
+import { postResendEmail } from "@/server/resend-send";
 import { classifyAppointmentOutcome } from "@/lib/noshow-classify";
 
 /** A reschedule win is attributable only when the rebooking lands within this
@@ -798,23 +799,17 @@ export const draftRescheduleNudges = createServerFn({ method: "POST" })
     const resendKey = process.env.RESEND_API_KEY;
     if (!resendKey) throw new Error("Server is missing RESEND_API_KEY.");
     try {
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${resendKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: process.env.REFILL_FROM_EMAIL ?? "offers@getrefill.app",
-          to: [pol.proxyEmail],
-          subject,
-          text,
-          html,
-          tags: [
-            { name: "type", value: "refill-reschedule-nudge" },
-            { name: "tenant", value: effectiveUserId },
-          ],
-        }),
+      const res = await postResendEmail({
+        apiKey: resendKey,
+        from: process.env.REFILL_FROM_EMAIL ?? "offers@getrefill.app",
+        to: [pol.proxyEmail],
+        subject,
+        text,
+        html,
+        tags: [
+          { name: "type", value: "refill-reschedule-nudge" },
+          { name: "tenant", value: effectiveUserId },
+        ],
         signal: AbortSignal.timeout(20_000),
       });
       if (!res.ok) {
@@ -822,7 +817,7 @@ export const draftRescheduleNudges = createServerFn({ method: "POST" })
           drafted: built.length,
           skippedNoPhone,
           sentTo: null,
-          error: `Resend ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`,
+          error: `Resend ${res.status}: ${res.body.slice(0, 200)}`,
         };
       }
     } catch (e) {

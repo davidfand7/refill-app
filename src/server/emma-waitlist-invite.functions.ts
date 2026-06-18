@@ -36,6 +36,7 @@ import {
   resolveOwnerDisplayName,
 } from "@/server/emma-spa-profile";
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
+import { postResendEmail } from "@/server/resend-send";
 import { doListOverdue } from "@/server/patient-ingest.functions";
 import { selectAllRows } from "@/lib/supabase-paginate";
 import { loadServiceCatalogForUser } from "@/server/refill-catalog";
@@ -410,33 +411,23 @@ export const sendOptInInviteBatchFn = createServerFn({ method: "POST" })
         const fromEmail = await resolveSpaFromEmail(effectiveUserId);
         const email = composeInviteProxyEmail({ spaName, drafts });
         try {
-          const res = await fetch("https://api.resend.com/emails", {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${resendKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              from: fromEmail,
-              to: [proxyEmail],
-              subject: email.subject,
-              text: email.text,
-              html: email.html,
-              tags: [
-                { name: "type", value: "refill-waitlist-invite" },
-                { name: "tenant", value: effectiveUserId },
-              ],
-            }),
+          const result = await postResendEmail({
+            apiKey: resendKey,
+            from: fromEmail,
+            to: [proxyEmail],
+            subject: email.subject,
+            text: email.text,
+            html: email.html,
+            tags: [
+              { name: "type", value: "refill-waitlist-invite" },
+              { name: "tenant", value: effectiveUserId },
+            ],
             signal: AbortSignal.timeout(20_000),
           });
-          if (res.ok) {
-            const json = (await res.json().catch(() => ({}))) as {
-              id?: string;
-            };
-            proxyEmailMessageId = json.id ?? null;
+          if (result.ok) {
+            proxyEmailMessageId = result.id ?? null;
           } else {
-            const errBody = await res.text().catch(() => "");
-            sendError = `Resend ${res.status}: ${errBody.slice(0, 200)}`;
+            sendError = `Resend ${result.status}: ${result.body.slice(0, 200)}`;
           }
         } catch (e) {
           sendError =

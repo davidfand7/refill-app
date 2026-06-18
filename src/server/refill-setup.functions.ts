@@ -14,6 +14,7 @@
  */
 
 import { admin } from "./admin-client";
+import { postResendEmail } from "@/server/resend-send";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
@@ -177,34 +178,27 @@ async function sendIntakeNotification(
   ].join("\n");
 
   try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: `SmartSpa intake <${FROM_MAILBOX}>`,
-        to: NOTIFY_RECIPIENTS,
-        reply_to: data.email,
-        subject,
-        text,
-        tags: [
-          { name: "type", value: "refill-setup-intent" },
-          {
-            name: "scheduler",
-            value: data.scheduler
-              .toLowerCase()
-              .replace(/[^a-z0-9]+/g, "-")
-              .slice(0, 40),
-          },
-        ],
-      }),
+    const res = await postResendEmail({
+      apiKey,
+      from: `SmartSpa intake <${FROM_MAILBOX}>`,
+      to: NOTIFY_RECIPIENTS,
+      replyTo: data.email,
+      subject,
+      text,
+      tags: [
+        { name: "type", value: "refill-setup-intent" },
+        {
+          name: "scheduler",
+          value: data.scheduler
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .slice(0, 40),
+        },
+      ],
       signal: AbortSignal.timeout(15_000),
     });
     if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(`Resend ${res.status}: ${body.slice(0, 300)}`);
+      throw new Error(`Resend ${res.status}: ${res.body.slice(0, 300)}`);
     }
     await sb
       .from("csv_scanner_leads")

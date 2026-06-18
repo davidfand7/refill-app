@@ -27,6 +27,12 @@
 
 export type ResendTag = { name: string; value: string };
 
+/** Open/click tracking toggle (Resend's `tracking` field). */
+export type ResendTracking = { opens?: boolean; clicks?: boolean };
+
+/** A file attachment (Resend's `attachments` field); `content` is base64. */
+export type ResendAttachment = { filename: string; content: string };
+
 export type ResendSendResult =
   | { ok: true; id: string | null }
   | { ok: false; status: number; body: string };
@@ -41,6 +47,10 @@ export async function postResendEmail(args: {
   /** Maps to Resend's `reply_to` field; omitted when undefined. */
   replyTo?: string;
   tags?: ResendTag[];
+  /** Resend open/click tracking; omitted when undefined. */
+  tracking?: ResendTracking;
+  /** Resend file attachments; omitted when undefined. */
+  attachments?: ResendAttachment[];
   signal?: AbortSignal;
 }): Promise<ResendSendResult> {
   // Only include keys a caller actually set — preserves each sender's exact
@@ -54,6 +64,8 @@ export async function postResendEmail(args: {
   if (args.text !== undefined) body.text = args.text;
   if (args.replyTo !== undefined) body.reply_to = args.replyTo;
   if (args.tags !== undefined) body.tags = args.tags;
+  if (args.tracking !== undefined) body.tracking = args.tracking;
+  if (args.attachments !== undefined) body.attachments = args.attachments;
 
   // No try/catch: a transport error rejects and propagates to the caller,
   // matching the pre-extraction behavior of all three senders.

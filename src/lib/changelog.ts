@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.86.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.86.0 &mdash; The Resend send-seam is complete: all 17 email call sites now route through one helper.</strong> Follow-through on v2.85.0 (which did the first 3): the remaining 14 hand-rolled <code>fetch(\"https://api.resend.com/emails\")</code> calls &mdash; across recall (&times;2), rescue, blast, preshow, promo, waitlist-invite, reschedule, scan-followup (&times;2), data-export, offers, setup, light-mode-writeback, and recognition-allocation &mdash; are migrated onto <code>postResendEmail()</code>. <strong>Net &minus;85 lines</strong>, and every caller&rsquo;s exact behavior is preserved: its own throw-vs-return, its own error-string format + slice length (200 here, 300 there, un-sliced in one), its own message-id read or non-read, and its engagement-event inserts in their original order. <strong>The careful part:</strong> each site was migrated and individually verified, not swept &mdash; three callers (blast, preshow, data-export) carried fields the helper didn&rsquo;t support and were caught rather than silently broken: <code>tracking:{opens,clicks}</code> (Resend open/click webhooks that feed patient-engagement reporting) on the two campaign senders, and <code>attachments</code> (the CSV patient-export file) on data-export. The helper gained optional <code>tracking</code> + <code>attachments</code> params (purely additive &mdash; omitted when unset, so no existing caller&rsquo;s body changed), and then those three folded in cleanly. <strong>Why it matters:</strong> the upcoming smartspa.app from-address cutover, any Resend API-version bump, or adding retry/timeout policy is now a one-file change instead of a 17-site sweep. A scout had reported only 3 of these sites; a <code>grep</code> backstop found all 17 &mdash; the reason this is whole and not three-quarters done. tsc 164, truncation 188. No migration.",
+    ],
+  },
+  {
     version: "v2.85.0",
     date: "June 2026",
     items: [

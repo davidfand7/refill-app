@@ -25,6 +25,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/integrations/supabase/types";
+import { postResendEmail } from "@/server/resend-send";
 import {
   buildClaimDeeplink,
   buildCopyPayload,
@@ -293,27 +294,21 @@ export async function dispatchLightModeWriteback(
   const KAREN_FROM =
     process.env.REFILL_DRIP_FROM ?? "Karen Anderson <karen@getrefill.app>";
   try {
-    const resp = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: KAREN_FROM,
-        to: [ownerEmail],
-        subject,
-        text,
-        html,
-        tags: [
-          { name: "type", value: "light-mode-writeback" },
-          { name: "platform", value: platform },
-        ],
-      }),
+    const resp = await postResendEmail({
+      apiKey,
+      from: KAREN_FROM,
+      to: [ownerEmail],
+      subject,
+      text,
+      html,
+      tags: [
+        { name: "type", value: "light-mode-writeback" },
+        { name: "platform", value: platform },
+      ],
       signal: AbortSignal.timeout(20_000),
     });
     if (!resp.ok) {
-      const body = (await resp.text().catch(() => "")).slice(0, 200);
+      const body = resp.body.slice(0, 200);
       return {
         ok: false,
         reason: "resend_failed",

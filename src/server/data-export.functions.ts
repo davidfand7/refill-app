@@ -18,6 +18,7 @@ import { z } from "zod";
 
 import type { Database } from "@/integrations/supabase/types";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import { postResendEmail } from "@/server/resend-send";
 import { fetchAllRows } from "@/server/paginate";
 import { getSpaName } from "@/server/emma-optout.functions";
 import { recordAgentAction } from "@/server/messaging-activity";
@@ -311,30 +312,24 @@ You can turn this monthly export off any time from Skills.`;
 </body></html>`;
 
   try {
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from: process.env.REFILL_FROM_EMAIL ?? "recall@getrefill.app",
-        to: [email],
-        subject,
-        text,
-        html,
-        attachments: [{ filename, content: toBase64Utf8(csv) }],
-        tags: [
-          { name: "type", value: "refill-patient-export" },
-          { name: "tenant", value: userId },
-        ],
-      }),
+    const res = await postResendEmail({
+      apiKey: resendKey,
+      from: process.env.REFILL_FROM_EMAIL ?? "recall@getrefill.app",
+      to: [email],
+      subject,
+      text,
+      html,
+      attachments: [{ filename, content: toBase64Utf8(csv) }],
+      tags: [
+        { name: "type", value: "refill-patient-export" },
+        { name: "tenant", value: userId },
+      ],
       signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) {
       return {
         status: "error",
-        error: `Resend ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`,
+        error: `Resend ${res.status}: ${res.body.slice(0, 200)}`,
       };
     }
   } catch (e) {

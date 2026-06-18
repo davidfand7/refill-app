@@ -25,6 +25,7 @@ import { admin } from "./admin-client";
 import { z } from "zod";
 
 import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
+import { postResendEmail } from "@/server/resend-send";
 import { sendSms } from "@/server/sms-provider";
 import { resolveSpaFromEmail } from "@/server/emma-sender.functions";
 import { recordAgentAction } from "@/server/messaging-activity";
@@ -610,36 +611,28 @@ export async function dispatchPreShowReminder(args: {
       };
     } else {
       try {
-        const res = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${resendKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            from: fromEmail,
-            to: [patientAttachments!.email!],
-            subject: email.subject,
-            text: email.text,
-            html: email.html,
-            tracking: { opens: true, clicks: true },
-            tags: [
-              { name: "type", value: "emma-preshow" },
-              { name: "appointment_id", value: apt.id },
-              { name: "offset_hours", value: String(offsetHours) },
-            ],
-          }),
+        const res = await postResendEmail({
+          apiKey: resendKey,
+          from: fromEmail,
+          to: [patientAttachments!.email!],
+          subject: email.subject,
+          text: email.text,
+          html: email.html,
+          tracking: { opens: true, clicks: true },
+          tags: [
+            { name: "type", value: "emma-preshow" },
+            { name: "appointment_id", value: apt.id },
+            { name: "offset_hours", value: String(offsetHours) },
+          ],
           signal: AbortSignal.timeout(15_000),
         });
         if (!res.ok) {
-          const errBody = await res.text().catch(() => "");
           dispatchError = {
             reason: "send_failed",
-            message: `resend: ${res.status} ${errBody.slice(0, 200)}`,
+            message: `resend: ${res.status} ${res.body.slice(0, 200)}`,
           };
         } else {
-          const json = (await res.json().catch(() => ({}))) as { id?: string };
-          messageId = json.id ?? null;
+          messageId = res.id ?? null;
         }
       } catch (e) {
         dispatchError = {
