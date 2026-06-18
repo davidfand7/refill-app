@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.84.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.84.0 &mdash; Owner preview: test the native booking flow on your own <code>/s/&lt;slug&gt;</code> page even when you run on Acuity.</strong> Since v2.72.0, a spa with a live Acuity connection has its public self-booking page gated off &mdash; it shows an honest &ldquo;contact the practice directly&rdquo; card instead of open slots, because Acuity sync is one-way (read-only) and a native booking would be a &ldquo;confirmed ghost&rdquo; off the provider&rsquo;s real calendar. That guard is correct for real patients, but it also blocked the <em>owner</em> from ever walking the booking experience to test it &mdash; which is exactly what surfaced after the Rejuv calendar was re-pointed onto its real account (the Acuity connection moved, the gate flipped on, and <code>/s/rejuv</code> went to the &ldquo;unavailable&rdquo; card). <strong>Fix:</strong> append <code>?preview</code> to the booking URL (e.g. <code>/s/rejuv?preview</code>) and, <em>only</em> when you&rsquo;re signed in to SmartSpa as the spa owner or an admin, the full native flow unlocks &mdash; pick a service, see real open slots, hold, and confirm end-to-end. <strong>The guard is never weakened for patients:</strong> the bypass requires a valid owner/admin session token (verified server-side on every gated call &mdash; context, slot list, and hold); an absent, expired, or non-owner token falls straight back to the normal &ldquo;contact the practice&rdquo; card. A clear &ldquo;Owner preview&rdquo; ribbon shows on the page so it&rsquo;s never mistaken for the live patient view. Fully additive &mdash; no behavior change for any non-preview visit. <strong>Touched</strong>: <code>scheduling.functions.ts</code> (new <code>isBookingPreviewer</code>/<code>externalPmsGateBlocks</code> + <code>previewToken</code> threaded through <code>getPublicBookingContextFn</code>, <code>listAvailableSlots</code>, <code>holdSlot</code>; <code>confirmBooking</code> rides the existing hold), <code>s.$slug.tsx</code> (<code>?preview</code> search param, token resolution, preview ribbon), <code>changelog.ts</code>. tsc 164, truncation 188. No migration.",
+    ],
+  },
+  {
     version: "v2.83.0",
     date: "June 2026",
     items: [

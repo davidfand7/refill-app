@@ -51,6 +51,7 @@ import {
 } from "@/server/refill-promo-calendar.functions";
 import { recordRescheduleWinIfNudged } from "@/server/reschedule.functions";
 import { getTenantOwnerUserId, tenantBooksOnExternalPms } from "@/server/scheduling-settings.functions";
+import { verifyAuth } from "@/server/auth-helpers";
 import { resolveBrand, resolveBrandForTenant, toPublicBrand, type PublicBrand } from "@/server/brand-resolver";
 import { REFILL_BRAND, mergeBrand } from "@/lib/brand";
 import { bestActiveOfferForName, badgeableOffers, type AddOnOffer } from "@/lib/promo-calendar";
@@ -95,13 +96,54 @@ interface BaseContext {
 const EXTERNAL_PMS_BOOKING_REASON =
   "Online self-booking isn't available for this practice. Please contact the practice directly to schedule your appointment.";
 
+// v2.84.0 — admin/owner preview bypass for the external-PMS gate.
+// The gate above (correctly) hides native self-booking for Acuity-mirrored
+// spas, so the spa owner can't walk the real patient flow to test it. This lets
+// an AUTHENTICATED owner-or-admin do exactly that — and nobody else. Returns
+// true only when `previewToken` is a valid session whose user owns this tenant
+// or is a platform admin; an absent/invalid/patient token returns false, so the
+// patient-facing guard is never weakened. Cheap-first: no token → no DB calls.
+async function isBookingPreviewer(
+  sb: Sb,
+  tenantId: string,
+  previewToken: string | undefined,
+): Promise<boolean> {
+  if (!previewToken) return false;
+  try {
+    const userId = await verifyAuth(previewToken);
+    const ownerUserId = await getTenantOwnerUserId(sb, tenantId);
+    if (ownerUserId && userId === ownerUserId) return true;
+    const { data } = await sb
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "admin")
+      .maybeSingle();
+    return !!data;
+  } catch {
+    return false; // bad/expired token → fall through to the normal gate
+  }
+}
+
+/** The external-PMS gate, honoring an admin/owner preview bypass. True → block. */
+async function externalPmsGateBlocks(
+  sb: Sb,
+  tenantId: string,
+  previewToken: string | undefined,
+): Promise<boolean> {
+  if (!(await tenantBooksOnExternalPms(sb, tenantId))) return false;
+  return !(await isBookingPreviewer(sb, tenantId, previewToken));
+}
+
 async function loadBaseContext(
   sb: Sb,
   tenantId: string,
   serviceId: string,
+  previewToken?: string,
 ): Promise<{ ok: true; base: BaseContext } | { ok: false; reason: string }> {
-  // Safety gate first — an external-PMS spa must never reach a hold/confirm.
-  if (await tenantBooksOnExternalPms(sb, tenantId)) {
+  // Safety gate first — an external-PMS spa must never reach a hold/confirm
+  // (unless an authenticated owner/admin is previewing the flow).
+  if (await externalPmsGateBlocks(sb, tenantId, previewToken)) {
     return { ok: false, reason: EXTERNAL_PMS_BOOKING_REASON };
   }
   const [{ data: settingsRow }, { data: svc }] = await Promise.all([
@@ -322,7 +364,14 @@ function parseTstzRange(lit: string | null): BlockInterval | null {
 
 // ── getPublicBookingContext (slug → tenant + bookable services) ──────────────
 
-const slugInput = z.object({ slug: z.string().min(1).max(80) });
+const slugInput = z.object({
+  slug: z.string().min(1).max(80),
+  // v2.84.0 — optional auth token. When the viewer is the tenant owner or an
+  // admin, it unlocks the native flow even for an external-PMS (Acuity) spa so
+  // they can preview/test it. Ignored for everyone else. (The brand fn shares
+  // this schema and simply ignores the field.)
+  previewToken: z.string().optional(),
+});
 
 /** A provider a patient can choose for a service, with their effective price. */
 export interface PublicProviderOption {
@@ -419,7 +468,8 @@ export const getPublicBookingContextFn = createServerFn({ method: "GET" })
 
     // v2.72.0 — external-PMS spas (Acuity-mirrored, read-only) can't safely take
     // native self-bookings; show an honest "unavailable" card, not open slots.
-    if (await tenantBooksOnExternalPms(sb, tenant.id)) {
+    // v2.84.0 — an authenticated owner/admin with ?preview can bypass to test.
+    if (await externalPmsGateBlocks(sb, tenant.id, data.previewToken)) {
       return { ok: false, reason: EXTERNAL_PMS_BOOKING_REASON };
     }
 
@@ -602,6 +652,8 @@ const listInput = z.object({
   extraMinutes: z.number().int().min(0).optional(),
   fromIso: z.string().min(10),
   toIso: z.string().min(10),
+  /** v2.84.0 — owner/admin preview token (unlocks external-PMS spas to test). */
+  previewToken: z.string().optional(),
 });
 
 /** A bookable slot tagged with the provider it belongs to. */
@@ -620,7 +672,7 @@ export const listAvailableSlots = createServerFn({ method: "GET" })
   .inputValidator((input: unknown) => listInput.parse(input))
   .handler(async ({ data }): Promise<ListSlotsResult> => {
     const sb = admin();
-    const loaded = await loadBaseContext(sb, data.tenantId, data.serviceId);
+    const loaded = await loadBaseContext(sb, data.tenantId, data.serviceId, data.previewToken);
     if (!loaded.ok) return { ok: false, reason: loaded.reason };
     const { base } = loaded;
 
@@ -724,6 +776,8 @@ const holdInput = z.object({
   startIso: z.string().min(10),
   /** Chosen add-on service ids (validated server-side against eligibility). */
   addonServiceIds: z.array(z.string().uuid()).optional().default([]),
+  /** v2.84.0 — owner/admin preview token (unlocks external-PMS spas to test). */
+  previewToken: z.string().optional(),
 });
 
 export type HoldResult =
@@ -734,7 +788,7 @@ export const holdSlot = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => holdInput.parse(input))
   .handler(async ({ data }): Promise<HoldResult> => {
     const sb = admin();
-    const loaded = await loadBaseContext(sb, data.tenantId, data.serviceId);
+    const loaded = await loadBaseContext(sb, data.tenantId, data.serviceId, data.previewToken);
     if (!loaded.ok) return { ok: false, reason: loaded.reason, code: "invalid" };
     const { base } = loaded;
 

@@ -37,14 +37,22 @@ import {
 } from "@/server/scheduling.functions";
 import { categoryLabel, orderedCategoryRank } from "@/lib/service-categories";
 import { PublicBrandHeader } from "@/components/refill/PublicBrandHeader";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/s/$slug")({
   component: PublicBookingPage,
   // ?service=<name> lets the Deals page deep-link a tapped Special straight here
   // with that service preselected. Optional + tolerant — an unknown value just
   // falls through to the normal service menu.
-  validateSearch: (search: Record<string, unknown>): { service?: string } => ({
+  validateSearch: (search: Record<string, unknown>): { service?: string; preview?: boolean } => ({
     service: typeof search.service === "string" ? search.service : undefined,
+    // v2.84.0 — ?preview unlocks the native flow for the spa owner/admin even on
+    // an external-PMS (Acuity) spa, so they can test the booking experience. Any
+    // truthy value enables it; the server still requires a valid owner/admin token.
+    preview:
+      search.preview === true || search.preview === "1" || search.preview === "true"
+        ? true
+        : undefined,
   }),
   // v2.66.0 — resolve the spa's brand name server-side so the booking link's
   // preview (og:site_name) carries the spa's brand when white-labeled. The page
@@ -88,7 +96,12 @@ const BRAND_DEFAULT_ACCENT = "#056048";
 
 function PublicBookingPage() {
   const { slug } = Route.useParams();
-  const { service: preselectService } = Route.useSearch();
+  const { service: preselectService, preview: previewRequested } = Route.useSearch();
+  // v2.84.0 — when ?preview is set, carry the owner/admin's session token to the
+  // server fns so the external-PMS booking gate is bypassed for testing. null =
+  // requested but not signed in (server falls back to the normal gate).
+  const [previewToken, setPreviewToken] = useState<string | undefined>(undefined);
+  const [previewActive, setPreviewActive] = useState(false);
   const [screen, setScreen] = useState<Screen>("loading");
   const [errMsg, setErrMsg] = useState("");
   const [ctx, setCtx] = useState<Ctx | null>(null);
@@ -194,7 +207,19 @@ function PublicBookingPage() {
     let cancelled = false;
     void (async () => {
       try {
-        const r = await getPublicBookingContextFn({ data: { slug } });
+        // Preview mode: grab the signed-in owner/admin's token so the server can
+        // unlock the native flow on an external-PMS spa. Missing token (not
+        // signed in) → undefined → server applies the normal gate.
+        let token: string | undefined;
+        if (previewRequested) {
+          const { data: sess } = await supabase.auth.getSession();
+          token = sess.session?.access_token ?? undefined;
+          if (!cancelled) {
+            setPreviewToken(token);
+            setPreviewActive(true);
+          }
+        }
+        const r = await getPublicBookingContextFn({ data: { slug, previewToken: token } });
         if (cancelled) return;
         if (!r.ok) {
           setErrMsg(r.reason);
@@ -304,6 +329,7 @@ function PublicBookingPage() {
           extraMinutes: extraMinutes || undefined,
           fromIso: now.toISOString(),
           toIso: to.toISOString(),
+          previewToken,
         },
       });
       setSlots(r.ok ? r.slots : []);
@@ -313,7 +339,7 @@ function PublicBookingPage() {
     } finally {
       setSlotsLoading(false);
     }
-  }, [ctx, serviceId, providerChoice, extraMinutes]);
+  }, [ctx, serviceId, providerChoice, extraMinutes, previewToken]);
 
   // Load slots once the patient chooses how to schedule (Smart Schedule).
   useEffect(() => {
@@ -384,6 +410,7 @@ function PublicBookingPage() {
           providerId: slot.providerId,
           startIso: slot.startIso,
           addonServiceIds: chosenAddons.map((a) => a.id),
+          previewToken,
         },
       });
       if (!r.ok) {
@@ -451,6 +478,28 @@ function PublicBookingPage() {
             nameClassName="text-stone-900"
             wrapperClassName="mb-5"
           />
+        )}
+
+        {/* v2.84.0 — preview-mode ribbon. Visible only when ?preview is on, so the
+            owner/admin knows they're behind the external-PMS gate (real patients
+            never see this page take bookings). */}
+        {previewActive && (
+          <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-[13px] text-indigo-900 flex items-start gap-2">
+            <Sparkles className="w-4 h-4 mt-0.5 shrink-0 text-indigo-500" />
+            <span>
+              {previewToken ? (
+                <>
+                  <span className="font-semibold">Owner preview</span> — you're testing the native
+                  booking flow. Patients still see “contact the practice” until Acuity is disconnected.
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold">Preview needs sign-in</span> — open this in a browser
+                  where you're signed in to SmartSpa as the owner or an admin to test booking.
+                </>
+              )}
+            </span>
+          </div>
         )}
 
         {screen === "loading" && (
