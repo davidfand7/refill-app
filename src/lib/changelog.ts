@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.87.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.87.0 &mdash; Inbound email replies are wired: the catcher's mitt for the reply pipeline.</strong> The SEND half has been live for ages &mdash; every Refill trial-drip and prospect-outreach email already goes out with a plus-addressed Reply-To (<code>reply+&lt;eventId&gt;@reply.getrefill.app</code>), and the engagement tables already reserve <code>response_text</code> / <code>response_received_at</code> columns. But the inbound handler that catches the reply never existed: ~325 lines of verification + parsing + routing logic (<code>verifyResendWebhook</code>, <code>parseReplyToToken</code>, <code>fetchReceivedEmail</code>, <code>normalizeInReplyTo</code>, <code>isInboundEvent</code>, and three reply routers) sat fully built but with <strong>zero callers</strong> &mdash; orphaned because the one route file, <code>/api/resend/inbound</code>, was missing. This ship creates it. When a spa owner or prospect hits reply, Resend posts the inbound email here; the route verifies the webhook signature, resolves the body, parses the plus-address token, and dispatches to the three routers in order &mdash; Refill drip &rarr; Refill outreach &rarr; Emma patient &mdash; first match wins, stamping the reply onto the originating engagement row (where the admin dashboard already reads it). <strong>Robustness:</strong> tolerates BOTH Resend inbound payload shapes (metadata-only <code>email.received</code> event &rarr; fetch the body; or full inline envelope like the light-mode receiver) so it works regardless of which Resend ships; signature verification is enforced when <code>RESEND_INBOUND_SIGNING_SECRET</code> is set and advisory (skipped + logged) until then; returns 200 on any processed/ignored event so Resend never retry-storms, 401 only on a real bad signature, 500 only on a transient body-fetch (the one case worth a retry). No schema, no new deps &mdash; pure glue that activates work already paid for. <strong>One external step before live replies land</strong> (code is ready regardless): Resend inbound MX + an Inbound Route pointing <code>reply.getrefill.app</code> at <code>/api/resend/inbound</code>, and optionally the signing secret. <strong>New</strong>: <code>src/routes/api.resend.inbound.ts</code>. <strong>Touched</strong>: <code>changelog.ts</code>. tsc 164, truncation 188.",
+    ],
+  },
+  {
     version: "v2.86.0",
     date: "June 2026",
     items: [

@@ -72,6 +72,7 @@ import { Route as ApiWebhooksStripeRouteImport } from './routes/api.webhooks.str
 import { Route as ApiTwilioInboundRouteImport } from './routes/api.twilio.inbound'
 import { Route as ApiResendInboundRewardsRouteImport } from './routes/api.resend.inbound-rewards'
 import { Route as ApiResendInboundLiteRouteImport } from './routes/api.resend.inbound-lite'
+import { Route as ApiResendInboundRouteImport } from './routes/api.resend.inbound'
 import { Route as ApiIngestRewardsRouteImport } from './routes/api.ingest.rewards'
 import { Route as ApiCronSchedulingRemindersRouteImport } from './routes/api.cron.scheduling-reminders'
 import { Route as ApiCronRefillTrialDripRouteImport } from './routes/api.cron.refill-trial-drip'
@@ -477,6 +478,11 @@ const ApiResendInboundRewardsRoute = ApiResendInboundRewardsRouteImport.update({
 const ApiResendInboundLiteRoute = ApiResendInboundLiteRouteImport.update({
   id: '/api/resend/inbound-lite',
   path: '/api/resend/inbound-lite',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiResendInboundRoute = ApiResendInboundRouteImport.update({
+  id: '/api/resend/inbound',
+  path: '/api/resend/inbound',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiIngestRewardsRoute = ApiIngestRewardsRouteImport.update({
@@ -1034,6 +1040,7 @@ export interface FileRoutesByFullPath {
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/cron/scheduling-reminders': typeof ApiCronSchedulingRemindersRoute
   '/api/ingest/rewards': typeof ApiIngestRewardsRoute
+  '/api/resend/inbound': typeof ApiResendInboundRoute
   '/api/resend/inbound-lite': typeof ApiResendInboundLiteRoute
   '/api/resend/inbound-rewards': typeof ApiResendInboundRewardsRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
@@ -1187,6 +1194,7 @@ export interface FileRoutesByTo {
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/cron/scheduling-reminders': typeof ApiCronSchedulingRemindersRoute
   '/api/ingest/rewards': typeof ApiIngestRewardsRoute
+  '/api/resend/inbound': typeof ApiResendInboundRoute
   '/api/resend/inbound-lite': typeof ApiResendInboundLiteRoute
   '/api/resend/inbound-rewards': typeof ApiResendInboundRewardsRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
@@ -1339,6 +1347,7 @@ export interface FileRoutesById {
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/cron/scheduling-reminders': typeof ApiCronSchedulingRemindersRoute
   '/api/ingest/rewards': typeof ApiIngestRewardsRoute
+  '/api/resend/inbound': typeof ApiResendInboundRoute
   '/api/resend/inbound-lite': typeof ApiResendInboundLiteRoute
   '/api/resend/inbound-rewards': typeof ApiResendInboundRewardsRoute
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
@@ -1497,6 +1506,7 @@ export interface FileRouteTypes {
     | '/api/cron/refill-trial-drip'
     | '/api/cron/scheduling-reminders'
     | '/api/ingest/rewards'
+    | '/api/resend/inbound'
     | '/api/resend/inbound-lite'
     | '/api/resend/inbound-rewards'
     | '/api/twilio/inbound'
@@ -1650,6 +1660,7 @@ export interface FileRouteTypes {
     | '/api/cron/refill-trial-drip'
     | '/api/cron/scheduling-reminders'
     | '/api/ingest/rewards'
+    | '/api/resend/inbound'
     | '/api/resend/inbound-lite'
     | '/api/resend/inbound-rewards'
     | '/api/twilio/inbound'
@@ -1801,6 +1812,7 @@ export interface FileRouteTypes {
     | '/api/cron/refill-trial-drip'
     | '/api/cron/scheduling-reminders'
     | '/api/ingest/rewards'
+    | '/api/resend/inbound'
     | '/api/resend/inbound-lite'
     | '/api/resend/inbound-rewards'
     | '/api/twilio/inbound'
@@ -1955,6 +1967,7 @@ export interface RootRouteChildren {
   ApiCronRefillTrialDripRoute: typeof ApiCronRefillTrialDripRoute
   ApiCronSchedulingRemindersRoute: typeof ApiCronSchedulingRemindersRoute
   ApiIngestRewardsRoute: typeof ApiIngestRewardsRoute
+  ApiResendInboundRoute: typeof ApiResendInboundRoute
   ApiResendInboundLiteRoute: typeof ApiResendInboundLiteRoute
   ApiResendInboundRewardsRoute: typeof ApiResendInboundRewardsRoute
   ApiTwilioInboundRoute: typeof ApiTwilioInboundRoute
@@ -2423,6 +2436,13 @@ declare module '@tanstack/react-router' {
       path: '/api/resend/inbound-lite'
       fullPath: '/api/resend/inbound-lite'
       preLoaderRoute: typeof ApiResendInboundLiteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/resend/inbound': {
+      id: '/api/resend/inbound'
+      path: '/api/resend/inbound'
+      fullPath: '/api/resend/inbound'
+      preLoaderRoute: typeof ApiResendInboundRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/ingest/rewards': {
@@ -3380,6 +3400,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronRefillTrialDripRoute: ApiCronRefillTrialDripRoute,
   ApiCronSchedulingRemindersRoute: ApiCronSchedulingRemindersRoute,
   ApiIngestRewardsRoute: ApiIngestRewardsRoute,
+  ApiResendInboundRoute: ApiResendInboundRoute,
   ApiResendInboundLiteRoute: ApiResendInboundLiteRoute,
   ApiResendInboundRewardsRoute: ApiResendInboundRewardsRoute,
   ApiTwilioInboundRoute: ApiTwilioInboundRoute,
