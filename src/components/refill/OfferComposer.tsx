@@ -27,8 +27,10 @@ import { Check, ChevronRight, Eye, KeyRound, Loader2, Megaphone, Plus, Sparkles,
 
 import {
   createSpaOffer,
+  getCohortReachFn,
   listPromoOffers,
   updateManufacturerOfferDelivery,
+  type CohortReach,
 } from "@/server/refill-promo-calendar.functions";
 import { createAbExperiment } from "@/server/smart-ab.functions";
 import { listServicesFn, type Service } from "@/server/refill-catalog";
@@ -102,6 +104,9 @@ export function OfferComposer({
   const [openSec, setOpenSec] = useState<null | "offer" | "who" | "when" | "delivery">("offer");
   const [pvTab, setPvTab] = useState<"badge" | "deals" | "email" | "text">("badge");
   const [busy, setBusy] = useState(false);
+  // Live cohort size ("~N match") — the system-does-the-math signal.
+  const [match, setMatch] = useState<CohortReach | null>(null);
+  const [matchLoading, setMatchLoading] = useState(false);
 
   const load = useCallback(async () => {
     if (!accessToken) return;
@@ -138,6 +143,27 @@ export function OfferComposer({
     setCap(selectedMfr.quantityCap != null ? String(selectedMfr.quantityCap) : "");
     setShowOnDeals(selectedMfr.showOnDeals !== false);
   }, [mode, selectedMfr]);
+
+  // Live match count for the selected cohort — refetched whenever it changes.
+  // Best-effort: a miss just hides the pill (never blocks authoring).
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    setMatchLoading(true);
+    void (async () => {
+      try {
+        const r = await getCohortReachFn({ data: { accessToken, viewAsUserId, cohort } });
+        if (!cancelled) setMatch(r);
+      } catch {
+        if (!cancelled) setMatch(null);
+      } finally {
+        if (!cancelled) setMatchLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, viewAsUserId, cohort]);
 
   function switchMode(m: Mode) {
     setMode(m);
@@ -214,6 +240,22 @@ export function OfferComposer({
         : "Badge at booking only"
       : "Drafted to your inbox to send";
   const isAb = mode === "spa" && optimize && versions.length >= 1;
+
+  // "~N match" pill (the system-does-the-math signal).
+  const matchPill =
+    matchLoading && !match ? (
+      <span className="inline-flex items-center gap-1 rounded-full bg-paper px-2 py-0.5 text-[10.5px] font-semibold text-ink-faint">
+        <Loader2 className="h-3 w-3 animate-spin" /> counting…
+      </span>
+    ) : match ? (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-soft px-2 py-0.5 text-[10.5px] font-semibold text-emerald-ink">
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald opacity-60" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald" />
+        </span>
+        {cohort === "all" ? `${match.total.toLocaleString()} patients` : `~${match.total} match`}
+      </span>
+    ) : null;
 
   function setVersion(i: number, patch: Partial<Version>) {
     setVersions((prev) => prev.map((v, k) => (k === i ? { ...v, ...patch } : v)));
@@ -457,6 +499,7 @@ export function OfferComposer({
         <Section
           label="Who gets it"
           value={whoPhrase[0].toUpperCase() + whoPhrase.slice(1)}
+          badge={matchPill}
           open={openSec === "who"}
           onToggle={() => setOpenSec((s) => (s === "who" ? null : "who"))}
         >
@@ -467,6 +510,14 @@ export function OfferComposer({
               </Chip>
             ))}
           </div>
+          {match && (
+            <p className="mt-2 flex items-center gap-1.5 text-[11.5px] font-medium text-emerald-ink">
+              <Sparkles className="h-3.5 w-3.5" />
+              {cohort === "all"
+                ? `${match.total.toLocaleString()} patient${match.total === 1 ? "" : "s"} in your book — they'll see this at booking.`
+                : `~${match.total} ${whoPhrase} patient${match.total === 1 ? "" : "s"} match${match.reachable < match.total ? ` · ${match.reachable} reachable by text` : ""}.`}
+            </p>
+          )}
           <p className="mt-2 text-[11px] text-ink-faint">
             {cohort === "all"
               ? "Everyone — badges at booking + shows on your public Deals page."
@@ -769,9 +820,9 @@ function ModeTab({ on, onClick, children }: { on: boolean; onClick: () => void; 
 }
 
 function Section({
-  label, value, open, onToggle, children,
+  label, value, open, onToggle, children, badge,
 }: {
-  label: string; value: string; open: boolean; onToggle: () => void; children: React.ReactNode;
+  label: string; value: string; open: boolean; onToggle: () => void; children: React.ReactNode; badge?: React.ReactNode;
 }) {
   return (
     <div className="rounded-xl border border-rule">
@@ -781,6 +832,7 @@ function Section({
           <span className="block text-[10px] font-semibold uppercase tracking-wider text-ink-faint">{label}</span>
           <span className="block truncate text-[13.5px] font-medium text-ink">{value}</span>
         </span>
+        {badge && <span className="flex-none">{badge}</span>}
       </button>
       {open && <div className="border-t border-rule px-3 py-3 space-y-3">{children}</div>}
     </div>

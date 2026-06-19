@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.106.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.106.0 &mdash; The composer counts your patients live: &ldquo;~31 match.&rdquo;</strong> Pick an audience in the composer&rsquo;s <em>Who gets it</em> section and SmartSpa now tells you, in real time, how many patients that is &mdash; a pulsing <strong>&ldquo;~31 match&rdquo;</strong> chip in the section header plus a plain-English line (<em>&ldquo;~31 lapsed patients match · 27 reachable by text&rdquo;</em>). Switch to Lapsed, New, or Expiring-reward and the number re-counts; pick Everyone and it shows your whole book (<em>&ldquo;1,240 patients in your book &mdash; they&rsquo;ll see this at booking&rdquo;</em>). The count comes from the <strong>same cohort engine the push path uses</strong> (<code>listOfferCohortTargets</code>, opt-out-filtered), so &ldquo;match&rdquo; means exactly what it&rsquo;ll mean when you send &mdash; not an estimate. This is the &ldquo;system does the math&rdquo; half of the agentic-native vision: you state the intent, SmartSpa shows you the reach before you commit. <strong>Touched</strong>: <code>refill-promo-calendar.functions.ts</code> (new <code>getCohortReachFn</code>), <code>OfferComposer.tsx</code> (live match pill + line + Section badge slot), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.105.0",
     date: "June 2026",
     items: [
