@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.102.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.102.0 &mdash; The composer gets a live preview: watch the offer become real as you build it.</strong> The unified Offer Composer now shows the patient-facing artifact updating in real time, with a four-way toggle: <strong>Badge</strong> (the at-booking row — service + offer chip + struck → discounted price, computed from the real catalog price), <strong>Deals</strong> (the public Deals card), <strong>Email</strong> (the win-back email mock), and <strong>AI text</strong> (the personalized SMS draft). It reflects every choice live &mdash; pick &ldquo;20% off Filler for lapsed&rdquo; and the badge shows the strike-through, the targeting note flips to &ldquo;not shown at public booking,&rdquo; and the SMS gains a &ldquo;just for you.&rdquo; When you&rsquo;re running an A/B it notes the preview shows the base version while the bandit tests all of them. This is the WYSIWYG half of the agentic-native vision &mdash; plain-English intent up top, the real artifact down here, the math hidden in between. <em>(Spa-name personalization in the preview copy is a trivial follow-up; uses a neutral placeholder for now.)</em> <strong>Touched</strong>: <code>OfferComposer.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.101.0",
     date: "June 2026",
     items: [

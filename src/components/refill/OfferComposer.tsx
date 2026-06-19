@@ -17,7 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ChevronRight, Loader2, Plus, Sparkles, Wand2, X } from "lucide-react";
+import { ChevronRight, Eye, Loader2, Plus, Sparkles, Wand2, X } from "lucide-react";
 
 import { createSpaOffer } from "@/server/refill-promo-calendar.functions";
 import { createAbExperiment } from "@/server/smart-ab.functions";
@@ -74,6 +74,7 @@ export function OfferComposer({
   const [versions, setVersions] = useState<Version[]>([]);
   // Which expander is open (KISS: one at a time, resting view is plain English).
   const [openSec, setOpenSec] = useState<null | "offer" | "who" | "when">("offer");
+  const [pvTab, setPvTab] = useState<"badge" | "deals" | "email" | "text">("badge");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -108,6 +109,23 @@ export function OfferComposer({
     const capTxt = cap.trim() ? `, cap ${cap}${weekdays.size ? "/wk" : ""}` : "";
     return `${days}${capTxt}`;
   }, [weekdays, cap]);
+
+  // ── Live-preview derived values (what the patient sees) ──────────────────
+  const selectedSvc = useMemo(() => services.find((s) => s.name === serviceName), [services, serviceName]);
+  const svcDisplay = selectedSvc?.displayName || serviceName || "your service";
+  const price = selectedSvc?.servicePrice ?? null;
+  const offerLabel = useMemo(() => {
+    if (offerType === "percent_off") return `${pct || "—"}% off`;
+    if (offerType === "free_addon") return `Free ${addon || "add-on"}`;
+    if (offerType === "discount_addon") return `$${discount || "—"} off ${addon || "add-on"}`;
+    return `$${discount || "—"} off`;
+  }, [offerType, discount, pct, addon]);
+  const discounted = useMemo(() => {
+    if (price == null) return null;
+    if (offerType === "percent_off" && pct) return Math.max(0, Math.round(price * (1 - Number(pct) / 100)));
+    if (offerType === "dollars_off" && discount) return Math.max(0, Math.round(price - Number(discount)));
+    return null;
+  }, [price, offerType, pct, discount]);
 
   const whoPhrase = cohort === "all" ? "everyone" : (COHORTS.find((c) => c.value === cohort)?.label ?? cohort).toLowerCase();
   const deliveryPhrase =
@@ -329,6 +347,109 @@ export function OfferComposer({
             </Field>
           </div>
         </Section>
+      </div>
+
+      {/* LIVE PREVIEW — the patient-facing artifact, updating as you build */}
+      <div className="border-t border-rule px-5 py-4">
+        <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">
+          <Eye className="h-3.5 w-3.5" /> Live preview — what patients see
+        </div>
+        <div className="mb-3 grid grid-cols-4 gap-1 rounded-lg bg-paper p-1">
+          {([
+            ["badge", "Badge"],
+            ["deals", "Deals"],
+            ["email", "Email"],
+            ["text", "AI text"],
+          ] as const).map(([t, lbl]) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setPvTab(t)}
+              className={cn(
+                "rounded-md py-1.5 text-[11.5px] font-semibold transition",
+                pvTab === t ? "bg-white text-ink shadow-sm" : "text-ink-soft hover:text-ink",
+              )}
+            >
+              {lbl}
+            </button>
+          ))}
+        </div>
+
+        <div className="rounded-xl border border-rule bg-paper/50 p-3">
+          {pvTab === "badge" && (
+            <div className="rounded-lg border border-rule bg-white p-3 shadow-sm">
+              <div className="text-[10px] uppercase tracking-wide text-ink-faint">Book online</div>
+              <div className="mt-2 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 text-[13px] font-semibold text-ink">
+                    <span className="truncate">{svcDisplay}</span>
+                    <span className="shrink-0 rounded-full bg-amber-soft px-1.5 py-0.5 text-[10px] font-bold text-amber">{offerLabel}</span>
+                  </div>
+                  <div className="mt-0.5 text-[11px] text-ink-faint">
+                    {cohort === "all" ? "Badged at booking" : "Targeted — not shown at public booking"}
+                  </div>
+                </div>
+                <div className="shrink-0 text-right text-[12.5px]">
+                  {price != null ? (
+                    discounted != null ? (
+                      <>
+                        <span className="mr-1 text-ink-faint line-through">${price}</span>
+                        <span className="font-bold text-amber">${discounted}</span>
+                      </>
+                    ) : (
+                      <span className="font-semibold text-ink">${price}</span>
+                    )
+                  ) : (
+                    <span className="text-ink-faint">—</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {pvTab === "deals" && (
+            <div className="overflow-hidden rounded-lg border border-rule bg-white shadow-sm">
+              <div className="flex h-12 items-end bg-gradient-to-br from-emerald to-emerald-ink p-2">
+                <span className="text-[13px] font-bold text-white">{offerLabel} {svcDisplay}</span>
+              </div>
+              <div className="p-3">
+                <div className="text-[12px] text-ink-soft">Book your {svcDisplay} and save{offerLabel.startsWith("Free") ? " with a free add-on" : ""}.</div>
+                <div className="mt-2 rounded-md bg-emerald py-1.5 text-center text-[12px] font-semibold text-white">Book this deal →</div>
+                {cohort !== "all" && (
+                  <div className="mt-1.5 text-[10px] text-ink-faint">Targeted offers don&rsquo;t list on the public Deals page.</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {pvTab === "email" && (
+            <div className="overflow-hidden rounded-lg border border-rule bg-white shadow-sm">
+              <div className="border-b border-rule p-2.5">
+                <div className="text-[12px] font-bold text-ink">Your spa</div>
+                <div className="text-[11px] text-ink-soft">We&rsquo;ve missed you — {offerLabel} your {svcDisplay} 💚</div>
+              </div>
+              <div className="p-3">
+                <div className="text-[12px] text-ink">Hi Jordan,</div>
+                <div className="mt-1 text-[15px] font-bold text-ink">
+                  {offerLabel} <span className="text-emerald-ink">your next {svcDisplay}</span>.
+                </div>
+                <div className="mt-2 inline-block rounded-md bg-emerald px-3 py-1.5 text-[12px] font-semibold text-white">Book my {svcDisplay} →</div>
+              </div>
+            </div>
+          )}
+
+          {pvTab === "text" && (
+            <div className="rounded-lg bg-paper p-3">
+              <div className="ml-auto max-w-[88%] rounded-2xl bg-emerald px-3 py-2 text-[12.5px] leading-snug text-white">
+                Hi Jordan! It&rsquo;s your spa — {offerLabel.toLowerCase()} your next {svcDisplay}{cohort !== "all" ? ", just for you" : ""}. Book here: smartspa.app/s/… 💚
+              </div>
+              <div className="mt-1.5 text-[10px] text-ink-faint">AI-drafted per patient · you review before it sends</div>
+            </div>
+          )}
+        </div>
+        {isAb && (
+          <p className="mt-2 text-[10.5px] text-ink-faint">Preview shows your base version; the bandit tests all {versions.length + 1} on real patients.</p>
+        )}
       </div>
 
       {/* OPTIMIZE — A/B as one intent */}
