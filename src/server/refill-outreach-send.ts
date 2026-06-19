@@ -66,7 +66,7 @@ import { postResendEmail } from "@/server/resend-send";
 // ─── Sender config ───────────────────────────────────────────────────────
 
 const KAREN_FROM =
-  process.env.REFILL_OUTREACH_FROM ?? "Karen Anderson <karen@getrefill.app>";
+  process.env.REFILL_OUTREACH_FROM ?? "Karen Anderson <karen@smartspa.app>";
 const REPLY_DOMAIN =
   process.env.REFILL_DRIP_REPLY_DOMAIN ?? "reply.getrefill.app";
 const KAREN_LOCAL_PART =
@@ -77,7 +77,7 @@ const KAREN_LOCAL_PART =
 // not "Kelly Caffee <karen@…>"). Spa outreach keeps the karen@ address
 // because Karen is still the credibility source even when a rep dispatches.
 const RECRUIT_DOMAIN =
-  process.env.REFILL_RECRUIT_DOMAIN ?? "getrefill.app";
+  process.env.REFILL_RECRUIT_DOMAIN ?? "smartspa.app";
 
 function buildReplyTo(eventId: string, displayName = "Karen Anderson"): string {
   return `${displayName} <${KAREN_LOCAL_PART}+${eventId}@${REPLY_DOMAIN}>`;
@@ -85,14 +85,14 @@ function buildReplyTo(eventId: string, displayName = "Karen Anderson"): string {
 
 // v397 Phase 2E: when an active rep sends, the From: line uses the rep's
 // display name with the same verified send address (so SPF/DKIM/DMARC stay
-// aligned with the karen@getrefill.app sender that Resend is set up for).
+// aligned with the karen@smartspa.app sender that Resend is set up for).
 // Spa owner sees "Kelly Caffee" in their inbox; hovering reveals the
-// karen@getrefill.app address. Reply-To still uses the existing plus-address
+// karen@smartspa.app address. Reply-To still uses the existing plus-address
 // token shape so routeInboundOutreachReply matches without changes.
 // sent_by column audits which rep fired the send.
 function buildRepFrom(displayName: string): string {
   const safe = displayName.replace(/[<>"\r\n]/g, "").trim() || "Refill";
-  // Extract the bare address from KAREN_FROM (e.g. "Karen … <karen@getrefill.app>" → "karen@getrefill.app").
+  // Extract the bare address from KAREN_FROM (e.g. "Karen … <karen@smartspa.app>" → "karen@smartspa.app").
   const angleMatch = KAREN_FROM.match(/<([^>]+)>/);
   const bareAddr = angleMatch ? angleMatch[1] : KAREN_FROM;
   return `${safe} <${bareAddr}>`;

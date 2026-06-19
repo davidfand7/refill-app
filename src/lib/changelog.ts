@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.91.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.91.0 &mdash; Cutover close-out: email senders + app-host move to smartspa.app.</strong> Two finishers on the front-door cutover. <strong>(1) Transactional from-addresses → @smartspa.app</strong> &mdash; <code>karen@</code> (drips, booking, reminders, outreach), <code>recall@</code>, <code>offers@</code>, <code>recognition@</code>, and the <code>hello@</code> sender now send from the smartspa.app domain (verified for sending, so SPF/DKIM/DMARC pass cleanly). Deliberate timing: the low-volume test phase is the <em>ideal</em> warming window &mdash; you build a sending domain's reputation by ramping gently from near-zero, so switching now (before there's volume to protect) starts the clock the safe way. Replies are unaffected &mdash; they already route via the <code>reply+&lt;token&gt;@smartspa.app</code> Reply-To. <strong>The support address <code>gethelp@getrefill.app</code> was deliberately left put</strong> &mdash; it's human-monitored, and smartspa.app's catch-all receiving would route a flipped contact address into the inbound webhook (lost mail). <strong>(2) App-host → smartspa.app apex</strong> &mdash; <code>REFILL_APP_DEFAULT</code> moved off <code>app.getrefill.app</code>, so onboarding + magic-link redirects land users on smartspa.app (the <code>.smartspa.app</code> cookie scope from v2.89.0 carries the session). <strong>(3) Branding sweep</strong> &mdash; <code>og:image</code> social-preview assets, the trial-drip email footer, and the story-page CTA all now read smartspa.app; the ICS booking-invite UID domain too. <strong>Left for deferred item #4</strong>: the <code>{slug}.getrefill.app</code> vanity-URL display strings (still gated on standing up a <code>*.smartspa.app</code> wildcard &mdash; flipping them early would show 404 URLs). getrefill.app keeps serving + 302-redirecting. <strong>Touched</strong>: ~14 server files (from-addresses), <code>refill-auth.ts</code>, <code>__root.tsx</code> + rescue/waitlist routes (og:image), <code>refill-drip-shell.ts</code>, <code>story.tsx</code>, <code>s.$slug.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.90.0",
     date: "June 2026",
     items: [

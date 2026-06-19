@@ -187,7 +187,7 @@ function StoryPage() {
                   href={SCAN_HREF}
                   className="font-semibold underline decoration-rule hover:decoration-ink"
                 >
-                  getrefill.app
+                  smartspa.app
                 </a>
               </span>
             </li>

@@ -822,7 +822,7 @@ export const dispatchAllocationBatch = createServerFn({ method: "POST" })
           try {
             const result = await postResendEmail({
               apiKey: resendKey,
-              from: process.env.REFILL_FROM_EMAIL ?? "recognition@getrefill.app",
+              from: process.env.REFILL_FROM_EMAIL ?? "recognition@smartspa.app",
               to: [proxyEmail],
               subject,
               text,

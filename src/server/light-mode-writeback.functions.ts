@@ -292,7 +292,7 @@ export async function dispatchLightModeWriteback(
 
   // ── Send via Resend
   const KAREN_FROM =
-    process.env.REFILL_DRIP_FROM ?? "Karen Anderson <karen@getrefill.app>";
+    process.env.REFILL_DRIP_FROM ?? "Karen Anderson <karen@smartspa.app>";
   try {
     const resp = await postResendEmail({
       apiKey,

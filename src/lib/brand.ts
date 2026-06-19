@@ -65,7 +65,7 @@ export const REFILL_BRAND: BrandConfig = {
   tagline: "/ the patient-profitability OS",
   emailFromName: "SmartSpa",
   // Domain stays getrefill.app this pass (smartspa.app migration is later infra).
-  emailFromMailbox: "hello@getrefill.app",
+  emailFromMailbox: "hello@smartspa.app",
   ctaHref: "/onboard",
   loginHref: "/login",
   ctaOrigin: "https://getrefill.app",

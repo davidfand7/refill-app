@@ -381,7 +381,7 @@ export const deleteSenderDomain = createServerFn({ method: "POST" })
  * Order of precedence:
  *   1. spa's verified sender_domains row (most recent verified)
  *   2. process.env.EMMA_FROM_EMAIL
- *   3. Refill platform default "Refill <hello@getrefill.app>"
+ *   3. Refill platform default "Refill <hello@smartspa.app>"
  *      (only when REFILL_FROM_ENABLED=1 — see scan-followup.ts gating)
  *   4. legacy platform default "Emma <hello@notify.openagentic.site>"
  *
@@ -412,7 +412,7 @@ export async function resolveSpaFromEmail(userId: string): Promise<string> {
     return process.env.EMMA_FROM_EMAIL;
   }
   if (process.env.REFILL_FROM_ENABLED === "1") {
-    return "Refill <hello@getrefill.app>";
+    return "Refill <hello@smartspa.app>";
   }
   return "SmartSpa <hello@notify.openagentic.site>";
 }

@@ -1032,7 +1032,7 @@ export const draftOfferPushFn = createServerFn({ method: "POST" })
     try {
       const res = await postResendEmail({
         apiKey: resendKey,
-        from: process.env.REFILL_FROM_EMAIL ?? "offers@getrefill.app",
+        from: process.env.REFILL_FROM_EMAIL ?? "offers@smartspa.app",
         to: [proxyEmail],
         subject,
         text,

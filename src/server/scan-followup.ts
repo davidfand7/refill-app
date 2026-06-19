@@ -36,13 +36,13 @@ import { postResendEmail } from "@/server/resend-send";
 // David at Refill) but the sending mailbox stayed pinned to
 // hello@notify.openagentic.site to preserve SPF/DKIM/DMARC alignment.
 //
-// Phase 0 (2026-05-19) introduces hello@getrefill.app as the Refill-branded
+// Phase 0 (2026-05-19) introduces hello@smartspa.app as the Refill-branded
 // mailbox. The flip is gated by REFILL_FROM_ENABLED to keep this safe:
 //   - off (default): every send uses the legacy mailbox. No risk to
 //     Karen's deliverability while DNS records propagate.
 //   - on (Grasshopper toggles after Gmail "tabs" placement is verified
 //     on getrefill.app per the arch doc risk register §10): Refill-branded
-//     leads send from hello@getrefill.app; Emma-branded leads still use
+//     leads send from hello@smartspa.app; Emma-branded leads still use
 //     the legacy mailbox.
 //
 // SCAN_FOLLOWUP_MAILBOX overrides both paths for dev/test rigging.

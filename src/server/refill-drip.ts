@@ -14,7 +14,7 @@
  * composer per tenant.
  *
  * Voice + sender:
- *   From: Karen Anderson <karen@getrefill.app>
+ *   From: Karen Anderson <karen@smartspa.app>
  *   Reply-To: david@openagentic.site (v389 interim — getrefill.app
  *     inbound MX lands in v390 with the reply-capture loop)
  *
@@ -57,7 +57,7 @@ export const DRIP_DAYS: readonly DripDay[] = [3, 7, 14, 21, 28] as const;
 // ─── Sender config ───────────────────────────────────────────────────────
 
 const KAREN_FROM =
-  process.env.REFILL_DRIP_FROM ?? "Karen Anderson <karen@getrefill.app>";
+  process.env.REFILL_DRIP_FROM ?? "Karen Anderson <karen@smartspa.app>";
 
 // v390: Reply-To is per-send plus-addressed at reply.openagentic.site
 // (the inbound MX already used by Emma's promo reply tracking). The

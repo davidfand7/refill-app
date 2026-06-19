@@ -20,14 +20,14 @@ import { z } from "zod";
 
 
 // Phase 0 (2026-05-19): per the Refill-Standalone-Architecture risk register,
-// hello@getrefill.app only goes live once SPF/DKIM/DMARC verifies + Gmail
+// hello@smartspa.app only goes live once SPF/DKIM/DMARC verifies + Gmail
 // "tabs" placement is confirmed. REFILL_FROM_ENABLED gates the flip; default
 // off preserves the existing notify.openagentic.site sender that's already
 // warmed up.
 const LEGACY_FROM_MAILBOX =
   process.env.SCAN_FOLLOWUP_MAILBOX ?? "hello@notify.openagentic.site";
 const REFILL_FROM_MAILBOX =
-  process.env.REFILL_FROM_MAILBOX ?? "hello@getrefill.app";
+  process.env.REFILL_FROM_MAILBOX ?? "hello@smartspa.app";
 const REFILL_FROM_ENABLED = process.env.REFILL_FROM_ENABLED === "1";
 const FROM_MAILBOX = REFILL_FROM_ENABLED ? REFILL_FROM_MAILBOX : LEGACY_FROM_MAILBOX;
 const NOTIFY_RECIPIENTS = (

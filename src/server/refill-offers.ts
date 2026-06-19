@@ -38,7 +38,7 @@ import { wrapDripEmail } from "@/lib/email-templates/refill-drip-shell";
 // ─── Sender + reply config (mirrors refill-drip.ts) ──────────────────────
 
 const KAREN_FROM =
-  process.env.REFILL_DRIP_FROM ?? "Karen Anderson <karen@getrefill.app>";
+  process.env.REFILL_DRIP_FROM ?? "Karen Anderson <karen@smartspa.app>";
 
 const REPLY_DOMAIN =
   process.env.REFILL_DRIP_REPLY_DOMAIN ?? "reply.getrefill.app";

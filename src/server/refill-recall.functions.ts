@@ -682,7 +682,7 @@ export const draftRecallOutreachFn = createServerFn({ method: "POST" })
     try {
       const res = await postResendEmail({
         apiKey: resendKey,
-        from: process.env.REFILL_FROM_EMAIL ?? "recall@getrefill.app",
+        from: process.env.REFILL_FROM_EMAIL ?? "recall@smartspa.app",
         to: [proxyEmail],
         subject,
         text,
@@ -871,7 +871,7 @@ export async function sendRecallDigestForUser(
   try {
     const res = await postResendEmail({
       apiKey: resendKey,
-      from: process.env.REFILL_FROM_EMAIL ?? "recall@getrefill.app",
+      from: process.env.REFILL_FROM_EMAIL ?? "recall@smartspa.app",
       to: [email],
       subject,
       text,

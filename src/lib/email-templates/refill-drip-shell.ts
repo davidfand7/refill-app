@@ -77,10 +77,10 @@ export function wrapDripEmail(content: DripEmailContent): DripEmailRendered {
   // SmartSpa shows its tagline; a white-labeled spa shows just its name.
   const showTagline = !brand;
   // Footer credit: drips + non-removed spas show a credit; a removePoweredBy
-  // spa shows none. Drips credit "getrefill.app"; a white-labeled spa that
+  // spa shows none. Drips credit "smartspa.app"; a white-labeled spa that
   // keeps the credit shows the softer "powered by SmartSpa".
   const footerCredit = !brand
-    ? "getrefill.app"
+    ? "smartspa.app"
     : brand.removePoweredBy
       ? null
       : "powered by SmartSpa";
@@ -104,9 +104,9 @@ export function wrapDripEmail(content: DripEmailContent): DripEmailRendered {
     // SmartSpa shell keeps its tagline + URL; a white-labeled spa shows only
     // its retained credit (if any).
     ...(!brand
-      ? ["SmartSpa / " + BRAND_TAGLINE, "https://getrefill.app"]
+      ? ["SmartSpa / " + BRAND_TAGLINE, "https://smartspa.app"]
       : footerCredit
-        ? [footerCredit, "https://getrefill.app"]
+        ? [footerCredit, "https://smartspa.app"]
         : []),
   ].join("\n");
 
@@ -166,7 +166,7 @@ export function wrapDripEmail(content: DripEmailContent): DripEmailRendered {
         ${
           footerCredit
             ? `<tr><td style="padding:20px 4px 0 4px;color:#8a9098;font-size:12px;line-height:1.55;">
-          <a href="https://getrefill.app" style="color:${accent};text-decoration:none;">${escapeHtml(footerCredit)}</a>
+          <a href="https://smartspa.app" style="color:${accent};text-decoration:none;">${escapeHtml(footerCredit)}</a>
         </td></tr>`
             : ""
         }

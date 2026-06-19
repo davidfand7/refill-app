@@ -1236,7 +1236,7 @@ function buildCalendarLinks(opts: {
     "PRODID:-//SmartSpa//Booking//EN",
     "CALSCALE:GREGORIAN",
     "BEGIN:VEVENT",
-    `UID:${start}-${startMs}@getrefill.app`,
+    `UID:${start}-${startMs}@smartspa.app`,
     `DTSTAMP:${start}`,
     `DTSTART:${start}`,
     `DTEND:${end}`,

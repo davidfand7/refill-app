@@ -73,7 +73,7 @@ export const Route = createFileRoute("/waitlist/optin/$token")({
       { property: "og:type", content: "website" },
       {
         property: "og:image",
-        content: "https://getrefill.app/brand/refill-og-patient.png",
+        content: "https://smartspa.app/brand/refill-og-patient.png",
       },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
@@ -90,7 +90,7 @@ export const Route = createFileRoute("/waitlist/optin/$token")({
       { name: "twitter:card", content: "summary_large_image" },
       {
         name: "twitter:image",
-        content: "https://getrefill.app/brand/refill-og-patient.png",
+        content: "https://smartspa.app/brand/refill-og-patient.png",
       },
     ],
     };

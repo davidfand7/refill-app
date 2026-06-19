@@ -51,7 +51,12 @@ type RefillNextMetadata = {
 
 // ─── helpers ─────────────────────────────────────────────────────────────
 
-const REFILL_APP_DEFAULT = "https://app.getrefill.app";
+// v2.91.0 — app-host cut over to the smartspa.app apex (front-door cutover).
+// Onboarding + magic-link redirects now land users on smartspa.app, not the
+// app.getrefill.app subdomain. The .smartspa.app cookie scope (v2.89.0) carries
+// the session; getrefill.app navigations already 302 here (v2.90.0). (Override
+// still honored via REFILL_APP_URL env.)
+const REFILL_APP_DEFAULT = "https://smartspa.app";
 
 function refillRedirect(leadId: string, refToken?: string): string {
   const base = process.env.REFILL_APP_URL ?? REFILL_APP_DEFAULT;

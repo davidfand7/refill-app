@@ -8,7 +8,7 @@
  *
  * From-line uses the spa's display name over the verified platform address
  * (same trick as buildRepFrom in refill-outreach-send.ts), so the patient sees
- * "Rejuv Skin Spa <karen@getrefill.app>".
+ * "Rejuv Skin Spa <karen@smartspa.app>".
  */
 
 import {
@@ -24,8 +24,8 @@ function bareAddress(fromLine: string): string {
 }
 
 function fromForSpa(spaName: string): string {
-  const base = process.env.REFILL_OUTREACH_FROM ?? "Karen Anderson <karen@getrefill.app>";
-  const addr = bareAddress(base) || "karen@getrefill.app";
+  const base = process.env.REFILL_OUTREACH_FROM ?? "Karen Anderson <karen@smartspa.app>";
+  const addr = bareAddress(base) || "karen@smartspa.app";
   // Strip characters that would break the display-name portion of the header.
   const safeName = spaName.replace(/[<>"\r\n]/g, "").trim() || "Your appointment";
   return `${safeName} <${addr}>`;
