@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.105.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.105.0 &mdash; The composer gets its Delivery keystone: where it shows &amp; how it reaches patients.</strong> The unified Offer Composer gains the section the mockup calls the keystone, and it reflects exactly how delivery actually works &mdash; no overpromising. For an <strong>Everyone</strong> offer it&rsquo;s <em>Show it</em>: a booking-page badge (always on &mdash; that&rsquo;s what a public offer does) plus a real <strong>Public Deals page</strong> toggle (now wired through for spa offers too, not just manufacturer promos &mdash; honored by the public Deals list). For a <strong>targeted</strong> cohort it&rsquo;s <em>Push it</em>: the live &ldquo;You send &mdash; draft to my inbox&rdquo; mode (SmartSpa writes a message per patient, you tap send in your own blue bubble) with &ldquo;SmartSpa auto-sends&rdquo; shown as <em>coming soon</em>, plus honest guardrail chips (opt-outs &amp; no-phone excluded · you review before send · every booking attributed back). The plain-English hero and the section&rsquo;s resting summary update live with the toggle. Works in manufacturer-delivery mode too (the Deals toggle maps to the promo&rsquo;s <code>show_on_deals</code>). <strong>Touched</strong>: <code>OfferComposer.tsx</code> (Delivery section + ToggleLine/SpectrumItem), <code>refill-promo-calendar.functions.ts</code> (<code>createSpaOffer</code> now accepts <code>showOnDeals</code>), <code>changelog.ts</code>. No migration (column existed).",
+    ],
+  },
+  {
     version: "v2.104.0",
     date: "June 2026",
     items: [

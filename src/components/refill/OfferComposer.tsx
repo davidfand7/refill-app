@@ -23,7 +23,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ChevronRight, Eye, KeyRound, Loader2, Plus, Sparkles, Wand2, X } from "lucide-react";
+import { Check, ChevronRight, Eye, KeyRound, Loader2, Megaphone, Plus, Sparkles, Wand2, X } from "lucide-react";
 
 import {
   createSpaOffer,
@@ -92,11 +92,14 @@ export function OfferComposer({
   const [cap, setCap] = useState("");
   const [startsOn, setStartsOn] = useState("");
   const [endsOn, setEndsOn] = useState("");
+  // Delivery: public 'Everyone' offers always badge at booking; this controls
+  // the public Deals listing (show_on_deals). No effect on targeted offers.
+  const [showOnDeals, setShowOnDeals] = useState(true);
   // A/B: alternate versions beyond the base (spa mode only for now).
   const [optimize, setOptimize] = useState(false);
   const [versions, setVersions] = useState<Version[]>([]);
   // Which expander is open (KISS: one at a time, resting view is plain English).
-  const [openSec, setOpenSec] = useState<null | "offer" | "who" | "when">("offer");
+  const [openSec, setOpenSec] = useState<null | "offer" | "who" | "when" | "delivery">("offer");
   const [pvTab, setPvTab] = useState<"badge" | "deals" | "email" | "text">("badge");
   const [busy, setBusy] = useState(false);
 
@@ -133,6 +136,7 @@ export function OfferComposer({
     setCohort(selectedMfr.targetCohort ?? "all");
     setWeekdays(new Set(selectedMfr.activeWeekdays ?? []));
     setCap(selectedMfr.quantityCap != null ? String(selectedMfr.quantityCap) : "");
+    setShowOnDeals(selectedMfr.showOnDeals !== false);
   }, [mode, selectedMfr]);
 
   function switchMode(m: Mode) {
@@ -197,7 +201,18 @@ export function OfferComposer({
 
   const whoPhrase = cohort === "all" ? "everyone" : (COHORTS.find((c) => c.value === cohort)?.label ?? cohort).toLowerCase();
   const deliveryPhrase =
-    cohort === "all" ? "badged at booking & on your Deals page" : "sent to your matching patients (their booking is the vote)";
+    cohort === "all"
+      ? showOnDeals
+        ? "badged at booking & on your Deals page"
+        : "badged at booking"
+      : "drafted to your inbox to send";
+  // Resting (collapsed) value for the Delivery section header.
+  const deliveryValue =
+    cohort === "all"
+      ? showOnDeals
+        ? "Badge at booking + Deals page"
+        : "Badge at booking only"
+      : "Drafted to your inbox to send";
   const isAb = mode === "spa" && optimize && versions.length >= 1;
 
   function setVersion(i: number, patch: Partial<Version>) {
@@ -208,6 +223,7 @@ export function OfferComposer({
     setServiceName(""); setDiscount(""); setPct(""); setAddon("");
     setWeekdays(new Set()); setCap(""); setStartsOn(""); setEndsOn("");
     setOptimize(false); setVersions([]); setCohort("all"); setOfferType("dollars_off");
+    setShowOnDeals(true);
   }
 
   async function activate() {
@@ -229,6 +245,7 @@ export function OfferComposer({
             targetCohort: cohort,
             activeWeekdays: weekdayArr,
             quantityCap: capN,
+            showOnDeals: cohort === "all" ? showOnDeals : undefined,
             isActive: true,
           },
         });
@@ -306,6 +323,7 @@ export function OfferComposer({
             capPeriod: weekdays.size ? "weekly" : "total",
             startsOn: startsOn || null,
             endsOn: endsOn || null,
+            showOnDeals: cohort === "all" ? showOnDeals : undefined,
           },
         });
         toast.success("Offer added — it badges that service at booking.");
@@ -495,6 +513,61 @@ export function OfferComposer({
           </div>
           {mode === "mfr" && (
             <p className="text-[10.5px] text-ink-faint">Start &amp; end dates come from the manufacturer&rsquo;s calendar — you can&rsquo;t change them.</p>
+          )}
+        </Section>
+
+        {/* DELIVERY — where it shows & how it reaches patients (the keystone) */}
+        <Section
+          label="Where it shows & how it's delivered"
+          value={deliveryValue}
+          open={openSec === "delivery"}
+          onToggle={() => setOpenSec((s) => (s === "delivery" ? null : "delivery"))}
+        >
+          {cohort === "all" ? (
+            <>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Show it — patients find it</div>
+              <ToggleLine
+                icon={<Eye className="h-3.5 w-3.5" />}
+                title="Booking-page badge"
+                desc="Your booking page flags this service’s deal at checkout. Always on for everyone-offers."
+                on
+                locked
+              />
+              <ToggleLine
+                icon={<Megaphone className="h-3.5 w-3.5" />}
+                title="Public Deals page"
+                desc="Also list it on your shareable Deals page (smartspa.app/s/…/deals)."
+                on={showOnDeals}
+                onToggle={() => setShowOnDeals((v) => !v)}
+              />
+            </>
+          ) : (
+            <>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Push it — reach the cohort</div>
+              <div className="space-y-2">
+                <SpectrumItem
+                  on
+                  lvl="You send"
+                  lvlCls="bg-emerald-soft text-emerald-ink"
+                  title="Draft to my inbox"
+                  desc="SmartSpa writes a personalized message per patient and drops the batch in your inbox to send by iMessage — your blue bubble, your voice. Push it from “Your offers” after you activate."
+                />
+                <SpectrumItem
+                  disabled
+                  lvl="Coming soon"
+                  lvlCls="bg-paper text-ink-faint"
+                  title="SmartSpa auto-sends"
+                  desc="SMS + email blast on a schedule, sent for you. In the works — for now SmartSpa drafts and you tap send."
+                />
+              </div>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {["Opt-outs & no-phone excluded", "You review before it sends", "Every booking attributed back"].map((g) => (
+                  <span key={g} className="inline-flex items-center gap-1 rounded-full border border-rule bg-white px-2 py-0.5 text-[10.5px] font-medium text-ink-soft">
+                    <Check className="h-3 w-3 text-emerald" /> {g}
+                  </span>
+                ))}
+              </div>
+            </>
           )}
         </Section>
       </div>
@@ -710,6 +783,53 @@ function Section({
         </span>
       </button>
       {open && <div className="border-t border-rule px-3 py-3 space-y-3">{children}</div>}
+    </div>
+  );
+}
+
+function ToggleLine({
+  icon, title, desc, on, onToggle, locked,
+}: {
+  icon: React.ReactNode; title: string; desc: string; on: boolean; onToggle?: () => void; locked?: boolean;
+}) {
+  return (
+    <div className={cn("flex items-center gap-3 rounded-xl border px-3 py-2.5", on ? "border-emerald/30 bg-emerald-soft/30" : "border-rule bg-white")}>
+      <span className={cn("flex h-7 w-7 flex-none items-center justify-center rounded-lg", on ? "bg-emerald text-paper" : "bg-paper text-ink-faint")}>{icon}</span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-semibold text-ink">{title}</div>
+        <div className="text-[11px] text-ink-faint">{desc}</div>
+      </div>
+      <button
+        type="button"
+        onClick={locked ? undefined : onToggle}
+        disabled={locked}
+        aria-pressed={on}
+        title={locked ? "Always on for everyone-offers" : undefined}
+        className={cn("relative h-6 w-11 flex-none rounded-full transition", on ? "bg-emerald" : "bg-rule", locked ? "opacity-60 cursor-default" : "")}
+      >
+        <span className={cn("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all", on ? "left-[22px]" : "left-0.5")} />
+      </button>
+    </div>
+  );
+}
+
+function SpectrumItem({
+  on, disabled, lvl, lvlCls, title, desc,
+}: {
+  on?: boolean; disabled?: boolean; lvl: string; lvlCls: string; title: string; desc: string;
+}) {
+  return (
+    <div className={cn("flex items-start gap-3 rounded-xl border px-3 py-2.5", on ? "border-emerald/40 bg-emerald-soft/30" : disabled ? "border-rule bg-paper/40 opacity-75" : "border-rule bg-white")}>
+      <span className={cn("mt-0.5 flex h-4 w-4 flex-none items-center justify-center rounded-full border-2", on ? "border-emerald" : "border-rule")}>
+        {on && <span className="h-2 w-2 rounded-full bg-emerald" />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className={cn("rounded-full px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide", lvlCls)}>{lvl}</span>
+          <span className="text-[13px] font-semibold text-ink">{title}</span>
+        </div>
+        <div className="mt-0.5 text-[11px] text-ink-faint">{desc}</div>
+      </div>
     </div>
   );
 }
