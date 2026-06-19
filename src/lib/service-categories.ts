@@ -77,6 +77,43 @@ export function orderedCategoryRank(value: string, order: string[]): number {
 }
 
 /**
+ * Group services into category buckets for a picker (<optgroup>) — so a flat
+ * dump of "CoolSculpting · Defyne · HIFU NECK · BBL -Chest…" reads instead as
+ * Tox ▸ … / Filler ▸ Defyne, Refyne… / Laser ▸ HIFU, BBL… — categories,
+ * individual services, and brand-named services all flowing under their
+ * category. Buckets follow the canonical category order (custom categories
+ * after, alphabetized); within a bucket, sort_order then name. Pure.
+ */
+export function groupServicesByCategory<
+  T extends { category: string; name: string; sortOrder?: number | null },
+>(services: T[]): Array<{ value: string; label: string; items: T[] }> {
+  const byCat = new Map<string, T[]>();
+  for (const s of services) {
+    const v = normalizeCategory(s.category) || DEFAULT_SERVICE_CATEGORY;
+    const arr = byCat.get(v) ?? [];
+    arr.push(s);
+    byCat.set(v, arr);
+  }
+  return [...byCat.entries()]
+    .sort(
+      (a, b) =>
+        categoryRank(a[0]) - categoryRank(b[0]) ||
+        categoryLabel(a[0]).localeCompare(categoryLabel(b[0])),
+    )
+    .map(([value, items]) => ({
+      value,
+      label: categoryLabel(value),
+      items: items
+        .slice()
+        .sort(
+          (x, y) =>
+            (x.sortOrder ?? Number.MAX_SAFE_INTEGER) - (y.sortOrder ?? Number.MAX_SAFE_INTEGER) ||
+            x.name.localeCompare(y.name),
+        ),
+    }));
+}
+
+/**
  * Build the full option list for a tenant: the built-ins (canonical order)
  * followed by any distinct custom categories already in use (alphabetized).
  * `existing` is the set of category values across that tenant's services.

@@ -27,6 +27,7 @@ import {
   type AbVerdictResult,
 } from "@/server/smart-ab.functions";
 import { listServicesFn, type Service } from "@/server/refill-catalog";
+import { groupServicesByCategory } from "@/lib/service-categories";
 import { liftPhrase } from "@/lib/smart-ab";
 import type { OfferType, OfferCohort } from "@/lib/promo-calendar";
 import { cn } from "@/lib/utils";
@@ -225,10 +226,14 @@ export function SmartAbCard({
                   className="w-full rounded border border-rule bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald/30 disabled:opacity-60"
                 >
                   <option value="">Choose a service…</option>
-                  {services.map((s) => (
-                    <option key={s.id} value={s.name}>
-                      {s.name}
-                    </option>
+                  {groupServicesByCategory(services).map((g) => (
+                    <optgroup key={g.value} label={g.label}>
+                      {g.items.map((s) => (
+                        <option key={s.id} value={s.name}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>

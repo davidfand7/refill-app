@@ -26,6 +26,7 @@ import {
   draftOfferPushFn,
 } from "@/server/refill-promo-calendar.functions";
 import { listServicesFn, type Service } from "@/server/refill-catalog";
+import { groupServicesByCategory } from "@/lib/service-categories";
 import type { PromoOffer, OfferType, OfferCohort } from "@/lib/promo-calendar";
 import { cn } from "@/lib/utils";
 
@@ -358,10 +359,14 @@ export function SpaOffersCard({
                 className="w-full rounded border border-rule bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber/30 disabled:opacity-60"
               >
                 <option value="">Choose a service…</option>
-                {services.map((s) => (
-                  <option key={s.id} value={s.name}>
-                    {s.name}
-                  </option>
+                {groupServicesByCategory(services).map((g) => (
+                  <optgroup key={g.value} label={g.label}>
+                    {g.items.map((s) => (
+                      <option key={s.id} value={s.name}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               {services.length === 0 && (

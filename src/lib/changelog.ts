@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.97.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.97.0 &mdash; Offer service pickers group by category (categories · services · brands flow).</strong> The &ldquo;Service to test&rdquo; (Smart-A/B) and &ldquo;Service&rdquo; (Create offer) dropdowns were a flat alphabetical dump &mdash; CoolSculpting, Defyne, HIFU&nbsp;NECK, BBL&nbsp;-Chest all in one ungrouped run. They&rsquo;re now fed from the bookable catalog and grouped into <code>&lt;optgroup&gt;</code> buckets by category in canonical order (Tox ▸ … / Filler ▸ Defyne, Refyne, Restylane… / Laser ▸ HIFU, BBL… / Facial / Skincare / Other, then any custom categories), sorted by the catalog&rsquo;s own sort-order then name within each bucket &mdash; so categories, individual services, and brand-named services all read in a sensible hierarchy. Shared pure helper <code>groupServicesByCategory</code> (in <code>service-categories.ts</code>) so the two pickers can&rsquo;t drift. <strong>Touched</strong>: <code>service-categories.ts</code>, <code>SmartAbCard.tsx</code>, <code>SpaOffersCard.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.96.0",
     date: "June 2026",
     items: [
