@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.104.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.104.0 &mdash; Offers get their own home.</strong> The unified Offer Composer (and its two result lists, &ldquo;Your offers&rdquo; and &ldquo;Your tests&rdquo;) were buried at the bottom of the Rewards tab, sharing the page with manufacturer reward-tracking, the attribution queue, and CSV imports. They now have a <strong>dedicated Promos → Offers tab</strong> (<code>/app/refill/recognition/offers</code>) where the composer is the hero of its own page &mdash; author your own offer or deliver a manufacturer promo, single or A/B, with the live patient-facing preview right there. The Rewards tab keeps what it&rsquo;s actually about: manufacturer reward signals, attribution review, and imports. This is the first structural step toward the agentic-native authoring vision &mdash; one clear surface for &ldquo;create an offer.&rdquo; <strong>Touched</strong>: new <code>app.refill.recognition.offers.tsx</code>, <code>RecognitionTabs.tsx</code> (new tab), <code>app.refill.recognition.rewards.tsx</code> (cards moved out), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.103.0",
     date: "June 2026",
     items: [

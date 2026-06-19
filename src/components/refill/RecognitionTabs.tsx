@@ -9,7 +9,7 @@
 
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Gift, Layers, PhoneOutgoing, Wand2, Target } from "lucide-react";
+import { Gift, Layers, PhoneOutgoing, Wand2, Target, Tag } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
@@ -71,6 +71,7 @@ export type RecognitionTab =
   | "brand-promos"
   | "inventory"
   | "rewards"
+  | "offers"
   | "program"
   | "recall"
   | "allocation";
@@ -83,6 +84,7 @@ const TABS: Array<{
 }> = [
   { key: "inventory", to: "/app/refill/recognition/inventory", label: "Inventory", Icon: Layers },
   { key: "rewards", to: "/app/refill/recognition/rewards", label: "Rewards", Icon: Gift },
+  { key: "offers", to: "/app/refill/recognition/offers", label: "Offers", Icon: Tag },
   { key: "program", to: "/app/refill/recognition/program", label: "Program", Icon: Target },
   { key: "recall", to: "/app/refill/recognition/recall", label: "Recall", Icon: PhoneOutgoing },
   { key: "allocation", to: "/app/refill/recognition/allocation", label: "Allocation", Icon: Wand2 },

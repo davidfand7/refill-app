@@ -118,6 +118,7 @@ import { Route as AppRefillRecoveryPreshowRouteImport } from './routes/app.refil
 import { Route as AppRefillRecognitionRewardsRouteImport } from './routes/app.refill.recognition.rewards'
 import { Route as AppRefillRecognitionRecallRouteImport } from './routes/app.refill.recognition.recall'
 import { Route as AppRefillRecognitionProgramRouteImport } from './routes/app.refill.recognition.program'
+import { Route as AppRefillRecognitionOffersRouteImport } from './routes/app.refill.recognition.offers'
 import { Route as AppRefillRecognitionInventoryRouteImport } from './routes/app.refill.recognition.inventory'
 import { Route as AppRefillRecognitionBrandPromosRouteImport } from './routes/app.refill.recognition.brand-promos'
 import { Route as AppRefillRecognitionAllocationRouteImport } from './routes/app.refill.recognition.allocation'
@@ -730,6 +731,12 @@ const AppRefillRecognitionProgramRoute =
     path: '/recognition/program',
     getParentRoute: () => AppRefillRoute,
   } as any)
+const AppRefillRecognitionOffersRoute =
+  AppRefillRecognitionOffersRouteImport.update({
+    id: '/recognition/offers',
+    path: '/recognition/offers',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
 const AppRefillRecognitionInventoryRoute =
   AppRefillRecognitionInventoryRouteImport.update({
     id: '/recognition/inventory',
@@ -1130,6 +1137,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/recognition/allocation': typeof AppRefillRecognitionAllocationRoute
   '/app/refill/recognition/brand-promos': typeof AppRefillRecognitionBrandPromosRoute
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
+  '/app/refill/recognition/offers': typeof AppRefillRecognitionOffersRoute
   '/app/refill/recognition/program': typeof AppRefillRecognitionProgramRoute
   '/app/refill/recognition/recall': typeof AppRefillRecognitionRecallRoute
   '/app/refill/recognition/rewards': typeof AppRefillRecognitionRewardsRoute
@@ -1280,6 +1288,7 @@ export interface FileRoutesByTo {
   '/app/refill/recognition/allocation': typeof AppRefillRecognitionAllocationRoute
   '/app/refill/recognition/brand-promos': typeof AppRefillRecognitionBrandPromosRoute
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
+  '/app/refill/recognition/offers': typeof AppRefillRecognitionOffersRoute
   '/app/refill/recognition/program': typeof AppRefillRecognitionProgramRoute
   '/app/refill/recognition/recall': typeof AppRefillRecognitionRecallRoute
   '/app/refill/recognition/rewards': typeof AppRefillRecognitionRewardsRoute
@@ -1439,6 +1448,7 @@ export interface FileRoutesById {
   '/app/refill/recognition/allocation': typeof AppRefillRecognitionAllocationRoute
   '/app/refill/recognition/brand-promos': typeof AppRefillRecognitionBrandPromosRoute
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
+  '/app/refill/recognition/offers': typeof AppRefillRecognitionOffersRoute
   '/app/refill/recognition/program': typeof AppRefillRecognitionProgramRoute
   '/app/refill/recognition/recall': typeof AppRefillRecognitionRecallRoute
   '/app/refill/recognition/rewards': typeof AppRefillRecognitionRewardsRoute
@@ -1599,6 +1609,7 @@ export interface FileRouteTypes {
     | '/app/refill/recognition/allocation'
     | '/app/refill/recognition/brand-promos'
     | '/app/refill/recognition/inventory'
+    | '/app/refill/recognition/offers'
     | '/app/refill/recognition/program'
     | '/app/refill/recognition/recall'
     | '/app/refill/recognition/rewards'
@@ -1749,6 +1760,7 @@ export interface FileRouteTypes {
     | '/app/refill/recognition/allocation'
     | '/app/refill/recognition/brand-promos'
     | '/app/refill/recognition/inventory'
+    | '/app/refill/recognition/offers'
     | '/app/refill/recognition/program'
     | '/app/refill/recognition/recall'
     | '/app/refill/recognition/rewards'
@@ -1907,6 +1919,7 @@ export interface FileRouteTypes {
     | '/app/refill/recognition/allocation'
     | '/app/refill/recognition/brand-promos'
     | '/app/refill/recognition/inventory'
+    | '/app/refill/recognition/offers'
     | '/app/refill/recognition/program'
     | '/app/refill/recognition/recall'
     | '/app/refill/recognition/rewards'
@@ -2772,6 +2785,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillRecognitionProgramRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/refill/recognition/offers': {
+      id: '/app/refill/recognition/offers'
+      path: '/recognition/offers'
+      fullPath: '/app/refill/recognition/offers'
+      preLoaderRoute: typeof AppRefillRecognitionOffersRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/recognition/inventory': {
       id: '/app/refill/recognition/inventory'
       path: '/recognition/inventory'
@@ -3246,6 +3266,7 @@ interface AppRefillRouteChildren {
   AppRefillRecognitionAllocationRoute: typeof AppRefillRecognitionAllocationRoute
   AppRefillRecognitionBrandPromosRoute: typeof AppRefillRecognitionBrandPromosRoute
   AppRefillRecognitionInventoryRoute: typeof AppRefillRecognitionInventoryRoute
+  AppRefillRecognitionOffersRoute: typeof AppRefillRecognitionOffersRoute
   AppRefillRecognitionProgramRoute: typeof AppRefillRecognitionProgramRoute
   AppRefillRecognitionRecallRoute: typeof AppRefillRecognitionRecallRoute
   AppRefillRecognitionRewardsRoute: typeof AppRefillRecognitionRewardsRoute
@@ -3294,6 +3315,7 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillRecognitionAllocationRoute: AppRefillRecognitionAllocationRoute,
   AppRefillRecognitionBrandPromosRoute: AppRefillRecognitionBrandPromosRoute,
   AppRefillRecognitionInventoryRoute: AppRefillRecognitionInventoryRoute,
+  AppRefillRecognitionOffersRoute: AppRefillRecognitionOffersRoute,
   AppRefillRecognitionProgramRoute: AppRefillRecognitionProgramRoute,
   AppRefillRecognitionRecallRoute: AppRefillRecognitionRecallRoute,
   AppRefillRecognitionRewardsRoute: AppRefillRecognitionRewardsRoute,
