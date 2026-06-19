@@ -1,15 +1,21 @@
 /**
- * OfferComposer — the unified, agentic-native offer composer (v2.100).
+ * OfferComposer — the unified, agentic-native offer composer (v2.100+).
  *
- * One surface to author an offer, leading with plain-English intent. Replaces
- * the two separate create forms (SpaOffersCard's "new offer" + SmartAbCard's
- * "new test"): a single offer and an A/B test are the SAME intent here — flip
- * "Let SmartSpa find your best version" and add a version. KISS additive-on-
- * demand: the resting view is plain-English; the controls live behind one
- * expander each. A live preview shows the patient-facing artifact.
+ * One surface to author an offer, leading with plain-English intent. Two modes:
  *
- * On Activate: no extra versions → createSpaOffer (one offer). 1+ extra
- * versions → createAbExperiment (the bandit picks the winner by real bookings).
+ *  • "Author an offer" (mode='spa') — the owner writes their OWN offer; a single
+ *    offer and an A/B test are the SAME intent (flip "Let SmartSpa find your best
+ *    version" and add a version). On Activate: no extra versions → createSpaOffer;
+ *    1+ → createAbExperiment.
+ *  • "Deliver a manufacturer promo" (mode='mfr', v2.103) — the manufacturer owns
+ *    the TERMS (locked, read-only); the owner authors only DELIVERY (who / when /
+ *    where). On Activate → updateManufacturerOfferDelivery. This folds the inline
+ *    MfrDeliveryEditor's job into the one agentic-native composer (hybrid model,
+ *    project_manufacturer_ab_arbiter). The mode switch only appears once at least
+ *    one manufacturer promo is loaded (KISS / additive-on-demand).
+ *
+ * KISS additive-on-demand: the resting view is plain-English; the controls live
+ * behind one expander each. A live preview shows the patient-facing artifact.
  *
  * Self-contained (accessToken prop). onCreated lets the parent refresh its
  * offer / test lists.
@@ -17,13 +23,17 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ChevronRight, Eye, Loader2, Plus, Sparkles, Wand2, X } from "lucide-react";
+import { ChevronRight, Eye, KeyRound, Loader2, Plus, Sparkles, Wand2, X } from "lucide-react";
 
-import { createSpaOffer } from "@/server/refill-promo-calendar.functions";
+import {
+  createSpaOffer,
+  listPromoOffers,
+  updateManufacturerOfferDelivery,
+} from "@/server/refill-promo-calendar.functions";
 import { createAbExperiment } from "@/server/smart-ab.functions";
 import { listServicesFn, type Service } from "@/server/refill-catalog";
 import { groupServicesByCategory } from "@/lib/service-categories";
-import type { OfferType, OfferCohort } from "@/lib/promo-calendar";
+import { normalizeForMatch, productMatchesName, type OfferType, type OfferCohort, type PromoOffer } from "@/lib/promo-calendar";
 import { cn } from "@/lib/utils";
 
 type AbType = "dollars_off" | "percent_off" | "free_addon";
@@ -43,9 +53,17 @@ const COHORTS: Array<{ value: OfferCohort; label: string }> = [
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 type Version = { offerType: AbType; value: string; addon: string };
+type Mode = "spa" | "mfr";
 
-function typeWord(t: OfferType): string {
-  return t === "percent_off" ? "% off" : t === "free_addon" ? "free add-on" : t === "discount_addon" ? "add-on $ off" : "$ off";
+function titleCase(s: string | null | undefined): string {
+  const t = (s ?? "").trim();
+  return t ? t[0].toUpperCase() + t.slice(1) : "";
+}
+
+/** Local yyyy-mm-dd (owner's day) — for filtering out expired mfr promos. */
+function todayLocalIso(): string {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
 }
 
 export function OfferComposer({
@@ -58,18 +76,23 @@ export function OfferComposer({
   onCreated?: () => void;
 }) {
   const [services, setServices] = useState<Service[]>([]);
-  // The base offer (version 1).
+  // Mode + the manufacturer-promo catalog (delivery mode).
+  const [mode, setMode] = useState<Mode>("spa");
+  const [mfrOffers, setMfrOffers] = useState<PromoOffer[]>([]);
+  const [selectedMfrId, setSelectedMfrId] = useState("");
+  // The base offer (version 1) — spa-authored mode.
   const [offerType, setOfferType] = useState<OfferType>("dollars_off");
   const [serviceName, setServiceName] = useState("");
   const [discount, setDiscount] = useState("");
   const [pct, setPct] = useState("");
   const [addon, setAddon] = useState("");
+  // Shared delivery (both modes): who / when.
   const [cohort, setCohort] = useState<OfferCohort>("all");
   const [weekdays, setWeekdays] = useState<Set<number>>(new Set());
   const [cap, setCap] = useState("");
   const [startsOn, setStartsOn] = useState("");
   const [endsOn, setEndsOn] = useState("");
-  // A/B: alternate versions beyond the base.
+  // A/B: alternate versions beyond the base (spa mode only for now).
   const [optimize, setOptimize] = useState(false);
   const [versions, setVersions] = useState<Version[]>([]);
   // Which expander is open (KISS: one at a time, resting view is plain English).
@@ -80,8 +103,16 @@ export function OfferComposer({
   const load = useCallback(async () => {
     if (!accessToken) return;
     try {
-      const svc = await listServicesFn({ data: { accessToken, viewAsUserId } });
+      const [svc, promos] = await Promise.all([
+        listServicesFn({ data: { accessToken, viewAsUserId } }),
+        listPromoOffers({ data: { accessToken, viewAsUserId } }).catch(() => [] as PromoOffer[]),
+      ]);
       setServices(svc.filter((s) => s.onlineBookable));
+      // Manufacturer promos still worth delivering (drop expired).
+      const today = todayLocalIso();
+      setMfrOffers(
+        promos.filter((o) => o.source === "manufacturer" && !!o.id && !(o.endsOn && o.endsOn < today)),
+      );
     } catch {
       /* leave empty */
     }
@@ -90,19 +121,73 @@ export function OfferComposer({
     void load();
   }, [load]);
 
+  const selectedMfr = useMemo(
+    () => mfrOffers.find((o) => o.id === selectedMfrId) ?? null,
+    [mfrOffers, selectedMfrId],
+  );
+
+  // When a manufacturer promo is selected, prefill the delivery controls from
+  // its current saved delivery so the composer reflects (and edits) live state.
+  useEffect(() => {
+    if (mode !== "mfr" || !selectedMfr) return;
+    setCohort(selectedMfr.targetCohort ?? "all");
+    setWeekdays(new Set(selectedMfr.activeWeekdays ?? []));
+    setCap(selectedMfr.quantityCap != null ? String(selectedMfr.quantityCap) : "");
+  }, [mode, selectedMfr]);
+
+  function switchMode(m: Mode) {
+    setMode(m);
+    setOpenSec("offer");
+    if (m === "mfr" && !selectedMfrId && mfrOffers.length > 0) {
+      setSelectedMfrId(mfrOffers[0].id as string);
+    }
+  }
+
   const needsDiscount = offerType === "dollars_off" || offerType === "discount_addon";
   const needsPct = offerType === "percent_off";
   const needsAddon = offerType === "free_addon" || offerType === "discount_addon";
 
-  // Plain-English base-offer phrase ("$50 off Tox" / "20% off Filler"). Uses the
-  // provider-cleaned display name so the summary reads "Tox" not "Tox w/ Karen".
+  // The matching service for a manufacturer promo (same synonym-aware matcher as
+  // the at-booking badge) — gives the preview a real price + display name.
+  const mfrSvc = useMemo(() => {
+    if (!selectedMfr) return null;
+    return services.find((s) => productMatchesName(selectedMfr.product, normalizeForMatch(s.name))) ?? null;
+  }, [selectedMfr, services]);
+
+  // ── Mode-unified offer terms (drives the phrase + the live preview) ─────────
+  const activeType: OfferType = mode === "mfr" ? selectedMfr?.offerType ?? "dollars_off" : offerType;
+  const activeD = mode === "mfr" ? selectedMfr?.discountUsd ?? null : discount.trim() ? Number(discount) : null;
+  const activeP = mode === "mfr" ? selectedMfr?.valuePct ?? null : pct.trim() ? Number(pct) : null;
+  const activeAddon = mode === "mfr" ? selectedMfr?.addonLabel ?? "" : addon;
+  const spaSvc = useMemo(() => services.find((s) => s.name === serviceName), [services, serviceName]);
+  const activeSvc = mode === "mfr" ? mfrSvc : spaSvc;
+  const svcDisplay =
+    activeSvc?.displayName ||
+    (mode === "mfr" ? titleCase(selectedMfr?.product) : serviceName) ||
+    "your service";
+  const price = activeSvc?.servicePrice ?? null;
+
+  const offerLabel = useMemo(() => {
+    if (activeType === "percent_off") return `${activeP ?? "—"}% off`;
+    if (activeType === "free_addon") return `Free ${activeAddon || "add-on"}`;
+    if (activeType === "discount_addon") return `$${activeD ?? "—"} off ${activeAddon || "add-on"}`;
+    return `$${activeD ?? "—"} off`;
+  }, [activeType, activeD, activeP, activeAddon]);
+
+  // Plain-English offer phrase ("$50 off Tox" / "20% off Filler").
   const offerPhrase = useMemo(() => {
-    const svc = services.find((s) => s.name === serviceName)?.displayName || serviceName || "a service";
-    if (offerType === "percent_off") return `${pct || "—"}% off ${svc}`;
-    if (offerType === "free_addon") return `Free ${addon || "add-on"} with ${svc}`;
-    if (offerType === "discount_addon") return `$${discount || "—"} off ${addon || "add-on"} with ${svc}`;
-    return `$${discount || "—"} off ${svc}`;
-  }, [offerType, serviceName, discount, pct, addon, services]);
+    if (activeType === "percent_off") return `${activeP ?? "—"}% off ${svcDisplay}`;
+    if (activeType === "free_addon") return `Free ${activeAddon || "add-on"} with ${svcDisplay}`;
+    if (activeType === "discount_addon") return `$${activeD ?? "—"} off ${activeAddon || "add-on"} with ${svcDisplay}`;
+    return `$${activeD ?? "—"} off ${svcDisplay}`;
+  }, [activeType, activeD, activeP, activeAddon, svcDisplay]);
+
+  const discounted = useMemo(() => {
+    if (price == null) return null;
+    if (activeType === "percent_off" && activeP) return Math.max(0, Math.round(price * (1 - activeP / 100)));
+    if (activeType === "dollars_off" && activeD) return Math.max(0, Math.round(price - activeD));
+    return null;
+  }, [price, activeType, activeP, activeD]);
 
   const whenPhrase = useMemo(() => {
     const days = weekdays.size ? [...weekdays].sort((a, b) => a - b).map((d) => WEEKDAYS[d]).join(", ") : "any day";
@@ -110,46 +195,62 @@ export function OfferComposer({
     return `${days}${capTxt}`;
   }, [weekdays, cap]);
 
-  // ── Live-preview derived values (what the patient sees) ──────────────────
-  const selectedSvc = useMemo(() => services.find((s) => s.name === serviceName), [services, serviceName]);
-  const svcDisplay = selectedSvc?.displayName || serviceName || "your service";
-  const price = selectedSvc?.servicePrice ?? null;
-  const offerLabel = useMemo(() => {
-    if (offerType === "percent_off") return `${pct || "—"}% off`;
-    if (offerType === "free_addon") return `Free ${addon || "add-on"}`;
-    if (offerType === "discount_addon") return `$${discount || "—"} off ${addon || "add-on"}`;
-    return `$${discount || "—"} off`;
-  }, [offerType, discount, pct, addon]);
-  const discounted = useMemo(() => {
-    if (price == null) return null;
-    if (offerType === "percent_off" && pct) return Math.max(0, Math.round(price * (1 - Number(pct) / 100)));
-    if (offerType === "dollars_off" && discount) return Math.max(0, Math.round(price - Number(discount)));
-    return null;
-  }, [price, offerType, pct, discount]);
-
   const whoPhrase = cohort === "all" ? "everyone" : (COHORTS.find((c) => c.value === cohort)?.label ?? cohort).toLowerCase();
   const deliveryPhrase =
     cohort === "all" ? "badged at booking & on your Deals page" : "sent to your matching patients (their booking is the vote)";
-  const isAb = optimize && versions.length >= 1;
+  const isAb = mode === "spa" && optimize && versions.length >= 1;
 
   function setVersion(i: number, patch: Partial<Version>) {
     setVersions((prev) => prev.map((v, k) => (k === i ? { ...v, ...patch } : v)));
   }
 
+  function resetSpa() {
+    setServiceName(""); setDiscount(""); setPct(""); setAddon("");
+    setWeekdays(new Set()); setCap(""); setStartsOn(""); setEndsOn("");
+    setOptimize(false); setVersions([]); setCohort("all"); setOfferType("dollars_off");
+  }
+
   async function activate() {
-    if (!accessToken || !serviceName) {
-      toast.error("Pick a service first.");
+    if (!accessToken) return;
+    const capN = cap.trim() ? Number(cap.trim()) : null;
+    if (cap.trim() && (!Number.isInteger(capN) || (capN as number) <= 0)) return toast.error("Limit must be a whole number.");
+    const weekdayArr = weekdays.size ? [...weekdays].sort((a, b) => a - b) : null;
+
+    // ── Manufacturer-delivery mode: terms locked, only delivery is authored. ──
+    if (mode === "mfr") {
+      if (!selectedMfr?.id) return toast.error("Pick a manufacturer promo first.");
+      setBusy(true);
+      try {
+        await updateManufacturerOfferDelivery({
+          data: {
+            accessToken,
+            viewAsUserId,
+            offerId: selectedMfr.id,
+            targetCohort: cohort,
+            activeWeekdays: weekdayArr,
+            quantityCap: capN,
+            isActive: true,
+          },
+        });
+        toast.success("Delivery saved — the terms stay the manufacturer's; you set who, when & where.");
+        await load();
+        onCreated?.();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Couldn't save delivery.");
+      } finally {
+        setBusy(false);
+      }
       return;
     }
+
+    // ── Spa-authored mode (single offer or A/B). ──
+    if (!serviceName) return toast.error("Pick a service first.");
     const d = discount.trim() ? Number(discount.trim()) : null;
     const p = pct.trim() ? Number(pct.trim()) : null;
     if (needsDiscount && (!d || d <= 0)) return toast.error("Enter a dollar amount.");
     if (needsPct && (!p || p <= 0 || p > 100)) return toast.error("Enter a percentage (1–100).");
     if (needsAddon && !addon.trim()) return toast.error("Name the add-on.");
     if (startsOn && endsOn && endsOn < startsOn) return toast.error("End date is before the start date.");
-    const capN = cap.trim() ? Number(cap.trim()) : null;
-    if (cap.trim() && (!Number.isInteger(capN) || (capN as number) <= 0)) return toast.error("Limit must be a whole number.");
-    const weekdayArr = weekdays.size ? [...weekdays].sort((a, b) => a - b) : null;
 
     setBusy(true);
     try {
@@ -209,10 +310,7 @@ export function OfferComposer({
         });
         toast.success("Offer added — it badges that service at booking.");
       }
-      // Reset.
-      setServiceName(""); setDiscount(""); setPct(""); setAddon("");
-      setWeekdays(new Set()); setCap(""); setStartsOn(""); setEndsOn("");
-      setOptimize(false); setVersions([]); setCohort("all"); setOfferType("dollars_off");
+      resetSpa();
       onCreated?.();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't create the offer.");
@@ -221,18 +319,31 @@ export function OfferComposer({
     }
   }
 
+  const mfrName = titleCase(selectedMfr?.manufacturer) || "the manufacturer";
+
   return (
     <div className="overflow-hidden rounded-2xl border border-emerald/30 bg-white shadow-sm">
+      {/* Mode switch — only once a manufacturer promo exists (KISS) */}
+      {mfrOffers.length > 0 && (
+        <div className="flex gap-1 border-b border-rule bg-paper/50 p-1.5">
+          <ModeTab on={mode === "spa"} onClick={() => switchMode("spa")}>Author an offer</ModeTab>
+          <ModeTab on={mode === "mfr"} onClick={() => switchMode("mfr")}>Deliver a manufacturer promo</ModeTab>
+        </div>
+      )}
+
       {/* Hero — plain-English intent */}
       <div className="border-b border-rule bg-gradient-to-br from-emerald-soft/60 to-white px-5 py-4">
         <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-emerald">
-          <Sparkles className="h-3.5 w-3.5" /> Your offer, in plain English
+          <Sparkles className="h-3.5 w-3.5" /> {mode === "mfr" ? "This promo, delivered your way" : "Your offer, in plain English"}
         </div>
         <p className="mt-1.5 text-[16px] leading-relaxed text-ink">
           <span className="font-semibold text-emerald-ink">{offerPhrase}</span>{" "}
           <span className="text-ink-soft">for</span>{" "}
           <span className="font-semibold">{whoPhrase}</span>{" "}
           <span className="text-ink-soft">— {whenPhrase} — {deliveryPhrase}</span>
+          {mode === "mfr" && selectedMfr && (
+            <span className="text-ink-soft"> · <span className="font-semibold text-amber">terms set by {mfrName}</span></span>
+          )}
           {isAb && (
             <span className="text-ink-soft">
               {" "}— <span className="font-semibold text-amber">testing {versions.length + 1} versions</span>, keeping the one that books best.
@@ -244,51 +355,83 @@ export function OfferComposer({
       <div className="px-5 py-4 space-y-2">
         {/* THE OFFER */}
         <Section
-          label="The offer"
+          label={mode === "mfr" ? "The promo (terms locked)" : "The offer"}
           value={offerPhrase}
           open={openSec === "offer"}
           onToggle={() => setOpenSec((s) => (s === "offer" ? null : "offer"))}
         >
-          <Field label="Type">
-            <div className="flex flex-wrap gap-1.5">
-              {TYPE_OPTIONS.map((t) => (
-                <Chip key={t.value} on={offerType === t.value} onClick={() => setOfferType(t.value)}>
-                  {t.label}
-                </Chip>
-              ))}
-            </div>
-          </Field>
-          <Field label="Applies to">
-            <select
-              value={serviceName}
-              onChange={(e) => setServiceName(e.target.value)}
-              disabled={services.length === 0}
-              className="w-full rounded border border-rule bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald/30 disabled:opacity-60"
-            >
-              <option value="">Choose a service…</option>
-              {groupServicesByCategory(services).map((g) => (
-                <optgroup key={g.value} label={g.label}>
-                  {g.items.map((s) => (
-                    <option key={s.id} value={s.name}>{s.displayName}</option>
+          {mode === "mfr" ? (
+            <>
+              <Field label="Manufacturer promo">
+                <select
+                  value={selectedMfrId}
+                  onChange={(e) => setSelectedMfrId(e.target.value)}
+                  className="w-full rounded border border-rule bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber/30"
+                >
+                  {mfrOffers.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.manufacturer ? `${titleCase(o.manufacturer)} — ` : ""}{o.title}
+                    </option>
                   ))}
-                </optgroup>
-              ))}
-            </select>
-          </Field>
-          {needsAddon && (
-            <Field label={offerType === "free_addon" ? "…get this free" : "…get $ off this add-on"}>
-              <input value={addon} onChange={(e) => setAddon(e.target.value)} placeholder="brow wax" className={inputCls} />
-            </Field>
-          )}
-          {needsDiscount && (
-            <Field label="Discount ($)">
-              <input type="number" min="0" value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="50" className={inputCls} />
-            </Field>
-          )}
-          {needsPct && (
-            <Field label="Percent (%)">
-              <input type="number" min="1" max="100" value={pct} onChange={(e) => setPct(e.target.value)} placeholder="20" className={inputCls} />
-            </Field>
+                </select>
+              </Field>
+              {selectedMfr && (
+                <div className="rounded-lg border border-amber/30 bg-amber-soft/40 p-2.5">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber">
+                    <KeyRound className="h-3.5 w-3.5" /> Terms set by {mfrName} — locked
+                  </div>
+                  <div className="mt-1 text-[13.5px] font-semibold text-ink">{offerPhrase}</div>
+                  <div className="mt-0.5 text-[11px] text-ink-faint">
+                    {selectedMfr.startsOn || "—"} – {selectedMfr.endsOn || "ongoing"}
+                    {mfrSvc ? ` · applies to ${mfrSvc.displayName}` : " · no match in your menu yet"}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <Field label="Type">
+                <div className="flex flex-wrap gap-1.5">
+                  {TYPE_OPTIONS.map((t) => (
+                    <Chip key={t.value} on={offerType === t.value} onClick={() => setOfferType(t.value)}>
+                      {t.label}
+                    </Chip>
+                  ))}
+                </div>
+              </Field>
+              <Field label="Applies to">
+                <select
+                  value={serviceName}
+                  onChange={(e) => setServiceName(e.target.value)}
+                  disabled={services.length === 0}
+                  className="w-full rounded border border-rule bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald/30 disabled:opacity-60"
+                >
+                  <option value="">Choose a service…</option>
+                  {groupServicesByCategory(services).map((g) => (
+                    <optgroup key={g.value} label={g.label}>
+                      {g.items.map((s) => (
+                        <option key={s.id} value={s.name}>{s.displayName}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </Field>
+              {needsAddon && (
+                <Field label={offerType === "free_addon" ? "…get this free" : "…get $ off this add-on"}>
+                  <input value={addon} onChange={(e) => setAddon(e.target.value)} placeholder="brow wax" className={inputCls} />
+                </Field>
+              )}
+              {needsDiscount && (
+                <Field label="Discount ($)">
+                  <input type="number" min="0" value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="50" className={inputCls} />
+                </Field>
+              )}
+              {needsPct && (
+                <Field label="Percent (%)">
+                  <input type="number" min="1" max="100" value={pct} onChange={(e) => setPct(e.target.value)} placeholder="20" className={inputCls} />
+                </Field>
+              )}
+            </>
           )}
         </Section>
 
@@ -339,13 +482,20 @@ export function OfferComposer({
             <Field label={weekdays.size ? "Limit / week" : "Limit"}>
               <input type="number" min="1" value={cap} onChange={(e) => setCap(e.target.value)} placeholder="e.g. 20" className={inputCls} />
             </Field>
-            <Field label="Starts (optional)">
-              <input type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} className={inputCls} />
-            </Field>
-            <Field label="Ends (optional)">
-              <input type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} className={inputCls} />
-            </Field>
+            {mode === "spa" && (
+              <>
+                <Field label="Starts (optional)">
+                  <input type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} className={inputCls} />
+                </Field>
+                <Field label="Ends (optional)">
+                  <input type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} className={inputCls} />
+                </Field>
+              </>
+            )}
           </div>
+          {mode === "mfr" && (
+            <p className="text-[10.5px] text-ink-faint">Start &amp; end dates come from the manufacturer&rsquo;s calendar — you can&rsquo;t change them.</p>
+          )}
         </Section>
       </div>
 
@@ -452,7 +602,8 @@ export function OfferComposer({
         )}
       </div>
 
-      {/* OPTIMIZE — A/B as one intent */}
+      {/* OPTIMIZE — A/B as one intent (spa-authored only) */}
+      {mode === "spa" && (
       <div className="border-t border-rule bg-emerald-soft/20 px-5 py-4">
         <div className="flex items-start gap-3">
           <span className="flex h-7 w-7 flex-none items-center justify-center rounded-lg bg-emerald text-paper">
@@ -502,20 +653,25 @@ export function OfferComposer({
           </div>
         )}
       </div>
+      )}
 
       {/* Activate */}
       <div className="flex items-center justify-between gap-3 border-t border-rule px-5 py-3">
         <span className="text-[12px] text-ink-faint">
-          {isAb ? `Testing ${versions.length + 1} versions · keeps the winner` : "One offer · badges at booking"}
+          {mode === "mfr"
+            ? "Manufacturer terms · you choose who, when & where"
+            : isAb
+              ? `Testing ${versions.length + 1} versions · keeps the winner`
+              : "One offer · badges at booking"}
         </span>
         <button
           type="button"
           onClick={() => void activate()}
-          disabled={busy || !serviceName}
+          disabled={busy || (mode === "mfr" ? !selectedMfrId : !serviceName)}
           className="inline-flex items-center gap-1.5 rounded-lg bg-emerald px-4 py-2 text-sm font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
         >
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          {isAb ? "Activate & start testing" : "Activate offer"}
+          {mode === "mfr" ? "Save delivery" : isAb ? "Activate & start testing" : "Activate offer"}
         </button>
       </div>
     </div>
@@ -523,6 +679,21 @@ export function OfferComposer({
 }
 
 const inputCls = "w-full rounded border border-rule bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald/30";
+
+function ModeTab({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex-1 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition",
+        on ? "bg-white text-emerald-ink shadow-sm" : "text-ink-soft hover:text-ink",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
 
 function Section({
   label, value, open, onToggle, children,

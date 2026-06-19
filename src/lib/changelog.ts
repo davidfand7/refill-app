@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.103.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.103.0 &mdash; Manufacturer promos now flow through the one composer too.</strong> The unified Offer Composer gains a second mode &mdash; a tab pair appears at the top the moment you have any manufacturer promos loaded: <strong>Author an offer</strong> (your own) and <strong>Deliver a manufacturer promo</strong>. In manufacturer mode the <strong>terms are locked</strong> &mdash; the discount, product, and dates come straight from the manufacturer&rsquo;s calendar and render read-only with a &ldquo;Terms set by Allergan&rdquo; lock chip &mdash; and you author only the <strong>delivery</strong>: who it&rsquo;s for (cohort), when it runs (weekday recurrence + cap), all with the same plain-English hero and live patient-facing preview (badge / Deals / email / SMS) as a spa offer. Pick a promo and the controls prefill from its current delivery; Activate writes only the delivery columns (<code>updateManufacturerOfferDelivery</code>), so the manufacturer&rsquo;s terms are never touched and your settings survive the next calendar re-import. This is the <strong>hybrid model</strong> &mdash; manufacturer owns the terms, you own the delivery &mdash; finally living in the one agentic-native authoring surface instead of a separate inline editor. <em>(The crown-jewel &ldquo;run a manufacturer promo against your own offer as an A/B&rdquo; is the next ship.)</em> <strong>Touched</strong>: <code>OfferComposer.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.102.0",
     date: "June 2026",
     items: [
