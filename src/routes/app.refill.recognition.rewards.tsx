@@ -37,7 +37,9 @@ import {
   EyeOff,
   ChevronDown,
   ArrowRight,
+  SlidersHorizontal,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 import { PageHeader } from "@/components/PageHeader";
 import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
@@ -58,6 +60,7 @@ import {
   ingestPromoCalendar,
   listPromoOffers,
   setPromoOfferOnDeals,
+  updateManufacturerOfferDelivery,
   createSpaOffer,
   deleteSpaOffer,
 } from "@/server/refill-promo-calendar.functions";
@@ -69,7 +72,7 @@ import {
 import { listServicesFn, type Service } from "@/server/refill-catalog";
 import { WatchSourcesSection } from "@/components/refill/WatchSourcesSection";
 import { AttributionReviewQueue } from "@/components/refill/AttributionReviewQueue";
-import type { PromoOffer } from "@/lib/promo-calendar";
+import type { PromoOffer, OfferCohort } from "@/lib/promo-calendar";
 
 export const Route = createFileRoute("/app/refill/recognition/rewards")({
   component: RewardsPage,
@@ -763,6 +766,188 @@ function LastTransactionCard({
   );
 }
 
+// Hybrid-model delivery editor (v2.93) — "lock terms, author delivery."
+// A manufacturer promo's TERMS are read-only (the manufacturer's, from the
+// calendar). The owner authors how it's DELIVERED at their spa: who it's for
+// (cohort), when it runs (weekday recurrence + cap). Deals visibility + pause
+// stay on the row itself. Writes only delivery columns via
+// updateManufacturerOfferDelivery; the next calendar re-import carries them
+// forward (ingestPromoCalendar preserves them by natural key).
+const MFR_COHORT_OPTIONS: Array<{ value: OfferCohort; label: string }> = [
+  { value: "all", label: "Everyone" },
+  { value: "lapsed", label: "Lapsed" },
+  { value: "new", label: "New" },
+  { value: "expiring", label: "Expiring reward" },
+];
+const MFR_WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+
+function deliverySummary(o: PromoOffer): string {
+  const who =
+    o.targetCohort && o.targetCohort !== "all"
+      ? MFR_COHORT_OPTIONS.find((c) => c.value === o.targetCohort)?.label ?? o.targetCohort
+      : "Everyone";
+  const days =
+    o.activeWeekdays && o.activeWeekdays.length > 0
+      ? o.activeWeekdays
+          .slice()
+          .sort((a, b) => a - b)
+          .map((d) => MFR_WEEKDAYS[d])
+          .join(", ")
+      : "every day";
+  const cap = o.quantityCap != null ? ` · cap ${o.quantityCap}${o.activeWeekdays?.length ? "/wk" : ""}` : "";
+  return `${who} · ${days}${cap}`;
+}
+
+function MfrDeliveryEditor({
+  offer,
+  accessToken,
+  viewAsUserId,
+  onSaved,
+}: {
+  offer: PromoOffer;
+  accessToken: string | null;
+  viewAsUserId?: string;
+  onSaved: () => void;
+}) {
+  const [cohort, setCohort] = useState<OfferCohort>(offer.targetCohort ?? "all");
+  const [weekdays, setWeekdays] = useState<Set<number>>(
+    new Set(offer.activeWeekdays ?? []),
+  );
+  const [cap, setCap] = useState(offer.quantityCap != null ? String(offer.quantityCap) : "");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!accessToken || !offer.id) return;
+    const capN = cap.trim() ? Number(cap.trim()) : null;
+    if (cap.trim() && (!Number.isInteger(capN) || (capN as number) <= 0)) {
+      toast.error("Limit must be a whole number.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateManufacturerOfferDelivery({
+        data: {
+          accessToken,
+          viewAsUserId,
+          offerId: offer.id,
+          targetCohort: cohort,
+          activeWeekdays: weekdays.size ? [...weekdays].sort((a, b) => a - b) : null,
+          quantityCap: capN,
+        },
+      });
+      toast.success("Delivery saved — kept even when you re-import the calendar.");
+      onSaved();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't save delivery.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 rounded-xl border border-rule bg-paper/40 p-3 space-y-3">
+      <div className="flex items-center gap-1.5 text-[11px] text-ink-faint">
+        <KeyRound className="h-3 w-3" />
+        Terms set by {offer.manufacturer || "the manufacturer"} — you choose who, when &amp; where.
+      </div>
+
+      <div>
+        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-soft">
+          Who it&apos;s for
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {MFR_COHORT_OPTIONS.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              onClick={() => setCohort(c.value)}
+              className={cn(
+                "rounded-full px-3 py-1 text-[12px] font-semibold border transition",
+                cohort === c.value
+                  ? "bg-amber text-paper border-amber"
+                  : "bg-white text-ink-soft border-rule hover:text-ink",
+              )}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        {cohort !== "all" && (
+          <p className="mt-1.5 text-[11px] text-ink-faint leading-relaxed">
+            Targeted: it won&apos;t show at public booking — it reaches your matching
+            patients (push it from your offers list) and earns the $5 only when an
+            in-cohort patient books it.
+          </p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-soft">
+            Days (optional)
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {MFR_WEEKDAYS.map((wl, i) => {
+              const on = weekdays.has(i);
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() =>
+                    setWeekdays((prev) => {
+                      const n = new Set(prev);
+                      if (n.has(i)) n.delete(i);
+                      else n.add(i);
+                      return n;
+                    })
+                  }
+                  className={cn(
+                    "h-7 w-8 rounded text-[11px] font-semibold border transition",
+                    on
+                      ? "bg-amber text-paper border-amber"
+                      : "bg-white text-ink-soft border-rule hover:text-ink",
+                  )}
+                >
+                  {wl}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1 text-[10.5px] text-ink-faint">Blank = every day.</p>
+        </div>
+        <div>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-ink-soft">
+            {weekdays.size > 0 ? "Limit / week (optional)" : "Limit (optional)"}
+          </div>
+          <input
+            type="number"
+            inputMode="numeric"
+            min="1"
+            step="1"
+            value={cap}
+            onChange={(e) => setCap(e.target.value)}
+            placeholder="e.g. 20"
+            className="w-full rounded border border-rule bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber/30"
+          />
+          <p className="mt-1 text-[10.5px] text-ink-faint">
+            {weekdays.size > 0 ? "Resets each week." : "Stops after this many redemptions."}
+          </p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => void save()}
+        disabled={saving}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-amber px-4 py-1.5 text-[12px] font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
+      >
+        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+        Save delivery
+      </button>
+    </div>
+  );
+}
+
 // Promo Intelligence (v2.6.0) — the manufacturer's promo dump, made legible.
 // Was a black-box uploader that showed a bare count; now it lists the actual
 // manufacturer offers, routes them Active / Upcoming / Expired, shows which of
@@ -781,6 +966,7 @@ function PromoIntelligenceCard({
   const [busy, setBusy] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
@@ -951,11 +1137,13 @@ function PromoIntelligenceCard({
                   {buckets[key].map((o) => {
                     const matches = matchedServiceNames(o);
                     const expired = key === "expired";
+                    const editing = editingId === o.id;
                     return (
                       <div
                         key={o.id}
-                        className={`flex items-start gap-3 rounded-xl border border-rule bg-white px-3 py-2.5 ${expired ? "opacity-60" : ""}`}
+                        className={`rounded-xl border border-rule bg-white px-3 py-2.5 ${expired ? "opacity-60" : ""}`}
                       >
+                        <div className="flex items-start gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="text-[13px] font-semibold text-ink truncate">
                             {o.title}
@@ -986,32 +1174,68 @@ function PromoIntelligenceCard({
                               </span>
                             )}
                           </div>
+                          {!expired && (
+                            <div className="mt-1 flex items-center gap-1.5 text-[11px] text-ink-faint">
+                              <SlidersHorizontal className="h-3 w-3" />
+                              <span>
+                                Delivers to {deliverySummary(o)} ·{" "}
+                                {o.showOnDeals ? "on Deals" : "hidden"}
+                              </span>
+                            </div>
+                          )}
                         </div>
                         {!expired && (
-                          <button
-                            type="button"
-                            onClick={() => void toggleOnDeals(o)}
-                            disabled={togglingId === o.id}
-                            title={
-                              o.showOnDeals
-                                ? "Showing on your Deals page — click to hide"
-                                : "Hidden from your Deals page — click to show"
-                            }
-                            className={`mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold transition disabled:opacity-50 ${
-                              o.showOnDeals
-                                ? "border-emerald-ink/30 bg-emerald-soft text-emerald-ink"
-                                : "border-rule bg-white text-ink-faint hover:text-ink"
-                            }`}
-                          >
-                            {togglingId === o.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : o.showOnDeals ? (
-                              <Eye className="h-3.5 w-3.5" />
-                            ) : (
-                              <EyeOff className="h-3.5 w-3.5" />
-                            )}
-                            {o.showOnDeals ? "On Deals" : "Hidden"}
-                          </button>
+                          <div className="flex shrink-0 flex-col items-stretch gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => void toggleOnDeals(o)}
+                              disabled={togglingId === o.id}
+                              title={
+                                o.showOnDeals
+                                  ? "Showing on your Deals page — click to hide"
+                                  : "Hidden from your Deals page — click to show"
+                              }
+                              className={`inline-flex items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold transition disabled:opacity-50 ${
+                                o.showOnDeals
+                                  ? "border-emerald-ink/30 bg-emerald-soft text-emerald-ink"
+                                  : "border-rule bg-white text-ink-faint hover:text-ink"
+                              }`}
+                            >
+                              {togglingId === o.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : o.showOnDeals ? (
+                                <Eye className="h-3.5 w-3.5" />
+                              ) : (
+                                <EyeOff className="h-3.5 w-3.5" />
+                              )}
+                              {o.showOnDeals ? "On Deals" : "Hidden"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingId(editing ? null : (o.id ?? null))}
+                              title="Choose who, when & where this promo is delivered"
+                              className={`inline-flex items-center justify-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold transition ${
+                                editing
+                                  ? "border-amber/50 bg-amber-soft text-amber"
+                                  : "border-rule bg-white text-ink-soft hover:text-ink"
+                              }`}
+                            >
+                              <SlidersHorizontal className="h-3.5 w-3.5" />
+                              {editing ? "Close" : "Delivery"}
+                            </button>
+                          </div>
+                        )}
+                        </div>
+                        {editing && !expired && (
+                          <MfrDeliveryEditor
+                            offer={o}
+                            accessToken={accessToken}
+                            viewAsUserId={viewAsUserId}
+                            onSaved={() => {
+                              setEditingId(null);
+                              void load();
+                            }}
+                          />
                         )}
                       </div>
                     );

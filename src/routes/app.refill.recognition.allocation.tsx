@@ -381,7 +381,7 @@ function RecognitionAgentPage() {
                 </Link>{" "}
                 +{" "}
                 <Link
-                  to="/app/refill/recognition/manufacturers"
+                  to="/app/refill/settings/manufacturers"
                   className="underline hover:text-emerald-ink"
                 >
                   Manufacturer profiles
