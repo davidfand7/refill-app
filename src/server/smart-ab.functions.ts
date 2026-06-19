@@ -20,7 +20,7 @@ import { z } from "zod";
 
 import { admin } from "./admin-client";
 import type { Database } from "@/integrations/supabase/types";
-import { getTenantIdForUser, resolveEffectiveUserId } from "@/server/auth-helpers";
+import { getTenantIdForUser, resolveEffectiveUserId, requireAdmin } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
 import { normalizeForMatch } from "@/lib/promo-calendar";
 import {
@@ -647,4 +647,119 @@ export const draftExperimentPush = createServerFn({ method: "POST" })
       return { drafted: built.length, assignedNew: newAssignments.length, skippedNoPhone, sentTo: null, error: e instanceof Error ? e.message : String(e) };
     }
     return { drafted: built.length, assignedNew: newAssignments.length, skippedNoPhone, sentTo: proxyEmail, error: null };
+  });
+
+// ── The Arbiter (v2.99) — anonymized cross-spa promo-performance verdict ─────
+//
+// The crown-jewel data product, internal-first (Grasshopper Q2): pool every
+// A/B arm across ALL tenants by product + offer STRUCTURE, and let the same
+// impartial bandit math say which structure books best — "$65 off books 1.7×
+// the $50 off across N spas, 92% confident." Spa identity is masked (only a
+// count); no patient data. This is the pitch-deck / partnership-leverage asset
+// (a manufacturer-facing dashboard would build on the same pooled read later).
+// Admin-only.
+type ArbiterArmRow = {
+  product: string;
+  manufacturer: string | null;
+  offer_type: string | null;
+  discount_usd: number | string | null;
+  value_pct: number | string | null;
+  addon_label: string | null;
+  ab_impressions: number | string | null;
+  ab_conversions: number | string | null;
+  tenant_id: string;
+};
+
+function structureKeyAndLabel(r: ArbiterArmRow): { key: string; label: string } {
+  const t = r.offer_type ?? "dollars_off";
+  const d = r.discount_usd != null ? Math.round(Number(r.discount_usd)) : null;
+  const p = r.value_pct != null ? Number(r.value_pct) : null;
+  const a = r.addon_label?.trim() || null;
+  switch (t) {
+    case "percent_off":
+      return { key: `percent_off:${p}`, label: p != null ? `${p}% off` : "% off" };
+    case "free_addon":
+      return { key: `free_addon:${(a ?? "").toLowerCase()}`, label: a ? `Free ${a}` : "Free add-on" };
+    case "discount_addon":
+      return { key: `discount_addon:${d}:${(a ?? "").toLowerCase()}`, label: d != null ? `$${d} off ${a ?? "add-on"}` : "Add-on offer" };
+    case "dollars_off":
+    default:
+      return { key: `dollars_off:${d}`, label: d != null ? `$${d} off` : "$ off" };
+  }
+}
+
+export type ArbiterProductVerdict = {
+  product: string;
+  /** Most common known manufacturer for this product (or null). */
+  manufacturer: string | null;
+  /** Distinct spas contributing data (anonymized — count only). */
+  spaCount: number;
+  verdict: AbVerdict;
+};
+
+export const getArbiterVerdicts = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => z.object({ accessToken: z.string() }).parse(input))
+  .handler(async ({ data }): Promise<ArbiterProductVerdict[]> => {
+    await requireAdmin(data.accessToken);
+    const sb = admin();
+
+    // Every A/B arm across ALL tenants — paginated (cross-tenant, unbounded).
+    const rows = await fetchAllRows<ArbiterArmRow>((from, to) =>
+      offersTbl(sb)
+        .select(
+          "product, manufacturer, offer_type, discount_usd, value_pct, addon_label, ab_impressions, ab_conversions, tenant_id",
+        )
+        .not("experiment_id", "is", null)
+        .order("product", { ascending: true })
+        .range(from, to),
+    );
+
+    // Group by product → structure. Pool impressions/conversions across spas;
+    // track distinct tenants (anonymized count) + the dominant manufacturer.
+    type Struct = { label: string; impressions: number; conversions: number };
+    const byProduct = new Map<
+      string,
+      {
+        structs: Map<string, Struct>;
+        tenants: Set<string>;
+        mfrCounts: Map<string, number>;
+      }
+    >();
+    for (const r of rows) {
+      const product = (r.product ?? "").trim().toLowerCase();
+      if (!product) continue;
+      let pg = byProduct.get(product);
+      if (!pg) {
+        pg = { structs: new Map(), tenants: new Set(), mfrCounts: new Map() };
+        byProduct.set(product, pg);
+      }
+      const { key, label } = structureKeyAndLabel(r);
+      const s = pg.structs.get(key) ?? { label, impressions: 0, conversions: 0 };
+      s.impressions += r.ab_impressions != null ? Number(r.ab_impressions) : 0;
+      s.conversions += r.ab_conversions != null ? Number(r.ab_conversions) : 0;
+      pg.structs.set(key, s);
+      pg.tenants.add(r.tenant_id);
+      const mfr = r.manufacturer?.trim().toLowerCase();
+      if (mfr) pg.mfrCounts.set(mfr, (pg.mfrCounts.get(mfr) ?? 0) + 1);
+    }
+
+    const out: ArbiterProductVerdict[] = [];
+    for (const [product, pg] of byProduct) {
+      // Only products with ≥2 distinct structures make an A/B verdict.
+      if (pg.structs.size < 2) continue;
+      const arms: AbArm[] = [...pg.structs.entries()].map(([key, s]) => ({
+        id: key,
+        label: s.label,
+        impressions: s.impressions,
+        conversions: s.conversions,
+      }));
+      const verdict = computeVerdict(arms, { seed: hashSeed(product) });
+      let topMfr: string | null = null;
+      let topN = 0;
+      for (const [m, n] of pg.mfrCounts) if (n > topN) { topN = n; topMfr = m; }
+      out.push({ product, manufacturer: topMfr, spaCount: pg.tenants.size, verdict });
+    }
+    // Most-evidenced products first.
+    out.sort((a, b) => b.verdict.totalImpressions - a.verdict.totalImpressions);
+    return out;
   });

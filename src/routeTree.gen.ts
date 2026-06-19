@@ -67,6 +67,7 @@ import { Route as AppAdminNavFeaturesRouteImport } from './routes/app.admin.nav-
 import { Route as AppAdminFlagsRouteImport } from './routes/app.admin.flags'
 import { Route as AppAdminCanonicalBrandsRouteImport } from './routes/app.admin.canonical-brands'
 import { Route as AppAdminAuditRouteImport } from './routes/app.admin.audit'
+import { Route as AppAdminArbiterRouteImport } from './routes/app.admin.arbiter'
 import { Route as AppAdminAgentsRouteImport } from './routes/app.admin.agents'
 import { Route as ApiWebhooksStripeRouteImport } from './routes/api.webhooks.stripe'
 import { Route as ApiTwilioInboundRouteImport } from './routes/api.twilio.inbound'
@@ -453,6 +454,11 @@ const AppAdminCanonicalBrandsRoute = AppAdminCanonicalBrandsRouteImport.update({
 const AppAdminAuditRoute = AppAdminAuditRouteImport.update({
   id: '/admin/audit',
   path: '/admin/audit',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAdminArbiterRoute = AppAdminArbiterRouteImport.update({
+  id: '/admin/arbiter',
+  path: '/admin/arbiter',
   getParentRoute: () => AppRoute,
 } as any)
 const AppAdminAgentsRoute = AppAdminAgentsRouteImport.update({
@@ -1046,6 +1052,7 @@ export interface FileRoutesByFullPath {
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/admin/agents': typeof AppAdminAgentsRoute
+  '/app/admin/arbiter': typeof AppAdminArbiterRoute
   '/app/admin/audit': typeof AppAdminAuditRoute
   '/app/admin/canonical-brands': typeof AppAdminCanonicalBrandsRoute
   '/app/admin/flags': typeof AppAdminFlagsRoute
@@ -1200,6 +1207,7 @@ export interface FileRoutesByTo {
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/admin/agents': typeof AppAdminAgentsRoute
+  '/app/admin/arbiter': typeof AppAdminArbiterRoute
   '/app/admin/audit': typeof AppAdminAuditRoute
   '/app/admin/canonical-brands': typeof AppAdminCanonicalBrandsRoute
   '/app/admin/flags': typeof AppAdminFlagsRoute
@@ -1353,6 +1361,7 @@ export interface FileRoutesById {
   '/api/twilio/inbound': typeof ApiTwilioInboundRoute
   '/api/webhooks/stripe': typeof ApiWebhooksStripeRoute
   '/app/admin/agents': typeof AppAdminAgentsRoute
+  '/app/admin/arbiter': typeof AppAdminArbiterRoute
   '/app/admin/audit': typeof AppAdminAuditRoute
   '/app/admin/canonical-brands': typeof AppAdminCanonicalBrandsRoute
   '/app/admin/flags': typeof AppAdminFlagsRoute
@@ -1512,6 +1521,7 @@ export interface FileRouteTypes {
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
     | '/app/admin/agents'
+    | '/app/admin/arbiter'
     | '/app/admin/audit'
     | '/app/admin/canonical-brands'
     | '/app/admin/flags'
@@ -1666,6 +1676,7 @@ export interface FileRouteTypes {
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
     | '/app/admin/agents'
+    | '/app/admin/arbiter'
     | '/app/admin/audit'
     | '/app/admin/canonical-brands'
     | '/app/admin/flags'
@@ -1818,6 +1829,7 @@ export interface FileRouteTypes {
     | '/api/twilio/inbound'
     | '/api/webhooks/stripe'
     | '/app/admin/agents'
+    | '/app/admin/arbiter'
     | '/app/admin/audit'
     | '/app/admin/canonical-brands'
     | '/app/admin/flags'
@@ -2401,6 +2413,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/audit'
       fullPath: '/app/admin/audit'
       preLoaderRoute: typeof AppAdminAuditRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/admin/arbiter': {
+      id: '/app/admin/arbiter'
+      path: '/admin/arbiter'
+      fullPath: '/app/admin/arbiter'
+      preLoaderRoute: typeof AppAdminArbiterRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/admin/agents': {
@@ -3332,6 +3351,7 @@ interface AppRouteChildren {
   AppRefillRoute: typeof AppRefillRouteWithChildren
   AppRepRoute: typeof AppRepRouteWithChildren
   AppAdminAgentsRoute: typeof AppAdminAgentsRoute
+  AppAdminArbiterRoute: typeof AppAdminArbiterRoute
   AppAdminAuditRoute: typeof AppAdminAuditRoute
   AppAdminCanonicalBrandsRoute: typeof AppAdminCanonicalBrandsRoute
   AppAdminFlagsRoute: typeof AppAdminFlagsRoute
@@ -3349,6 +3369,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppRefillRoute: AppRefillRouteWithChildren,
   AppRepRoute: AppRepRouteWithChildren,
   AppAdminAgentsRoute: AppAdminAgentsRoute,
+  AppAdminArbiterRoute: AppAdminArbiterRoute,
   AppAdminAuditRoute: AppAdminAuditRoute,
   AppAdminCanonicalBrandsRoute: AppAdminCanonicalBrandsRoute,
   AppAdminFlagsRoute: AppAdminFlagsRoute,

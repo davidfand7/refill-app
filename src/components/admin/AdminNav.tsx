@@ -46,6 +46,11 @@ const ITEMS: AdminNavItem[] = [
     match: (p) => p.startsWith("/app/admin/reports"),
   },
   {
+    to: "/app/admin/arbiter",
+    label: "Arbiter",
+    match: (p) => p.startsWith("/app/admin/arbiter"),
+  },
+  {
     to: "/app/admin/audit",
     label: "Audit log",
     match: (p) => p.startsWith("/app/admin/audit"),

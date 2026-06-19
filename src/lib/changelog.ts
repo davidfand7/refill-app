@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.99.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.99.0 &mdash; The Impartial Arbiter: anonymized cross-spa promo-performance verdict (admin, internal-first).</strong> The crown-jewel data product the whole consolidation was building toward. New admin surface <code>/app/admin/arbiter</code> (&ldquo;Arbiter&rdquo; chip) pools <em>every</em> Smart-A/B arm across <em>all</em> spas by product + offer structure, and lets the same impartial bandit say which structure books best &mdash; rendered manufacturer-facing: &ldquo;<em>Botox — which offer books best? Allergan · across N spas · X patients reached. $65 off wins — it books 1.7× more than the runner-up. 92% confidence.</em>&rdquo; with a bar per structure (booked-rate + P(best)) and the impartiality note (&ldquo;SmartSpa didn&rsquo;t choose, the owner didn&rsquo;t choose, patients chose by booking&rdquo;). <strong>Anonymized</strong> (Grasshopper Q3=yes): spa identity is masked to a <em>count</em> (&ldquo;across N spas&rdquo;), no patient data &mdash; per-spa noise becomes a manufacturer-grade signal. <strong>Internal-first</strong> (Q2): this is the pitch-deck / partnership-leverage asset; a manufacturer-facing dashboard would build on the same pooled read later. New <code>getArbiterVerdicts</code> server fn (admin-gated via <code>requireAdmin</code>, paginated cross-tenant read, groups by product→structure, dominant-manufacturer + distinct-spa count, runs <code>computeVerdict</code> per product). A product appears once ≥2 structures have run as variants. <strong>This completes the manufacturer-promo consolidation arc</strong> (v2.92 move → v2.93 hybrid fold → v2.94 rep loop → v2.95–v2.98 Smart-A/B engine+UI+live loop → v2.99 arbiter). <strong>New</strong>: <code>app.admin.arbiter.tsx</code>, <code>getArbiterVerdicts</code>. <strong>Touched</strong>: <code>smart-ab.functions.ts</code>, <code>AdminNav.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.98.0",
     date: "June 2026",
     items: [
