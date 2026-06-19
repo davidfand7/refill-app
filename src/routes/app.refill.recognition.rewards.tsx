@@ -45,6 +45,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
 import { SpaOffersCard } from "@/components/refill/SpaOffersCard";
 import { RepPromosCard } from "@/components/refill/RepPromosCard";
+import { SmartAbCard } from "@/components/refill/SmartAbCard";
 import { getRepLoopEnabled } from "@/server/refill-promos";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
@@ -288,6 +289,8 @@ function RewardsPage() {
             )}
 
             <SpaOffersCard accessToken={accessToken} viewAsUserId={viewAsUserId} />
+
+            <SmartAbCard accessToken={accessToken} viewAsUserId={viewAsUserId} />
 
             {loading ? (
               <div className="flex items-center justify-center text-sm text-ink-soft py-16">

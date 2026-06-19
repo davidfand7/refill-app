@@ -22,7 +22,13 @@ import { admin } from "./admin-client";
 import type { Database } from "@/integrations/supabase/types";
 import { getTenantIdForUser, resolveEffectiveUserId } from "@/server/auth-helpers";
 import { normalizeForMatch } from "@/lib/promo-calendar";
-import { computeVerdict, type AbArm, type AbVerdict } from "@/lib/smart-ab";
+import {
+  computeVerdict,
+  thompsonPickArm,
+  mulberry32,
+  type AbArm,
+  type AbVerdict,
+} from "@/lib/smart-ab";
 
 type AnySb = ReturnType<typeof createClient<Database>>;
 
@@ -294,6 +300,89 @@ export const recordAbOutcome = createServerFn({ method: "POST" })
       sb as unknown as { rpc(fn: string, p: Record<string, unknown>): PromiseLike<unknown> }
     ).rpc("bump_ab_outcome", { p_offer_id: data.offerId, p_conversion: data.conversion });
     return { ok: true };
+  });
+
+// ── Simulator (demo/verify, NO live-path touch) ─────────────────────────────
+//
+// Mirrors the proven admin "Simulate a cancellation" tool: lets the owner watch
+// the bandit work WITHOUT waiting for real sends/bookings. Each round Thompson-
+// picks an arm from the CURRENT counts (so reach visibly shifts toward the
+// front-runner), then converts with a synthetic per-arm "appeal" derived from
+// the variant's terms (a bigger discount books a little better) plus a small
+// per-arm jitter so a clear winner emerges. Accumulates deltas locally and
+// writes ONE update per arm. Clearly synthetic — these counts are demo data.
+type SimArmRow = {
+  id: string;
+  ab_label: string | null;
+  title: string;
+  offer_type: string | null;
+  discount_usd: number | string | null;
+  value_pct: number | string | null;
+  ab_impressions: number | string | null;
+  ab_conversions: number | string | null;
+};
+
+function syntheticAppeal(r: SimArmRow): number {
+  const d = r.discount_usd != null ? Number(r.discount_usd) : 0;
+  const p = r.value_pct != null ? Number(r.value_pct) : 0;
+  const value = d / 600 + p / 250; // bigger offer → a bit more appealing
+  // Deterministic per-arm jitter so two similar offers still separate.
+  const jitter = (hashSeed(r.id) % 9) / 100 - 0.04;
+  const a = 0.1 + value + jitter;
+  return Math.max(0.04, Math.min(0.4, a));
+}
+
+const simInput = z.object({
+  accessToken: z.string(),
+  viewAsUserId: z.string().optional(),
+  experimentId: z.string().uuid(),
+  rounds: z.number().int().min(1).max(500).default(40),
+});
+
+export const simulateAbRound = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => simInput.parse(input))
+  .handler(async ({ data }): Promise<{ ok: true; added: number }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+
+    const { data: rows } = await offersTbl(sb)
+      .select("id, ab_label, title, offer_type, discount_usd, value_pct, ab_impressions, ab_conversions")
+      .eq("tenant_id", tenantId)
+      .eq("experiment_id", data.experimentId);
+    const armRows = (rows as SimArmRow[] | null) ?? [];
+    if (armRows.length < 2) throw new Error("Experiment has no arms to simulate.");
+
+    const appeal = new Map(armRows.map((r) => [r.id, syntheticAppeal(r)]));
+    const live: AbArm[] = armRows.map((r) => ({
+      id: r.id,
+      label: r.ab_label ?? r.title,
+      impressions: r.ab_impressions != null ? Number(r.ab_impressions) : 0,
+      conversions: r.ab_conversions != null ? Number(r.ab_conversions) : 0,
+    }));
+    const startImp = live.reduce((s, a) => s + a.impressions, 0);
+    const rng = mulberry32((hashSeed(data.experimentId) ^ (startImp * 2654435761)) >>> 0);
+
+    for (let i = 0; i < data.rounds; i++) {
+      // Reseed the pick per round (cheap) so allocation reflects current counts.
+      const pick = thompsonPickArm(live, ((rng() * 2 ** 32) >>> 0) ^ i);
+      if (!pick) break;
+      const arm = live.find((a) => a.id === pick.id)!;
+      arm.impressions += 1;
+      if (rng() < (appeal.get(arm.id) ?? 0.1)) arm.conversions += 1;
+    }
+
+    // One UPDATE per arm with the accumulated deltas.
+    for (let k = 0; k < armRows.length; k++) {
+      await offersTbl(sb)
+        .update({ ab_impressions: live[k].impressions, ab_conversions: live[k].conversions })
+        .eq("id", live[k].id)
+        .eq("tenant_id", tenantId);
+    }
+    return { ok: true, added: data.rounds };
   });
 
 export const listAbExperiments = createServerFn({ method: "POST" })

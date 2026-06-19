@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.96.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.96.0 &mdash; Smart-A/B is visible: the &ldquo;Let SmartSpa find your best version&rdquo; composer + the verdict view.</strong> v2.95.0 landed the bandit engine; this puts a face on it. New <strong>SmartAbCard</strong> on the Rewards offers surface: pick a service, drop in 2&ndash;4 versions that differ only in the offer (e.g. <em>$50 off</em> vs <em>20% off</em> vs <em>free brow wax</em>), pick who it&rsquo;s for, and start the test. Each running test renders the <strong>verdict</strong> live &mdash; a trophy line (&ldquo;<em>$50 off is ahead &mdash; it books 1.7&times; more, 71% likely the best</em>&rdquo;), then a bar per version showing its booking rate, <em>n&nbsp;booked&nbsp;/&nbsp;sent</em>, and the bandit&rsquo;s <em>P(this is best)</em>. When the bandit clears its confidence threshold it flips to <strong>decided</strong>, names the winner, and pauses the losing arms &mdash; SmartSpa never asks you to &ldquo;declare a winner.&rdquo; The framing is the crown jewel: <strong>real bookings decide, the AI measures, SmartSpa just reports</strong> &mdash; the impartiality that makes this data sellable to manufacturers. <strong>Real bookings populate it via the push/booking path (next slice)</strong>; until that&rsquo;s wired, a clearly-synthetic <strong>&ldquo;Simulate bookings&rdquo;</strong> button (mirrors the proven Simulate-a-cancellation tool, no live data touched) Thompson-allocates 40 synthetic rounds so you can watch reach shift toward the front-runner and see the verdict get called end-to-end. <strong>(API used)</strong>: <code>createAbExperiment</code> / <code>getAbVerdict</code> (auto-decides) / <code>listAbExperiments</code> + new <code>simulateAbRound</code> (synthetic, owner-safe). <strong>Next</strong>: assign arms on the push path + count a real booking as that arm&rsquo;s conversion (the live loop), then the manufacturer-facing impartial-arbiter view. <strong>New</strong>: <code>SmartAbCard.tsx</code>. <strong>Touched</strong>: <code>smart-ab.functions.ts</code> (simulator), <code>app.refill.recognition.rewards.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.95.0",
     date: "June 2026",
     items: [
