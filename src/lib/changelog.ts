@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.92.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.92.0 &mdash; Manufacturers moved out of Recognition, under Account/Settings (manufacturer-surface consolidation, step 1).</strong> There were three &ldquo;manufacturer&rdquo;-flavored surfaces under Recognition causing confusion. The <strong>Manufacturers</strong> tab isn&rsquo;t actually a promos surface &mdash; it&rsquo;s a manufacturer <em>loyalty-tier-structure editor</em> (paste an Allē/ASPIRE program doc &rarr; AI extracts the rebate tiers &rarr; review + save), built to feed the Recognition-Allocation rebate engine (which isn&rsquo;t wired yet). That&rsquo;s a different altitude from time-bound patient promos, so it doesn&rsquo;t belong in the promos area. Moved <strong>as-is</strong> (zero functional change) from <code>/app/refill/recognition/manufacturers</code> to <code>/app/refill/settings/manufacturers</code> &mdash; added to the Settings tab strip (with a Factory icon), removed from the Recognition tab strip. Preserved so we don&rsquo;t lose a good idea (a single dashboard of every manufacturer&rsquo;s tier structure); we&rsquo;ll wire it to feed something later, or leave it as a reference. The real promo consolidation (folding manufacturer promos into the unified offer engine + the impartial Smart-A/B arbiter) comes next. <strong>Touched</strong>: route renamed <code>app.refill.recognition.manufacturers.tsx</code> &rarr; <code>app.refill.settings.manufacturers.tsx</code> (path + nav-strip swap), <code>SettingsTabStrip.tsx</code>, <code>RecognitionTabs.tsx</code>, <code>changelog.ts</code>. No migration, no data change.",
+    ],
+  },
+  {
     version: "v2.91.0",
     date: "June 2026",
     items: [

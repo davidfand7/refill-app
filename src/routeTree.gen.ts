@@ -103,6 +103,7 @@ import { Route as AppRefillSettingsSpaProfileRouteImport } from './routes/app.re
 import { Route as AppRefillSettingsSenderRouteImport } from './routes/app.refill.settings.sender'
 import { Route as AppRefillSettingsSchedulerRouteImport } from './routes/app.refill.settings.scheduler'
 import { Route as AppRefillSettingsNoshowRouteImport } from './routes/app.refill.settings.noshow'
+import { Route as AppRefillSettingsManufacturersRouteImport } from './routes/app.refill.settings.manufacturers'
 import { Route as AppRefillSettingsLightModeRouteImport } from './routes/app.refill.settings.light-mode'
 import { Route as AppRefillSettingsHealthRouteImport } from './routes/app.refill.settings.health'
 import { Route as AppRefillSettingsBrandRouteImport } from './routes/app.refill.settings.brand'
@@ -116,7 +117,6 @@ import { Route as AppRefillRecoveryPreshowRouteImport } from './routes/app.refil
 import { Route as AppRefillRecognitionRewardsRouteImport } from './routes/app.refill.recognition.rewards'
 import { Route as AppRefillRecognitionRecallRouteImport } from './routes/app.refill.recognition.recall'
 import { Route as AppRefillRecognitionProgramRouteImport } from './routes/app.refill.recognition.program'
-import { Route as AppRefillRecognitionManufacturersRouteImport } from './routes/app.refill.recognition.manufacturers'
 import { Route as AppRefillRecognitionInventoryRouteImport } from './routes/app.refill.recognition.inventory'
 import { Route as AppRefillRecognitionBrandPromosRouteImport } from './routes/app.refill.recognition.brand-promos'
 import { Route as AppRefillRecognitionAllocationRouteImport } from './routes/app.refill.recognition.allocation'
@@ -643,6 +643,12 @@ const AppRefillSettingsNoshowRoute = AppRefillSettingsNoshowRouteImport.update({
   path: '/settings/noshow',
   getParentRoute: () => AppRefillRoute,
 } as any)
+const AppRefillSettingsManufacturersRoute =
+  AppRefillSettingsManufacturersRouteImport.update({
+    id: '/settings/manufacturers',
+    path: '/settings/manufacturers',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
 const AppRefillSettingsLightModeRoute =
   AppRefillSettingsLightModeRouteImport.update({
     id: '/settings/light-mode',
@@ -716,12 +722,6 @@ const AppRefillRecognitionProgramRoute =
   AppRefillRecognitionProgramRouteImport.update({
     id: '/recognition/program',
     path: '/recognition/program',
-    getParentRoute: () => AppRefillRoute,
-  } as any)
-const AppRefillRecognitionManufacturersRoute =
-  AppRefillRecognitionManufacturersRouteImport.update({
-    id: '/recognition/manufacturers',
-    path: '/recognition/manufacturers',
     getParentRoute: () => AppRefillRoute,
   } as any)
 const AppRefillRecognitionInventoryRoute =
@@ -1123,7 +1123,6 @@ export interface FileRoutesByFullPath {
   '/app/refill/recognition/allocation': typeof AppRefillRecognitionAllocationRoute
   '/app/refill/recognition/brand-promos': typeof AppRefillRecognitionBrandPromosRoute
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
-  '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
   '/app/refill/recognition/program': typeof AppRefillRecognitionProgramRoute
   '/app/refill/recognition/recall': typeof AppRefillRecognitionRecallRoute
   '/app/refill/recognition/rewards': typeof AppRefillRecognitionRewardsRoute
@@ -1137,6 +1136,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/settings/brand': typeof AppRefillSettingsBrandRoute
   '/app/refill/settings/health': typeof AppRefillSettingsHealthRoute
   '/app/refill/settings/light-mode': typeof AppRefillSettingsLightModeRoute
+  '/app/refill/settings/manufacturers': typeof AppRefillSettingsManufacturersRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
@@ -1272,7 +1272,6 @@ export interface FileRoutesByTo {
   '/app/refill/recognition/allocation': typeof AppRefillRecognitionAllocationRoute
   '/app/refill/recognition/brand-promos': typeof AppRefillRecognitionBrandPromosRoute
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
-  '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
   '/app/refill/recognition/program': typeof AppRefillRecognitionProgramRoute
   '/app/refill/recognition/recall': typeof AppRefillRecognitionRecallRoute
   '/app/refill/recognition/rewards': typeof AppRefillRecognitionRewardsRoute
@@ -1286,6 +1285,7 @@ export interface FileRoutesByTo {
   '/app/refill/settings/brand': typeof AppRefillSettingsBrandRoute
   '/app/refill/settings/health': typeof AppRefillSettingsHealthRoute
   '/app/refill/settings/light-mode': typeof AppRefillSettingsLightModeRoute
+  '/app/refill/settings/manufacturers': typeof AppRefillSettingsManufacturersRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
@@ -1430,7 +1430,6 @@ export interface FileRoutesById {
   '/app/refill/recognition/allocation': typeof AppRefillRecognitionAllocationRoute
   '/app/refill/recognition/brand-promos': typeof AppRefillRecognitionBrandPromosRoute
   '/app/refill/recognition/inventory': typeof AppRefillRecognitionInventoryRoute
-  '/app/refill/recognition/manufacturers': typeof AppRefillRecognitionManufacturersRoute
   '/app/refill/recognition/program': typeof AppRefillRecognitionProgramRoute
   '/app/refill/recognition/recall': typeof AppRefillRecognitionRecallRoute
   '/app/refill/recognition/rewards': typeof AppRefillRecognitionRewardsRoute
@@ -1444,6 +1443,7 @@ export interface FileRoutesById {
   '/app/refill/settings/brand': typeof AppRefillSettingsBrandRoute
   '/app/refill/settings/health': typeof AppRefillSettingsHealthRoute
   '/app/refill/settings/light-mode': typeof AppRefillSettingsLightModeRoute
+  '/app/refill/settings/manufacturers': typeof AppRefillSettingsManufacturersRoute
   '/app/refill/settings/noshow': typeof AppRefillSettingsNoshowRoute
   '/app/refill/settings/scheduler': typeof AppRefillSettingsSchedulerRoute
   '/app/refill/settings/sender': typeof AppRefillSettingsSenderRoute
@@ -1589,7 +1589,6 @@ export interface FileRouteTypes {
     | '/app/refill/recognition/allocation'
     | '/app/refill/recognition/brand-promos'
     | '/app/refill/recognition/inventory'
-    | '/app/refill/recognition/manufacturers'
     | '/app/refill/recognition/program'
     | '/app/refill/recognition/recall'
     | '/app/refill/recognition/rewards'
@@ -1603,6 +1602,7 @@ export interface FileRouteTypes {
     | '/app/refill/settings/brand'
     | '/app/refill/settings/health'
     | '/app/refill/settings/light-mode'
+    | '/app/refill/settings/manufacturers'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
     | '/app/refill/settings/sender'
@@ -1738,7 +1738,6 @@ export interface FileRouteTypes {
     | '/app/refill/recognition/allocation'
     | '/app/refill/recognition/brand-promos'
     | '/app/refill/recognition/inventory'
-    | '/app/refill/recognition/manufacturers'
     | '/app/refill/recognition/program'
     | '/app/refill/recognition/recall'
     | '/app/refill/recognition/rewards'
@@ -1752,6 +1751,7 @@ export interface FileRouteTypes {
     | '/app/refill/settings/brand'
     | '/app/refill/settings/health'
     | '/app/refill/settings/light-mode'
+    | '/app/refill/settings/manufacturers'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
     | '/app/refill/settings/sender'
@@ -1895,7 +1895,6 @@ export interface FileRouteTypes {
     | '/app/refill/recognition/allocation'
     | '/app/refill/recognition/brand-promos'
     | '/app/refill/recognition/inventory'
-    | '/app/refill/recognition/manufacturers'
     | '/app/refill/recognition/program'
     | '/app/refill/recognition/recall'
     | '/app/refill/recognition/rewards'
@@ -1909,6 +1908,7 @@ export interface FileRouteTypes {
     | '/app/refill/settings/brand'
     | '/app/refill/settings/health'
     | '/app/refill/settings/light-mode'
+    | '/app/refill/settings/manufacturers'
     | '/app/refill/settings/noshow'
     | '/app/refill/settings/scheduler'
     | '/app/refill/settings/sender'
@@ -2655,6 +2655,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillSettingsNoshowRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/refill/settings/manufacturers': {
+      id: '/app/refill/settings/manufacturers'
+      path: '/settings/manufacturers'
+      fullPath: '/app/refill/settings/manufacturers'
+      preLoaderRoute: typeof AppRefillSettingsManufacturersRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/settings/light-mode': {
       id: '/app/refill/settings/light-mode'
       path: '/settings/light-mode'
@@ -2744,13 +2751,6 @@ declare module '@tanstack/react-router' {
       path: '/recognition/program'
       fullPath: '/app/refill/recognition/program'
       preLoaderRoute: typeof AppRefillRecognitionProgramRouteImport
-      parentRoute: typeof AppRefillRoute
-    }
-    '/app/refill/recognition/manufacturers': {
-      id: '/app/refill/recognition/manufacturers'
-      path: '/recognition/manufacturers'
-      fullPath: '/app/refill/recognition/manufacturers'
-      preLoaderRoute: typeof AppRefillRecognitionManufacturersRouteImport
       parentRoute: typeof AppRefillRoute
     }
     '/app/refill/recognition/inventory': {
@@ -3227,7 +3227,6 @@ interface AppRefillRouteChildren {
   AppRefillRecognitionAllocationRoute: typeof AppRefillRecognitionAllocationRoute
   AppRefillRecognitionBrandPromosRoute: typeof AppRefillRecognitionBrandPromosRoute
   AppRefillRecognitionInventoryRoute: typeof AppRefillRecognitionInventoryRoute
-  AppRefillRecognitionManufacturersRoute: typeof AppRefillRecognitionManufacturersRoute
   AppRefillRecognitionProgramRoute: typeof AppRefillRecognitionProgramRoute
   AppRefillRecognitionRecallRoute: typeof AppRefillRecognitionRecallRoute
   AppRefillRecognitionRewardsRoute: typeof AppRefillRecognitionRewardsRoute
@@ -3238,6 +3237,7 @@ interface AppRefillRouteChildren {
   AppRefillSettingsBrandRoute: typeof AppRefillSettingsBrandRoute
   AppRefillSettingsHealthRoute: typeof AppRefillSettingsHealthRoute
   AppRefillSettingsLightModeRoute: typeof AppRefillSettingsLightModeRoute
+  AppRefillSettingsManufacturersRoute: typeof AppRefillSettingsManufacturersRoute
   AppRefillSettingsNoshowRoute: typeof AppRefillSettingsNoshowRoute
   AppRefillSettingsSchedulerRoute: typeof AppRefillSettingsSchedulerRoute
   AppRefillSettingsSenderRoute: typeof AppRefillSettingsSenderRoute
@@ -3275,8 +3275,6 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillRecognitionAllocationRoute: AppRefillRecognitionAllocationRoute,
   AppRefillRecognitionBrandPromosRoute: AppRefillRecognitionBrandPromosRoute,
   AppRefillRecognitionInventoryRoute: AppRefillRecognitionInventoryRoute,
-  AppRefillRecognitionManufacturersRoute:
-    AppRefillRecognitionManufacturersRoute,
   AppRefillRecognitionProgramRoute: AppRefillRecognitionProgramRoute,
   AppRefillRecognitionRecallRoute: AppRefillRecognitionRecallRoute,
   AppRefillRecognitionRewardsRoute: AppRefillRecognitionRewardsRoute,
@@ -3288,6 +3286,7 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillSettingsBrandRoute: AppRefillSettingsBrandRoute,
   AppRefillSettingsHealthRoute: AppRefillSettingsHealthRoute,
   AppRefillSettingsLightModeRoute: AppRefillSettingsLightModeRoute,
+  AppRefillSettingsManufacturersRoute: AppRefillSettingsManufacturersRoute,
   AppRefillSettingsNoshowRoute: AppRefillSettingsNoshowRoute,
   AppRefillSettingsSchedulerRoute: AppRefillSettingsSchedulerRoute,
   AppRefillSettingsSenderRoute: AppRefillSettingsSenderRoute,

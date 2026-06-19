@@ -1,5 +1,5 @@
 /**
- * /app/refill/recognition/manufacturers — Manufacturer Profile + AI
+ * /app/refill/settings/manufacturers — Manufacturer Profile + AI
  * extraction (v1.34.2.1).
  *
  * Per project_recognition_allocation_engine_spec: each manufacturer has
@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
+import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -42,7 +42,7 @@ import {
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute(
-  "/app/refill/recognition/manufacturers",
+  "/app/refill/settings/manufacturers",
 )({
   component: ManufacturersPage,
 });
@@ -128,7 +128,7 @@ function ManufacturersPage() {
         }
       />
 
-      <RecognitionTabs active="manufacturers" />
+      <SettingsTabStrip active="manufacturers" />
 
       <div className="flex-1 px-4 py-6 lg:px-10 max-w-[960px] w-full mx-auto space-y-5">
         {loadError ? (
