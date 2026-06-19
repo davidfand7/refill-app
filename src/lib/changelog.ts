@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.98.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.98.0 &mdash; Smart-A/B live loop: real bookings now drive the bandit.</strong> The simulator showed the loop; this wires it to reality. <strong>Assignment half</strong>: a new <strong>Push test</strong> button on a running, cohort-targeted experiment drafts it to the cohort &mdash; each patient is assigned ONE version by Thompson sampling (sticky, so they always see the same one), an impression is counted for that version, and the per-patient message carries THEIR version. Same draft-first / opt-out-safe / human-gated path as offer push (batch emailed to the spa&rsquo;s proxy inbox for review + iMessage send). <strong>Booking half</strong>: when a booking is attributed to a patient, SmartSpa credits a conversion (the &ldquo;vote&rdquo;) to the exact version that patient was assigned &mdash; sticky + counted once per patient (a second booking can&rsquo;t double-vote). Hooked into the existing cross-sell/recovery attribution, fully additive + best-effort: it never touches the $5 decision or the booking flow. As votes land, <code>getAbVerdict</code> shifts reach toward the front-runner and auto-decides the winner. <strong>An &lsquo;Everyone&rsquo; test can&rsquo;t be pushed</strong> (it runs on the public booking page, where versions can&rsquo;t be split per patient) &mdash; the Push button only shows for cohort tests, with a clear message otherwise. <strong>Robustness</strong>: the re-push read of existing assignments is paginated (a lapsed cohort runs to ~2,000 &mdash; a fixed read would silently re-assign the overflow); conversion crediting uses atomic <code>bump_ab_conversion</code> / <code>bump_ab_impression</code> RPCs so concurrent bookings can&rsquo;t lose increments. <strong>New</strong>: <code>offer_experiment_assignments</code> table + the two RPCs (migration), <code>smart-ab-conversion.ts</code>, <code>draftExperimentPush</code>. <strong>Touched</strong>: <code>smart-ab.functions.ts</code>, <code>refill-promo-calendar.functions.ts</code> (export push helpers + best-effort conversion hook), <code>SmartAbCard.tsx</code>, <code>changelog.ts</code>. Migration applied separately.",
+    ],
+  },
+  {
     version: "v2.97.0",
     date: "June 2026",
     items: [

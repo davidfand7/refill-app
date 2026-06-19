@@ -21,7 +21,17 @@ import { z } from "zod";
 import { admin } from "./admin-client";
 import type { Database } from "@/integrations/supabase/types";
 import { getTenantIdForUser, resolveEffectiveUserId } from "@/server/auth-helpers";
+import { fetchAllRows } from "@/server/paginate";
 import { normalizeForMatch } from "@/lib/promo-calendar";
+import {
+  listOfferCohortTargets,
+  composeOfferPushBody,
+  firstNameOf,
+  escHtml,
+} from "@/server/refill-promo-calendar.functions";
+import { resolveSpaName } from "@/server/emma-spa-profile";
+import { tenantBooksOnExternalPms } from "@/server/scheduling-settings.functions";
+import { postResendEmail } from "@/server/resend-send";
 import {
   computeVerdict,
   thompsonPickArm,
@@ -39,6 +49,10 @@ function offersTbl(sb: AnySb) {
 function experimentsTbl(sb: AnySb) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (sb as unknown as { from(t: string): any }).from("offer_experiments");
+}
+function assignmentsTbl(sb: AnySb) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (sb as unknown as { from(t: string): any }).from("offer_experiment_assignments");
 }
 
 const VARIANT_TYPES = ["dollars_off", "percent_off", "free_addon", "discount_addon"] as const;
@@ -92,6 +106,8 @@ export type AbExperimentSummary = {
   status: "running" | "decided" | "stopped";
   winnerOfferId: string | null;
   createdAt: string;
+  /** The shared cohort across arms — 'all' can't be pushed (public badge). */
+  targetCohort: string;
   arms: Array<{ offerId: string; label: string }>;
 };
 
@@ -413,14 +429,16 @@ export const listAbExperiments = createServerFn({ method: "POST" })
     if (list.length === 0) return [];
 
     const { data: armRows } = await offersTbl(sb)
-      .select("id, ab_label, title, experiment_id")
+      .select("id, ab_label, title, experiment_id, target_cohort")
       .eq("tenant_id", tenantId)
       .not("experiment_id", "is", null);
     const armsByExp = new Map<string, Array<{ offerId: string; label: string }>>();
-    for (const r of (armRows as Array<{ id: string; ab_label: string | null; title: string; experiment_id: string }> | null) ?? []) {
+    const cohortByExp = new Map<string, string>();
+    for (const r of (armRows as Array<{ id: string; ab_label: string | null; title: string; experiment_id: string; target_cohort: string | null }> | null) ?? []) {
       const arr = armsByExp.get(r.experiment_id) ?? [];
       arr.push({ offerId: r.id, label: r.ab_label ?? r.title });
       armsByExp.set(r.experiment_id, arr);
+      if (!cohortByExp.has(r.experiment_id)) cohortByExp.set(r.experiment_id, r.target_cohort ?? "all");
     }
 
     return list.map((e) => ({
@@ -429,6 +447,204 @@ export const listAbExperiments = createServerFn({ method: "POST" })
       status: e.status as AbExperimentSummary["status"],
       winnerOfferId: e.winner_offer_id,
       createdAt: e.created_at,
+      targetCohort: cohortByExp.get(e.id) ?? "all",
       arms: armsByExp.get(e.id) ?? [],
     }));
+  });
+
+// ── draftExperimentPush — the assignment half of the live loop ──────────────
+//
+// Push an A/B experiment to its cohort: each patient is assigned ONE arm
+// (Thompson sampling, sticky), an impression is counted for that arm, and the
+// patient gets the message for THEIR variant. A later booking credits the arm
+// they were assigned (recordExperimentConversion). Draft-first + opt-out-safe +
+// human-gated, exactly like draftOfferPushFn: composes one message per patient
+// and emails the batch to the spa's proxy inbox for review + send.
+type PushArmRow = {
+  id: string;
+  ab_label: string | null;
+  title: string;
+  target_cohort: string | null;
+  ab_impressions: number | string | null;
+  ab_conversions: number | string | null;
+};
+
+export type ExperimentPushResult = {
+  drafted: number;
+  assignedNew: number;
+  skippedNoPhone: number;
+  sentTo: string | null;
+  error: string | null;
+};
+
+export const draftExperimentPush = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => verdictInput.parse(input))
+  .handler(async ({ data }): Promise<ExperimentPushResult> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+
+    const { data: expRow } = await experimentsTbl(sb)
+      .select("id, status")
+      .eq("id", data.experimentId)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (!expRow) throw new Error("Experiment not found.");
+    if (expRow.status !== "running") throw new Error("This test is finished — nothing to push.");
+
+    const { data: armRows } = await offersTbl(sb)
+      .select("id, ab_label, title, target_cohort, ab_impressions, ab_conversions")
+      .eq("tenant_id", tenantId)
+      .eq("experiment_id", data.experimentId);
+    const arms = (armRows as PushArmRow[] | null) ?? [];
+    if (arms.length < 2) throw new Error("This test has no versions to push.");
+    const cohort = arms[0].target_cohort ?? "all";
+    if (cohort === "all") {
+      throw new Error(
+        "Give this test an audience (Lapsed / New / Expiring) before pushing — an all-patients test runs on your public booking page, where versions can't be split per patient.",
+      );
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const any = sb as unknown as { from(t: string): any; rpc(fn: string, p: Record<string, unknown>): PromiseLike<unknown> };
+    const { data: policy } = await any
+      .from("noshow_policies")
+      .select("rescue_proxy_email")
+      .eq("user_id", effectiveUserId)
+      .maybeSingle();
+    const proxyEmail = (policy?.rescue_proxy_email as string | null)?.trim() || null;
+    if (!proxyEmail) {
+      throw new Error(
+        "Set your iMessage proxy email first (Refill → no-show settings) so drafts have somewhere to land.",
+      );
+    }
+
+    const spaName = await resolveSpaName(
+      sb as unknown as Parameters<typeof resolveSpaName>[0],
+      effectiveUserId,
+    );
+    const { data: tenantRow } = await sb
+      .from("tenants")
+      .select("slug")
+      .eq("id", tenantId)
+      .maybeSingle();
+    let slug = (tenantRow as { slug?: string } | null)?.slug ?? "";
+    if (slug && (await tenantBooksOnExternalPms(sb, tenantId))) slug = "";
+
+    const targets = await listOfferCohortTargets(
+      sb as unknown as Parameters<typeof listOfferCohortTargets>[0],
+      effectiveUserId,
+      cohort as Parameters<typeof listOfferCohortTargets>[2],
+    );
+
+    // Existing assignments so a re-push keeps each patient on the same variant.
+    // PAGINATED — a lapsed cohort can run to ~2,000 patients; a fixed read would
+    // cap at 1,000 and silently re-assign the overflow (new variant + double
+    // impression) on every re-push. Page past the cap.
+    const existing = await fetchAllRows<{ patient_node_id: string; arm_offer_id: string }>(
+      (from, to) =>
+        assignmentsTbl(sb)
+          .select("patient_node_id, arm_offer_id")
+          .eq("tenant_id", tenantId)
+          .eq("experiment_id", data.experimentId)
+          .order("patient_node_id", { ascending: true })
+          .range(from, to),
+    );
+    const assignedArm = new Map<string, string>(
+      existing.map((r) => [r.patient_node_id, r.arm_offer_id]),
+    );
+
+    // Live arm counts — Thompson-pick new patients off the current state, and
+    // advance local impression counts as we assign so within-batch allocation
+    // stays balanced (no conversions yet → near-even explore).
+    const live: AbArm[] = arms.map((a) => ({
+      id: a.id,
+      label: a.ab_label ?? a.title,
+      impressions: a.ab_impressions != null ? Number(a.ab_impressions) : 0,
+      conversions: a.ab_conversions != null ? Number(a.ab_conversions) : 0,
+    }));
+    const titleById = new Map(arms.map((a) => [a.id, a.title]));
+    const impDelta = new Map<string, number>();
+    const newAssignments: Array<{ tenant_id: string; experiment_id: string; patient_node_id: string; arm_offer_id: string }> = [];
+
+    const built: Array<{ name: string; phone: string; body: string }> = [];
+    let skippedNoPhone = 0;
+    for (const t of targets) {
+      const phone = (t.phone ?? "").trim();
+      if (!phone) {
+        skippedNoPhone += 1;
+        continue;
+      }
+      let armId = assignedArm.get(t.patientNodeId);
+      if (!armId) {
+        const seed = hashSeed(`${data.experimentId}:${t.patientNodeId}`);
+        const pick = thompsonPickArm(live, seed) ?? live[0];
+        armId = pick.id;
+        assignedArm.set(t.patientNodeId, armId);
+        const lc = live.find((a) => a.id === armId);
+        if (lc) lc.impressions += 1; // advance local state for the next pick
+        impDelta.set(armId, (impDelta.get(armId) ?? 0) + 1);
+        newAssignments.push({
+          tenant_id: tenantId,
+          experiment_id: data.experimentId,
+          patient_node_id: t.patientNodeId,
+          arm_offer_id: armId,
+        });
+      }
+      const title = titleById.get(armId) ?? "your offer";
+      built.push({ name: t.name || "(unnamed)", phone, body: composeOfferPushBody(firstNameOf(t.name), spaName, title, slug) });
+    }
+
+    if (built.length === 0) {
+      return { drafted: 0, assignedNew: 0, skippedNoPhone, sentTo: null, error: "No reachable patients in this cohort (none had a phone number)." };
+    }
+
+    // Persist new assignments + count their impressions (atomic per-arm bump).
+    if (newAssignments.length > 0) {
+      await assignmentsTbl(sb).insert(newAssignments);
+      for (const [armId, n] of impDelta) {
+        await any.rpc("bump_ab_impression", { p_offer_id: armId, p_n: n });
+      }
+    }
+
+    const subject = `${built.length} A/B draft${built.length === 1 ? "" : "s"} — SmartSpa is testing versions`;
+    const rows = built
+      .map(
+        (b) =>
+          `<tr><td style="padding:6px 10px;border-bottom:1px solid #eee">${escHtml(b.name)}</td><td style="padding:6px 10px;border-bottom:1px solid #eee">${escHtml(b.phone)}</td><td style="padding:6px 10px;border-bottom:1px solid #eee">${escHtml(b.body)}</td></tr>`,
+      )
+      .join("");
+    const html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1c2024">
+<p>Paste this whole email into Claude Desktop with the iMessage MCP installed. Claude will call <code>draft_imessage(recipient_phone, body)</code> for each row — one Messages.app conversation per draft. Review each and tap Send.</p>
+<p><strong>SmartSpa A/B test</strong> &middot; ${built.length} patient(s) &middot; each is testing one of your versions${skippedNoPhone ? ` &middot; ${skippedNoPhone} skipped (no phone)` : ""}. Which version books best decides the winner.</p>
+<table style="border-collapse:collapse;font-size:13px"><thead><tr><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #ccc">Name</th><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #ccc">Phone</th><th style="text-align:left;padding:6px 10px;border-bottom:2px solid #ccc">Message</th></tr></thead><tbody>${rows}</tbody></table>
+</div>`;
+    const text = built.map((b) => `${b.name}\t${b.phone}\t${b.body}`).join("\n");
+
+    const resendKey = process.env.RESEND_API_KEY;
+    if (!resendKey) throw new Error("Server is missing RESEND_API_KEY.");
+    try {
+      const res = await postResendEmail({
+        apiKey: resendKey,
+        from: process.env.REFILL_FROM_EMAIL ?? "offers@smartspa.app",
+        to: [proxyEmail],
+        subject,
+        text,
+        html,
+        tags: [
+          { name: "type", value: "refill-ab-push" },
+          { name: "tenant", value: effectiveUserId },
+        ],
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (!res.ok) {
+        return { drafted: built.length, assignedNew: newAssignments.length, skippedNoPhone, sentTo: null, error: `Resend ${res.status}: ${res.body.slice(0, 200)}` };
+      }
+    } catch (e) {
+      return { drafted: built.length, assignedNew: newAssignments.length, skippedNoPhone, sentTo: null, error: e instanceof Error ? e.message : String(e) };
+    }
+    return { drafted: built.length, assignedNew: newAssignments.length, skippedNoPhone, sentTo: proxyEmail, error: null };
   });

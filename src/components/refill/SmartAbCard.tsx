@@ -16,13 +16,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { ChevronDown, FlaskConical, Loader2, Plus, Sparkles, Trophy, X } from "lucide-react";
+import { ChevronDown, FlaskConical, Loader2, Plus, Send, Sparkles, Trophy, X } from "lucide-react";
 
 import {
   createAbExperiment,
   getAbVerdict,
   listAbExperiments,
   simulateAbRound,
+  draftExperimentPush,
   type AbExperimentSummary,
   type AbVerdictResult,
 } from "@/server/smart-ab.functions";
@@ -172,6 +173,27 @@ export function SmartAbCard({
       await load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't simulate.");
+    } finally {
+      setWorkingId(null);
+    }
+  }
+
+  async function push(experimentId: string) {
+    if (!accessToken) return;
+    setWorkingId(experimentId);
+    try {
+      const res = await draftExperimentPush({ data: { accessToken, viewAsUserId, experimentId } });
+      if (res.error) {
+        toast.error(res.error);
+        return;
+      }
+      toast.success(
+        `Staged ${res.drafted} draft${res.drafted === 1 ? "" : "s"} to ${res.sentTo} — review & send in Messages. ${res.assignedNew} newly assigned a version.${res.skippedNoPhone ? ` (${res.skippedNoPhone} had no phone)` : ""}`,
+      );
+      const v = await getAbVerdict({ data: { accessToken, viewAsUserId, experimentId } });
+      setVerdicts((prev) => ({ ...prev, [experimentId]: v }));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't push the test.");
     } finally {
       setWorkingId(null);
     }
@@ -342,6 +364,7 @@ export function SmartAbCard({
                   result={verdicts[e.experimentId]}
                   working={workingId === e.experimentId}
                   onSimulate={() => void simulate(e.experimentId)}
+                  onPush={() => void push(e.experimentId)}
                 />
               ))}
             </div>
@@ -357,16 +380,21 @@ function VerdictView({
   result,
   working,
   onSimulate,
+  onPush,
 }: {
   exp: AbExperimentSummary;
   result: AbVerdictResult | undefined;
   working: boolean;
   onSimulate: () => void;
+  onPush: () => void;
 }) {
   const v = result?.verdict;
   const decided = result?.status === "decided";
   const maxRate = v ? Math.max(0.001, ...v.arms.map((a) => a.rate)) : 1;
   const winnerId = result?.winnerOfferId ?? v?.best?.id ?? null;
+  // Pushable = still running AND targeted to a cohort (an 'all' test runs on the
+  // public booking page, where versions can't be split per patient).
+  const pushable = (result?.status ?? exp.status) === "running" && exp.targetCohort !== "all";
 
   return (
     <div className="rounded-xl border border-rule bg-white px-4 py-3">
@@ -383,16 +411,30 @@ function VerdictView({
             running
           </span>
         )}
-        <button
-          type="button"
-          onClick={onSimulate}
-          disabled={working}
-          title="Simulate bookings to see the bandit work (synthetic — no live data)"
-          className="ml-auto inline-flex items-center gap-1 rounded-md border border-rule px-2 py-0.5 text-[11px] font-semibold text-ink-soft hover:text-ink transition disabled:opacity-50"
-        >
-          {working ? <Loader2 className="h-3 w-3 animate-spin" /> : <FlaskConical className="h-3 w-3" />}
-          Simulate bookings
-        </button>
+        <div className="ml-auto flex items-center gap-1.5">
+          {pushable && (
+            <button
+              type="button"
+              onClick={onPush}
+              disabled={working}
+              title="Draft this test to your cohort — each patient gets one version; their booking is the vote"
+              className="inline-flex items-center gap-1 rounded-md border border-emerald-ink/30 bg-emerald-soft px-2 py-0.5 text-[11px] font-semibold text-emerald hover:opacity-90 transition disabled:opacity-50"
+            >
+              {working ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+              Push test
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onSimulate}
+            disabled={working}
+            title="Simulate bookings to see the bandit work (synthetic — no live data)"
+            className="inline-flex items-center gap-1 rounded-md border border-rule px-2 py-0.5 text-[11px] font-semibold text-ink-soft hover:text-ink transition disabled:opacity-50"
+          >
+            {working ? <Loader2 className="h-3 w-3 animate-spin" /> : <FlaskConical className="h-3 w-3" />}
+            Simulate
+          </button>
+        </div>
       </div>
 
       {v && v.best && (
