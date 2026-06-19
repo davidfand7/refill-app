@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.100.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.100.0 &mdash; The unified Offer Composer: one agentic-native surface to author an offer (single OR A/B).</strong> The marquee UX consolidation. There were two separate create forms &mdash; &ldquo;new offer&rdquo; (cross/up-sell) and &ldquo;new test&rdquo; (Smart-A/B). They&rsquo;re now ONE composer that leads with plain-English intent: a live summary at the top reads back your offer as you build it (&ldquo;<em>$50 off Tox for lapsed — Tue, cap 20/wk — sent to your matching patients</em>&rdquo;), with the controls tucked behind one expander each (KISS additive-on-demand). <strong>A single offer and an A/B are the same intent here</strong>: flip &ldquo;Let SmartSpa find your best version&rdquo; and add a version &mdash; the base offer becomes version 1 and the alternates differ only in terms. On Activate, no extra versions → one offer (<code>createSpaOffer</code>); one+ versions → an A/B (<code>createAbExperiment</code>, the impartial bandit picks the winner by real bookings). Cohort, schedule (weekday recurrence + cap + dates), and the resulting delivery surfaces (badge + Deals for Everyone; cohort push otherwise) are shared across versions, shown honestly. The two old cards keep their <strong>result lists</strong> &mdash; &ldquo;Your offers&rdquo; (pause/resume/delete/push) and &ldquo;Your tests&rdquo; (simulate/push/verdict) &mdash; with their create forms gated off (<code>hideCreate</code>), and refresh the moment the composer creates something. Same DNA as the original agentic platform: plain-English intent, the system does the math &mdash; the differentiator vs form-based incumbents. <strong>New</strong>: <code>OfferComposer.tsx</code>. <strong>Touched</strong>: <code>SpaOffersCard.tsx</code> + <code>SmartAbCard.tsx</code> (hideCreate + refreshKey), <code>app.refill.recognition.rewards.tsx</code>, <code>changelog.ts</code>. No migration. <em>Next passes: a richer live preview (badge/Deals/email tabs) + folding manufacturer-promo delivery into the same composer.</em>",
+    ],
+  },
+  {
     version: "v2.99.0",
     date: "June 2026",
     items: [

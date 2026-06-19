@@ -58,9 +58,16 @@ function newVariant(): VariantDraft {
 export function SmartAbCard({
   accessToken,
   viewAsUserId,
+  hideCreate = false,
+  refreshKey,
 }: {
   accessToken: string | null;
   viewAsUserId?: string;
+  /** v2.100: create moved to the unified OfferComposer — this card then shows
+   *  only the running tests + their verdicts (simulate / push / results). */
+  hideCreate?: boolean;
+  /** Bump to force a re-fetch (e.g. after the composer creates a test). */
+  refreshKey?: number;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [open, setOpen] = useState(false);
@@ -115,7 +122,7 @@ export function SmartAbCard({
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   function setVariant(i: number, patch: Partial<VariantDraft>) {
     setVariants((prev) => prev.map((v, k) => (k === i ? { ...v, ...patch } : v)));
@@ -207,7 +214,7 @@ export function SmartAbCard({
         className="flex w-full items-center gap-2 text-sm font-semibold text-ink"
       >
         <FlaskConical className="h-4 w-4 text-emerald" />
-        Let SmartSpa find your best version
+        {hideCreate ? "Your tests" : "Let SmartSpa find your best version"}
         {experiments.length > 0 && (
           <span className="rounded-full bg-emerald-soft px-2 py-0.5 text-[10.5px] font-semibold text-emerald">
             {experiments.length}
@@ -220,12 +227,15 @@ export function SmartAbCard({
 
       {!collapsed && (
         <>
+          {!hideCreate && (
           <p className="mt-2 text-[11px] text-ink-faint leading-relaxed">
             Test a few versions of an offer on the same patients. Real bookings
             decide the winner — an impartial AI bandit shifts toward whatever
             books best and keeps it. No math, no &ldquo;declare a winner.&rdquo;
           </p>
+          )}
 
+          {!hideCreate && (
           <div className="mt-3">
             <button
               type="button"
@@ -236,8 +246,9 @@ export function SmartAbCard({
               {open ? "Close" : "New test"}
             </button>
           </div>
+          )}
 
-          {open && (
+          {!hideCreate && open && (
             <div className="mt-3 space-y-3 rounded-xl border border-rule bg-white p-3">
               <div>
                 <Lbl>Service to test</Lbl>

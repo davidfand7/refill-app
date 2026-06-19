@@ -90,9 +90,16 @@ const WEEKDAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 export function SpaOffersCard({
   accessToken,
   viewAsUserId,
+  hideCreate = false,
+  refreshKey,
 }: {
   accessToken: string | null;
   viewAsUserId?: string;
+  /** v2.100: create moved to the unified OfferComposer — this card then shows
+   *  only the existing-offers list (pause/resume/delete/push). */
+  hideCreate?: boolean;
+  /** Bump to force a re-fetch (e.g. after the composer creates an offer). */
+  refreshKey?: number;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [open, setOpen] = useState(false);
@@ -130,7 +137,7 @@ export function SpaOffersCard({
 
   useEffect(() => {
     void load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   const needsDiscount = offerType === "dollars_off" || offerType === "discount_addon";
   const needsPct = offerType === "percent_off";
@@ -263,7 +270,7 @@ export function SpaOffersCard({
         className="flex w-full items-center gap-2 text-sm font-semibold text-ink"
       >
         <Sparkles className="h-4 w-4 text-amber" />
-        Create a Cross/Up-sell Offer
+        {hideCreate ? "Your offers" : "Create a Cross/Up-sell Offer"}
         {offers.length > 0 && (
           <span className="rounded-full bg-amber-soft px-2 py-0.5 text-[10.5px] font-semibold text-amber">
             {offers.length}
@@ -279,12 +286,15 @@ export function SpaOffersCard({
 
       {!collapsed && (
         <>
+      {!hideCreate && (
       <p className="mt-2 text-[11px] text-ink-faint">
         Your own loyalty program — not a manufacturer's. Dollar or percent off a
         service, or a free / discounted add-on with it. It badges that service
         at booking and earns the same $5 when a matched patient books it.
       </p>
+      )}
 
+      {!hideCreate && (
       <div className="mt-3">
         <button
           type="button"
@@ -295,8 +305,9 @@ export function SpaOffersCard({
           {open ? "Close form" : "New offer"}
         </button>
       </div>
+      )}
 
-      {open && (
+      {!hideCreate && open && (
         <div className="mt-3 space-y-3">
           {/* Offer type selector */}
           <div>

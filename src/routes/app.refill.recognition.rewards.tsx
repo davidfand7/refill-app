@@ -46,6 +46,7 @@ import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
 import { SpaOffersCard } from "@/components/refill/SpaOffersCard";
 import { RepPromosCard } from "@/components/refill/RepPromosCard";
 import { SmartAbCard } from "@/components/refill/SmartAbCard";
+import { OfferComposer } from "@/components/refill/OfferComposer";
 import { getRepLoopEnabled } from "@/server/refill-promos";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
@@ -99,6 +100,9 @@ function RewardsPage() {
   const [receipt, setReceipt] = useState<RewardImportReceipt | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [repLoopEnabled, setRepLoopEnabled] = useState(false);
+  // Bumped when the composer creates an offer/test, so the two result lists
+  // (Your offers / Your tests) re-fetch.
+  const [refreshKey, setRefreshKey] = useState(0);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
@@ -288,9 +292,15 @@ function RewardsPage() {
               <RepPromosCard accessToken={accessToken} viewAsUserId={viewAsUserId} />
             )}
 
-            <SpaOffersCard accessToken={accessToken} viewAsUserId={viewAsUserId} />
+            <OfferComposer
+              accessToken={accessToken}
+              viewAsUserId={viewAsUserId}
+              onCreated={() => setRefreshKey((k) => k + 1)}
+            />
 
-            <SmartAbCard accessToken={accessToken} viewAsUserId={viewAsUserId} />
+            <SpaOffersCard accessToken={accessToken} viewAsUserId={viewAsUserId} hideCreate refreshKey={refreshKey} />
+
+            <SmartAbCard accessToken={accessToken} viewAsUserId={viewAsUserId} hideCreate refreshKey={refreshKey} />
 
             {loading ? (
               <div className="flex items-center justify-center text-sm text-ink-soft py-16">
