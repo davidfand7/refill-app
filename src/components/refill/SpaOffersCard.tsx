@@ -374,7 +374,7 @@ export function SpaOffersCard({
                   <optgroup key={g.value} label={g.label}>
                     {g.items.map((s) => (
                       <option key={s.id} value={s.name}>
-                        {s.name}
+                        {s.displayName}
                       </option>
                     ))}
                   </optgroup>

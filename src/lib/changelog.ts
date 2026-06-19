@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.101.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.101.0 &mdash; Catalog hygiene: provider bake-ins cleaned out of every service picker.</strong> Many spas (esp. solo Acuity setups) weld the provider into the catalog label &mdash; &ldquo;Tox w/ Karen&rdquo;, &ldquo;Filler with Karen&rdquo; &mdash; which made the offer + A/B + composer service dropdowns read messy. Now <code>listServicesFn</code> returns a provider-cleaned <code>displayName</code> alongside the raw <code>name</code>: it loads the tenant&rsquo;s provider names and strips a trailing <em>connector + known provider name</em> (&ldquo;Tox w/ Karen&rdquo; → &ldquo;Tox&rdquo;) for display. <strong>Precision over recall</strong> &mdash; only a KNOWN provider/owner name is stripped, so &ldquo;Facial with Dermaplane&rdquo; or &ldquo;Botox / Dysport&rdquo; pass through untouched. The three pickers (the unified composer, &ldquo;Your offers&rdquo;, &ldquo;Your tests&rdquo;) + the composer&rsquo;s plain-English summary now show the clean label; the option&rsquo;s <strong>value stays the raw name</strong> so matching, badging, and the $5 win path are byte-identical. <strong>Clean-on-read, never mutate the source</strong> &mdash; re-typing the catalog isn&rsquo;t the owner&rsquo;s job (same philosophy as the v1.26.15 rescue-label strip; that logic is now a shared <code>stripProviderSuffix</code> util). Best-effort: a tenant with no providers configured just sees names unchanged. <strong>Note</strong>: genuinely mis-entered rows (e.g. a stray &ldquo;Lyft&rdquo;) aren&rsquo;t provider bake-ins and stay as-is &mdash; those need an owner rename/hide in the catalog (a future cleanup tool). <strong>Touched</strong>: <code>service-categories.ts</code> (new <code>stripProviderSuffix</code>), <code>refill-catalog.ts</code> (<code>displayName</code> on Service + provider load in <code>listServicesFn</code>), <code>OfferComposer.tsx</code> / <code>SmartAbCard.tsx</code> / <code>SpaOffersCard.tsx</code> (display cleaned label), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.100.0",
     date: "June 2026",
     items: [

@@ -93,14 +93,15 @@ export function OfferComposer({
   const needsPct = offerType === "percent_off";
   const needsAddon = offerType === "free_addon" || offerType === "discount_addon";
 
-  // Plain-English base-offer phrase ("$50 off Tox" / "20% off Filler").
+  // Plain-English base-offer phrase ("$50 off Tox" / "20% off Filler"). Uses the
+  // provider-cleaned display name so the summary reads "Tox" not "Tox w/ Karen".
   const offerPhrase = useMemo(() => {
-    const svc = serviceName || "a service";
+    const svc = services.find((s) => s.name === serviceName)?.displayName || serviceName || "a service";
     if (offerType === "percent_off") return `${pct || "—"}% off ${svc}`;
     if (offerType === "free_addon") return `Free ${addon || "add-on"} with ${svc}`;
     if (offerType === "discount_addon") return `$${discount || "—"} off ${addon || "add-on"} with ${svc}`;
     return `$${discount || "—"} off ${svc}`;
-  }, [offerType, serviceName, discount, pct, addon]);
+  }, [offerType, serviceName, discount, pct, addon, services]);
 
   const whenPhrase = useMemo(() => {
     const days = weekdays.size ? [...weekdays].sort((a, b) => a - b).map((d) => WEEKDAYS[d]).join(", ") : "any day";
@@ -250,7 +251,7 @@ export function OfferComposer({
               {groupServicesByCategory(services).map((g) => (
                 <optgroup key={g.value} label={g.label}>
                   {g.items.map((s) => (
-                    <option key={s.id} value={s.name}>{s.name}</option>
+                    <option key={s.id} value={s.name}>{s.displayName}</option>
                   ))}
                 </optgroup>
               ))}

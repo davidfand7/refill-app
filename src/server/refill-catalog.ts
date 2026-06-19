@@ -18,7 +18,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { admin } from "./admin-client";
-import { normalizeCategory } from "@/lib/service-categories";
+import { normalizeCategory, stripProviderSuffix } from "@/lib/service-categories";
 import { z } from "zod";
 
 import { parseServiceListCsv } from "@/lib/catalog-csv";
@@ -361,6 +361,9 @@ export type Service = {
   id: string;
   tenantId: string;
   name: string;
+  /** Provider-cleaned name for DISPLAY ("Tox w/ Karen" → "Tox"); matching +
+   *  writes still use `name`. Equals `name` unless listServicesFn cleaned it. */
+  displayName: string;
   category: ServiceCategory;
   servicePrice: number;
   cogsPerService: number | null;
@@ -411,6 +414,7 @@ function rowToService(r: ServiceRow): Service {
     id: r.id,
     tenantId: r.tenant_id,
     name: r.name,
+    displayName: r.name, // listServicesFn overrides with the provider-cleaned label
     category: r.category as ServiceCategory,
     servicePrice: price,
     cogsPerService: cogs,
@@ -477,7 +481,29 @@ export const listServicesFn = createServerFn({ method: "POST" })
         .order("name", { ascending: true })
         .range(from, to);
     });
-    return rows.map((r) => rowToService(r as ServiceRow));
+
+    // v2.101 catalog hygiene: clean provider bake-ins from the DISPLAY name
+    // ("Tox w/ Karen" → "Tox"). Load the tenant's provider names as the strip
+    // candidates (precise — only a known name is stripped). Best-effort: a miss
+    // leaves displayName === name. Source-of-truth `name` is never mutated.
+    let providerNames: string[] = [];
+    try {
+      const { data: provs } = await sb
+        .from("scheduling_providers")
+        .select("name")
+        .eq("tenant_id", tenantId)
+        .limit(200);
+      providerNames = ((provs as { name: string | null }[] | null) ?? [])
+        .map((p) => p.name?.trim() ?? "")
+        .filter(Boolean);
+    } catch {
+      /* no providers / not configured — displayName falls back to name */
+    }
+
+    return rows.map((r) => {
+      const svc = rowToService(r as ServiceRow);
+      return { ...svc, displayName: stripProviderSuffix(svc.name, providerNames) };
+    });
   });
 
 // ─── setServiceHiddenFn (v1.34.9.1) ───────────────────────────────────────

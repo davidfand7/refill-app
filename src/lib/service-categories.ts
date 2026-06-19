@@ -77,6 +77,28 @@ export function orderedCategoryRank(value: string, order: string[]): number {
 }
 
 /**
+ * Strip a provider baked into a service name for DISPLAY — "Tox w/ Karen" →
+ * "Tox", "Filler with Karen" → "Filler". Many spas (esp. solo Acuity setups)
+ * weld the provider into the catalog label; that pollutes every service picker.
+ * Clean on render, never mutate the source (re-typing the catalog isn't on the
+ * owner). PRECISION over recall: only strip a trailing connector + a KNOWN
+ * provider/owner name (the candidates), so "Facial with Dermaplane" or
+ * "Botox / Dysport" pass through untouched. Pure — same logic as the rescue
+ * composers' stripProviderFromTreatment, shared here.
+ */
+export function stripProviderSuffix(name: string, candidates: string[]): string {
+  if (!name) return name;
+  const cands = candidates.map((c) => c?.trim()).filter((c): c is string => !!c && c.length > 1);
+  if (cands.length === 0) return name;
+  let out = name.trim();
+  for (const c of cands) {
+    const esc = c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    out = out.replace(new RegExp(`\\s*(?:w\\/\\s*|with\\s+|[-–—\\/:]\\s*)${esc}\\s*$`, "i"), "").trim();
+  }
+  return out || name;
+}
+
+/**
  * Group services into category buckets for a picker (<optgroup>) — so a flat
  * dump of "CoolSculpting · Defyne · HIFU NECK · BBL -Chest…" reads instead as
  * Tox ▸ … / Filler ▸ Defyne, Refyne… / Laser ▸ HIFU, BBL… — categories,
