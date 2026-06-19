@@ -9,7 +9,7 @@
 
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Gift, Layers, PhoneOutgoing, Wand2, Tag, Target } from "lucide-react";
+import { Gift, Layers, PhoneOutgoing, Wand2, Target } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
@@ -63,6 +63,10 @@ function RecallExpiryBadge() {
   );
 }
 
+// "brand-promos" retired v2.94 — the rep-interest loop folded into the Rewards
+// offers surface (RepPromosCard, gated by rep_loop_enabled). The standalone
+// route now redirects to Rewards. Kept in the union so a stale `active` prop
+// (and the redirecting route, if it ever renders) still type-checks.
 export type RecognitionTab =
   | "brand-promos"
   | "inventory"
@@ -77,7 +81,6 @@ const TABS: Array<{
   label: string;
   Icon: typeof Layers;
 }> = [
-  { key: "brand-promos", to: "/app/refill/recognition/brand-promos", label: "Brand Promos", Icon: Tag },
   { key: "inventory", to: "/app/refill/recognition/inventory", label: "Inventory", Icon: Layers },
   { key: "rewards", to: "/app/refill/recognition/rewards", label: "Rewards", Icon: Gift },
   { key: "program", to: "/app/refill/recognition/program", label: "Program", Icon: Target },

@@ -111,6 +111,16 @@ export const FLAG_CATALOG: FeatureFlagDefinition[] = [
     offMeaning: "Plaid Mode hidden from this spa entirely.",
   },
   {
+    key: "rep_loop_enabled",
+    label: "Rep loop (brand-promo interest)",
+    description:
+      "Surfaces manufacturer promos the spa is eligible for (matched by the products they carry) inside the unified Rewards offers surface, with an 'I'm interested → ping my rep' + dismiss loop and the [VERIFIED] tier ladder. The eligible promos come from the rep-side CRM (Liz / openagenticv4), which isn't feeding SmartSpa standalone yet — so this ships dark and is flipped ON globally (or per-tenant) once a rep pipeline exists. Default OFF.",
+    defaultEnabled: false,
+    onMeaning:
+      "Eligible brand promos + the express-interest-to-rep loop appear on the Rewards offers surface.",
+    offMeaning: "Rep loop hidden everywhere; the standalone Brand Promos page is retired into Rewards.",
+  },
+  {
     key: "concierge_mode_enabled",
     label: "Concierge onboarding (operator co-driving)",
     description:

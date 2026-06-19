@@ -44,6 +44,8 @@ import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/PageHeader";
 import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
 import { SpaOffersCard } from "@/components/refill/SpaOffersCard";
+import { RepPromosCard } from "@/components/refill/RepPromosCard";
+import { getRepLoopEnabled } from "@/server/refill-promos";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { listSupportedManufacturers } from "@/lib/manufacturer-reward-csv";
@@ -95,6 +97,7 @@ function RewardsPage() {
   const [uploading, setUploading] = useState(false);
   const [receipt, setReceipt] = useState<RewardImportReceipt | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("all");
+  const [repLoopEnabled, setRepLoopEnabled] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   const load = useCallback(async () => {
@@ -109,6 +112,14 @@ function RewardsPage() {
       const v = await listRewardSignal({ data: { accessToken: token, viewAsUserId } });
       setView(v);
       setLoadError(null);
+      // Rep loop ships dark behind rep_loop_enabled — best-effort, never blocks
+      // the page (a miss just leaves the rep card hidden).
+      try {
+        const rep = await getRepLoopEnabled({ data: { accessToken: token, viewAsUserId } });
+        setRepLoopEnabled(rep.enabled);
+      } catch {
+        setRepLoopEnabled(false);
+      }
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Couldn't load.");
     } finally {
@@ -271,6 +282,10 @@ function RewardsPage() {
             />
 
             <PromoIntelligenceCard accessToken={accessToken} viewAsUserId={viewAsUserId} />
+
+            {repLoopEnabled && (
+              <RepPromosCard accessToken={accessToken} viewAsUserId={viewAsUserId} />
+            )}
 
             <SpaOffersCard accessToken={accessToken} viewAsUserId={viewAsUserId} />
 

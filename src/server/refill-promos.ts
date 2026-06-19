@@ -25,7 +25,12 @@ import { createServerFn } from "@tanstack/react-start";
 import { admin } from "./admin-client";
 import { z } from "zod";
 
-import { verifyAuth, accessTokenInput } from "@/server/auth-helpers";
+import {
+  verifyAuth,
+  accessTokenInput,
+  getTenantIdForUser,
+  resolveEffectiveUserId,
+} from "@/server/auth-helpers";
 import type {
   PromotionAttachments,
   PromotionBuyInTier,
@@ -283,6 +288,51 @@ export const expressInterestInPromo = createServerFn({ method: "POST" })
       );
     if (error) throw new Error(`Couldn't record interest: ${error.message}`);
     return { ok: true, status: "interested" };
+  });
+
+// ── getRepLoopEnabled (v2.94 · rep-loop gate) ─────────────────────────────
+//
+// The rep loop ships DARK behind the `rep_loop_enabled` flag (catalog default
+// OFF) — the eligible promos come from the rep-side CRM, which isn't feeding
+// SmartSpa standalone yet. Resolves global-OR-tenant: a global row turns it on
+// for everyone; a tenant row turns it on for one spa. Either ON wins; default
+// OFF. viewAs-honored so an admin viewing-as a tenant sees that spa's state.
+// Mirrors concierge.functions' loose-typed feature_flags read (the table isn't
+// in the generated Database types).
+export const getRepLoopEnabled = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) =>
+    accessTokenInput.extend({ viewAsUserId: z.string().uuid().optional() }).parse(input),
+  )
+  .handler(async ({ data }): Promise<{ enabled: boolean }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const any = sb as unknown as { from(t: string): any };
+
+    const { data: globalRow } = await any
+      .from("feature_flags")
+      .select("enabled")
+      .eq("flag_key", "rep_loop_enabled")
+      .eq("scope", "global")
+      .is("scope_id", null)
+      .maybeSingle();
+    if ((globalRow as { enabled?: boolean } | null)?.enabled === true) {
+      return { enabled: true };
+    }
+
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    if (!tenantId) return { enabled: false };
+    const { data: tenantRow } = await any
+      .from("feature_flags")
+      .select("enabled")
+      .eq("flag_key", "rep_loop_enabled")
+      .eq("scope", "tenant")
+      .eq("scope_id", tenantId)
+      .maybeSingle();
+    return { enabled: (tenantRow as { enabled?: boolean } | null)?.enabled === true };
   });
 
 const dismissInput = accessTokenInput.extend({
