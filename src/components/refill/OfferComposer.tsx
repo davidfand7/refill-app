@@ -50,6 +50,8 @@ const COHORTS: Array<{ value: OfferCohort; label: string }> = [
   { value: "all", label: "Everyone" },
   { value: "lapsed", label: "Lapsed" },
   { value: "new", label: "New" },
+  { value: "vip", label: "VIP / A-list" },
+  { value: "waitlist", label: "Waitlist" },
   { value: "expiring", label: "Expiring reward" },
 ];
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];

@@ -90,7 +90,7 @@ const createInput = z.object({
   /** Shared trigger service all arms apply to. */
   serviceName: z.string().min(1).max(160),
   /** Shared targeting (the only variable a patient sees is the offer terms). */
-  targetCohort: z.enum(["all", "lapsed", "new", "expiring"]).default("all"),
+  targetCohort: z.enum(["all", "lapsed", "new", "expiring", "vip", "waitlist"]).default("all"),
   activeWeekdays: z.array(z.number().int().min(0).max(6)).max(7).nullable().optional(),
   quantityCap: z.number().int().positive().max(100000).nullable().optional(),
   startsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),

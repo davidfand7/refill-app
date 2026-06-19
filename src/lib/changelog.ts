@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.107.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.107.0 &mdash; Two more audiences in the composer: VIP / A-list and Waitlist.</strong> The <em>Who gets it</em> picker grows from four cohorts to six &mdash; you can now target an offer at your <strong>VIP / A-list</strong> (the patients you&rsquo;ve starred, plus anyone your A-list rules mark) or your opted-in <strong>Waitlist</strong>, alongside Everyone / Lapsed / New / Expiring-reward. Both resolve through the <strong>same cohort engine the push path uses</strong> (opt-out-filtered), so they get the live &ldquo;~N match&rdquo; count for free and reach patients the same trusted way (draft-to-inbox). VIP reads each patient&rsquo;s star flag; Waitlist reads opted-in (<code>status=active</code>) waitlist entries and hydrates their contact. Like any targeted cohort, these don&rsquo;t badge publicly &mdash; they&rsquo;re pushed, and earn the $5 only when an in-cohort patient books. <strong>Requires a one-line migration</strong> (widens the offer <code>target_cohort</code> CHECK constraint) &mdash; applied separately. <strong>Touched</strong>: <code>promo-calendar.ts</code> (OfferCohort type), <code>refill-promo-calendar.functions.ts</code> (vip + waitlist resolvers in listOfferCohortTargets, 3 cohort enums), <code>smart-ab.functions.ts</code> (A/B cohort enum), <code>OfferComposer.tsx</code> + <code>app.refill.recognition.rewards.tsx</code> (cohort pickers), migration <code>v2_107_0_vip_waitlist_cohorts.sql</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.106.0",
     date: "June 2026",
     items: [

@@ -792,6 +792,8 @@ const MFR_COHORT_OPTIONS: Array<{ value: OfferCohort; label: string }> = [
   { value: "all", label: "Everyone" },
   { value: "lapsed", label: "Lapsed" },
   { value: "new", label: "New" },
+  { value: "vip", label: "VIP / A-list" },
+  { value: "waitlist", label: "Waitlist" },
   { value: "expiring", label: "Expiring reward" },
 ];
 const MFR_WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];

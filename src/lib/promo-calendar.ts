@@ -36,7 +36,7 @@ export type OfferType =
  *  patient segments — they DON'T passively badge to anonymous visitors,
  *  they're delivered to matching patients (push) + only earn for in-cohort
  *  patients. */
-export type OfferCohort = "all" | "lapsed" | "new" | "expiring";
+export type OfferCohort = "all" | "lapsed" | "new" | "expiring" | "vip" | "waitlist";
 
 /** A parsed promo-calendar offer (one row of the "Dollars Off" subset). */
 export type PromoOffer = {
