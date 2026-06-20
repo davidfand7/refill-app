@@ -58,8 +58,11 @@ import {
   updateServiceProductQuantityFn,
   getServiceAddonIdsFn,
   setServiceAddonsFn,
+  previewServiceProductReconcileFn,
+  commitServiceProductReconcileFn,
   type Product,
   type RecategorizeReceipt,
+  type ReconcilePreview,
   type Service,
   type ServiceCategory,
   type ServiceLinkageBundle,
@@ -169,6 +172,9 @@ function ServicesPage() {
   const [linkageLoading, setLinkageLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [recategorizing, setRecategorizing] = useState(false);
+  // v2.117.0: service⇄product auto-reconcile (preview-first).
+  const [reconcilePreview, setReconcilePreview] = useState<ReconcilePreview | null>(null);
+  const [reconcileBusy, setReconcileBusy] = useState(false);
   const [lastRecategorize, setLastRecategorize] = useState<
     | { ok: true; receipt: RecategorizeReceipt; at: string }
     | { ok: false; message: string; at: string }
@@ -674,6 +680,52 @@ function ServicesPage() {
     }
   }
 
+  async function onPreviewReconcile() {
+    if (reconcileBusy) return;
+    setReconcileBusy(true);
+    try {
+      const preview = await withToken((token) =>
+        previewServiceProductReconcileFn({ data: { accessToken: token, viewAsUserId } }),
+      );
+      setReconcilePreview(preview);
+      if (preview.toLink.length === 0 && preview.toCreate.length === 0) {
+        toast.success(
+          `Nothing to reconcile — ${preview.alreadyLinked} already linked, ${preview.unmatched.length} have no brand match.`,
+          { duration: 7000 },
+        );
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't preview reconcile.");
+    } finally {
+      setReconcileBusy(false);
+    }
+  }
+
+  async function onCommitReconcile() {
+    if (reconcileBusy) return;
+    setReconcileBusy(true);
+    try {
+      const receipt = await withToken((token) =>
+        commitServiceProductReconcileFn({ data: { accessToken: token, viewAsUserId } }),
+      );
+      const fresh = await withToken((token) =>
+        listServicesFn({ data: { accessToken: token, viewAsUserId } }),
+      );
+      setServices(fresh);
+      setReconcilePreview(null);
+      toast.success(
+        `Linked ${receipt.linked} service${receipt.linked === 1 ? "" : "s"}` +
+          (receipt.created > 0 ? ` · created ${receipt.created} product${receipt.created === 1 ? "" : "s"}` : "") +
+          (receipt.flagged > 0 ? ` · ${receipt.flagged} need unit counts set` : "") + ".",
+        { duration: 9000 },
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't reconcile.");
+    } finally {
+      setReconcileBusy(false);
+    }
+  }
+
   async function onToggleCogsSource(source: "manual" | "derived") {
     if (!editingId || busy) return;
     setBusy(true);
@@ -723,6 +775,25 @@ function ServicesPage() {
                   <Wand2 className="h-3.5 w-3.5" />
                 )}
                 Re-categorize
+              </button>
+              <button
+                type="button"
+                onClick={onPreviewReconcile}
+                disabled={reconcileBusy || services.length === 0}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold transition",
+                  reconcileBusy || services.length === 0
+                    ? "text-ink-faint cursor-not-allowed"
+                    : "text-ink-soft hover:text-ink hover:border-emerald/40",
+                )}
+                title="Match services to products by brand and link them so COGS derives automatically — auto-creates a product where one's missing. Preview-first."
+              >
+                {reconcileBusy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Link2 className="h-3.5 w-3.5" />
+                )}
+                Link products
               </button>
               <Link
                 to="/app/refill/catalog/import"
@@ -859,6 +930,80 @@ function ServicesPage() {
               >
                 {showHidden ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
                 {showHidden ? "Showing hidden" : "Show hidden"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {reconcilePreview && (reconcilePreview.toLink.length > 0 || reconcilePreview.toCreate.length > 0) && (
+          <div className="rounded-xl border border-emerald/30 bg-white px-5 py-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-[15px] font-semibold text-ink">
+                Reconcile preview — nothing's saved yet
+              </h3>
+              <button
+                type="button"
+                onClick={() => setReconcilePreview(null)}
+                className="text-ink-faint hover:text-ink text-[13px]"
+              >
+                Cancel
+              </button>
+            </div>
+            <p className="text-[12px] text-ink-soft leading-snug">
+              Matched by brand. Linking lets each service derive its COGS from product cost. Quantity defaults to 1 — services marked
+              <span className="font-semibold text-amber"> ⚑ set units</span> consume variable units (tox) and need your real count after.
+            </p>
+
+            {reconcilePreview.toLink.length > 0 && (
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint mb-1">
+                  Link to existing product · {reconcilePreview.toLink.length}
+                </div>
+                <ul className="divide-y divide-rule/60 rounded-md border border-rule">
+                  {reconcilePreview.toLink.map((it) => (
+                    <li key={it.serviceId} className="px-3 py-2 flex items-center justify-between gap-2 text-[13px]">
+                      <span className="text-ink">{it.serviceName} <span className="text-ink-faint">→ {it.canonicalBrand}</span></span>
+                      {it.unitFlagged && <span className="text-[11px] font-semibold text-amber">⚑ set units</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {reconcilePreview.toCreate.length > 0 && (
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint mb-1">
+                  Create product + link · {reconcilePreview.toCreate.length}
+                </div>
+                <ul className="divide-y divide-rule/60 rounded-md border border-rule">
+                  {reconcilePreview.toCreate.map((it) => (
+                    <li key={it.serviceId} className="px-3 py-2 flex items-center justify-between gap-2 text-[13px]">
+                      <span className="text-ink">
+                        {it.serviceName} <span className="text-ink-faint">→ new {it.canonicalBrand} ({categoryLabel(it.category)})</span>
+                      </span>
+                      {it.unitFlagged && <span className="text-[11px] font-semibold text-amber">⚑ set units</span>}
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-[11px] text-ink-faint mt-1">New products are created with $0 cost/price — set those once on the Products tab.</p>
+              </div>
+            )}
+
+            <div className="text-[11px] text-ink-faint">
+              {reconcilePreview.alreadyLinked} already linked · {reconcilePreview.unmatched.length} no brand match (skipped)
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onCommitReconcile}
+                disabled={reconcileBusy}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md bg-emerald px-4 py-2 text-[14px] font-semibold text-paper shadow-sm transition",
+                  reconcileBusy ? "opacity-60 cursor-wait" : "hover:opacity-95",
+                )}
+              >
+                {reconcileBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+                Confirm — link {reconcilePreview.toLink.length + reconcilePreview.toCreate.length}
               </button>
             </div>
           </div>

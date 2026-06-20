@@ -1914,3 +1914,240 @@ export const setServiceAddonsFn = createServerFn({ method: "POST" })
     }
     return { ok: true };
   });
+
+// ─── Service ⇄ Product auto-reconcile (v2.117.0) ──────────────────────────
+//
+// Owner set up Services (to feed bookables) and Products (cost/price) as
+// separate rows; many overlap by brand. Rather than re-create, this matches
+// services to products via the canonical registry and (preview-first) LINKS
+// them so each service derives its COGS — auto-creating a product stub where a
+// brand has no product yet (owner fills cost/price once). Mirrors the
+// recategorize sweep. Quantity defaults to 1; tox (unit-variable) services are
+// flagged for the owner to set real unit counts after.
+
+export type ReconcileAction = "link" | "create_and_link";
+
+export type ReconcileItem = {
+  serviceId: string;
+  serviceName: string;
+  /** Canonical brand display name the service matched. */
+  canonicalBrand: string;
+  category: ProductCategory;
+  manufacturer: ProductManufacturer | null;
+  unitType: ProductUnitType;
+  subcategoryArea: string | null;
+  subcategoryFamily: string | null;
+  action: ReconcileAction;
+  /** Existing product to link (null when action = create_and_link). */
+  productId: string | null;
+  /** Tox / unit-variable — qty defaults to 1 but needs the owner's real count. */
+  unitFlagged: boolean;
+};
+
+export type ReconcilePreview = {
+  toLink: ReconcileItem[];
+  toCreate: ReconcileItem[];
+  /** Services already linked to ≥1 product (skipped). */
+  alreadyLinked: number;
+  /** Service names with no canonical-brand match (skipped — not products). */
+  unmatched: string[];
+};
+
+type ReconcileServiceRow = {
+  id: string;
+  name: string;
+  cogs_per_service: string | number | null;
+};
+
+/** Shared matcher used by both preview and commit (so they never drift). */
+async function computeReconcilePlan(
+  sb: SupabaseAdmin,
+  tenantId: string,
+): Promise<{ preview: ReconcilePreview; cogsById: Map<string, number | null> }> {
+  const brands = await loadAllCanonicalBrands(sb);
+
+  const services = await fetchAllRows<ReconcileServiceRow>((from, to) =>
+    sb
+      .from("services")
+      .select("id, name, cogs_per_service")
+      .eq("tenant_id", tenantId)
+      .is("hidden_at", null)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
+
+  const products = await fetchAllRows<{ id: string; brand: string }>((from, to) =>
+    sb
+      .from("products")
+      .select("id, brand")
+      .eq("tenant_id", tenantId)
+      .is("hidden_at", null)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
+
+  // Existing links → which services are already reconciled.
+  const serviceIds = services.map((s) => s.id);
+  const linkedServiceIds = new Set<string>();
+  if (serviceIds.length > 0) {
+    const links = await fetchAllRows<{ service_id: string }>((from, to) =>
+      sb
+        .from("service_products")
+        .select("service_id")
+        .in("service_id", serviceIds)
+        .order("service_id", { ascending: true })
+        .range(from, to),
+    );
+    for (const l of links) linkedServiceIds.add(l.service_id);
+  }
+
+  // Map canonical brand → first matching existing product.
+  const productByCanonical = new Map<string, string>();
+  for (const p of products) {
+    const c = lookupCanonicalBrand(p.brand, brands);
+    if (c && !productByCanonical.has(c.displayName)) productByCanonical.set(c.displayName, p.id);
+  }
+
+  const toLink: ReconcileItem[] = [];
+  const toCreate: ReconcileItem[] = [];
+  const unmatched: string[] = [];
+  const cogsById = new Map<string, number | null>();
+  let alreadyLinked = 0;
+
+  for (const s of services) {
+    cogsById.set(
+      s.id,
+      s.cogs_per_service == null
+        ? null
+        : typeof s.cogs_per_service === "string"
+          ? Number(s.cogs_per_service)
+          : s.cogs_per_service,
+    );
+    const c = lookupCanonicalBrand(s.name, brands);
+    if (!c) {
+      unmatched.push(s.name);
+      continue;
+    }
+    if (linkedServiceIds.has(s.id)) {
+      alreadyLinked += 1;
+      continue;
+    }
+    const category = canonicalToProductCategory(c.category);
+    const productId = productByCanonical.get(c.displayName) ?? null;
+    const item: ReconcileItem = {
+      serviceId: s.id,
+      serviceName: s.name,
+      canonicalBrand: c.displayName,
+      category,
+      manufacturer: c.manufacturer,
+      unitType: c.unitType,
+      subcategoryArea: c.subcategoryArea,
+      subcategoryFamily: c.subcategoryFamily,
+      action: productId ? "link" : "create_and_link",
+      productId,
+      unitFlagged: category === "tox",
+    };
+    if (productId) toLink.push(item);
+    else toCreate.push(item);
+  }
+
+  return { preview: { toLink, toCreate, alreadyLinked, unmatched }, cogsById };
+}
+
+export const previewServiceProductReconcileFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => readInput.parse(raw))
+  .handler(async ({ data }): Promise<ReconcilePreview> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
+    const { preview } = await computeReconcilePlan(sb, tenantId);
+    return preview;
+  });
+
+export type ReconcileReceipt = {
+  linked: number;
+  created: number;
+  flagged: number;
+  skippedAlreadyLinked: number;
+  unmatched: number;
+};
+
+export const commitServiceProductReconcileFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => readInput.parse(raw))
+  .handler(async ({ data }): Promise<ReconcileReceipt> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
+    // Recompute server-side (idempotent — never trusts a stale client plan).
+    const { preview, cogsById } = await computeReconcilePlan(sb, tenantId);
+
+    let linked = 0;
+    let created = 0;
+    let flagged = 0;
+
+    const linkService = async (serviceId: string, productId: string, unitFlagged: boolean) => {
+      // Create the link (qty 1) — skip if it somehow already exists.
+      const { error: linkErr } = await sb
+        .from("service_products")
+        .upsert(
+          { service_id: serviceId, product_id: productId, quantity_per_service: 1 },
+          { onConflict: "service_id,product_id" },
+        );
+      if (linkErr) throw new Error(`Couldn't link: ${linkErr.message}`);
+      // Switch to derived COGS only when the owner hasn't set a manual value
+      // (never clobber existing manual COGS).
+      if ((cogsById.get(serviceId) ?? null) == null) {
+        await sb
+          .from("services")
+          .update({ cogs_source: "derived" })
+          .eq("id", serviceId)
+          .eq("tenant_id", tenantId);
+      }
+      await syncDerivedCogsIfNeeded(sb, serviceId, tenantId);
+      linked += 1;
+      if (unitFlagged) flagged += 1;
+    };
+
+    // Link existing-product matches.
+    for (const item of preview.toLink) {
+      if (!item.productId) continue;
+      await linkService(item.serviceId, item.productId, item.unitFlagged);
+    }
+
+    // Create stub products for brand-only matches, then link.
+    for (const item of preview.toCreate) {
+      const { data: row, error } = await sb
+        .from("products")
+        .insert({
+          tenant_id: tenantId,
+          brand: item.canonicalBrand,
+          category: item.category,
+          unit_type: item.unitType,
+          cost_per_unit: 0,
+          sales_price_per_unit: 0,
+          manufacturer: item.manufacturer,
+          notes: "Auto-created from service — set cost & price.",
+          subcategory_area: item.subcategoryArea,
+          subcategory_family: item.subcategoryFamily,
+        })
+        .select("id")
+        .single();
+      if (error || !row) throw new Error(`Couldn't create product: ${error?.message ?? "no row"}`);
+      created += 1;
+      await linkService(item.serviceId, row.id, item.unitFlagged);
+    }
+
+    return {
+      linked,
+      created,
+      flagged,
+      skippedAlreadyLinked: preview.alreadyLinked,
+      unmatched: preview.unmatched.length,
+    };
+  });

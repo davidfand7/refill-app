@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.117.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.117.0 &mdash; Link products: stop re-creating what you already entered.</strong> You set up Services to feed bookables, and many of them are the same brands as your Products &mdash; so a new <strong>Link products</strong> button on the Service catalog matches services to products <em>by brand</em> (via the canonical registry) and wires them together, so each service <strong>derives its COGS automatically</strong> from product cost &times; quantity. Where a service names a real brand but has <em>no</em> product yet, it <strong>auto-creates the product stub</strong> (brand / category / manufacturer filled in &mdash; you just set cost &amp; price once) and links it. <strong>Preview-first</strong>, exactly like the CSV import: it shows every proposed link + create, and nothing is written until you confirm. Quantity defaults to 1; tox / unit-variable services are flagged <strong>&#9873; set units</strong> so you can drop in the real unit count after (it never clobbers a COGS you set manually). Services with no brand match (consults, facials) are skipped. <strong>Touched</strong>: <code>refill-catalog.ts</code> (<code>previewServiceProductReconcileFn</code> + <code>commitServiceProductReconcileFn</code>, idempotent, recomputes server-side), <code>app.refill.catalog.services.tsx</code> (Link products button + preview panel), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.116.0",
     date: "June 2026",
     items: [
