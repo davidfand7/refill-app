@@ -13,6 +13,13 @@
  *    MfrDeliveryEditor's job into the one agentic-native composer (hybrid model,
  *    project_manufacturer_ab_arbiter). The mode switch only appears once at least
  *    one manufacturer promo is loaded (KISS / additive-on-demand).
+ *  • "Test head-to-head" (mode='arena', v2.109 — the crown jewel) — a NEUTRAL
+ *    venue where a manufacturer promo and the spa's own offer(s) enter as equal
+ *    A/B arms on the same trigger service; the impartial bandit keeps whichever
+ *    real customers BOOK more. SmartSpa favors no side. Each arm is one
+ *    createAbExperiment variant; mfr arms carry `manufacturer` forward (written
+ *    source='spa', ingest-safe) so the pooled result is attributable to the
+ *    maker in getArbiterVerdicts. See OfferArena below.
  *
  * KISS additive-on-demand: the resting view is plain-English; the controls live
  * behind one expander each. A live preview shows the patient-facing artifact.
@@ -23,7 +30,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Check, ChevronRight, Eye, KeyRound, Loader2, Megaphone, Plus, Sparkles, Wand2, X } from "lucide-react";
+import { Check, ChevronRight, Eye, KeyRound, Loader2, Megaphone, Plus, Scale, Sparkles, Trophy, Wand2, X } from "lucide-react";
 
 import {
   createSpaOffer,
@@ -57,7 +64,7 @@ const COHORTS: Array<{ value: OfferCohort; label: string }> = [
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 
 type Version = { offerType: AbType; value: string; addon: string };
-type Mode = "spa" | "mfr";
+type Mode = "spa" | "mfr" | "arena";
 
 function titleCase(s: string | null | undefined): string {
   const t = (s ?? "").trim();
@@ -391,9 +398,22 @@ export function OfferComposer({
         <div className="flex gap-1 border-b border-rule bg-paper/50 p-1.5">
           <ModeTab on={mode === "spa"} onClick={() => switchMode("spa")}>Author an offer</ModeTab>
           <ModeTab on={mode === "mfr"} onClick={() => switchMode("mfr")}>Deliver a manufacturer promo</ModeTab>
+          <ModeTab on={mode === "arena"} onClick={() => switchMode("arena")}>Test head-to-head</ModeTab>
         </div>
       )}
 
+      {mode === "arena" && (
+        <OfferArena
+          accessToken={accessToken}
+          viewAsUserId={viewAsUserId}
+          services={services}
+          mfrOffers={mfrOffers}
+          onCreated={onCreated}
+        />
+      )}
+
+      {mode !== "arena" && (
+      <>
       {/* Hero — plain-English intent */}
       <div className="border-b border-rule bg-gradient-to-br from-emerald-soft/60 to-white px-5 py-4">
         <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-emerald">
@@ -813,11 +833,427 @@ export function OfferComposer({
           </button>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }
 
 const inputCls = "w-full rounded border border-rule bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald/30";
+
+// ── Arena (crown jewel): mfr offer × spa offer as A/B arms in a NEUTRAL venue ──
+// SmartSpa favors no side. Each arm — your authored offer or a manufacturer's
+// locked promo — competes on the SAME trigger service for the SAME patients; the
+// impartial bandit keeps whichever real customers BOOK more. A manufacturer arm
+// is written source='spa' (ingest-safe) but carries `manufacturer` forward so
+// the result is attributable in getArbiterVerdicts. project_manufacturer_ab_arbiter.
+
+const ARENA_TYPES = ["dollars_off", "percent_off", "free_addon", "discount_addon"] as const;
+type ArenaArm =
+  | { kind: "spa"; offerType: AbType; value: string; addon: string }
+  | { kind: "mfr"; mfrId: string };
+
+function spaArmLabel(a: { offerType: AbType; value: string; addon: string }): string {
+  if (a.offerType === "percent_off") return a.value ? `${a.value}% off` : "% off";
+  if (a.offerType === "free_addon") return a.addon ? `Free ${a.addon}` : "Free add-on";
+  return a.value ? `$${a.value} off` : "$ off";
+}
+function promoArmLabel(o: PromoOffer): string {
+  const t = o.offerType ?? "dollars_off";
+  if (t === "percent_off") return o.valuePct != null ? `${o.valuePct}% off` : "% off";
+  if (t === "free_addon") return o.addonLabel ? `Free ${o.addonLabel}` : "Free add-on";
+  if (t === "discount_addon") return o.discountUsd != null ? `$${Math.round(o.discountUsd)} off ${o.addonLabel ?? "add-on"}` : "Add-on $ off";
+  return o.discountUsd != null ? `$${Math.round(o.discountUsd)} off` : "$ off";
+}
+
+function OfferArena({
+  accessToken,
+  viewAsUserId,
+  services,
+  mfrOffers,
+  onCreated,
+}: {
+  accessToken: string | null;
+  viewAsUserId?: string;
+  services: Service[];
+  mfrOffers: PromoOffer[];
+  onCreated?: () => void;
+}) {
+  const [triggerService, setTriggerService] = useState("");
+  const [arms, setArms] = useState<ArenaArm[]>([
+    { kind: "spa", offerType: "dollars_off", value: "", addon: "" },
+    { kind: "mfr", mfrId: "" },
+  ]);
+  const [cohort, setCohort] = useState<OfferCohort>("all");
+  const [weekdays, setWeekdays] = useState<Set<number>>(new Set());
+  const [cap, setCap] = useState("");
+  const [startsOn, setStartsOn] = useState("");
+  const [endsOn, setEndsOn] = useState("");
+  const [openSec, setOpenSec] = useState<null | "lineup" | "who" | "when">("lineup");
+  const [busy, setBusy] = useState(false);
+  const [match, setMatch] = useState<CohortReach | null>(null);
+
+  const triggerSvc = useMemo(() => services.find((s) => s.name === triggerService) ?? null, [services, triggerService]);
+  const triggerDisplay = triggerSvc?.displayName || titleCase(triggerService) || "this service";
+  const price = triggerSvc?.servicePrice ?? null;
+
+  // Manufacturer promos that can enter THIS service's arena (matching product +
+  // a bandit-supported offer type).
+  const matchingMfr = useMemo(() => {
+    if (!triggerSvc) return [] as PromoOffer[];
+    const norm = normalizeForMatch(triggerSvc.name);
+    return mfrOffers.filter(
+      (o) => productMatchesName(o.product, norm) && (ARENA_TYPES as readonly string[]).includes(o.offerType ?? "dollars_off"),
+    );
+  }, [mfrOffers, triggerSvc]);
+
+  // Open the arena pre-bound to a real matchup: pick the first service that has a
+  // manufacturer promo waiting, so the owner lands on a head-to-head, not a blank.
+  useEffect(() => {
+    if (triggerService) return;
+    for (const o of mfrOffers) {
+      if (!(ARENA_TYPES as readonly string[]).includes(o.offerType ?? "dollars_off")) continue;
+      const svc = services.find((s) => productMatchesName(o.product, normalizeForMatch(s.name)));
+      if (svc) {
+        setTriggerService(svc.name);
+        setArms([
+          { kind: "spa", offerType: "dollars_off", value: "", addon: "" },
+          { kind: "mfr", mfrId: o.id as string },
+        ]);
+        return;
+      }
+    }
+  }, [mfrOffers, services, triggerService]);
+
+  // Live cohort reach ("~N match") — best-effort, never blocks.
+  useEffect(() => {
+    if (!accessToken) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await getCohortReachFn({ data: { accessToken, viewAsUserId, cohort } });
+        if (!cancelled) setMatch(r);
+      } catch {
+        if (!cancelled) setMatch(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, viewAsUserId, cohort]);
+
+  function patchArm(i: number, patch: Partial<Extract<ArenaArm, { kind: "spa" }>> & Partial<Extract<ArenaArm, { kind: "mfr" }>>) {
+    setArms((prev) => prev.map((a, k) => (k === i ? ({ ...a, ...patch } as ArenaArm) : a)));
+  }
+
+  const armLabels = arms.map((a) =>
+    a.kind === "spa" ? spaArmLabel(a) : (() => { const o = mfrOffers.find((m) => m.id === a.mfrId); return o ? promoArmLabel(o) : "—"; })(),
+  );
+  const mfrCount = arms.filter((a) => a.kind === "mfr").length;
+  const lineupValue = arms.length >= 2 ? `${arms.length} arms competing` : "Add at least 2 arms";
+
+  const whoPhrase = cohort === "all" ? "everyone" : (COHORTS.find((c) => c.value === cohort)?.label ?? cohort).toLowerCase();
+  const whenPhrase = useMemo(() => {
+    const days = weekdays.size ? [...weekdays].sort((a, b) => a - b).map((d) => WEEKDAYS[d]).join(", ") : "any day";
+    const capTxt = cap.trim() ? `, cap ${cap}${weekdays.size ? "/wk" : ""}` : "";
+    return `${days}${capTxt}`;
+  }, [weekdays, cap]);
+
+  function priceFor(arm: ArenaArm): number | null {
+    if (price == null) return null;
+    if (arm.kind === "spa") {
+      if (arm.offerType === "percent_off" && arm.value) return Math.max(0, Math.round(price * (1 - Number(arm.value) / 100)));
+      if (arm.offerType === "dollars_off" && arm.value) return Math.max(0, Math.round(price - Number(arm.value)));
+      return null;
+    }
+    const o = mfrOffers.find((m) => m.id === arm.mfrId);
+    if (!o) return null;
+    const t = o.offerType ?? "dollars_off";
+    if (t === "percent_off" && o.valuePct) return Math.max(0, Math.round(price * (1 - o.valuePct / 100)));
+    if (t === "dollars_off" && o.discountUsd) return Math.max(0, Math.round(price - o.discountUsd));
+    return null;
+  }
+
+  async function activate() {
+    if (!accessToken) return;
+    if (!triggerService) return toast.error("Pick the service the arms compete on.");
+    if (arms.length < 2) return toast.error("An arena needs at least 2 arms.");
+    const capN = cap.trim() ? Number(cap.trim()) : null;
+    if (cap.trim() && (!Number.isInteger(capN) || (capN as number) <= 0)) return toast.error("Limit must be a whole number.");
+    if (startsOn && endsOn && endsOn < startsOn) return toast.error("End date is before the start date.");
+
+    const variants: Array<{
+      offerType: AbType | OfferType;
+      discountUsd: number | null;
+      valuePct: number | null;
+      addonLabel: string | null;
+      manufacturer: string | null;
+      label?: string;
+    }> = [];
+    for (const a of arms) {
+      if (a.kind === "spa") {
+        const num = a.value.trim() ? Number(a.value.trim()) : null;
+        if (a.offerType === "dollars_off" && (!num || num <= 0)) return toast.error("Each $-off arm needs an amount.");
+        if (a.offerType === "percent_off" && (!num || num <= 0 || num > 100)) return toast.error("Each %-off arm needs a percentage (1–100).");
+        if (a.offerType === "free_addon" && !a.addon.trim()) return toast.error("Each free-add-on arm needs a name.");
+        variants.push({
+          offerType: a.offerType,
+          discountUsd: a.offerType === "dollars_off" ? num : null,
+          valuePct: a.offerType === "percent_off" ? num : null,
+          addonLabel: a.offerType === "free_addon" ? a.addon.trim() || null : null,
+          manufacturer: null,
+        });
+      } else {
+        const o = mfrOffers.find((m) => m.id === a.mfrId);
+        if (!o) return toast.error("Pick a manufacturer promo for each manufacturer arm.");
+        variants.push({
+          offerType: (o.offerType ?? "dollars_off") as OfferType,
+          discountUsd: o.discountUsd ?? null,
+          valuePct: o.valuePct ?? null,
+          addonLabel: o.addonLabel ?? null,
+          manufacturer: o.manufacturer || null,
+          label: `${titleCase(o.manufacturer) || "Manufacturer"} — ${promoArmLabel(o)}`,
+        });
+      }
+    }
+
+    const weekdayArr = weekdays.size ? [...weekdays].sort((a, b) => a - b) : null;
+    setBusy(true);
+    try {
+      await createAbExperiment({
+        data: {
+          accessToken,
+          viewAsUserId,
+          serviceName: triggerService,
+          targetCohort: cohort,
+          activeWeekdays: weekdayArr,
+          quantityCap: capN,
+          startsOn: startsOn || null,
+          endsOn: endsOn || null,
+          baseLabel: `Head-to-head on ${triggerDisplay}`,
+          variants,
+        },
+      });
+      toast.success("Arena live — SmartSpa keeps whichever your customers book most.");
+      onCreated?.();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't start the arena.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      {/* Hero — the impartial framing */}
+      <div className="border-b border-rule bg-gradient-to-br from-amber-soft/50 to-white px-5 py-4">
+        <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.1em] text-amber">
+          <Scale className="h-3.5 w-3.5" /> May the best offer win
+        </div>
+        <p className="mt-1.5 text-[16px] leading-relaxed text-ink">
+          <span className="font-semibold text-emerald-ink">{arms.length} offers</span>{" "}
+          <span className="text-ink-soft">compete for</span>{" "}
+          <span className="font-semibold">{triggerDisplay}</span>{" "}
+          <span className="text-ink-soft">bookings from</span>{" "}
+          <span className="font-semibold">{whoPhrase}</span>
+          <span className="text-ink-soft">{" "}— SmartSpa takes <span className="font-semibold text-amber">no side</span>; your customers vote with bookings.</span>
+        </p>
+        {mfrCount > 0 && (
+          <p className="mt-1 text-[11.5px] text-ink-faint">
+            If your offer out-books the manufacturer&rsquo;s, that&rsquo;s the impartial proof — and the pressure on them to do better.
+          </p>
+        )}
+      </div>
+
+      <div className="px-5 py-4 space-y-2">
+        {/* THE LINEUP */}
+        <Section
+          label="The lineup"
+          value={lineupValue}
+          open={openSec === "lineup"}
+          onToggle={() => setOpenSec((s) => (s === "lineup" ? null : "lineup"))}
+        >
+          <Field label="They compete on">
+            <select
+              value={triggerService}
+              onChange={(e) => setTriggerService(e.target.value)}
+              disabled={services.length === 0}
+              className="w-full rounded border border-rule bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber/30 disabled:opacity-60"
+            >
+              <option value="">Choose a service…</option>
+              {groupServicesByCategory(services).map((g) => (
+                <optgroup key={g.value} label={g.label}>
+                  {g.items.map((s) => (
+                    <option key={s.id} value={s.name}>{s.displayName}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            <p className="mt-1 text-[10.5px] text-ink-faint">Every arm offers a deal on the same service — that&rsquo;s what makes it a fair fight.</p>
+          </Field>
+
+          <div className="space-y-2">
+            {arms.map((a, i) => (
+              <div key={i} className={cn("rounded-lg border p-2.5", a.kind === "mfr" ? "border-amber/30 bg-amber-soft/30" : "border-emerald/30 bg-emerald-soft/20")}>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide", a.kind === "mfr" ? "bg-amber-soft text-amber" : "bg-emerald-soft text-emerald-ink")}>
+                    {a.kind === "mfr" ? <><KeyRound className="h-3 w-3" /> Manufacturer</> : <><Wand2 className="h-3 w-3" /> Your offer</>}
+                  </span>
+                  {arms.length > 2 && (
+                    <button type="button" onClick={() => setArms((prev) => prev.filter((_, k) => k !== i))} className="text-ink-faint hover:text-rose">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                {a.kind === "spa" ? (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <select value={a.offerType} onChange={(e) => patchArm(i, { offerType: e.target.value as AbType })} className="rounded border border-rule bg-white px-1.5 py-1 text-[12px] font-semibold focus:outline-none">
+                      <option value="dollars_off">$ off</option>
+                      <option value="percent_off">% off</option>
+                      <option value="free_addon">Free add-on</option>
+                    </select>
+                    {a.offerType === "free_addon" ? (
+                      <input value={a.addon} onChange={(e) => patchArm(i, { addon: e.target.value })} placeholder="brow wax" className="w-28 rounded border border-rule px-1.5 py-1 text-[12px]" />
+                    ) : (
+                      <input type="number" min="1" value={a.value} onChange={(e) => patchArm(i, { value: e.target.value })} placeholder={a.offerType === "percent_off" ? "20" : "50"} className="w-20 rounded border border-rule px-1.5 py-1 text-[12px]" />
+                    )}
+                    <span className="text-[11px] text-ink-faint">on {triggerDisplay}</span>
+                  </div>
+                ) : (
+                  <div>
+                    <select
+                      value={a.mfrId}
+                      onChange={(e) => patchArm(i, { mfrId: e.target.value })}
+                      disabled={!triggerSvc || matchingMfr.length === 0}
+                      className="w-full rounded border border-rule bg-white px-2 py-1.5 text-[12.5px] focus:outline-none focus:ring-2 focus:ring-amber/30 disabled:opacity-60"
+                    >
+                      <option value="">{!triggerSvc ? "Pick the service first…" : matchingMfr.length === 0 ? "No manufacturer promo for this service" : "Choose a promo…"}</option>
+                      {matchingMfr.map((o) => (
+                        <option key={o.id} value={o.id}>
+                          {titleCase(o.manufacturer) ? `${titleCase(o.manufacturer)} — ` : ""}{promoArmLabel(o)} 🔒
+                        </option>
+                      ))}
+                    </select>
+                    {a.mfrId && (() => { const o = mfrOffers.find((m) => m.id === a.mfrId); return o ? (
+                      <p className="mt-1 text-[10.5px] text-ink-faint">Terms locked by {titleCase(o.manufacturer) || "the manufacturer"} · {o.startsOn || "—"} – {o.endsOn || "ongoing"}</p>
+                    ) : null; })()}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            {arms.length < 6 && (
+              <button type="button" onClick={() => setArms((prev) => [...prev, { kind: "spa", offerType: "percent_off", value: "", addon: "" }])} className="inline-flex items-center gap-1 rounded-full border border-dashed border-emerald/40 px-2.5 py-1 text-[12px] font-semibold text-ink-faint hover:text-emerald">
+                <Plus className="h-3.5 w-3.5" /> Your offer
+              </button>
+            )}
+            {arms.length < 6 && (
+              <button type="button" onClick={() => setArms((prev) => [...prev, { kind: "mfr", mfrId: matchingMfr[0]?.id as string ?? "" }])} className="inline-flex items-center gap-1 rounded-full border border-dashed border-amber/40 px-2.5 py-1 text-[12px] font-semibold text-ink-faint hover:text-amber">
+                <Plus className="h-3.5 w-3.5" /> Manufacturer promo
+              </button>
+            )}
+          </div>
+        </Section>
+
+        {/* WHO */}
+        <Section
+          label="Who they compete for"
+          value={whoPhrase[0].toUpperCase() + whoPhrase.slice(1)}
+          badge={match ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-soft px-2 py-0.5 text-[10.5px] font-semibold text-emerald-ink">
+              {cohort === "all" ? `${match.total.toLocaleString()} patients` : `~${match.total} match`}
+            </span>
+          ) : undefined}
+          open={openSec === "who"}
+          onToggle={() => setOpenSec((s) => (s === "who" ? null : "who"))}
+        >
+          <div className="flex flex-wrap gap-1.5">
+            {COHORTS.map((c) => (
+              <Chip key={c.value} on={cohort === c.value} onClick={() => setCohort(c.value)}>{c.label}</Chip>
+            ))}
+          </div>
+          <p className="mt-2 text-[11px] text-ink-faint">Every arm is shown to the same audience — SmartSpa rotates which offer each patient sees and counts who books.</p>
+        </Section>
+
+        {/* WHEN */}
+        <Section
+          label="When it runs"
+          value={whenPhrase[0].toUpperCase() + whenPhrase.slice(1)}
+          open={openSec === "when"}
+          onToggle={() => setOpenSec((s) => (s === "when" ? null : "when"))}
+        >
+          <Field label="Days (optional)">
+            <div className="flex flex-wrap gap-1">
+              {WEEKDAYS.map((wl, i) => (
+                <button key={i} type="button" onClick={() => setWeekdays((prev) => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; })} className={cn("h-7 w-8 rounded text-[11px] font-semibold border transition", weekdays.has(i) ? "bg-emerald text-paper border-emerald" : "bg-white text-ink-soft border-rule hover:text-ink")}>
+                  {wl}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Field label={weekdays.size ? "Limit / week" : "Limit"}>
+              <input type="number" min="1" value={cap} onChange={(e) => setCap(e.target.value)} placeholder="e.g. 20" className={inputCls} />
+            </Field>
+            <Field label="Starts (optional)">
+              <input type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} className={inputCls} />
+            </Field>
+            <Field label="Ends (optional)">
+              <input type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} className={inputCls} />
+            </Field>
+          </div>
+        </Section>
+      </div>
+
+      {/* LIVE PREVIEW — the starting line */}
+      <div className="border-t border-rule px-5 py-4">
+        <div className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-ink-faint">
+          <Trophy className="h-3.5 w-3.5" /> The starting line — who&rsquo;s competing
+        </div>
+        <div className="space-y-1.5">
+          {arms.map((a, i) => {
+            const disc = priceFor(a);
+            return (
+              <div key={i} className="flex items-center justify-between gap-3 rounded-lg border border-rule bg-paper/40 px-3 py-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className={cn("h-1.5 w-1.5 flex-none rounded-full", a.kind === "mfr" ? "bg-amber" : "bg-emerald")} />
+                  <span className="truncate text-[13px] font-semibold text-ink">{armLabels[i]} {triggerDisplay}</span>
+                  {a.kind === "mfr" && <span className="flex-none text-[10px] font-bold uppercase tracking-wide text-amber">{titleCase(mfrOffers.find((m) => m.id === a.mfrId)?.manufacturer) || "Mfr"}</span>}
+                </div>
+                <span className="flex-none text-[12.5px]">
+                  {price != null && disc != null ? (
+                    <><span className="mr-1 text-ink-faint line-through">${price}</span><span className="font-bold text-amber">${disc}</span></>
+                  ) : price != null ? (
+                    <span className="text-ink-soft">${price}</span>
+                  ) : <span className="text-ink-faint">—</span>}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-ink">
+          <Scale className="h-3.5 w-3.5" /> Winner decided by real bookings — most arenas call it in ~2 weeks. Stop anytime.
+        </p>
+      </div>
+
+      {/* Activate */}
+      <div className="flex items-center justify-between gap-3 border-t border-rule px-5 py-3">
+        <span className="text-[12px] text-ink-faint">{arms.length} arms · winner kept automatically</span>
+        <button
+          type="button"
+          onClick={() => void activate()}
+          disabled={busy || !triggerService || arms.length < 2}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-amber px-4 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-95 transition disabled:opacity-50"
+        >
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scale className="h-4 w-4" />}
+          Start the arena
+        </button>
+      </div>
+    </>
+  );
+}
 
 function ModeTab({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return (

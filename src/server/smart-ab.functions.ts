@@ -65,6 +65,16 @@ const variantSchema = z.object({
   addonLabel: z.string().max(160).nullable().optional(),
   /** Short label for the verdict UI; auto-derived if omitted. */
   label: z.string().max(120).optional(),
+  /**
+   * When set, this arm is a manufacturer promo run as a locked variant (the
+   * crown-jewel: mfr offer × spa offer, winner chosen impartially by bookings).
+   * The arm is still written source='spa' (so ingestPromoCalendar's
+   * delete-and-replace of source='manufacturer' rows can't orphan the
+   * experiment), but it carries the manufacturer name forward so
+   * getArbiterVerdicts can attribute the pooled result. See
+   * project_manufacturer_ab_arbiter.
+   */
+  manufacturer: z.string().max(160).nullable().optional(),
 });
 
 function variantLabel(v: z.infer<typeof variantSchema>): string {
@@ -157,7 +167,10 @@ export const createAbExperiment = createServerFn({ method: "POST" })
       return {
         tenant_id: tenantId,
         source: "spa",
-        manufacturer: null,
+        // A locked manufacturer arm carries its maker forward for arbiter
+        // attribution; pure spa arms stay null. The row is source='spa' either
+        // way, so re-imports never orphan the experiment.
+        manufacturer: v.manufacturer?.trim() || null,
         product,
         title: label,
         ab_label: label,

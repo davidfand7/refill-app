@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.109.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.109.0 &mdash; The crown jewel: test a manufacturer&rsquo;s promo head-to-head against your own offer, judged impartially by real bookings.</strong> A new <strong>Test head-to-head</strong> tab in the composer opens a <em>neutral arena</em>: a manufacturer promo and your own offer(s) enter as <strong>equal A/B arms</strong> on the same trigger service, shown to the same audience, and SmartSpa keeps whichever your customers actually <strong>book</strong> more. SmartSpa takes <strong>no side</strong> &mdash; if the manufacturer&rsquo;s $75-off wins, great; if your $50-off out-books it, that&rsquo;s the impartial proof, and the pressure on them to do better. Pick the service the arms compete on, stack any mix of <em>Your offer</em> (type + terms) and <em>Manufacturer promo</em> (terms locked &#128274;, only promos matching the service show), set the shared who/when, and start the arena. The winner is chosen by the same bandit the spa-only A/B already uses. Architecturally clean: a manufacturer arm is written <code>source='spa'</code> (so a promo-calendar re-import&rsquo;s delete-and-replace can never orphan the experiment) but carries <code>manufacturer</code> forward, so the pooled result is attributable to the maker in <code>getArbiterVerdicts</code> &mdash; the sellable impartial-arbiter signal, for free. <strong>Touched</strong>: <code>smart-ab.functions.ts</code> (optional <code>manufacturer</code> on the variant schema, threaded into the arm row), <code>OfferComposer.tsx</code> (new <code>OfferArena</code> component + third mode tab), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.108.0",
     date: "June 2026",
     items: [
