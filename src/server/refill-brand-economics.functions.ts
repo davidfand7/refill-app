@@ -212,6 +212,7 @@ type CatalogProductRow = {
   manufacturer: string | null;
   unit_type: string;
   subcategory_area: string | null;
+  sort_order: number | null;
   cost_per_unit: string | number;
   sales_price_per_unit: string | number;
 };
@@ -226,10 +227,11 @@ async function loadBrandEconomicsBundle(
   const productRows = await fetchAllRows<CatalogProductRow>((from, to) =>
     sb
       .from("products")
-      .select("brand, category, manufacturer, unit_type, subcategory_area, cost_per_unit, sales_price_per_unit")
+      .select("brand, category, manufacturer, unit_type, subcategory_area, sort_order, cost_per_unit, sales_price_per_unit")
       .eq("tenant_id", tenantId)
       .is("hidden_at", null)
       .order("category", { ascending: true })
+      .order("sort_order", { ascending: true, nullsFirst: false })
       .order("brand", { ascending: true })
       .range(from, to),
   );
@@ -239,6 +241,7 @@ async function loadBrandEconomicsBundle(
     category: r.category,
     unitType: r.unit_type ?? "other",
     subcategories: parseSubcategories(r.subcategory_area),
+    sortOrder: r.sort_order ?? null,
     costPerUnit: typeof r.cost_per_unit === "string" ? Number(r.cost_per_unit) : r.cost_per_unit,
     salesPricePerUnit:
       typeof r.sales_price_per_unit === "string"

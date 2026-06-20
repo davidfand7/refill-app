@@ -477,9 +477,12 @@ function BrandEconomicsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {g.rows.map((r, i) => {
+                  {g.rows.map((r) => {
                     const lift = r.spaIncentivePerUnit > 0;
-                    const topOfCat = i === 0;
+                    // Rows follow your manual product order; badge the actual
+                    // highest-margin brand wherever it sits.
+                    const bestMargin = Math.max(...g.rows.map((x) => x.marginNowPerUnit));
+                    const topOfCat = r.marginNowPerUnit === bestMargin && bestMargin > 0 && g.rows.length > 1;
                     return (
                       <tr key={r.brand} className="border-t border-rule/60">
                         <td className="px-5 py-3">

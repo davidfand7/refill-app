@@ -82,6 +82,8 @@ export type BrandCostInput = {
   unitType: string;
   /** Sub-category tags (Mid-face / Lips / Biostim …) — the substitution group. */
   subcategories: string[];
+  /** Manual position within category (mirrors the Products page drag order). */
+  sortOrder: number | null;
   costPerUnit: number;
   salesPricePerUnit: number;
 };
@@ -92,6 +94,7 @@ export type BrandEconomics = {
   category: string;
   unitType: string;
   subcategories: string[];
+  sortOrder: number | null;
   /** Patient-facing sales price per unit (premium-positioning signal). */
   pricePerUnit: number;
   /** price − cost, straight from the catalog (the unchanging baseline). */
@@ -169,6 +172,7 @@ export function computeBrandEconomics(
     category: product.category,
     unitType: product.unitType,
     subcategories: product.subcategories,
+    sortOrder: product.sortOrder,
     pricePerUnit: product.salesPricePerUnit,
     baseMarginPerUnit: baseMargin,
     spaIncentivePerUnit: spaPerUnit,
@@ -181,9 +185,12 @@ export function computeBrandEconomics(
 }
 
 /**
- * Economics for every product, ranked by margin_now within each category
- * (highest-margin brand first) so the substitutability set is obvious at a
- * glance. Stable: ties break on baseMargin then brand name.
+ * Economics for every product, ordered within each category by the owner's
+ * manual product order (sort_order, nulls last → brand) so the Brand Economics
+ * panel mirrors the Products page drag order exactly. The "best margin" is
+ * surfaced by a badge in the UI rather than by position, so manual order and
+ * margin visibility coexist. (The recommender re-sorts internally, so this
+ * order doesn't affect recommendations.)
  */
 export function rankBrandEconomics(
   products: BrandCostInput[],
@@ -194,10 +201,9 @@ export function rankBrandEconomics(
     .map((p) => computeBrandEconomics(p, entries, todayIso))
     .sort((a, b) => {
       if (a.category !== b.category) return a.category.localeCompare(b.category);
-      if (b.marginNowPerUnit !== a.marginNowPerUnit)
-        return b.marginNowPerUnit - a.marginNowPerUnit;
-      if (b.baseMarginPerUnit !== a.baseMarginPerUnit)
-        return b.baseMarginPerUnit - a.baseMarginPerUnit;
+      const ao = a.sortOrder ?? Infinity;
+      const bo = b.sortOrder ?? Infinity;
+      if (ao !== bo) return ao - bo;
       return a.brand.localeCompare(b.brand);
     });
 }

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.124.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.124.0 &mdash; Brand economics follows your product order.</strong> The Brand economics table now lists brands within a category in the <em>same manual order</em> you set by dragging on the Products page (not auto-sorted by margin) &mdash; so the two screens read identically, top to bottom. You don&rsquo;t lose the margin view: the <strong>BEST MARGIN</strong> badge now marks the actual highest-margin brand <em>wherever it sits</em> in your order. (The recommender re-ranks internally, so this is purely the visual order &mdash; recommendations are unaffected.) <strong>Touched</strong>: <code>brand-economics.ts</code> (order by sort_order, carry it on the snapshot), <code>refill-brand-economics.functions.ts</code> (load sort_order), Brand economics panel (best-margin badge by value, not position), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.123.0",
     date: "June 2026",
     items: [
