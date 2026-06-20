@@ -89,7 +89,96 @@ export type PromoOffer = {
   /** For a weekly cap: the Monday (ISO yyyy-mm-dd) the stored redeemedCount
    *  belongs to. A count whose week is before today's reads as 0. */
   capPeriodStart?: string | null;
+  /** "Refine targeting" predicates that NARROW the base cohort (v2.110). A
+   *  non-empty spec makes the offer targeted (push-only, $5-gated by match).
+   *  Defaults to {} (no refinement). */
+  targetFilters?: OfferTargetFilters;
 };
+
+/**
+ * Optional predicates that narrow an offer's base cohort to a refined audience.
+ * All set fields are AND-combined. Resolved server-side against each patient's
+ * knowledge_nodes.attachments rollup (lastVisit / totalVisits / lifetimeSpendUsd
+ * / phone). Stored as the offer's `filter_spec` jsonb. "Bought X / not Y" is a
+ * later pass (needs patient_transactions) and will extend this shape.
+ */
+export type OfferTargetFilters = {
+  /** Last visit at least N days ago (e.g. "haven't been in 90+ days"). */
+  lastVisitMinDays?: number | null;
+  /** Last visit within the past N days (recently active). */
+  lastVisitMaxDays?: number | null;
+  /** Lifetime visit count at least / at most this many. */
+  visitCountMin?: number | null;
+  visitCountMax?: number | null;
+  /** Lifetime spend (USD) at least / at most this much. */
+  spendMinUsd?: number | null;
+  spendMaxUsd?: number | null;
+  /** Only patients with a phone on file (reachable by text). */
+  reachableByTextOnly?: boolean;
+};
+
+/** The per-patient metrics the filter predicate reads (from attachments). */
+export type PatientFilterMetrics = {
+  /** ISO yyyy-mm-dd of the most recent visit, or null if unknown. */
+  lastVisit?: string | null;
+  totalVisits?: number | null;
+  lifetimeSpendUsd?: number | null;
+  phone?: string | null;
+};
+
+/** True when a spec actually constrains anything (any field set). An empty/
+ *  absent spec means "no refinement" — the offer behaves as its base cohort. */
+export function hasTargetFilters(spec: OfferTargetFilters | null | undefined): boolean {
+  if (!spec) return false;
+  return (
+    spec.lastVisitMinDays != null ||
+    spec.lastVisitMaxDays != null ||
+    spec.visitCountMin != null ||
+    spec.visitCountMax != null ||
+    spec.spendMinUsd != null ||
+    spec.spendMaxUsd != null ||
+    spec.reachableByTextOnly === true
+  );
+}
+
+/**
+ * Pure predicate: does one patient satisfy a refine-targeting spec? Used by the
+ * count, the push resolver, AND the $5 win-integrity gate, so "match" means the
+ * same everywhere. `daysSinceLastVisit` is passed in (caller owns "today" — keeps
+ * this deterministic and unit-testable). A null metric fails any bound that
+ * references it (we don't push to / pay for a patient we can't verify).
+ */
+export function patientMatchesFilters(
+  m: PatientFilterMetrics,
+  spec: OfferTargetFilters | null | undefined,
+  daysSinceLastVisit: number | null,
+): boolean {
+  if (!hasTargetFilters(spec)) return true;
+  const s = spec as OfferTargetFilters;
+
+  if (s.lastVisitMinDays != null) {
+    if (daysSinceLastVisit == null || daysSinceLastVisit < s.lastVisitMinDays) return false;
+  }
+  if (s.lastVisitMaxDays != null) {
+    if (daysSinceLastVisit == null || daysSinceLastVisit > s.lastVisitMaxDays) return false;
+  }
+  if (s.visitCountMin != null) {
+    if (m.totalVisits == null || m.totalVisits < s.visitCountMin) return false;
+  }
+  if (s.visitCountMax != null) {
+    if (m.totalVisits == null || m.totalVisits > s.visitCountMax) return false;
+  }
+  if (s.spendMinUsd != null) {
+    if (m.lifetimeSpendUsd == null || m.lifetimeSpendUsd < s.spendMinUsd) return false;
+  }
+  if (s.spendMaxUsd != null) {
+    if (m.lifetimeSpendUsd == null || m.lifetimeSpendUsd > s.spendMaxUsd) return false;
+  }
+  if (s.reachableByTextOnly === true) {
+    if (!(m.phone ?? "").trim()) return false;
+  }
+  return true;
+}
 
 /** The badge shape attached to a service / add-on at booking. */
 export type AddOnOffer = {
@@ -424,7 +513,11 @@ export function matchOfferForName(
  * surfacing them anonymously would both leak and mis-imply eligibility.
  */
 export function badgeableOffers(offers: PromoOffer[]): PromoOffer[] {
-  return offers.filter((o) => (o.targetCohort ?? "all") === "all");
+  // 'all' cohort badges — UNLESS it's been refined (a filter spec narrows it to
+  // a targeted audience, so it reaches those patients via push, never the badge).
+  return offers.filter(
+    (o) => (o.targetCohort ?? "all") === "all" && !hasTargetFilters(o.targetFilters),
+  );
 }
 
 /**

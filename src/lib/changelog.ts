@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.110.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.110.0 &mdash; Refine targeting: narrow any audience to exactly the patients you want.</strong> The composer&rsquo;s new <strong>Refine targeting</strong> section layers optional filters on top of whoever you picked in <em>Who gets it</em> &mdash; <strong>not seen in N+ days</strong>, <strong>at least N visits</strong>, <strong>spent at least $X</strong>, and <strong>reachable by text</strong> &mdash; all AND-combined. So &ldquo;Lapsed who spent $500+&rdquo; or &ldquo;Everyone not seen in 90+ days, reachable by text&rdquo; just work. The live <strong>&ldquo;~N match&rdquo;</strong> count re-counts as you type, reading the <em>same</em> resolver the push uses, so the number is exactly who you&rsquo;ll reach. Adding any filter makes the offer <strong>targeted</strong>: it stops badging publicly and drafts to your inbox to send, and &mdash; critically &mdash; the <strong>$5 only records when the booking patient actually matches the filter</strong>, so the number never lies. Filters read each patient&rsquo;s visit-history &amp; spend rollup; &ldquo;bought X but not Y&rdquo; is the next pass. <strong>Requires a one-line migration</strong> (adds the offer <code>filter_spec</code> jsonb) &mdash; applied separately. <strong>Touched</strong>: <code>promo-calendar.ts</code> (OfferTargetFilters type + pure <code>patientMatchesFilters</code> predicate + badge exclusion), <code>refill-promo-calendar.functions.ts</code> (refined resolver reused by count/push/$5-gate + createSpaOffer threading), <code>OfferComposer.tsx</code> (Refine section + live count), migration <code>v2_110_0_offer_target_filters.sql</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.109.0",
     date: "June 2026",
     items: [

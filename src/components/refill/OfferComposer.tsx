@@ -42,7 +42,7 @@ import {
 import { createAbExperiment } from "@/server/smart-ab.functions";
 import { listServicesFn, type Service } from "@/server/refill-catalog";
 import { groupServicesByCategory } from "@/lib/service-categories";
-import { normalizeForMatch, productMatchesName, type OfferType, type OfferCohort, type PromoOffer } from "@/lib/promo-calendar";
+import { hasTargetFilters, normalizeForMatch, productMatchesName, type OfferTargetFilters, type OfferType, type OfferCohort, type PromoOffer } from "@/lib/promo-calendar";
 import { cn } from "@/lib/utils";
 
 type AbType = "dollars_off" | "percent_off" | "free_addon";
@@ -77,6 +77,20 @@ function todayLocalIso(): string {
   return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
 }
 
+/** Build a refine-targeting spec from the composer's raw input strings (shared
+ *  by the live-count effect and the activate path so they never drift). */
+function buildTargetFilters(recencyMin: string, visitsMin: string, spendMin: string, reachable: boolean): OfferTargetFilters {
+  const f: OfferTargetFilters = {};
+  const rm = recencyMin.trim() ? Number(recencyMin.trim()) : null;
+  const vm = visitsMin.trim() ? Number(visitsMin.trim()) : null;
+  const sm = spendMin.trim() ? Number(spendMin.trim()) : null;
+  if (rm && rm > 0) f.lastVisitMinDays = Math.round(rm);
+  if (vm && vm > 0) f.visitCountMin = Math.round(vm);
+  if (sm && sm > 0) f.spendMinUsd = Math.round(sm);
+  if (reachable) f.reachableByTextOnly = true;
+  return f;
+}
+
 export function OfferComposer({
   accessToken,
   viewAsUserId,
@@ -109,8 +123,14 @@ export function OfferComposer({
   // A/B: alternate versions beyond the base (spa mode only for now).
   const [optimize, setOptimize] = useState(false);
   const [versions, setVersions] = useState<Version[]>([]);
+  // Refine targeting (v2.110): optional predicates that narrow the base cohort.
+  // min/at-least + reachable for v1; the spec supports max bounds for later.
+  const [fRecencyMin, setFRecencyMin] = useState("");
+  const [fVisitsMin, setFVisitsMin] = useState("");
+  const [fSpendMin, setFSpendMin] = useState("");
+  const [fReachable, setFReachable] = useState(false);
   // Which expander is open (KISS: one at a time, resting view is plain English).
-  const [openSec, setOpenSec] = useState<null | "offer" | "who" | "when" | "delivery">("offer");
+  const [openSec, setOpenSec] = useState<null | "offer" | "who" | "refine" | "when" | "delivery">("offer");
   const [pvTab, setPvTab] = useState<"badge" | "deals" | "email" | "text">("badge");
   const [busy, setBusy] = useState(false);
   // Live cohort size ("~N match") — the system-does-the-math signal.
@@ -159,9 +179,10 @@ export function OfferComposer({
     if (!accessToken) return;
     let cancelled = false;
     setMatchLoading(true);
+    const filterSpec = buildTargetFilters(fRecencyMin, fVisitsMin, fSpendMin, fReachable);
     void (async () => {
       try {
-        const r = await getCohortReachFn({ data: { accessToken, viewAsUserId, cohort } });
+        const r = await getCohortReachFn({ data: { accessToken, viewAsUserId, cohort, filterSpec } });
         if (!cancelled) setMatch(r);
       } catch {
         if (!cancelled) setMatch(null);
@@ -172,7 +193,7 @@ export function OfferComposer({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, viewAsUserId, cohort]);
+  }, [accessToken, viewAsUserId, cohort, fRecencyMin, fVisitsMin, fSpendMin, fReachable]);
 
   function switchMode(m: Mode) {
     setMode(m);
@@ -234,20 +255,38 @@ export function OfferComposer({
     return `${days}${capTxt}`;
   }, [weekdays, cap]);
 
+  // Refine targeting: build the spec from the inputs; a non-empty spec makes the
+  // offer targeted (push-only) even when the base cohort is Everyone.
+  const refineFilters = useMemo<OfferTargetFilters>(
+    () => buildTargetFilters(fRecencyMin, fVisitsMin, fSpendMin, fReachable),
+    [fRecencyMin, fVisitsMin, fSpendMin, fReachable],
+  );
+  const isRefined = hasTargetFilters(refineFilters);
+  // Targeted = reaches specific patients via push (no public badge). A refined
+  // Everyone-offer is targeted by definition.
+  const isTargeted = cohort !== "all" || isRefined;
+
+  const refinePhrase = useMemo(() => {
+    const parts: string[] = [];
+    if (refineFilters.lastVisitMinDays != null) parts.push(`not seen in ${refineFilters.lastVisitMinDays}+ days`);
+    if (refineFilters.visitCountMin != null) parts.push(`${refineFilters.visitCountMin}+ visits`);
+    if (refineFilters.spendMinUsd != null) parts.push(`spent $${refineFilters.spendMinUsd.toLocaleString()}+`);
+    if (refineFilters.reachableByTextOnly) parts.push("reachable by text");
+    return parts.join(" · ");
+  }, [refineFilters]);
+
   const whoPhrase = cohort === "all" ? "everyone" : (COHORTS.find((c) => c.value === cohort)?.label ?? cohort).toLowerCase();
-  const deliveryPhrase =
-    cohort === "all"
-      ? showOnDeals
-        ? "badged at booking & on your Deals page"
-        : "badged at booking"
-      : "drafted to your inbox to send";
+  const deliveryPhrase = !isTargeted
+    ? showOnDeals
+      ? "badged at booking & on your Deals page"
+      : "badged at booking"
+    : "drafted to your inbox to send";
   // Resting (collapsed) value for the Delivery section header.
-  const deliveryValue =
-    cohort === "all"
-      ? showOnDeals
-        ? "Badge at booking + Deals page"
-        : "Badge at booking only"
-      : "Drafted to your inbox to send";
+  const deliveryValue = !isTargeted
+    ? showOnDeals
+      ? "Badge at booking + Deals page"
+      : "Badge at booking only"
+    : "Drafted to your inbox to send";
   const isAb = mode === "spa" && optimize && versions.length >= 1;
 
   // "~N match" pill (the system-does-the-math signal).
@@ -262,7 +301,7 @@ export function OfferComposer({
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald opacity-60" />
           <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald" />
         </span>
-        {cohort === "all" ? `${match.total.toLocaleString()} patients` : `~${match.total} match`}
+        {!isTargeted ? `${match.total.toLocaleString()} patients` : `~${match.total} match`}
       </span>
     ) : null;
 
@@ -275,6 +314,7 @@ export function OfferComposer({
     setWeekdays(new Set()); setCap(""); setStartsOn(""); setEndsOn("");
     setOptimize(false); setVersions([]); setCohort("all"); setOfferType("dollars_off");
     setShowOnDeals(true);
+    setFRecencyMin(""); setFVisitsMin(""); setFSpendMin(""); setFReachable(false);
   }
 
   async function activate(draft = false) {
@@ -319,6 +359,9 @@ export function OfferComposer({
     if (needsPct && (!p || p <= 0 || p > 100)) return toast.error("Enter a percentage (1–100).");
     if (needsAddon && !addon.trim()) return toast.error("Name the add-on.");
     if (startsOn && endsOn && endsOn < startsOn) return toast.error("End date is before the start date.");
+    // Refine-targeting and A/B don't combine yet — be explicit, never silently
+    // drop the filters from the experiment.
+    if (isAb && isRefined) return toast.error("Refine targeting applies to a single offer — turn off testing to refine, or clear the filters.");
 
     setBusy(true);
     try {
@@ -369,16 +412,23 @@ export function OfferComposer({
             discountUsd: needsDiscount ? d : null,
             valuePct: needsPct ? p : null,
             addonLabel: needsAddon ? addon.trim() : null,
+            targetFilters: isRefined ? refineFilters : undefined,
             activeWeekdays: weekdayArr,
             quantityCap: capN,
             capPeriod: weekdays.size ? "weekly" : "total",
             startsOn: startsOn || null,
             endsOn: endsOn || null,
-            showOnDeals: cohort === "all" ? showOnDeals : undefined,
+            showOnDeals: !isTargeted ? showOnDeals : undefined,
             isActive: draft ? false : undefined,
           },
         });
-        toast.success(draft ? "Saved as a draft — activate it anytime from Your offers." : "Offer added — it badges that service at booking.");
+        toast.success(
+          draft
+            ? "Saved as a draft — activate it anytime from Your offers."
+            : isRefined
+              ? "Offer added — refined to your filters, drafted to your inbox to send."
+              : "Offer added — it badges that service at booking.",
+        );
       }
       resetSpa();
       onCreated?.();
@@ -536,16 +586,58 @@ export function OfferComposer({
           {match && (
             <p className="mt-2 flex items-center gap-1.5 text-[11.5px] font-medium text-emerald-ink">
               <Sparkles className="h-3.5 w-3.5" />
-              {cohort === "all"
+              {!isTargeted
                 ? `${match.total.toLocaleString()} patient${match.total === 1 ? "" : "s"} in your book — they'll see this at booking.`
-                : `~${match.total} ${whoPhrase} patient${match.total === 1 ? "" : "s"} match${match.reachable < match.total ? ` · ${match.reachable} reachable by text` : ""}.`}
+                : `~${match.total} ${isRefined ? "matching" : whoPhrase} patient${match.total === 1 ? "" : "s"}${isRefined ? "" : " match"}${match.reachable < match.total ? ` · ${match.reachable} reachable by text` : ""}.`}
             </p>
           )}
           <p className="mt-2 text-[11px] text-ink-faint">
-            {cohort === "all"
+            {!isTargeted
               ? "Everyone — badges at booking + shows on your public Deals page."
-              : "Targeted — won't show at public booking; it's pushed to these patients and earns the $5 only when an in-cohort patient books."}
+              : isRefined
+                ? "Refined — won't badge publicly; it's pushed to just the patients who match, and earns the $5 only when a matching patient books."
+                : "Targeted — won't show at public booking; it's pushed to these patients and earns the $5 only when an in-cohort patient books."}
           </p>
+        </Section>
+
+        {/* REFINE TARGETING (v2.110) — narrow the audience further */}
+        <Section
+          label="Refine targeting"
+          value={isRefined ? refinePhrase : "Optional — everyone in the audience above"}
+          open={openSec === "refine"}
+          onToggle={() => setOpenSec((s) => (s === "refine" ? null : "refine"))}
+        >
+          <p className="text-[11px] text-ink-faint">
+            Narrow the audience above to exactly the patients you want. Leave blank to reach all of them. Adding any filter makes this a targeted push.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Field label="Not seen in (days)">
+              <input type="number" min="1" value={fRecencyMin} onChange={(e) => setFRecencyMin(e.target.value)} placeholder="90" className={inputCls} />
+            </Field>
+            <Field label="At least (visits)">
+              <input type="number" min="1" value={fVisitsMin} onChange={(e) => setFVisitsMin(e.target.value)} placeholder="3" className={inputCls} />
+            </Field>
+            <Field label="Spent at least ($)">
+              <input type="number" min="1" value={fSpendMin} onChange={(e) => setFSpendMin(e.target.value)} placeholder="500" className={inputCls} />
+            </Field>
+          </div>
+          <label className="mt-1 flex items-center gap-2 text-[12px] font-medium text-ink-soft">
+            <input type="checkbox" checked={fReachable} onChange={(e) => setFReachable(e.target.checked)} className="h-4 w-4 rounded border-rule text-emerald focus:ring-emerald/30" />
+            Only patients reachable by text (phone on file)
+          </label>
+          {isRefined && match && (
+            <p className="mt-1 flex items-center gap-1.5 text-[11.5px] font-medium text-emerald-ink">
+              <Sparkles className="h-3.5 w-3.5" /> ~{match.total} match{match.total === 1 ? "es" : ""} after refining{match.reachable < match.total ? ` · ${match.reachable} reachable by text` : ""}.
+            </p>
+          )}
+          <p className="mt-1 text-[10.5px] text-ink-faint">
+            Reads each patient&rsquo;s visit history &amp; spend. &ldquo;Bought X but not Y&rdquo; is coming next.
+          </p>
+          {isAb && isRefined && (
+            <p className="mt-1 text-[10.5px] font-semibold text-amber">
+              Refine targeting and A/B testing can&rsquo;t combine yet — turn off testing to refine, or clear these filters.
+            </p>
+          )}
         </Section>
 
         {/* WHEN */}
@@ -597,7 +689,7 @@ export function OfferComposer({
           open={openSec === "delivery"}
           onToggle={() => setOpenSec((s) => (s === "delivery" ? null : "delivery"))}
         >
-          {cohort === "all" ? (
+          {!isTargeted ? (
             <>
               <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint">Show it — patients find it</div>
               <ToggleLine
@@ -683,7 +775,7 @@ export function OfferComposer({
                     <span className="shrink-0 rounded-full bg-amber-soft px-1.5 py-0.5 text-[10px] font-bold text-amber">{offerLabel}</span>
                   </div>
                   <div className="mt-0.5 text-[11px] text-ink-faint">
-                    {cohort === "all" ? "Badged at booking" : "Targeted — not shown at public booking"}
+                    {!isTargeted ? "Badged at booking" : "Targeted — not shown at public booking"}
                   </div>
                 </div>
                 <div className="shrink-0 text-right text-[12.5px]">
@@ -712,7 +804,7 @@ export function OfferComposer({
               <div className="p-3">
                 <div className="text-[12px] text-ink-soft">Book your {svcDisplay} and save{offerLabel.startsWith("Free") ? " with a free add-on" : ""}.</div>
                 <div className="mt-2 rounded-md bg-emerald py-1.5 text-center text-[12px] font-semibold text-white">Book this deal →</div>
-                {cohort !== "all" && (
+                {isTargeted && (
                   <div className="mt-1.5 text-[10px] text-ink-faint">Targeted offers don&rsquo;t list on the public Deals page.</div>
                 )}
               </div>
@@ -809,7 +901,9 @@ export function OfferComposer({
             ? "Manufacturer terms · you choose who, when & where"
             : isAb
               ? `Testing ${versions.length + 1} versions · keeps the winner`
-              : "One offer · badges at booking"}
+              : isRefined
+                ? "One offer · refined · drafted to your inbox"
+                : "One offer · badges at booking"}
         </span>
         <div className="flex items-center gap-2">
           {mode === "spa" && !isAb && (
