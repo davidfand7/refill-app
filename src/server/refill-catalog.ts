@@ -1032,6 +1032,42 @@ export const recategorizeProductsFromBrandsFn = createServerFn({ method: "POST" 
 
 // ─── deleteServiceFn ──────────────────────────────────────────────────────
 
+/**
+ * Delete one service (tenant-scoped) + clean up the rows that reference it —
+ * there's no FK cascade, so provider mappings / COGS links / add-on rows would
+ * otherwise dangle. Returns true when a row was actually deleted. Shared by
+ * deleteServiceFn and the dedupe routine so cleanup never drifts.
+ */
+async function deleteServiceWithCleanup(
+  sb: SupabaseAdmin,
+  tenantId: string,
+  id: string,
+): Promise<boolean> {
+  const { data: deleted, error } = await sb
+    .from("services")
+    .delete()
+    .eq("id", id)
+    .eq("tenant_id", tenantId)
+    .select("id");
+  if (error) throw new Error(`Couldn't delete service: ${error.message}`);
+  if (!deleted || deleted.length === 0) return false; // already gone / not this tenant
+
+  const cleanup = await Promise.all([
+    sb.from("scheduling_provider_services").delete().eq("service_id", id),
+    sb.from("service_products").delete().eq("service_id", id),
+    sb
+      .from("service_addons")
+      .delete()
+      .eq("tenant_id", tenantId)
+      .or(`service_id.eq.${id},addon_service_id.eq.${id}`),
+  ]);
+  const cleanupErr = cleanup.find((r) => r.error)?.error;
+  if (cleanupErr) {
+    console.error(`[deleteService] orphan cleanup partially failed for ${id}: ${cleanupErr.message}`);
+  }
+  return true;
+}
+
 export const deleteServiceFn = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => deleteInput.parse(raw))
   .handler(async ({ data }): Promise<{ ok: true }> => {
@@ -1041,39 +1077,7 @@ export const deleteServiceFn = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
-    // Delete the service tenant-scoped; .select() confirms it was really this
-    // tenant's before we touch child rows by service_id.
-    const { data: deleted, error } = await sb
-      .from("services")
-      .delete()
-      .eq("id", data.id)
-      .eq("tenant_id", tenantId)
-      .select("id");
-    if (error) throw new Error(`Couldn't delete service: ${error.message}`);
-    if (!deleted || deleted.length === 0) {
-      return { ok: true }; // already gone / not this tenant — nothing to clean
-    }
-
-    // Clean up rows that referenced it — there's no FK cascade, so these would
-    // otherwise dangle: clutter provider mappings, break add-on eligibility /
-    // COGS links, and resurface if a new service ever reuses the id. Best-effort
-    // (the service itself is already deleted, the user's intent) — log, don't
-    // fail the op, but don't silently swallow either.
-    const cleanup = await Promise.all([
-      sb.from("scheduling_provider_services").delete().eq("service_id", data.id),
-      sb.from("service_products").delete().eq("service_id", data.id),
-      sb
-        .from("service_addons")
-        .delete()
-        .eq("tenant_id", tenantId)
-        .or(`service_id.eq.${data.id},addon_service_id.eq.${data.id}`),
-    ]);
-    const cleanupErr = cleanup.find((r) => r.error)?.error;
-    if (cleanupErr) {
-      console.error(
-        `[deleteService] orphan cleanup partially failed for ${data.id}: ${cleanupErr.message}`,
-      );
-    }
+    await deleteServiceWithCleanup(sb, tenantId, data.id);
     return { ok: true };
   });
 
@@ -2120,27 +2124,35 @@ export const commitServiceProductReconcileFn = createServerFn({ method: "POST" }
       await linkService(item.serviceId, item.productId, item.unitFlagged);
     }
 
-    // Create stub products for brand-only matches, then link.
+    // Create stub products for brand-only matches, then link. Multiple services
+    // can map to the SAME canonical brand with no existing product — create the
+    // product ONCE and link them all to it (never spawn duplicate products).
+    const createdByCanonical = new Map<string, string>();
     for (const item of preview.toCreate) {
-      const { data: row, error } = await sb
-        .from("products")
-        .insert({
-          tenant_id: tenantId,
-          brand: item.canonicalBrand,
-          category: item.category,
-          unit_type: item.unitType,
-          cost_per_unit: 0,
-          sales_price_per_unit: 0,
-          manufacturer: item.manufacturer,
-          notes: "Auto-created from service — set cost & price.",
-          subcategory_area: item.subcategoryArea,
-          subcategory_family: item.subcategoryFamily,
-        })
-        .select("id")
-        .single();
-      if (error || !row) throw new Error(`Couldn't create product: ${error?.message ?? "no row"}`);
-      created += 1;
-      await linkService(item.serviceId, row.id, item.unitFlagged);
+      let productId = createdByCanonical.get(item.canonicalBrand);
+      if (!productId) {
+        const { data: row, error } = await sb
+          .from("products")
+          .insert({
+            tenant_id: tenantId,
+            brand: item.canonicalBrand,
+            category: item.category,
+            unit_type: item.unitType,
+            cost_per_unit: 0,
+            sales_price_per_unit: 0,
+            manufacturer: item.manufacturer,
+            notes: "Auto-created from service — set cost & price.",
+            subcategory_area: item.subcategoryArea,
+            subcategory_family: item.subcategoryFamily,
+          })
+          .select("id")
+          .single();
+        if (error || !row) throw new Error(`Couldn't create product: ${error?.message ?? "no row"}`);
+        productId = row.id;
+        createdByCanonical.set(item.canonicalBrand, productId);
+        created += 1;
+      }
+      await linkService(item.serviceId, productId, item.unitFlagged);
     }
 
     return {
@@ -2150,4 +2162,247 @@ export const commitServiceProductReconcileFn = createServerFn({ method: "POST" }
       skippedAlreadyLinked: preview.alreadyLinked,
       unmatched: preview.unmatched.length,
     };
+  });
+
+// ─── Service de-duplication (v2.118.0) ────────────────────────────────────
+//
+// Pre-existing duplicate service rows (same name entered/imported more than
+// once) clutter the catalog and split bookings. This groups visible services
+// by normalized name and, for each group >1, keeps the MOST COMPLETE row
+// (priced > has-COGS > oldest) and proposes removing the rest. Preview-first;
+// removal reuses deleteServiceWithCleanup so no orphaned links dangle. After a
+// dedupe, re-run "Link products" so survivors keep their COGS link.
+
+export type DedupeRow = { id: string; name: string; servicePrice: number; hasCogs: boolean };
+export type DedupeGroup = { normalizedName: string; keep: DedupeRow; remove: DedupeRow[] };
+export type ServiceDedupePreview = { groups: DedupeGroup[]; totalRemovable: number };
+
+function normalizeServiceName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+type DedupeServiceRow = {
+  id: string;
+  name: string;
+  service_price: string | number;
+  cogs_per_service: string | number | null;
+  created_at: string;
+};
+
+async function computeDedupePlan(
+  sb: SupabaseAdmin,
+  tenantId: string,
+): Promise<ServiceDedupePreview> {
+  const rows = await fetchAllRows<DedupeServiceRow>((from, to) =>
+    sb
+      .from("services")
+      .select("id, name, service_price, cogs_per_service, created_at")
+      .eq("tenant_id", tenantId)
+      .is("hidden_at", null)
+      .order("created_at", { ascending: true })
+      .range(from, to),
+  );
+
+  const groups = new Map<string, DedupeServiceRow[]>();
+  for (const r of rows) {
+    const key = normalizeServiceName(r.name);
+    const arr = groups.get(key) ?? [];
+    arr.push(r);
+    groups.set(key, arr);
+  }
+
+  const completeness = (r: DedupeServiceRow): number => {
+    const price = typeof r.service_price === "string" ? Number(r.service_price) : r.service_price;
+    return (price > 0 ? 2 : 0) + (r.cogs_per_service != null ? 1 : 0);
+  };
+  const toRow = (r: DedupeServiceRow): DedupeRow => ({
+    id: r.id,
+    name: r.name,
+    servicePrice: typeof r.service_price === "string" ? Number(r.service_price) : r.service_price,
+    hasCogs: r.cogs_per_service != null,
+  });
+
+  const out: DedupeGroup[] = [];
+  let totalRemovable = 0;
+  for (const [key, arr] of groups) {
+    if (arr.length < 2) continue;
+    // Keep the most complete; tie-break oldest (created_at asc already).
+    const sorted = [...arr].sort((a, b) => completeness(b) - completeness(a));
+    const [keep, ...remove] = sorted;
+    out.push({ normalizedName: key, keep: toRow(keep), remove: remove.map(toRow) });
+    totalRemovable += remove.length;
+  }
+  out.sort((a, b) => b.remove.length - a.remove.length || a.normalizedName.localeCompare(b.normalizedName));
+  return { groups: out, totalRemovable };
+}
+
+export const previewServiceDedupeFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => readInput.parse(raw))
+  .handler(async ({ data }): Promise<ServiceDedupePreview> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
+    return computeDedupePlan(sb, tenantId);
+  });
+
+export const commitServiceDedupeFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => readInput.parse(raw))
+  .handler(async ({ data }): Promise<{ removed: number }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
+    // Recompute server-side (never trust a stale client plan before deleting).
+    const plan = await computeDedupePlan(sb, tenantId);
+    let removed = 0;
+    for (const g of plan.groups) {
+      for (const r of g.remove) {
+        if (await deleteServiceWithCleanup(sb, tenantId, r.id)) removed += 1;
+      }
+    }
+    return { removed };
+  });
+
+// ─── Product de-duplication + combined catalog cleanup (v2.118.0) ──────────
+//
+// The v2.117.0 reconcile created one product per duplicate SERVICE (it didn't
+// dedupe within a run — now fixed). This cleans up the resulting duplicate
+// PRODUCTS: group by brand, keep the most complete (priced > oldest), re-point
+// any service→product links onto the survivor, then delete the dups (their
+// remaining links cascade). Combined fn dedupes SERVICES first, then products,
+// so the link state is settled before products collapse. Preview-first.
+
+type DedupeProductRow = {
+  id: string;
+  brand: string;
+  cost_per_unit: string | number;
+  created_at: string;
+};
+
+async function computeProductDedupePlan(
+  sb: SupabaseAdmin,
+  tenantId: string,
+): Promise<ServiceDedupePreview> {
+  const rows = await fetchAllRows<DedupeProductRow>((from, to) =>
+    sb
+      .from("products")
+      .select("id, brand, cost_per_unit, created_at")
+      .eq("tenant_id", tenantId)
+      .is("hidden_at", null)
+      .order("created_at", { ascending: true })
+      .range(from, to),
+  );
+  const groups = new Map<string, DedupeProductRow[]>();
+  for (const r of rows) {
+    const key = normalizeServiceName(r.brand);
+    const arr = groups.get(key) ?? [];
+    arr.push(r);
+    groups.set(key, arr);
+  }
+  const cost = (r: DedupeProductRow) =>
+    typeof r.cost_per_unit === "string" ? Number(r.cost_per_unit) : r.cost_per_unit;
+  const toRow = (r: DedupeProductRow): DedupeRow => ({
+    id: r.id,
+    name: r.brand,
+    servicePrice: cost(r),
+    hasCogs: cost(r) > 0,
+  });
+  const out: DedupeGroup[] = [];
+  let totalRemovable = 0;
+  for (const [key, arr] of groups) {
+    if (arr.length < 2) continue;
+    // Keep priced (cost>0) first, else oldest (created_at asc already).
+    const sorted = [...arr].sort((a, b) => (cost(b) > 0 ? 1 : 0) - (cost(a) > 0 ? 1 : 0));
+    const [keep, ...remove] = sorted;
+    out.push({ normalizedName: key, keep: toRow(keep), remove: remove.map(toRow) });
+    totalRemovable += remove.length;
+  }
+  out.sort((a, b) => b.remove.length - a.remove.length || a.normalizedName.localeCompare(b.normalizedName));
+  return { groups: out, totalRemovable };
+}
+
+export type CatalogDedupePreview = {
+  services: ServiceDedupePreview;
+  products: ServiceDedupePreview;
+};
+
+export const previewCatalogDedupeFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => readInput.parse(raw))
+  .handler(async ({ data }): Promise<CatalogDedupePreview> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
+    const [services, products] = await Promise.all([
+      computeDedupePlan(sb, tenantId),
+      computeProductDedupePlan(sb, tenantId),
+    ]);
+    return { services, products };
+  });
+
+async function repointAndDeleteProduct(
+  sb: SupabaseAdmin,
+  tenantId: string,
+  removeId: string,
+  keepId: string,
+): Promise<void> {
+  // Move any service links from the doomed product onto the survivor, then
+  // delete it (its remaining links cascade via the products FK).
+  const links = await fetchAllRows<{ service_id: string }>((from, to) =>
+    sb
+      .from("service_products")
+      .select("service_id")
+      .eq("product_id", removeId)
+      .order("service_id", { ascending: true })
+      .range(from, to),
+  );
+  const affected = links.map((l) => l.service_id);
+  for (const serviceId of affected) {
+    await sb
+      .from("service_products")
+      .upsert(
+        { service_id: serviceId, product_id: keepId, quantity_per_service: 1 },
+        { onConflict: "service_id,product_id" },
+      );
+  }
+  await sb.from("products").delete().eq("id", removeId).eq("tenant_id", tenantId);
+  for (const serviceId of affected) await syncDerivedCogsIfNeeded(sb, serviceId, tenantId);
+}
+
+export const commitCatalogDedupeFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => readInput.parse(raw))
+  .handler(async ({ data }): Promise<{ servicesRemoved: number; productsRemoved: number }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
+
+    // 1) Services first (settles which links survive).
+    const svcPlan = await computeDedupePlan(sb, tenantId);
+    let servicesRemoved = 0;
+    for (const g of svcPlan.groups) {
+      for (const r of g.remove) {
+        if (await deleteServiceWithCleanup(sb, tenantId, r.id)) servicesRemoved += 1;
+      }
+    }
+
+    // 2) Products — recompute AFTER service dedupe so link state is current.
+    const prodPlan = await computeProductDedupePlan(sb, tenantId);
+    let productsRemoved = 0;
+    for (const g of prodPlan.groups) {
+      for (const r of g.remove) {
+        await repointAndDeleteProduct(sb, tenantId, r.id, g.keep.id);
+        productsRemoved += 1;
+      }
+    }
+    return { servicesRemoved, productsRemoved };
   });

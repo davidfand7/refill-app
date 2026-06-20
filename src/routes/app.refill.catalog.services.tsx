@@ -25,6 +25,7 @@ import {
   ChevronRight,
   ChevronsDownUp,
   ChevronsUpDown,
+  Copy,
   Eye,
   EyeOff,
   GripVertical,
@@ -60,9 +61,12 @@ import {
   setServiceAddonsFn,
   previewServiceProductReconcileFn,
   commitServiceProductReconcileFn,
+  previewCatalogDedupeFn,
+  commitCatalogDedupeFn,
   type Product,
   type RecategorizeReceipt,
   type ReconcilePreview,
+  type CatalogDedupePreview,
   type Service,
   type ServiceCategory,
   type ServiceLinkageBundle,
@@ -175,6 +179,9 @@ function ServicesPage() {
   // v2.117.0: service⇄product auto-reconcile (preview-first).
   const [reconcilePreview, setReconcilePreview] = useState<ReconcilePreview | null>(null);
   const [reconcileBusy, setReconcileBusy] = useState(false);
+  // v2.118.0: catalog de-dupe (services + the products the reconcile spawned).
+  const [dedupePreview, setDedupePreview] = useState<CatalogDedupePreview | null>(null);
+  const [dedupeBusy, setDedupeBusy] = useState(false);
   const [lastRecategorize, setLastRecategorize] = useState<
     | { ok: true; receipt: RecategorizeReceipt; at: string }
     | { ok: false; message: string; at: string }
@@ -726,6 +733,48 @@ function ServicesPage() {
     }
   }
 
+  async function onPreviewDedupe() {
+    if (dedupeBusy) return;
+    setDedupeBusy(true);
+    try {
+      const preview = await withToken((token) =>
+        previewCatalogDedupeFn({ data: { accessToken: token, viewAsUserId } }),
+      );
+      setDedupePreview(preview);
+      if (preview.services.totalRemovable === 0 && preview.products.totalRemovable === 0) {
+        toast.success("No duplicates found — your catalog's clean.", { duration: 6000 });
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't scan for duplicates.");
+    } finally {
+      setDedupeBusy(false);
+    }
+  }
+
+  async function onCommitDedupe() {
+    if (dedupeBusy) return;
+    setDedupeBusy(true);
+    try {
+      const receipt = await withToken((token) =>
+        commitCatalogDedupeFn({ data: { accessToken: token, viewAsUserId } }),
+      );
+      const fresh = await withToken((token) =>
+        listServicesFn({ data: { accessToken: token, viewAsUserId } }),
+      );
+      setServices(fresh);
+      setDedupePreview(null);
+      toast.success(
+        `Removed ${receipt.servicesRemoved} duplicate service${receipt.servicesRemoved === 1 ? "" : "s"}` +
+          ` · ${receipt.productsRemoved} duplicate product${receipt.productsRemoved === 1 ? "" : "s"}.`,
+        { duration: 9000 },
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't remove duplicates.");
+    } finally {
+      setDedupeBusy(false);
+    }
+  }
+
   async function onToggleCogsSource(source: "manual" | "derived") {
     if (!editingId || busy) return;
     setBusy(true);
@@ -794,6 +843,25 @@ function ServicesPage() {
                   <Link2 className="h-3.5 w-3.5" />
                 )}
                 Link products
+              </button>
+              <button
+                type="button"
+                onClick={onPreviewDedupe}
+                disabled={dedupeBusy || services.length === 0}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold transition",
+                  dedupeBusy || services.length === 0
+                    ? "text-ink-faint cursor-not-allowed"
+                    : "text-ink-soft hover:text-ink hover:border-emerald/40",
+                )}
+                title="Find duplicate services + products (same name/brand) and collapse each to one, re-pointing links. Preview-first."
+              >
+                {dedupeBusy ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+                Clean up duplicates
               </button>
               <Link
                 to="/app/refill/catalog/import"
@@ -1004,6 +1072,69 @@ function ServicesPage() {
               >
                 {reconcileBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
                 Confirm — link {reconcilePreview.toLink.length + reconcilePreview.toCreate.length}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {dedupePreview && (dedupePreview.services.totalRemovable > 0 || dedupePreview.products.totalRemovable > 0) && (
+          <div className="rounded-xl border border-amber/40 bg-white px-5 py-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-[15px] font-semibold text-ink">
+                Duplicate cleanup preview — nothing's removed yet
+              </h3>
+              <button type="button" onClick={() => setDedupePreview(null)} className="text-ink-faint hover:text-ink text-[13px]">
+                Cancel
+              </button>
+            </div>
+            <p className="text-[12px] text-ink-soft leading-snug">
+              Each group collapses to ONE row — the most complete (priced first). Product links re-point to the survivor, so no service loses its COGS.
+            </p>
+
+            {dedupePreview.services.totalRemovable > 0 && (
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint mb-1">
+                  Duplicate services · removing {dedupePreview.services.totalRemovable}
+                </div>
+                <ul className="divide-y divide-rule/60 rounded-md border border-rule">
+                  {dedupePreview.services.groups.map((g) => (
+                    <li key={g.normalizedName} className="px-3 py-2 flex items-center justify-between gap-2 text-[13px]">
+                      <span className="text-ink">{g.keep.name}</span>
+                      <span className="text-ink-faint">keep 1 · remove {g.remove.length}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {dedupePreview.products.totalRemovable > 0 && (
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint mb-1">
+                  Duplicate products · removing {dedupePreview.products.totalRemovable}
+                </div>
+                <ul className="divide-y divide-rule/60 rounded-md border border-rule">
+                  {dedupePreview.products.groups.map((g) => (
+                    <li key={g.normalizedName} className="px-3 py-2 flex items-center justify-between gap-2 text-[13px]">
+                      <span className="text-ink">{g.keep.name}</span>
+                      <span className="text-ink-faint">keep 1 · remove {g.remove.length}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={onCommitDedupe}
+                disabled={dedupeBusy}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md bg-emerald px-4 py-2 text-[14px] font-semibold text-paper shadow-sm transition",
+                  dedupeBusy ? "opacity-60 cursor-wait" : "hover:opacity-95",
+                )}
+              >
+                {dedupeBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+                Confirm — remove {dedupePreview.services.totalRemovable + dedupePreview.products.totalRemovable}
               </button>
             </div>
           </div>

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.118.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.118.0 &mdash; Clean up duplicates (and a reconcile fix).</strong> Two parts. <strong>Fix</strong>: v2.117.0&rsquo;s &ldquo;Link products&rdquo; created one product per <em>duplicate service</em> &mdash; so if you had &ldquo;CO2 Fractional&rdquo; three times, it made three CO2 products. It now de-dupes <em>within a run</em> (one product per brand, no matter how many services point at it). <strong>Cleanup</strong>: a new <strong>Clean up duplicates</strong> button on the Service catalog finds duplicate services <em>and</em> duplicate products (same name/brand), collapses each group to one row &mdash; the most complete (priced first) &mdash; and <strong>re-points any product links onto the survivor so no service loses its COGS</strong>. It clears services first (so the link state settles), then products. Preview-first: it shows every group it&rsquo;ll collapse and removes nothing until you confirm; the read is fully paginated. <strong>Touched</strong>: <code>refill-catalog.ts</code> (within-run reconcile de-dupe + <code>previewCatalogDedupeFn</code>/<code>commitCatalogDedupeFn</code> + shared <code>deleteServiceWithCleanup</code> + link re-point), <code>app.refill.catalog.services.tsx</code> (Clean up duplicates button + preview panel), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.117.0",
     date: "June 2026",
     items: [
