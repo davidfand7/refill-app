@@ -32,6 +32,9 @@ import {
   type IncentiveType,
   type IncentiveBeneficiary,
 } from "@/lib/brand-economics";
+import { recommendBrand, type BrandRecommendation } from "@/lib/brand-recommender";
+import type { PatientSummary } from "@/lib/patient-csv";
+import type { ValueTier, ReliabilityFlag } from "@/lib/patient-value";
 
 const accessInput = z.object({
   accessToken: z.string().min(1),
@@ -210,6 +213,38 @@ type CatalogProductRow = {
   sales_price_per_unit: string | number;
 };
 
+/** Shared loader — products catalog × active ledger → ranked economics. */
+async function loadBrandEconomicsBundle(
+  sb: ReturnType<typeof admin>,
+  effectiveUserId: string,
+): Promise<BrandEconomicsBundle> {
+  const tenantId = await getTenantIdForUser(sb, effectiveUserId, LEDGER_NO_TENANT_MSG);
+  // Active (non-hidden) products only — hidden brands aren't in play.
+  const productRows = await fetchAllRows<CatalogProductRow>((from, to) =>
+    sb
+      .from("products")
+      .select("brand, category, manufacturer, cost_per_unit, sales_price_per_unit")
+      .eq("tenant_id", tenantId)
+      .is("hidden_at", null)
+      .order("category", { ascending: true })
+      .order("brand", { ascending: true })
+      .range(from, to),
+  );
+  const products: BrandCostInput[] = productRows.map((r) => ({
+    brand: r.brand,
+    manufacturer: r.manufacturer ?? null,
+    category: r.category,
+    costPerUnit: typeof r.cost_per_unit === "string" ? Number(r.cost_per_unit) : r.cost_per_unit,
+    salesPricePerUnit:
+      typeof r.sales_price_per_unit === "string"
+        ? Number(r.sales_price_per_unit)
+        : r.sales_price_per_unit,
+  }));
+  const ledger = await loadLedger(sb, effectiveUserId);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  return { economics: rankBrandEconomics(products, ledger, todayIso), ledger, todayIso };
+}
+
 export const getBrandEconomics = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => accessInput.parse(raw))
   .handler(async ({ data }): Promise<BrandEconomicsBundle> => {
@@ -217,36 +252,79 @@ export const getBrandEconomics = createServerFn({ method: "POST" })
       accessToken: data.accessToken,
       viewAsUserId: data.viewAsUserId,
     });
+    return loadBrandEconomicsBundle(admin(), effectiveUserId);
+  });
+
+// ─── Patient brand recommendations (Pillar 2.2) ─────────────────────────────
+
+const patientRecInput = accessInput.extend({ patientNodeId: z.string().uuid() });
+
+export type PatientBrandRecommendations = {
+  valueTier: ValueTier | null;
+  reliabilityFlag: ReliabilityFlag | null;
+  patientName: string;
+  recommendations: BrandRecommendation[];
+};
+
+/** Product kinds whose brands are clinically substitutable → catalog category. */
+const KIND_TO_CATEGORY: Record<string, string> = {
+  toxin: "tox",
+  filler: "filler",
+  biostimulator: "biostimulator",
+};
+
+export const getPatientBrandRecommendations = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => patientRecInput.parse(raw))
+  .handler(async ({ data }): Promise<PatientBrandRecommendations> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId, LEDGER_NO_TENANT_MSG);
 
-    // Active (non-hidden) products only — hidden brands aren't in play.
-    const productRows = await fetchAllRows<CatalogProductRow>((from, to) =>
-      sb
-        .from("products")
-        .select("brand, category, manufacturer, cost_per_unit, sales_price_per_unit")
-        .eq("tenant_id", tenantId)
-        .is("hidden_at", null)
-        .order("category", { ascending: true })
-        .order("brand", { ascending: true })
-        .range(from, to),
-    );
-    const products: BrandCostInput[] = productRows.map((r) => ({
-      brand: r.brand,
-      manufacturer: r.manufacturer ?? null,
-      category: r.category,
-      costPerUnit: typeof r.cost_per_unit === "string" ? Number(r.cost_per_unit) : r.cost_per_unit,
-      salesPricePerUnit:
-        typeof r.sales_price_per_unit === "string"
-          ? Number(r.sales_price_per_unit)
-          : r.sales_price_per_unit,
-    }));
+    const { data: node } = await sb
+      .from("knowledge_nodes")
+      .select("title, attachments")
+      .eq("id", data.patientNodeId)
+      .eq("user_id", effectiveUserId)
+      .eq("node_type", "patient")
+      .maybeSingle();
+    const summary = (node?.attachments ?? null) as PatientSummary | null;
 
-    const ledger = await loadLedger(sb, effectiveUserId);
-    const todayIso = new Date().toISOString().slice(0, 10);
+    const bundle = await loadBrandEconomicsBundle(sb, effectiveUserId);
+    // Group economics by category (already ranked within category).
+    const byCategory = new Map<string, typeof bundle.economics>();
+    for (const e of bundle.economics) {
+      const arr = byCategory.get(e.category) ?? [];
+      arr.push(e);
+      byCategory.set(e.category, arr);
+    }
+
+    // Categories the patient actually gets treated in (toxin/filler/biostim).
+    const kinds = summary?.purchasePatterns?.byKind ?? {};
+    const categories = new Set<string>();
+    for (const [kind, cat] of Object.entries(KIND_TO_CATEGORY)) {
+      const m = (kinds as Record<string, { visitCount?: number } | undefined>)[kind];
+      if (m && (m.visitCount ?? 0) > 0) categories.add(cat);
+    }
+
+    const recommendations: BrandRecommendation[] = [];
+    for (const cat of categories) {
+      const economics = byCategory.get(cat);
+      if (!economics || economics.length === 0) continue;
+      const rec = recommendBrand({
+        category: cat,
+        valueTier: summary?.valueTier ?? null,
+        reliabilityFlag: summary?.reliabilityFlag ?? null,
+        economics,
+      });
+      if (rec) recommendations.push(rec);
+    }
+
     return {
-      economics: rankBrandEconomics(products, ledger, todayIso),
-      ledger,
-      todayIso,
+      valueTier: summary?.valueTier ?? null,
+      reliabilityFlag: summary?.reliabilityFlag ?? null,
+      patientName: node?.title ?? "Patient",
+      recommendations,
     };
   });

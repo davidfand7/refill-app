@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.121.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.121.0 &mdash; The Recommender: &ldquo;for THIS patient, use THIS brand&rdquo; (Pillar 2.2).</strong> The piece everything was building toward. Each patient profile now carries a <strong>Brand recommendations</strong> card that makes the chairside call <em>right</em>, not just greedy &mdash; by reading their value tier against live brand economics. A <strong>Top-value, reliable</strong> patient &rarr; the <em>premium</em> brand they trust, even at thinner margin (lifetime value outweighs one visit; it even tells you the per-unit margin you&rsquo;re trading and why). A <strong>Core</strong> patient &rarr; the high-margin clinically-equivalent <em>substitute</em> + the value-feel they experience as a great price. A <strong>new</strong> patient &rarr; an acquisition play that earns the second visit. A <strong>Watch</strong> patient (chronic no-show / discount-only) &rarr; protect margin, don&rsquo;t burn premium incentive. It recommends per injectable category the patient actually gets (tox / filler / biostimulator), reading <code>margin_now</code> + patient value-feel straight from the catalog &times; the live incentive ledger. <strong>Internal only &mdash; never shown to the patient.</strong> This closes the 3-pillar Patient-Profitability OS: value tiering (1) feeds brand economics (2.1) feeds the recommender (2.2). <strong>Touched</strong>: <code>brand-recommender.ts</code> (new pure lib), <code>refill-brand-economics.functions.ts</code> (<code>getPatientBrandRecommendations</code> + shared economics loader), <code>brand-economics.ts</code> (price on the snapshot), patient profile card, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.120.0",
     date: "June 2026",
     items: [

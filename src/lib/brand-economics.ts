@@ -86,6 +86,8 @@ export type BrandEconomics = {
   brand: string;
   manufacturer: string | null;
   category: string;
+  /** Patient-facing sales price per unit (premium-positioning signal). */
+  pricePerUnit: number;
   /** price − cost, straight from the catalog (the unchanging baseline). */
   baseMarginPerUnit: number;
   /** Active SPA-side per-unit incentive total (rebates / samples). */
@@ -159,6 +161,7 @@ export function computeBrandEconomics(
     brand: product.brand,
     manufacturer: product.manufacturer,
     category: product.category,
+    pricePerUnit: product.salesPricePerUnit,
     baseMarginPerUnit: baseMargin,
     spaIncentivePerUnit: spaPerUnit,
     spaIncentiveFlat: spaFlat,

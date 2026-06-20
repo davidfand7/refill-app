@@ -73,6 +73,11 @@ import {
   listPreshowProfiles,
   type PreshowProfile,
 } from "@/server/refill-preshow-agent.functions";
+import {
+  getPatientBrandRecommendations,
+  type PatientBrandRecommendations,
+} from "@/server/refill-brand-economics.functions";
+import { cn } from "@/lib/utils";
 import type {
   ProductKind,
   ProductManufacturer,
@@ -104,6 +109,7 @@ type Window = "12mo" | "all";
 function PatientDetailPage() {
   const { patientId } = Route.useParams();
   const [data, setData] = useState<PatientDetail | null>(null);
+  const [recs, setRecs] = useState<PatientBrandRecommendations | null>(null);
   const [preshowProfiles, setPreshowProfiles] = useState<PreshowProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -128,17 +134,21 @@ function PatientDetailPage() {
           }
           return;
         }
-        const [detail, profiles] = await Promise.all([
+        const [detail, profiles, recommendations] = await Promise.all([
           getPatientById({
             data: { accessToken: token, patientId, viewAsUserId },
           }),
           listPreshowProfiles({
             data: { accessToken: token, viewAsUserId },
           }).catch(() => [] as PreshowProfile[]),
+          getPatientBrandRecommendations({
+            data: { accessToken: token, patientNodeId: patientId, viewAsUserId },
+          }).catch(() => null),
         ]);
         if (!cancelled) {
           setData(detail);
           setPreshowProfiles(profiles);
+          setRecs(recommendations);
           setLoading(false);
           if (!detail) setLoadError("Patient not found.");
         }
@@ -203,6 +213,8 @@ function PatientDetailPage() {
           <>
             <ContactCard patient={data.patient} />
             <SummaryCard patient={data.patient} />
+
+            <BrandRecsCard recs={recs} />
             <SoftTagsCard
               patient={data.patient}
               definitions={data.customTagDefinitions}
@@ -402,6 +414,73 @@ function SummaryCard({ patient }: { patient: PatientListRow }) {
           value={patient.lastVisit ? formatDate(patient.lastVisit) : "—"}
         />
       </div>
+    </section>
+  );
+}
+
+// ─── Brand recommendations card (Pillar 2.2) ──────────────────────────────
+
+const REC_CATEGORY_LABEL: Record<string, string> = {
+  tox: "Tox",
+  filler: "Filler",
+  biostimulator: "Biostimulator",
+};
+
+const REC_STRATEGY_META: Record<
+  string,
+  { label: string; cls: string }
+> = {
+  premium_ltv: { label: "Premium · LTV", cls: "bg-emerald/10 text-emerald-ink" },
+  margin_substitute: { label: "Margin", cls: "bg-emerald/10 text-emerald-ink" },
+  acquisition: { label: "Acquire", cls: "bg-rule-soft text-ink-soft" },
+  margin_protect: { label: "Protect margin", cls: "bg-amber-soft text-amber" },
+};
+
+function BrandRecsCard({ recs }: { recs: PatientBrandRecommendations | null }) {
+  if (!recs || recs.recommendations.length === 0) return null;
+  return (
+    <section className="rounded-xl border border-rule bg-white overflow-hidden">
+      <div className="px-5 py-3 border-b border-rule bg-rule-soft/60 flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
+          Brand recommendations
+        </div>
+        <span className="text-[10px] text-ink-faint">Internal · never shown to the patient</span>
+      </div>
+      <ul className="divide-y divide-rule/60">
+        {recs.recommendations.map((r) => {
+          const meta = REC_STRATEGY_META[r.strategy] ?? REC_STRATEGY_META.margin_substitute;
+          return (
+            <li key={r.category} className="px-5 py-3.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint">
+                  {REC_CATEGORY_LABEL[r.category] ?? r.category}
+                </span>
+                <span className="text-[15px] font-semibold text-ink">{r.recommendedBrand}</span>
+                {r.manufacturer && (
+                  <span className="text-[11px] text-ink-faint">{r.manufacturer}</span>
+                )}
+                <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider", meta.cls)}>
+                  {meta.label}
+                </span>
+              </div>
+              <p className="mt-1 text-[12.5px] text-ink-soft leading-snug">{r.rationale}</p>
+              <div className="mt-1.5 flex items-center gap-3 text-[11px] tabular-nums text-ink-faint">
+                <span>
+                  Margin now <span className="font-semibold text-emerald-ink">{formatCurrency(r.marginNowPerUnit)}/u</span>
+                </span>
+                {r.patientValueFeel > 0 && (
+                  <span>Patient feels <span className="font-semibold text-ink">{formatCurrency(r.patientValueFeel)}</span></span>
+                )}
+                {r.marginDeltaVsBest < 0 && (
+                  <span className="text-amber">
+                    −{formatCurrency(Math.abs(r.marginDeltaVsBest))}/u vs {r.bestMarginBrand}
+                  </span>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }
