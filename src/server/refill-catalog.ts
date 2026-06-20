@@ -31,7 +31,14 @@ import { fetchAllRows } from "@/server/paginate";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
-export type ProductCategory = "tox" | "filler" | "laser_consumable" | "skincare" | "other";
+export type ProductCategory =
+  | "tox"
+  | "filler"
+  | "biostimulator"
+  | "laser_consumable"
+  | "facial"
+  | "skincare"
+  | "other";
 
 export type ProductUnitType = "vial" | "syringe" | "bottle" | "session" | "other";
 
@@ -63,6 +70,11 @@ export type Product = {
   marginPct: number | null;
   manufacturer: ProductManufacturer | null;
   notes: string | null;
+  /** v2.115.0: optional sub-category — area (primary substitution group, e.g.
+   *  cheek/lip/jaw) + family (secondary refiner). Owner-authored; products
+   *  inherit canonical defaults on the recategorize sweep. Free-text. */
+  subcategoryArea: string | null;
+  subcategoryFamily: string | null;
   /** v1.34.9.1: soft-hide. null = active, ISO timestamp = hidden at that moment. */
   hiddenAt: string | null;
   createdAt: string;
@@ -138,6 +150,8 @@ type ProductRow = {
   sales_price_per_unit: string | number;
   manufacturer: string | null;
   notes: string | null;
+  subcategory_area: string | null;
+  subcategory_family: string | null;
   hidden_at: string | null;
   created_at: string;
   updated_at: string;
@@ -160,6 +174,8 @@ function rowToProduct(r: ProductRow): Product {
     marginPct,
     manufacturer: (r.manufacturer as ProductManufacturer | null) ?? null,
     notes: r.notes,
+    subcategoryArea: r.subcategory_area ?? null,
+    subcategoryFamily: r.subcategory_family ?? null,
     hiddenAt: r.hidden_at ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -168,7 +184,7 @@ function rowToProduct(r: ProductRow): Product {
 
 // ─── Zod ──────────────────────────────────────────────────────────────────
 
-const CATEGORY_VALUES = ["tox", "filler", "laser_consumable", "skincare", "other"] as const;
+const CATEGORY_VALUES = ["tox", "filler", "biostimulator", "laser_consumable", "facial", "skincare", "other"] as const;
 const UNIT_VALUES = ["vial", "syringe", "bottle", "session", "other"] as const;
 const MANUFACTURER_VALUES = [
   "abbvie", "galderma", "evolus", "merz",
@@ -199,6 +215,8 @@ const productPayload = z.object({
   salesPricePerUnit: z.number().nonnegative("Price can't be negative."),
   manufacturer: z.enum(MANUFACTURER_VALUES).nullable(),
   notes: z.string().trim().max(500).nullable(),
+  subcategoryArea: z.string().trim().max(80).nullable().optional(),
+  subcategoryFamily: z.string().trim().max(80).nullable().optional(),
 });
 
 const createInput = z.object({
@@ -288,6 +306,8 @@ export const createProductFn = createServerFn({ method: "POST" })
         sales_price_per_unit: data.product.salesPricePerUnit,
         manufacturer: data.product.manufacturer,
         notes: data.product.notes,
+        subcategory_area: data.product.subcategoryArea ?? null,
+        subcategory_family: data.product.subcategoryFamily ?? null,
       })
       .select("*")
       .single();
@@ -318,6 +338,8 @@ export const updateProductFn = createServerFn({ method: "POST" })
         sales_price_per_unit: data.product.salesPricePerUnit,
         manufacturer: data.product.manufacturer,
         notes: data.product.notes,
+        subcategory_area: data.product.subcategoryArea ?? null,
+        subcategory_family: data.product.subcategoryFamily ?? null,
       })
       .eq("id", data.id)
       .eq("tenant_id", tenantId)
@@ -615,6 +637,9 @@ export type CanonicalBrand = {
   manufacturer: ProductManufacturer | null;
   unitType: ProductUnitType;
   notes: string | null;
+  /** v2.115.0: owner-authored sub-category defaults products inherit on sweep. */
+  subcategoryArea: string | null;
+  subcategoryFamily: string | null;
 };
 
 type CanonicalBrandRow = {
@@ -625,6 +650,8 @@ type CanonicalBrandRow = {
   manufacturer: string | null;
   unit_type: string;
   notes: string | null;
+  subcategory_area: string | null;
+  subcategory_family: string | null;
 };
 
 function rowToCanonicalBrand(r: CanonicalBrandRow): CanonicalBrand {
@@ -636,6 +663,8 @@ function rowToCanonicalBrand(r: CanonicalBrandRow): CanonicalBrand {
     manufacturer: (r.manufacturer as ProductManufacturer | null) ?? null,
     unitType: r.unit_type as ProductUnitType,
     notes: r.notes,
+    subcategoryArea: r.subcategory_area ?? null,
+    subcategoryFamily: r.subcategory_family ?? null,
   };
 }
 
@@ -726,7 +755,7 @@ export type RecategorizeProductsReceipt = {
 
 // ─── Admin CRUD for canonical_brands (system-wide reference) ──────────────
 
-const CANONICAL_CATEGORY_VALUES = ["tox", "filler", "laser", "facial", "skincare", "other"] as const;
+const CANONICAL_CATEGORY_VALUES = ["tox", "filler", "biostimulator", "laser", "facial", "skincare", "other"] as const;
 
 const brandPayload = z.object({
   displayName: z.string().trim().min(1, "Display name is required.").max(120),
@@ -912,7 +941,7 @@ export const recategorizeProductsFromBrandsFn = createServerFn({ method: "POST" 
     const brands = await loadAllCanonicalBrands(sb);
     const { data: products, error } = await sb
       .from("products")
-      .select("id, brand, notes, category, manufacturer")
+      .select("id, brand, notes, category, manufacturer, subcategory_area, subcategory_family")
       .eq("tenant_id", tenantId);
     if (error) throw new Error(`Couldn't list products: ${error.message}`);
     const rows = (products ?? []) as Array<{
@@ -921,6 +950,8 @@ export const recategorizeProductsFromBrandsFn = createServerFn({ method: "POST" 
       notes: string | null;
       category: string;
       manufacturer: string | null;
+      subcategory_area: string | null;
+      subcategory_family: string | null;
     }>;
     let scanned = 0;
     let recategorized = 0;
@@ -945,16 +976,31 @@ export const recategorizeProductsFromBrandsFn = createServerFn({ method: "POST" 
         match.manufacturer && match.manufacturer !== oldManufacturer
           ? match.manufacturer
           : oldManufacturer;
+      // Inherit sub-category defaults from the registry, but ONLY fill blanks —
+      // never overwrite an explicit owner choice (same policy as manufacturer).
+      const oldArea = r.subcategory_area ?? null;
+      const oldFamily = r.subcategory_family ?? null;
+      const newArea = !oldArea && match.subcategoryArea ? match.subcategoryArea : oldArea;
+      const newFamily = !oldFamily && match.subcategoryFamily ? match.subcategoryFamily : oldFamily;
       if (
         oldCategory === newCategory &&
-        oldManufacturer === newManufacturer
+        oldManufacturer === newManufacturer &&
+        oldArea === newArea &&
+        oldFamily === newFamily
       ) {
         unchanged++;
         continue;
       }
-      const updates: { category?: ProductCategory; manufacturer?: ProductManufacturer | null } = {};
+      const updates: {
+        category?: ProductCategory;
+        manufacturer?: ProductManufacturer | null;
+        subcategory_area?: string | null;
+        subcategory_family?: string | null;
+      } = {};
       if (oldCategory !== newCategory) updates.category = newCategory;
       if (oldManufacturer !== newManufacturer) updates.manufacturer = newManufacturer;
+      if (oldArea !== newArea) updates.subcategory_area = newArea;
+      if (oldFamily !== newFamily) updates.subcategory_family = newFamily;
       const { error: updErr } = await sb
         .from("products")
         .update(updates)
@@ -1403,8 +1449,9 @@ function canonicalToProductCategory(c: ServiceCategory): ProductCategory {
   switch (c) {
     case "tox": return "tox";
     case "filler": return "filler";
+    case "biostimulator": return "biostimulator";
     case "laser": return "laser_consumable";
-    case "facial": return "other";
+    case "facial": return "facial";
     case "skincare": return "skincare";
     case "other": return "other";
     // Custom (free-text) categories have no product-taxonomy mapping.

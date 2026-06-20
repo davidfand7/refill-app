@@ -61,7 +61,9 @@ export const Route = createFileRoute("/app/refill/catalog/products")({
 const CATEGORY_OPTIONS: Array<{ value: ProductCategory; label: string }> = [
   { value: "tox", label: "Tox" },
   { value: "filler", label: "Filler" },
+  { value: "biostimulator", label: "Biostimulator" },
   { value: "laser_consumable", label: "Laser consumable" },
+  { value: "facial", label: "Facial" },
   { value: "skincare", label: "Skincare" },
   { value: "other", label: "Other" },
 ];
@@ -99,6 +101,8 @@ type ProductDraft = {
   salesPricePerUnit: string;
   manufacturer: ProductManufacturer | "";
   notes: string;
+  subcategoryArea: string;
+  subcategoryFamily: string;
 };
 
 const EMPTY_DRAFT: ProductDraft = {
@@ -109,6 +113,8 @@ const EMPTY_DRAFT: ProductDraft = {
   salesPricePerUnit: "",
   manufacturer: "",
   notes: "",
+  subcategoryArea: "",
+  subcategoryFamily: "",
 };
 
 function productToDraft(p: Product): ProductDraft {
@@ -120,6 +126,8 @@ function productToDraft(p: Product): ProductDraft {
     salesPricePerUnit: String(p.salesPricePerUnit),
     manufacturer: p.manufacturer ?? "",
     notes: p.notes ?? "",
+    subcategoryArea: p.subcategoryArea ?? "",
+    subcategoryFamily: p.subcategoryFamily ?? "",
   };
 }
 
@@ -137,6 +145,8 @@ function draftToPayload(d: ProductDraft) {
     salesPricePerUnit: price,
     manufacturer: d.manufacturer === "" ? null : (d.manufacturer as ProductManufacturer),
     notes: d.notes.trim() ? d.notes.trim() : null,
+    subcategoryArea: d.subcategoryArea.trim() ? d.subcategoryArea.trim() : null,
+    subcategoryFamily: d.subcategoryFamily.trim() ? d.subcategoryFamily.trim() : null,
   };
 }
 
@@ -852,6 +862,28 @@ function ProductFormCard({
               </option>
             ))}
           </select>
+        </FormField>
+
+        <FormField label="Sub-category — area (optional)">
+          <input
+            type="text"
+            value={draft.subcategoryArea}
+            onChange={(e) => onChange({ ...draft, subcategoryArea: e.target.value })}
+            placeholder="e.g. cheek, lip, jawline"
+            disabled={busy}
+            className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+          />
+        </FormField>
+
+        <FormField label="Sub-category — family (optional)">
+          <input
+            type="text"
+            value={draft.subcategoryFamily}
+            onChange={(e) => onChange({ ...draft, subcategoryFamily: e.target.value })}
+            placeholder="e.g. Voluma-class, Volbella-class"
+            disabled={busy}
+            className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+          />
         </FormField>
 
         <FormField label="Unit type">

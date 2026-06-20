@@ -275,6 +275,8 @@ export type Database = {
           id: string
           manufacturer: string | null
           notes: string | null
+          subcategory_area: string | null
+          subcategory_family: string | null
           unit_type: string
           updated_at: string
         }
@@ -286,6 +288,8 @@ export type Database = {
           id?: string
           manufacturer?: string | null
           notes?: string | null
+          subcategory_area?: string | null
+          subcategory_family?: string | null
           unit_type: string
           updated_at?: string
         }
@@ -297,6 +301,8 @@ export type Database = {
           id?: string
           manufacturer?: string | null
           notes?: string | null
+          subcategory_area?: string | null
+          subcategory_family?: string | null
           unit_type?: string
           updated_at?: string
         }
@@ -2575,6 +2581,8 @@ export type Database = {
           manufacturer: string | null
           notes: string | null
           sales_price_per_unit: number
+          subcategory_area: string | null
+          subcategory_family: string | null
           tenant_id: string
           unit_type: string
           updated_at: string
@@ -2589,6 +2597,8 @@ export type Database = {
           manufacturer?: string | null
           notes?: string | null
           sales_price_per_unit: number
+          subcategory_area?: string | null
+          subcategory_family?: string | null
           tenant_id: string
           unit_type: string
           updated_at?: string
@@ -2603,6 +2613,8 @@ export type Database = {
           manufacturer?: string | null
           notes?: string | null
           sales_price_per_unit?: number
+          subcategory_area?: string | null
+          subcategory_family?: string | null
           tenant_id?: string
           unit_type?: string
           updated_at?: string

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.115.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.115.0 &mdash; Catalog foundation: biostimulators get their own shelf + filler sub-categories.</strong> Now that the intelligence groups substitutable brands <em>by category</em> (Brand Economics &rarr; the coming recommender), the catalog taxonomy is load-bearing &mdash; and it had a gap. <strong>Biostimulator is now a first-class category</strong> (Sculptra, Radiesse) instead of being mis-filed as filler &mdash; you don&rsquo;t swap a collagen biostimulator for an HA filler, and the recommender won&rsquo;t either. Added <strong>Facial</strong> too, so brands stop dumping into &ldquo;Other.&rdquo; Products also gain two <strong>optional</strong> sub-category fields &mdash; <strong>area</strong> (the primary substitution group, e.g. cheek / lip / jawline) and <strong>family</strong> (a secondary refiner) &mdash; so fillers substitute <em>within the area you&rsquo;re actually treating</em>. They&rsquo;re free-text and optional; seed the defaults once on the canonical brand registry and every product inherits them on the <strong>Recategorize</strong> sweep. <strong>Touched</strong>: migration <code>v2_115_0_catalog_biostim_subcat</code> (category CHECK + <code>subcategory_area</code>/<code>subcategory_family</code> columns on products + canonical_brands, re-points Sculptra/Radiesse &rarr; biostimulator), <code>refill-catalog.ts</code> (enums, sweep inherits sub-cats), product form (Biostimulator/Facial + Area/Family fields), Brand Economics labels, generated DB types, <code>changelog.ts</code>. <strong>Run the migration, then hit Recategorize.</strong>",
+    ],
+  },
+  {
     version: "v2.114.0",
     date: "June 2026",
     items: [

@@ -48,7 +48,9 @@ const TYPE_OPTIONS: Array<{ value: IncentiveType; label: string }> = [
 const CATEGORY_LABEL: Record<string, string> = {
   tox: "Tox",
   filler: "Filler",
+  biostimulator: "Biostimulator",
   laser_consumable: "Laser consumable",
+  facial: "Facial",
   skincare: "Skincare",
   other: "Other",
 };
