@@ -315,7 +315,8 @@ function PatientsPage() {
       const fresh = await listPatients({ data: { accessToken, viewAsUserId, includeHidden: showHidden } });
       setRows(fresh);
       toast.success(
-        `Tiers recomputed — ${res.byTier.top} top · ${res.byTier.core} core · ${res.byTier.emerging} new · ${res.byReliability.watch} watch.`,
+        `Tiers recomputed — ${res.byTier.top} top · ${res.byTier.core} core · ${res.byTier.emerging} new · ${res.byReliability.watch} watch.` +
+          (res.bucketsSkipped > 0 ? ` (${res.bucketsSkipped} non-patient bucket${res.bucketsSkipped === 1 ? "" : "s"} skipped.)` : ""),
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't recompute tiers.");

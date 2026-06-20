@@ -129,6 +129,7 @@ import { Route as AppRefillPatientsPatientIdRouteImport } from './routes/app.ref
 import { Route as AppRefillCatalogServicesRouteImport } from './routes/app.refill.catalog.services'
 import { Route as AppRefillCatalogProductsRouteImport } from './routes/app.refill.catalog.products'
 import { Route as AppRefillCatalogImportRouteImport } from './routes/app.refill.catalog.import'
+import { Route as AppRefillCatalogBrandEconomicsRouteImport } from './routes/app.refill.catalog.brand-economics'
 import { Route as AppRefillCampaignsNewRouteImport } from './routes/app.refill.campaigns.new'
 import { Route as AppRefillCampaignsCampaignIdRouteImport } from './routes/app.refill.campaigns.$campaignId'
 import { Route as AppRefillCalendarZenotiInstallRouteImport } from './routes/app.refill.calendar.zenoti-install'
@@ -795,6 +796,12 @@ const AppRefillCatalogImportRoute = AppRefillCatalogImportRouteImport.update({
   path: '/catalog/import',
   getParentRoute: () => AppRefillRoute,
 } as any)
+const AppRefillCatalogBrandEconomicsRoute =
+  AppRefillCatalogBrandEconomicsRouteImport.update({
+    id: '/catalog/brand-economics',
+    path: '/catalog/brand-economics',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
 const AppRefillCampaignsNewRoute = AppRefillCampaignsNewRouteImport.update({
   id: '/new',
   path: '/new',
@@ -1127,6 +1134,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/calendar/zenoti-install': typeof AppRefillCalendarZenotiInstallRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
+  '/app/refill/catalog/brand-economics': typeof AppRefillCatalogBrandEconomicsRoute
   '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
   '/app/refill/catalog/products': typeof AppRefillCatalogProductsRoute
   '/app/refill/catalog/services': typeof AppRefillCatalogServicesRoute
@@ -1278,6 +1286,7 @@ export interface FileRoutesByTo {
   '/app/refill/calendar/vagaro-install': typeof AppRefillCalendarVagaroInstallRoute
   '/app/refill/calendar/zenoti-install': typeof AppRefillCalendarZenotiInstallRoute
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
+  '/app/refill/catalog/brand-economics': typeof AppRefillCatalogBrandEconomicsRoute
   '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
   '/app/refill/catalog/products': typeof AppRefillCatalogProductsRoute
   '/app/refill/catalog/services': typeof AppRefillCatalogServicesRoute
@@ -1438,6 +1447,7 @@ export interface FileRoutesById {
   '/app/refill/calendar/zenoti-install': typeof AppRefillCalendarZenotiInstallRoute
   '/app/refill/campaigns/$campaignId': typeof AppRefillCampaignsCampaignIdRouteWithChildren
   '/app/refill/campaigns/new': typeof AppRefillCampaignsNewRoute
+  '/app/refill/catalog/brand-economics': typeof AppRefillCatalogBrandEconomicsRoute
   '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
   '/app/refill/catalog/products': typeof AppRefillCatalogProductsRoute
   '/app/refill/catalog/services': typeof AppRefillCatalogServicesRoute
@@ -1599,6 +1609,7 @@ export interface FileRouteTypes {
     | '/app/refill/calendar/zenoti-install'
     | '/app/refill/campaigns/$campaignId'
     | '/app/refill/campaigns/new'
+    | '/app/refill/catalog/brand-economics'
     | '/app/refill/catalog/import'
     | '/app/refill/catalog/products'
     | '/app/refill/catalog/services'
@@ -1750,6 +1761,7 @@ export interface FileRouteTypes {
     | '/app/refill/calendar/vagaro-install'
     | '/app/refill/calendar/zenoti-install'
     | '/app/refill/campaigns/new'
+    | '/app/refill/catalog/brand-economics'
     | '/app/refill/catalog/import'
     | '/app/refill/catalog/products'
     | '/app/refill/catalog/services'
@@ -1909,6 +1921,7 @@ export interface FileRouteTypes {
     | '/app/refill/calendar/zenoti-install'
     | '/app/refill/campaigns/$campaignId'
     | '/app/refill/campaigns/new'
+    | '/app/refill/catalog/brand-economics'
     | '/app/refill/catalog/import'
     | '/app/refill/catalog/products'
     | '/app/refill/catalog/services'
@@ -2862,6 +2875,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillCatalogImportRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/refill/catalog/brand-economics': {
+      id: '/app/refill/catalog/brand-economics'
+      path: '/catalog/brand-economics'
+      fullPath: '/app/refill/catalog/brand-economics'
+      preLoaderRoute: typeof AppRefillCatalogBrandEconomicsRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/campaigns/new': {
       id: '/app/refill/campaigns/new'
       path: '/new'
@@ -3260,6 +3280,7 @@ interface AppRefillRouteChildren {
   AppRefillAgentsPreshowRoute: typeof AppRefillAgentsPreshowRoute
   AppRefillAgentsRecognitionRoute: typeof AppRefillAgentsRecognitionRoute
   AppRefillAgentsRescueRoute: typeof AppRefillAgentsRescueRoute
+  AppRefillCatalogBrandEconomicsRoute: typeof AppRefillCatalogBrandEconomicsRoute
   AppRefillCatalogImportRoute: typeof AppRefillCatalogImportRoute
   AppRefillCatalogProductsRoute: typeof AppRefillCatalogProductsRoute
   AppRefillCatalogServicesRoute: typeof AppRefillCatalogServicesRoute
@@ -3309,6 +3330,7 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillAgentsPreshowRoute: AppRefillAgentsPreshowRoute,
   AppRefillAgentsRecognitionRoute: AppRefillAgentsRecognitionRoute,
   AppRefillAgentsRescueRoute: AppRefillAgentsRescueRoute,
+  AppRefillCatalogBrandEconomicsRoute: AppRefillCatalogBrandEconomicsRoute,
   AppRefillCatalogImportRoute: AppRefillCatalogImportRoute,
   AppRefillCatalogProductsRoute: AppRefillCatalogProductsRoute,
   AppRefillCatalogServicesRoute: AppRefillCatalogServicesRoute,

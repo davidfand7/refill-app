@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.114.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.114.0 &mdash; Brand Economics: the hidden lever, made visible (Pillar 2.1).</strong> The first piece of the Brand-Substitution Margin Optimizer. A new <strong>Brand economics</strong> tab under Catalog shows, per category, what each brand <em>actually nets you right now</em> &mdash; your catalog margin (price &minus; cost) plus any <strong>active manufacturer incentive</strong> &mdash; ranked so the high-margin substitute is obvious at a glance (e.g. &ldquo;Jeuveau $8.50/u vs Botox $6.00/u this month&rdquo;), with the patient&rsquo;s <em>value-feel</em> (vouchers / rewards they experience as a better price) in its own column. You maintain the new <strong>Manufacturer Incentive Ledger</strong> with a structured form &mdash; per brand: rebate / sample / voucher / patient-reward / instant, who it accrues to (you = lifts margin-now, or the patient = value-feel), amount, per-unit vs flat, and a date window so a promo that ends next month stops counting automatically. This is the data spine the upcoming tier-aware recommender reads (top-tier patient &rarr; the premium brand for LTV; price-sensitive &rarr; the high-margin substitute + a price they love). Reuses the existing products catalog margin + canonical brand map; the &ldquo;type it in plain English&rdquo; entry is a fast-follow. <strong>Internal only &mdash; margin-now is YOUR margin, never the patient&rsquo;s view, and unrelated to SmartSpa&rsquo;s $5.</strong> <strong>Also</strong>: hardened value tiering to skip non-patient catch-all buckets (e.g. a QuickBooks &ldquo;Unassigned&rdquo; row that was ranking as a fake top-tier whale) &mdash; excluded from the percentile and de-tiered. <strong>Touched</strong>: <code>brand-economics.ts</code> (new pure lib), <code>refill-brand-economics.functions.ts</code> (new ledger + economics fns), <code>app.refill.catalog.brand-economics.tsx</code> (new route) + Catalog sub-nav, <code>patient-value.ts</code> + <code>refill-patient-value.functions.ts</code> (non-patient guard), <code>changelog.ts</code>. No migration (ledger rides <code>knowledge_nodes</code> jsonb).",
+    ],
+  },
+  {
     version: "v2.113.0",
     date: "June 2026",
     items: [

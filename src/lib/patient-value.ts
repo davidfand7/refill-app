@@ -56,6 +56,32 @@ export const TOP_PERCENTILE = 0.8;
 /** RFM composite weights — Monetary leads, then Frequency, then Recency. */
 export const RFM_WEIGHTS = { monetary: 0.5, frequency: 0.3, recency: 0.2 } as const;
 
+// ─── Non-patient bucket guard ─────────────────────────────────────────────
+
+/**
+ * QuickBooks/POS catch-all "patient" rows that are NOT real people — they
+ * aggregate unattributed sales and otherwise rank as fake whales (e.g.
+ * "Unassigned" surfaced as a top-tier $44k/89-visit "patient" on Rejuv).
+ * These must be excluded from value tiering (they skew the percentile AND
+ * are non-targetable). Conservative EXACT normalized-name match — never a
+ * substring (a real patient surnamed "Cash" must not be nuked).
+ */
+const NON_PATIENT_BUCKET_NAMES = new Set([
+  "unassigned",
+  "cash sale",
+  "cash customer",
+  "no name",
+  "house account",
+  "walk in",
+  "walk-in",
+]);
+
+/** True when a node's display name is a known non-patient catch-all bucket. */
+export function isNonPatientName(displayName: string | null | undefined): boolean {
+  const n = (displayName ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  return NON_PATIENT_BUCKET_NAMES.has(n);
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function daysBetween(iso: string | null, now: number): number | null {

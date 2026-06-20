@@ -26,6 +26,7 @@ import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
 import {
   assignValueTiers,
+  isNonPatientName,
   reliabilityFlag,
   type PatientValueInputs,
   type ReliabilityFlag,
@@ -40,6 +41,8 @@ const accessInput = z.object({
 export type RecomputeValueTiersResult = {
   patientsScanned: number;
   patientsWritten: number;
+  /** Non-patient catch-all buckets (e.g. "Unassigned") excluded from ranking. */
+  bucketsSkipped: number;
   byTier: Record<ValueTier, number>;
   byReliability: Record<ReliabilityFlag, number>;
   computedAt: string;
@@ -87,12 +90,29 @@ export const recomputePatientValueTiers = createServerFn({ method: "POST" })
       }
     }
 
-    // 3) Build the rankable inputs from each patient summary.
+    // 3) Build the rankable inputs from each patient summary. Non-patient
+    //    catch-all buckets (e.g. QuickBooks "Unassigned") are EXCLUDED — they
+    //    aggregate unattributed sales and would rank as fake whales, skewing
+    //    the percentile and surfacing as targetable "top" patients. Any such
+    //    bucket carrying a stale tier from a prior run gets it CLEARED below.
     type Entry = { id: string; summary: PatientSummary } & PatientValueInputs;
     const entries: Entry[] = [];
+    const bucketsToClear: Array<{ id: string; summary: PatientSummary }> = [];
+    let bucketsSkipped = 0;
     for (const row of rows) {
       const summary = row.attachments as unknown as PatientSummary | null;
       if (!summary) continue;
+      if (isNonPatientName(summary.displayName)) {
+        bucketsSkipped += 1;
+        if (
+          summary.valueTier != null ||
+          summary.valueScore != null ||
+          summary.reliabilityFlag != null
+        ) {
+          bucketsToClear.push({ id: row.id, summary });
+        }
+        continue;
+      }
       entries.push({
         id: row.id,
         summary,
@@ -143,6 +163,19 @@ export const recomputePatientValueTiers = createServerFn({ method: "POST" })
       updates.push({ id: e.id, attachments: next as unknown as Json });
     }
 
+    // 5b) Clear stale tier fields off any non-patient bucket (so a previously
+    //     mis-tiered "Unassigned" stops reading/targeting as top).
+    for (const b of bucketsToClear) {
+      const cleared: PatientSummary = {
+        ...b.summary,
+        valueTier: null,
+        valueScore: null,
+        reliabilityFlag: null,
+        valueTieredAt: computedAt,
+      };
+      updates.push({ id: b.id, attachments: cleared as unknown as Json });
+    }
+
     // 6) Bulk-write changed rows. Chunked Promise.all (matches the reliability
     //    recompute write shape) — bounded round trips without a CASE-WHEN.
     const CHUNK = 50;
@@ -162,6 +195,7 @@ export const recomputePatientValueTiers = createServerFn({ method: "POST" })
     return {
       patientsScanned: entries.length,
       patientsWritten: updates.length,
+      bucketsSkipped,
       byTier,
       byReliability,
       computedAt,
