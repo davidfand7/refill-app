@@ -36,6 +36,7 @@
 import { parseCsvGrid } from "@/lib/csv-grid";
 import { normalizePatientName } from "@/lib/normalize-patient";
 import { KIND_CADENCE } from "@/lib/patient-cadence";
+import type { ValueTier, ReliabilityFlag } from "@/lib/patient-value";
 import {
   resolveProduct,
   type ProductManufacturer,
@@ -431,6 +432,22 @@ export type PatientContactSummary = {
   contactSource: "client-csv" | "manual" | "fuzzy-confirmed" | null;
   /** ISO timestamp the contact info last changed. */
   contactLinkedAt: string | null;
+  /**
+   * v2.113.0: Patient Value Tiering (Patient-Profitability OS, Pillar 1).
+   * Internal-only, NEVER patient-visible. Computed whole-book (percentile is
+   * tenant-relative) by `recomputePatientValueTiers`, NOT on rollup — so they
+   * live here in PatientContactSummary to survive sales-CSV re-rolls the same
+   * way vip/softTags/lifeEvents do (a re-upload recomputes the spend/visit
+   * summary but must NOT blow away the last computed tier). See
+   * `@/lib/patient-value`.
+   */
+  valueTier?: ValueTier | null;
+  /** 0–100 composite RFM percentile rank within the book at compute time. */
+  valueScore?: number | null;
+  /** Behavior axis, independent of value. "watch" = interference risk. */
+  reliabilityFlag?: ReliabilityFlag | null;
+  /** ISO timestamp the tiers were last recomputed. */
+  valueTieredAt?: string | null;
 };
 
 // ─── Patient Soft-Tags (v1.31.0) ───────────────────────────────────────────
@@ -1174,6 +1191,17 @@ export function rollupPatientSummary(
       summary.contactSource = priorContact.contactSource;
     if (priorContact.contactLinkedAt !== undefined)
       summary.contactLinkedAt = priorContact.contactLinkedAt;
+    // v2.113.0: value-tiering fields are computed whole-book by a separate
+    // recompute pass, not on rollup — so a sales-CSV re-upload must carry the
+    // last computed tier forward (same preservation path as vip/softTags).
+    if (priorContact.valueTier !== undefined)
+      summary.valueTier = priorContact.valueTier;
+    if (priorContact.valueScore !== undefined)
+      summary.valueScore = priorContact.valueScore;
+    if (priorContact.reliabilityFlag !== undefined)
+      summary.reliabilityFlag = priorContact.reliabilityFlag;
+    if (priorContact.valueTieredAt !== undefined)
+      summary.valueTieredAt = priorContact.valueTieredAt;
   }
   return summary;
 }

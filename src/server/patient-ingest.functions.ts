@@ -49,6 +49,7 @@ import {
   type PatientLifeEvent,
   type PatientLifeEventType,
 } from "@/lib/patient-csv";
+import type { ValueTier, ReliabilityFlag } from "@/lib/patient-value";
 import {
   parseClientListCsv,
   type ParsedClientRow,
@@ -140,6 +141,14 @@ export type PatientListRow = {
    * captured. Active vs archived is computed live via isLifeEventActive.
    */
   lifeEvents: PatientLifeEvent[];
+  /**
+   * v2.113.0: Patient Value Tiering (internal-only). valueTier = RFM
+   * percentile within the tenant's book (top/core/emerging); reliabilityFlag
+   * = behavior axis (reliable/watch). Null until the first recompute pass.
+   * See @/lib/patient-value.
+   */
+  valueTier: ValueTier | null;
+  reliabilityFlag: ReliabilityFlag | null;
 };
 
 export type PatientTransactionRow = {
@@ -282,6 +291,8 @@ function hydratePatientListRow(node: KnowledgeNodeRow): PatientListRow {
     softTags: a?.softTags ?? {},
     purchasePatterns: a?.purchasePatterns ?? null,
     lifeEvents: a?.lifeEvents ?? [],
+    valueTier: a?.valueTier ?? null,
+    reliabilityFlag: a?.reliabilityFlag ?? null,
   };
 }
 
@@ -305,6 +316,12 @@ function extractContactSummary(
     lifeEvents: summary.lifeEvents ?? [],
     contactSource: summary.contactSource ?? null,
     contactLinkedAt: summary.contactLinkedAt ?? null,
+    // v2.113.0: carry the last whole-book value tiering forward across a
+    // sales-CSV re-roll (recompute is a separate pass, not part of rollup).
+    valueTier: summary.valueTier ?? null,
+    valueScore: summary.valueScore ?? null,
+    reliabilityFlag: summary.reliabilityFlag ?? null,
+    valueTieredAt: summary.valueTieredAt ?? null,
   };
 }
 

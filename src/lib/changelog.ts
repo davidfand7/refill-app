@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.113.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.113.0 &mdash; Patient Value Tiering: know who your best patients are.</strong> The first pillar of the Patient-Profitability OS. Every patient is now scored on <strong>two independent axes</strong>, ranked within <em>your own</em> book (never against other spas): <strong>Value</strong> &mdash; an RFM blend of recency, visit frequency &amp; spend, percentile-ranked into <em>Top&nbsp;20%</em> / <em>Core</em> / <em>New</em>; and <strong>Reliability</strong> &mdash; a behavior flag (<em>Watch</em> for chronic no-show/cancel or discount-only), kept separate from value so a brand-new high-intent patient reads as an opportunity, not &ldquo;low value.&rdquo; New patients land <em>New</em>, never low. It&rsquo;s <strong>internal only</strong> &mdash; &ldquo;Watch,&rdquo; not &ldquo;bad,&rdquo; and never shown to the patient. See it as a badge on the patient list &amp; profile, filter the book by tier, and hit <strong>Recompute tiers</strong> to refresh the whole book at once. Best part: it plugs straight into the offer composer&rsquo;s <strong>Refine targeting</strong> &mdash; aim an offer at your Top&nbsp;20%, and the live &ldquo;~N match&rdquo; count, the push audience and the $5 win-integrity gate all honor it identically. Reuses the same signals the recognition engine &amp; A-list rules already tier on (no third system), and rides <code>knowledge_nodes.attachments</code> jsonb &mdash; <strong>no migration</strong>, and the tier survives sales-CSV re-imports. <strong>Touched</strong>: <code>patient-value.ts</code> (new pure lib), <code>refill-patient-value.functions.ts</code> (new whole-book recompute), <code>patient-csv.ts</code> + <code>patient-ingest.functions.ts</code> (storage + re-roll preservation), <code>promo-calendar.ts</code> + <code>refill-promo-calendar.functions.ts</code> (valueTier refine filter), <code>OfferComposer.tsx</code>, patient list + profile routes, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.112.0",
     date: "June 2026",
     items: [

@@ -12,6 +12,7 @@
  */
 
 import { parseCsvRows, parseMoney } from "@/lib/manufacturer-reward-csv";
+import type { ValueTier } from "@/lib/patient-value";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -121,6 +122,10 @@ export type OfferTargetFilters = {
   /** Has purchased NONE of these product kinds (e.g. ["filler"] = "never had
    *  filler"). Combine with boughtKinds for cross-sell ("toxin but not filler"). */
   notBoughtKinds?: string[] | null;
+  /** v2.113.0: only patients in ANY of these value tiers (top/core/emerging).
+   *  Internal-only RFM tiering from `recomputePatientValueTiers`; lets the
+   *  composer aim an offer at, e.g., the spa's Top 20%. Read from attachments. */
+  valueTiers?: ValueTier[] | null;
 };
 
 /** The per-patient metrics the filter predicate reads. lastVisit/totalVisits/
@@ -134,6 +139,8 @@ export type PatientFilterMetrics = {
   phone?: string | null;
   /** Distinct product kinds this patient has purchased (amount > 0). */
   purchasedKinds?: string[] | null;
+  /** v2.113.0: stored value tier (top/core/emerging) from attachments. */
+  valueTier?: ValueTier | null;
 };
 
 /** True when a spec actually constrains anything (any field set). An empty/
@@ -149,7 +156,8 @@ export function hasTargetFilters(spec: OfferTargetFilters | null | undefined): b
     spec.spendMaxUsd != null ||
     spec.reachableByTextOnly === true ||
     (spec.boughtKinds?.length ?? 0) > 0 ||
-    (spec.notBoughtKinds?.length ?? 0) > 0
+    (spec.notBoughtKinds?.length ?? 0) > 0 ||
+    (spec.valueTiers?.length ?? 0) > 0
   );
 }
 
@@ -204,6 +212,11 @@ export function patientMatchesFilters(
     const had = m.purchasedKinds ?? [];
     // Has bought NONE of the listed kinds.
     if (s.notBoughtKinds.some((k) => had.includes(k))) return false;
+  }
+  if (s.valueTiers?.length) {
+    // In ANY of the selected tiers. Untiered (null) fails — we don't push to /
+    // pay for a patient whose tier we can't verify, same as the other bounds.
+    if (m.valueTier == null || !s.valueTiers.includes(m.valueTier)) return false;
   }
   return true;
 }

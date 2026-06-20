@@ -44,6 +44,7 @@ import { getSpaProfileBundleFn } from "@/server/spa-profile.functions";
 import { listServicesFn, type Service } from "@/server/refill-catalog";
 import { groupServicesByCategory } from "@/lib/service-categories";
 import { hasTargetFilters, normalizeForMatch, productMatchesName, type OfferTargetFilters, type OfferType, type OfferCohort, type PromoOffer } from "@/lib/promo-calendar";
+import type { ValueTier } from "@/lib/patient-value";
 import { cn } from "@/lib/utils";
 
 type AbType = "dollars_off" | "percent_off" | "free_addon";
@@ -71,6 +72,15 @@ const KIND_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "retail", label: "Retail" },
 ];
 
+// v2.113.0: value-tier refine chips. Internal-only RFM tiering (from the
+// patient list's "Recompute tiers"). "Top 20%" / "Core" / "New" — never
+// patient-visible language. Maps to OfferTargetFilters.valueTiers.
+const VALUE_TIER_OPTIONS: Array<{ value: ValueTier; label: string }> = [
+  { value: "top", label: "Top 20%" },
+  { value: "core", label: "Core" },
+  { value: "emerging", label: "New" },
+];
+
 type Version = { offerType: AbType; value: string; addon: string };
 type Mode = "spa" | "mfr" | "arena";
 
@@ -94,6 +104,7 @@ function buildTargetFilters(
   reachable: boolean,
   bought: string[],
   notBought: string[],
+  valueTiers: ValueTier[],
 ): OfferTargetFilters {
   const f: OfferTargetFilters = {};
   const rm = recencyMin.trim() ? Number(recencyMin.trim()) : null;
@@ -105,6 +116,7 @@ function buildTargetFilters(
   if (reachable) f.reachableByTextOnly = true;
   if (bought.length) f.boughtKinds = bought;
   if (notBought.length) f.notBoughtKinds = notBought;
+  if (valueTiers.length) f.valueTiers = valueTiers;
   return f;
 }
 
@@ -150,6 +162,7 @@ export function OfferComposer({
   const [fReachable, setFReachable] = useState(false);
   const [fBought, setFBought] = useState<Set<string>>(new Set());
   const [fNotBought, setFNotBought] = useState<Set<string>>(new Set());
+  const [fValueTiers, setFValueTiers] = useState<Set<ValueTier>>(new Set());
   // Which expander is open (KISS: one at a time, resting view is plain English).
   const [openSec, setOpenSec] = useState<null | "offer" | "who" | "refine" | "when" | "delivery">("offer");
   const [pvTab, setPvTab] = useState<"badge" | "deals" | "email" | "text">("badge");
@@ -202,7 +215,7 @@ export function OfferComposer({
     if (!accessToken) return;
     let cancelled = false;
     setMatchLoading(true);
-    const filterSpec = buildTargetFilters(fRecencyMin, fVisitsMin, fSpendMin, fReachable, [...fBought], [...fNotBought]);
+    const filterSpec = buildTargetFilters(fRecencyMin, fVisitsMin, fSpendMin, fReachable, [...fBought], [...fNotBought], [...fValueTiers]);
     void (async () => {
       try {
         const r = await getCohortReachFn({ data: { accessToken, viewAsUserId, cohort, filterSpec } });
@@ -216,7 +229,7 @@ export function OfferComposer({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, viewAsUserId, cohort, fRecencyMin, fVisitsMin, fSpendMin, fReachable, fBought, fNotBought]);
+  }, [accessToken, viewAsUserId, cohort, fRecencyMin, fVisitsMin, fSpendMin, fReachable, fBought, fNotBought, fValueTiers]);
 
   function switchMode(m: Mode) {
     setMode(m);
@@ -283,8 +296,8 @@ export function OfferComposer({
   // Refine targeting: build the spec from the inputs; a non-empty spec makes the
   // offer targeted (push-only) even when the base cohort is Everyone.
   const refineFilters = useMemo<OfferTargetFilters>(
-    () => buildTargetFilters(fRecencyMin, fVisitsMin, fSpendMin, fReachable, [...fBought], [...fNotBought]),
-    [fRecencyMin, fVisitsMin, fSpendMin, fReachable, fBought, fNotBought],
+    () => buildTargetFilters(fRecencyMin, fVisitsMin, fSpendMin, fReachable, [...fBought], [...fNotBought], [...fValueTiers]),
+    [fRecencyMin, fVisitsMin, fSpendMin, fReachable, fBought, fNotBought, fValueTiers],
   );
   const isRefined = hasTargetFilters(refineFilters);
   // Targeted = reaches specific patients via push (no public badge). A refined
@@ -299,6 +312,7 @@ export function OfferComposer({
     if (refineFilters.boughtKinds?.length) parts.push(`had ${refineFilters.boughtKinds.map((k) => KIND_OPTIONS.find((o) => o.value === k)?.label ?? k).join("/")}`);
     if (refineFilters.notBoughtKinds?.length) parts.push(`never ${refineFilters.notBoughtKinds.map((k) => KIND_OPTIONS.find((o) => o.value === k)?.label ?? k).join("/")}`);
     if (refineFilters.reachableByTextOnly) parts.push("reachable by text");
+    if (refineFilters.valueTiers?.length) parts.push(refineFilters.valueTiers.map((t) => VALUE_TIER_OPTIONS.find((o) => o.value === t)?.label ?? t).join("/"));
     return parts.join(" · ");
   }, [refineFilters]);
 
@@ -342,7 +356,7 @@ export function OfferComposer({
     setOptimize(false); setVersions([]); setCohort("all"); setOfferType("dollars_off");
     setShowOnDeals(true);
     setFRecencyMin(""); setFVisitsMin(""); setFSpendMin(""); setFReachable(false);
-    setFBought(new Set()); setFNotBought(new Set());
+    setFBought(new Set()); setFNotBought(new Set()); setFValueTiers(new Set());
   }
 
   async function activate(draft = false) {
@@ -671,6 +685,19 @@ export function OfferComposer({
                   onClick={() => setFNotBought((prev) => { const n = new Set(prev); n.has(k.value) ? n.delete(k.value) : n.add(k.value); return n; })}
                 >
                   {k.label}
+                </Chip>
+              ))}
+            </div>
+          </Field>
+          <Field label="Value tier">
+            <div className="flex flex-wrap gap-1.5">
+              {VALUE_TIER_OPTIONS.map((t) => (
+                <Chip
+                  key={t.value}
+                  on={fValueTiers.has(t.value)}
+                  onClick={() => setFValueTiers((prev) => { const n = new Set(prev); n.has(t.value) ? n.delete(t.value) : n.add(t.value); return n; })}
+                >
+                  {t.label}
                 </Chip>
               ))}
             </div>

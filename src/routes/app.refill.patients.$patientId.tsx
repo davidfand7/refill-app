@@ -335,9 +335,44 @@ function ContactCard({ patient }: { patient: PatientListRow }) {
 function SummaryCard({ patient }: { patient: PatientListRow }) {
   return (
     <section className="rounded-xl border border-rule bg-white overflow-hidden">
-      <div className="px-5 py-3 border-b border-rule bg-rule-soft/60">
+      <div className="px-5 py-3 border-b border-rule bg-rule-soft/60 flex items-center justify-between gap-2">
         <div className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
           Lifetime
+        </div>
+        {/* v2.113.0: internal value tiering — never patient-visible. */}
+        <div className="flex items-center gap-1.5">
+          {patient.valueTier === "top" && (
+            <span
+              className="inline-flex items-center rounded-full bg-emerald/10 text-emerald-ink px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
+              title="Top ~20% by value (recency · visits · spend), ranked within your book. Internal only."
+            >
+              Top 20%
+            </span>
+          )}
+          {patient.valueTier === "core" && (
+            <span
+              className="inline-flex items-center rounded-full bg-rule-soft text-ink-soft px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
+              title="Core value tier — ranked within your book. Internal only."
+            >
+              Core
+            </span>
+          )}
+          {patient.valueTier === "emerging" && (
+            <span
+              className="inline-flex items-center rounded-full bg-rule-soft text-ink-soft px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
+              title="New / too little history to rank yet — an acquisition opportunity, not low value. Internal only."
+            >
+              New
+            </span>
+          )}
+          {patient.reliabilityFlag === "watch" && (
+            <span
+              className="inline-flex items-center rounded-full bg-amber-soft text-amber px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
+              title="Internal note: reliability — chronic no-show/cancel or discount-only. Never shown to the patient."
+            >
+              Watch
+            </span>
+          )}
         </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-rule">

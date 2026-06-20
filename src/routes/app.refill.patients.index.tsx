@@ -50,6 +50,8 @@ import {
   type PatientListRow,
 } from "@/server/patient-ingest.functions";
 import type { CustomTagDefinition, PatientSoftTags } from "@/lib/patient-csv";
+import { recomputePatientValueTiers } from "@/server/refill-patient-value.functions";
+import type { ValueTier } from "@/lib/patient-value";
 import {
   listWaitlist,
   markPatientOptedIn,
@@ -214,6 +216,10 @@ function PatientsPage() {
   const [waitlistFilter, setWaitlistFilter] = useState<"all" | "on" | "off">("all");
   // v385.2: VIP filter chip strip. Same pattern as waitlist.
   const [vipFilter, setVipFilter] = useState<"all" | "on" | "off">("all");
+  // v2.113.0: value-tier filter (internal RFM tiering). "all" = unfiltered.
+  const [valueTierFilter, setValueTierFilter] = useState<"all" | ValueTier>("all");
+  // v2.113.0: recompute-tiers button busy state.
+  const [tiersBusy, setTiersBusy] = useState(false);
   // v385.2: pending state for in-flight VIP toggles (separate from
   // waitlist's pending set so the two toggles don't interfere).
   const [pendingVipIds, setPendingVipIds] = useState<Set<string>>(new Set());
@@ -298,6 +304,25 @@ function PatientsPage() {
       cancelled = true;
     };
   }, [membership.status, viewAsUserId, showHidden]);
+
+  // v2.113.0: recompute value tiers whole-book, then reload the rows so the
+  // new badges/filter counts reflect the fresh tiering. Internal-only.
+  async function onRecomputeTiers() {
+    if (!accessToken || tiersBusy) return;
+    setTiersBusy(true);
+    try {
+      const res = await recomputePatientValueTiers({ data: { accessToken, viewAsUserId } });
+      const fresh = await listPatients({ data: { accessToken, viewAsUserId, includeHidden: showHidden } });
+      setRows(fresh);
+      toast.success(
+        `Tiers recomputed — ${res.byTier.top} top · ${res.byTier.core} core · ${res.byTier.emerging} new · ${res.byReliability.watch} watch.`,
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't recompute tiers.");
+    } finally {
+      setTiersBusy(false);
+    }
+  }
 
   // v385: toggle a patient's waitlist membership. Optimistic UI — the
   // toggle flips immediately, the server fn fires in the background, and
@@ -527,6 +552,8 @@ function PatientsPage() {
         const keys = patientTagFilterKeys(r.softTags);
         if (!keys.some((k) => softTagFilter.has(k))) return false;
       }
+      // v2.113.0: value-tier filter (internal RFM tiering).
+      if (valueTierFilter !== "all" && r.valueTier !== valueTierFilter) return false;
       return true;
     });
     // v385.1: sort. Comparator chosen by sortKey; default descending for
@@ -560,6 +587,7 @@ function PatientsPage() {
     waitlistIndex,
     vipFilter,
     softTagFilter,
+    valueTierFilter,
     sortKey,
   ]);
 
@@ -856,6 +884,47 @@ function PatientsPage() {
             onClick={() => setVipFilter("off")}
             label="Not VIP"
           />
+        </div>
+
+        {/* v2.113.0: Value-tier filter strip (internal RFM tiering). The
+            "Recompute" button runs recomputePatientValueTiers whole-book. */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] text-ink-soft inline-flex items-center gap-1">
+            <Filter className="h-3 w-3" />
+            Value
+          </span>
+          <Chip active={valueTierFilter === "all"} onClick={() => setValueTierFilter("all")} label="All" />
+          <Chip
+            active={valueTierFilter === "top"}
+            onClick={() => setValueTierFilter((v) => (v === "top" ? "all" : "top"))}
+            label="Top 20%"
+            count={rows ? rows.filter((r) => r.valueTier === "top").length : undefined}
+          />
+          <Chip
+            active={valueTierFilter === "core"}
+            onClick={() => setValueTierFilter((v) => (v === "core" ? "all" : "core"))}
+            label="Core"
+            count={rows ? rows.filter((r) => r.valueTier === "core").length : undefined}
+          />
+          <Chip
+            active={valueTierFilter === "emerging"}
+            onClick={() => setValueTierFilter((v) => (v === "emerging" ? "all" : "emerging"))}
+            label="New"
+            count={rows ? rows.filter((r) => r.valueTier === "emerging").length : undefined}
+          />
+          <button
+            type="button"
+            disabled={tiersBusy || !rows}
+            onClick={onRecomputeTiers}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1 text-[11px] font-medium transition",
+              tiersBusy ? "opacity-60 cursor-wait" : "text-ink-soft hover:text-ink hover:bg-rule-soft cursor-pointer",
+            )}
+            title="Recompute value tiers across your whole book (percentile-ranked within your patients). Internal only."
+          >
+            <Sparkles className="h-3 w-3" />
+            {tiersBusy ? "Recomputing…" : "Recompute tiers"}
+          </button>
         </div>
 
         {/* Manufacturer chip filter */}
@@ -1181,6 +1250,33 @@ function PatientRow({
               <span className="inline-flex items-center gap-1 rounded-full bg-rose-soft text-rose px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
                 <Ban className="h-2.5 w-2.5" />
                 Banned
+              </span>
+            )}
+            {/* v2.113.0: Patient Value Tiering — internal-only. Only the
+                meaningful signals get a chip (Top 20% / New / Watch); "Core"
+                is the unbadged default to keep the list clean. */}
+            {row.valueTier === "top" && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-emerald/10 text-emerald-ink px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
+                title="Top ~20% by value (recency · visits · spend), ranked within your book. Internal only — never shown to the patient."
+              >
+                Top 20%
+              </span>
+            )}
+            {row.valueTier === "emerging" && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-rule-soft text-ink-soft px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
+                title="New / too little history to rank yet — an acquisition opportunity, not low value. Internal only."
+              >
+                New
+              </span>
+            )}
+            {row.reliabilityFlag === "watch" && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-amber-soft text-amber px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider"
+                title="Internal note: reliability — chronic no-show/cancel or discount-only. Never shown to the patient."
+              >
+                Watch
               </span>
             )}
           </div>
