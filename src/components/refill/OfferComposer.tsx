@@ -270,7 +270,7 @@ export function OfferComposer({
     setShowOnDeals(true);
   }
 
-  async function activate() {
+  async function activate(draft = false) {
     if (!accessToken) return;
     const capN = cap.trim() ? Number(cap.trim()) : null;
     if (cap.trim() && (!Number.isInteger(capN) || (capN as number) <= 0)) return toast.error("Limit must be a whole number.");
@@ -368,9 +368,10 @@ export function OfferComposer({
             startsOn: startsOn || null,
             endsOn: endsOn || null,
             showOnDeals: cohort === "all" ? showOnDeals : undefined,
+            isActive: draft ? false : undefined,
           },
         });
-        toast.success("Offer added — it badges that service at booking.");
+        toast.success(draft ? "Saved as a draft — activate it anytime from Your offers." : "Offer added — it badges that service at booking.");
       }
       resetSpa();
       onCreated?.();
@@ -790,15 +791,27 @@ export function OfferComposer({
               ? `Testing ${versions.length + 1} versions · keeps the winner`
               : "One offer · badges at booking"}
         </span>
-        <button
-          type="button"
-          onClick={() => void activate()}
-          disabled={busy || (mode === "mfr" ? !selectedMfrId : !serviceName)}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald px-4 py-2 text-sm font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
-        >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          {mode === "mfr" ? "Save delivery" : isAb ? "Activate & start testing" : "Activate offer"}
-        </button>
+        <div className="flex items-center gap-2">
+          {mode === "spa" && !isAb && (
+            <button
+              type="button"
+              onClick={() => void activate(true)}
+              disabled={busy || !serviceName}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-rule bg-white px-3 py-2 text-sm font-semibold text-ink-soft hover:text-ink transition disabled:opacity-50"
+            >
+              Save as draft
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => void activate(false)}
+            disabled={busy || (mode === "mfr" ? !selectedMfrId : !serviceName)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald px-4 py-2 text-sm font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {mode === "mfr" ? "Save delivery" : isAb ? "Activate & start testing" : "Activate offer"}
+          </button>
+        </div>
       </div>
     </div>
   );

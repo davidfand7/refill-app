@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.108.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.108.0 &mdash; Save an offer as a draft.</strong> The composer&rsquo;s action bar now has <strong>Save as draft</strong> alongside Activate (for a single spa offer). It saves the offer <em>paused</em> &mdash; it won&rsquo;t badge, list, or push until you flip it on from <em>Your offers</em> &mdash; so you can compose now and launch later, or park a half-formed idea without losing it. <code>createSpaOffer</code> gained an <code>isActive</code> flag (defaults true; draft = false), reusing the pause/resume the offers list already has. <strong>Touched</strong>: <code>refill-promo-calendar.functions.ts</code> (isActive on createSpaOffer), <code>OfferComposer.tsx</code> (Save-as-draft button), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.107.0",
     date: "June 2026",
     items: [
