@@ -764,6 +764,8 @@ const brandPayload = z.object({
   manufacturer: z.enum(MANUFACTURER_VALUES).nullable(),
   unitType: z.enum(UNIT_VALUES),
   notes: z.string().trim().max(500).nullable(),
+  subcategoryArea: z.string().trim().max(80).nullable().optional(),
+  subcategoryFamily: z.string().trim().max(80).nullable().optional(),
 });
 
 const createBrandInput = z.object({
@@ -818,6 +820,8 @@ export const createCanonicalBrandFn = createServerFn({ method: "POST" })
         manufacturer: data.brand.manufacturer,
         unit_type: data.brand.unitType,
         notes: data.brand.notes,
+        subcategory_area: data.brand.subcategoryArea ?? null,
+        subcategory_family: data.brand.subcategoryFamily ?? null,
       })
       .select("*")
       .single();
@@ -842,6 +846,8 @@ export const updateCanonicalBrandFn = createServerFn({ method: "POST" })
         manufacturer: data.brand.manufacturer,
         unit_type: data.brand.unitType,
         notes: data.brand.notes,
+        subcategory_area: data.brand.subcategoryArea ?? null,
+        subcategory_family: data.brand.subcategoryFamily ?? null,
       })
       .eq("id", data.id)
       .select("*")

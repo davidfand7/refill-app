@@ -39,11 +39,12 @@ export const Route = createFileRoute("/app/admin/canonical-brands")({
   component: CanonicalBrandsPage,
 });
 
-type CategoryValue = "tox" | "filler" | "laser" | "facial" | "skincare" | "other";
+type CategoryValue = "tox" | "filler" | "biostimulator" | "laser" | "facial" | "skincare" | "other";
 
 const CATEGORY_OPTIONS: Array<{ value: CategoryValue; label: string }> = [
   { value: "tox", label: "Tox" },
   { value: "filler", label: "Filler" },
+  { value: "biostimulator", label: "Biostimulator" },
   { value: "laser", label: "Laser" },
   { value: "facial", label: "Facial" },
   { value: "skincare", label: "Skincare" },
@@ -82,6 +83,8 @@ type BrandDraft = {
   manufacturer: ProductManufacturer | "";
   unitType: ProductUnitType;
   notes: string;
+  subcategoryArea: string;
+  subcategoryFamily: string;
 };
 
 const EMPTY_DRAFT: BrandDraft = {
@@ -91,6 +94,8 @@ const EMPTY_DRAFT: BrandDraft = {
   manufacturer: "",
   unitType: "vial",
   notes: "",
+  subcategoryArea: "",
+  subcategoryFamily: "",
 };
 
 function brandToDraft(b: CanonicalBrand): BrandDraft {
@@ -101,6 +106,8 @@ function brandToDraft(b: CanonicalBrand): BrandDraft {
     manufacturer: b.manufacturer ?? "",
     unitType: b.unitType,
     notes: b.notes ?? "",
+    subcategoryArea: b.subcategoryArea ?? "",
+    subcategoryFamily: b.subcategoryFamily ?? "",
   };
 }
 
@@ -117,6 +124,8 @@ function draftToPayload(d: BrandDraft) {
     manufacturer: d.manufacturer === "" ? null : (d.manufacturer as ProductManufacturer),
     unitType: d.unitType,
     notes: d.notes.trim() ? d.notes.trim() : null,
+    subcategoryArea: d.subcategoryArea.trim() ? d.subcategoryArea.trim() : null,
+    subcategoryFamily: d.subcategoryFamily.trim() ? d.subcategoryFamily.trim() : null,
   };
 }
 
@@ -506,6 +515,32 @@ function BrandFormCard({
           Name variants the parser will match against. Include the display name itself plus common abbreviations / typos.
         </p>
       </FormField>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <FormField label="Sub-category — area (optional)">
+          <input
+            type="text"
+            value={draft.subcategoryArea}
+            onChange={(e) => onChange({ ...draft, subcategoryArea: e.target.value })}
+            placeholder="e.g. cheek, lip, jawline"
+            disabled={busy}
+            className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+          />
+          <p className="text-[11px] text-ink-soft mt-1 leading-snug">
+            Primary substitution group. Products inherit this on Recategorize (blanks only).
+          </p>
+        </FormField>
+        <FormField label="Sub-category — family (optional)">
+          <input
+            type="text"
+            value={draft.subcategoryFamily}
+            onChange={(e) => onChange({ ...draft, subcategoryFamily: e.target.value })}
+            placeholder="e.g. Voluma-class, Volbella-class"
+            disabled={busy}
+            className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
+          />
+        </FormField>
+      </div>
 
       <FormField label="Notes (optional)">
         <input

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.116.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.116.0 &mdash; Canonical brand registry: full CRUD on the sub-categories too.</strong> Follow-on to v2.115.0 so the &ldquo;source of truth&rdquo; is editable end-to-end. The admin canonical-brands editor (<code>/app/admin/canonical-brands</code>) now exposes the new <strong>area</strong> + <strong>family</strong> sub-category fields and the <strong>Biostimulator</strong> category &mdash; so you can author the shipping defaults <em>once</em> on the registry and every tenant&rsquo;s products inherit them on Recategorize (fills blanks only, never clobbers an explicit choice). Closes the last CRUD gap from the catalog-foundation work: products, services, the incentive ledger, AND the canonical registry are now fully create/edit/delete across every field. <strong>Touched</strong>: <code>refill-catalog.ts</code> (brand payload + create/update write area/family), <code>app.admin.canonical-brands.tsx</code> (Biostimulator option + Area/Family inputs), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.115.0",
     date: "June 2026",
     items: [
