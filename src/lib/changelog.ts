@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.125.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.125.0 &mdash; Samples in vials/syringes, valued automatically.</strong> Add a <strong>Sample (free units)</strong> incentive the way you actually get them: pick <strong>Vial</strong> or <strong>Syringe</strong> (those two on top) and enter <em>how many are free</em> &mdash; SmartSpa computes the dollar value from that brand&rsquo;s cost (e.g. 2 free vials of a $790/vial brand = <strong>$1,580</strong> to you) and books it as a margin-side incentive. No manual math, and you see the computed value live as you type. (If the brand has no cost set yet, it nudges you to set it on the Products tab first.) <strong>Touched</strong>: Brand economics incentive form (Sample &rarr; unit + free-unit count, auto-$ from catalog cost), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.124.0",
     date: "June 2026",
     items: [

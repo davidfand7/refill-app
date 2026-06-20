@@ -68,6 +68,9 @@ type Draft = {
   startsOn: string;
   endsOn: string;
   notes: string;
+  /** Sample-only: how many free units + which unit (Vial/Syringe…). */
+  freeUnits: string;
+  sampleUnit: string;
 };
 
 const EMPTY_DRAFT: Draft = {
@@ -81,7 +84,18 @@ const EMPTY_DRAFT: Draft = {
   startsOn: "",
   endsOn: "",
   notes: "",
+  freeUnits: "",
+  sampleUnit: "vial",
 };
+
+// Vial + Syringe first — the most common sample units.
+const SAMPLE_UNIT_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "vial", label: "Vial" },
+  { value: "syringe", label: "Syringe" },
+  { value: "bottle", label: "Bottle" },
+  { value: "session", label: "Session" },
+  { value: "other", label: "Other" },
+];
 
 const inputCls =
   "w-full rounded-md border border-rule bg-white px-3 py-2 text-[14px] text-ink focus:border-emerald/50 focus:outline-none focus:ring-2 focus:ring-emerald/20";
@@ -167,12 +181,39 @@ function BrandEconomicsPage() {
     return groups;
   }, [bundle, categoryOrder]);
 
+  // Look up a brand's per-unit cost + unit from the loaded economics (cost =
+  // price − base margin). Powers the Sample → auto-$ computation.
+  function brandLookup(brand: string): { cost: number; unitType: string } | null {
+    const key = brand.trim().toLowerCase();
+    const e = (bundle?.economics ?? []).find((x) => x.brand.trim().toLowerCase() === key);
+    if (!e) return null;
+    return { cost: Math.max(0, e.pricePerUnit - e.baseMarginPerUnit), unitType: e.unitType };
+  }
+
+  const isSample = draft.incentiveType === "sample";
+  const sampleInfo = isSample ? brandLookup(draft.brand) : null;
+  const sampleValue = isSample ? (Number(draft.freeUnits) || 0) * (sampleInfo?.cost ?? 0) : 0;
+
   async function onSave(e: FormEvent) {
     e.preventDefault();
     if (busy) return;
-    const amount = Number(draft.amountUsd.trim());
     if (!draft.brand.trim()) return toast.error("Brand is required.");
-    if (!Number.isFinite(amount) || amount < 0) return toast.error("Enter a valid amount.");
+    // Sample = free units × that brand's cost. Compute the $ value here.
+    let amount: number;
+    let perUnit = draft.perUnit;
+    let beneficiary = draft.beneficiary;
+    if (isSample) {
+      const count = Number(draft.freeUnits);
+      if (!Number.isFinite(count) || count <= 0) return toast.error("Enter how many free units.");
+      if (!sampleInfo || sampleInfo.cost <= 0)
+        return toast.error(`Set ${draft.brand.trim()}'s cost on the Products tab first.`);
+      amount = Math.round(count * sampleInfo.cost * 100) / 100;
+      perUnit = false; // a sample is a one-time flat value
+      beneficiary = "spa"; // free units lower YOUR cost
+    } else {
+      amount = Number(draft.amountUsd.trim());
+      if (!Number.isFinite(amount) || amount < 0) return toast.error("Enter a valid amount.");
+    }
     setBusy(true);
     try {
       const { data: sess } = await supabase.auth.getSession();
@@ -188,12 +229,14 @@ function BrandEconomicsPage() {
             manufacturer: draft.manufacturer.trim() || null,
             category: draft.category,
             incentiveType: draft.incentiveType,
-            beneficiary: draft.beneficiary,
+            beneficiary,
             amountUsd: amount,
-            perUnit: draft.perUnit,
+            perUnit,
             startsOn: draft.startsOn || null,
             endsOn: draft.endsOn || null,
-            notes: draft.notes.trim() || null,
+            notes:
+              draft.notes.trim() ||
+              (isSample ? `${Number(draft.freeUnits)} free ${draft.sampleUnit}(s)` : null),
           },
         },
       });
@@ -237,6 +280,8 @@ function BrandEconomicsPage() {
       startsOn: entry.startsOn ?? "",
       endsOn: entry.endsOn ?? "",
       notes: entry.notes ?? "",
+      freeUnits: "",
+      sampleUnit: "vial",
     });
     setAdding(true);
   }
@@ -362,7 +407,12 @@ function BrandEconomicsPage() {
                   value={draft.incentiveType}
                   onChange={(e) => {
                     const t = e.target.value as IncentiveType;
-                    setDraft((d) => ({ ...d, incentiveType: t, beneficiary: defaultBeneficiary(t) }));
+                    setDraft((d) => ({
+                      ...d,
+                      incentiveType: t,
+                      beneficiary: defaultBeneficiary(t),
+                      sampleUnit: t === "sample" ? brandLookup(d.brand)?.unitType ?? d.sampleUnit : d.sampleUnit,
+                    }));
                   }}
                 >
                   {TYPE_OPTIONS.map((o) => (
@@ -370,40 +420,84 @@ function BrandEconomicsPage() {
                   ))}
                 </select>
               </label>
-              <label className="block">
-                <span className="text-[12px] font-medium text-ink-soft">Accrues to</span>
-                <select
-                  className={inputCls}
-                  value={draft.beneficiary}
-                  onChange={(e) => setDraft((d) => ({ ...d, beneficiary: e.target.value as IncentiveBeneficiary }))}
-                >
-                  <option value="spa">You (lifts margin now)</option>
-                  <option value="patient">Patient (value-feel)</option>
-                </select>
-              </label>
-              <label className="block">
-                <span className="text-[12px] font-medium text-ink-soft">Amount (USD)</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  className={inputCls}
-                  value={draft.amountUsd}
-                  onChange={(e) => setDraft((d) => ({ ...d, amountUsd: e.target.value }))}
-                  placeholder="1.50"
-                />
-              </label>
+              {isSample ? (
+                <>
+                  <label className="block">
+                    <span className="text-[12px] font-medium text-ink-soft">Sample unit</span>
+                    <select
+                      className={inputCls}
+                      value={draft.sampleUnit}
+                      onChange={(e) => setDraft((d) => ({ ...d, sampleUnit: e.target.value }))}
+                    >
+                      {SAMPLE_UNIT_OPTIONS.map((u) => (
+                        <option key={u.value} value={u.value}>{u.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-[12px] font-medium text-ink-soft"># free {draft.sampleUnit}s</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      className={inputCls}
+                      value={draft.freeUnits}
+                      onChange={(e) => setDraft((d) => ({ ...d, freeUnits: e.target.value }))}
+                      placeholder="2"
+                    />
+                  </label>
+                </>
+              ) : (
+                <>
+                  <label className="block">
+                    <span className="text-[12px] font-medium text-ink-soft">Accrues to</span>
+                    <select
+                      className={inputCls}
+                      value={draft.beneficiary}
+                      onChange={(e) => setDraft((d) => ({ ...d, beneficiary: e.target.value as IncentiveBeneficiary }))}
+                    >
+                      <option value="spa">You (lifts margin now)</option>
+                      <option value="patient">Patient (value-feel)</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-[12px] font-medium text-ink-soft">Amount (USD)</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className={inputCls}
+                      value={draft.amountUsd}
+                      onChange={(e) => setDraft((d) => ({ ...d, amountUsd: e.target.value }))}
+                      placeholder="1.50"
+                    />
+                  </label>
+                </>
+              )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-              <label className="flex items-center gap-2 text-[13px] font-medium text-ink-soft">
-                <input
-                  type="checkbox"
-                  checked={draft.perUnit}
-                  onChange={(e) => setDraft((d) => ({ ...d, perUnit: e.target.checked }))}
-                  className="h-4 w-4 rounded border-rule text-emerald focus:ring-emerald/30"
-                />
-                Per unit (vs flat per treatment)
-              </label>
+              {isSample ? (
+                <div className="text-[12px] text-ink-soft">
+                  {sampleInfo ? (
+                    <>
+                      <span className="font-semibold text-emerald-ink">= {fmtUsd(sampleValue)}</span>{" "}
+                      value to you ({Number(draft.freeUnits) || 0} × {fmtUsd(sampleInfo.cost)}/{draft.sampleUnit}).
+                    </>
+                  ) : (
+                    <span className="text-amber">Set this brand&rsquo;s cost on the Products tab to auto-value the sample.</span>
+                  )}
+                </div>
+              ) : (
+                <label className="flex items-center gap-2 text-[13px] font-medium text-ink-soft">
+                  <input
+                    type="checkbox"
+                    checked={draft.perUnit}
+                    onChange={(e) => setDraft((d) => ({ ...d, perUnit: e.target.checked }))}
+                    className="h-4 w-4 rounded border-rule text-emerald focus:ring-emerald/30"
+                  />
+                  Per unit (vs flat per treatment)
+                </label>
+              )}
               <label className="block">
                 <span className="text-[12px] font-medium text-ink-soft">Starts (optional)</span>
                 <input
