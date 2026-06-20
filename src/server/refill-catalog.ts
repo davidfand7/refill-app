@@ -75,6 +75,9 @@ export type Product = {
    *  inherit canonical defaults on the recategorize sweep. Free-text. */
   subcategoryArea: string | null;
   subcategoryFamily: string | null;
+  /** v2.120.0: manual position within its category (drag-reorder). Null = unset
+   *  → falls back to brand-alpha. Mirrors services.sort_order. */
+  sortOrder: number | null;
   /** v1.34.9.1: soft-hide. null = active, ISO timestamp = hidden at that moment. */
   hiddenAt: string | null;
   createdAt: string;
@@ -152,6 +155,7 @@ type ProductRow = {
   notes: string | null;
   subcategory_area: string | null;
   subcategory_family: string | null;
+  sort_order: number | null;
   hidden_at: string | null;
   created_at: string;
   updated_at: string;
@@ -176,6 +180,7 @@ function rowToProduct(r: ProductRow): Product {
     notes: r.notes,
     subcategoryArea: r.subcategory_area ?? null,
     subcategoryFamily: r.subcategory_family ?? null,
+    sortOrder: r.sort_order ?? null,
     hiddenAt: r.hidden_at ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -254,6 +259,7 @@ export const listProductsFn = createServerFn({ method: "POST" })
       if (!data.includeHidden) query = query.is("hidden_at", null);
       return query
         .order("category", { ascending: true })
+        .order("sort_order", { ascending: true, nullsFirst: false })
         .order("brand", { ascending: true })
         .range(from, to);
     });
@@ -2405,4 +2411,37 @@ export const commitCatalogDedupeFn = createServerFn({ method: "POST" })
       }
     }
     return { servicesRemoved, productsRemoved };
+  });
+
+// ─── reorderProductsFn (v2.120.0) ─────────────────────────────────────────
+// Persist a category's product order after a drag. Positions each id by index;
+// tenant-scoped. Mirrors reorderServicesFn — every result checked so a swallowed
+// failure can't leave the persisted order out of sync with the optimistic UI.
+const reorderProductsInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  orderedIds: z.array(z.string().uuid()).max(5000),
+});
+
+export const reorderProductsFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => reorderProductsInput.parse(raw))
+  .handler(async ({ data }): Promise<{ ok: true }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
+    const results = await Promise.all(
+      data.orderedIds.map((id, i) =>
+        sb.from("products").update({ sort_order: i }).eq("id", id).eq("tenant_id", tenantId),
+      ),
+    );
+    const failed = results.filter((r) => r.error);
+    if (failed.length > 0) {
+      throw new Error(
+        `Reorder failed for ${failed.length} of ${results.length} products: ${failed[0].error?.message}`,
+      );
+    }
+    return { ok: true };
   });

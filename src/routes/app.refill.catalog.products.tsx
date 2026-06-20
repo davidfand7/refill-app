@@ -18,13 +18,14 @@
  */
 
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
   Beaker,
   CheckCircle2,
   Eye,
   EyeOff,
+  GripVertical,
   Loader2,
   Pencil,
   Plus,
@@ -43,6 +44,7 @@ import {
   createProductFn,
   deleteProductFn,
   listProductsFn,
+  reorderProductsFn,
   recategorizeProductsFromBrandsFn,
   setProductHiddenFn,
   type RecategorizeProductsReceipt,
@@ -340,8 +342,47 @@ function ProductsPage() {
       arr.push(p);
       groups.set(p.category, arr);
     }
+    // Honor the manual order within each category (lower sort_order first;
+    // ties / unset fall back to brand-alpha). Mirrors the services list.
+    for (const arr of groups.values()) {
+      arr.sort(
+        (a, b) =>
+          (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || a.brand.localeCompare(b.brand),
+      );
+    }
     return groups;
   }, [filteredProducts]);
+
+  // Drag-to-reorder within a category (mirrors onReorderServiceCat).
+  const draggedProductId = useRef<string | null>(null);
+  async function onReorderProductCat(draggedId: string, targetId: string) {
+    if (draggedId === targetId) return;
+    const dragged = products.find((p) => p.id === draggedId);
+    const target = products.find((p) => p.id === targetId);
+    if (!dragged || !target || dragged.category !== target.category) return;
+    const cat = target.category;
+    const ids = products
+      .filter((p) => p.category === cat)
+      .sort(
+        (a, b) =>
+          (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || a.brand.localeCompare(b.brand),
+      )
+      .map((p) => p.id)
+      .filter((id) => id !== draggedId);
+    const tIdx = ids.indexOf(targetId);
+    ids.splice(tIdx < 0 ? ids.length : tIdx, 0, draggedId);
+    const pos = new Map(ids.map((id, i) => [id, i]));
+    const prev = products;
+    setProducts((cur) => cur.map((p) => (pos.has(p.id) ? { ...p, sortOrder: pos.get(p.id)! } : p)));
+    try {
+      await withToken((token) =>
+        reorderProductsFn({ data: { accessToken: token, viewAsUserId, orderedIds: ids } }),
+      );
+    } catch (err) {
+      setProducts(prev);
+      toast.error(err instanceof Error ? err.message : "Couldn't save the new order.");
+    }
+  }
 
   async function withToken<T>(fn: (token: string) => Promise<T>): Promise<T> {
     const { data: sess } = await supabase.auth.getSession();
@@ -707,6 +748,15 @@ function ProductsPage() {
                         product={p}
                         onEdit={() => startEdit(p)}
                         onToggleHidden={() => void onToggleHidden(p)}
+                        onDragStartRow={() => {
+                          draggedProductId.current = p.id;
+                        }}
+                        onDropRow={() => {
+                          if (draggedProductId.current) {
+                            void onReorderProductCat(draggedProductId.current, p.id);
+                            draggedProductId.current = null;
+                          }
+                        }}
                       />
                     ),
                   )}
@@ -724,22 +774,39 @@ function ProductRow({
   product,
   onEdit,
   onToggleHidden,
+  onDragStartRow,
+  onDropRow,
 }: {
   product: Product;
   onEdit: () => void;
   onToggleHidden: () => void;
+  onDragStartRow?: () => void;
+  onDropRow?: () => void;
 }) {
   const isHidden = product.hiddenAt !== null;
   return (
-    <li>
+    <li
+      onDragOver={onDropRow ? (e) => e.preventDefault() : undefined}
+      onDrop={onDropRow}
+    >
       <div
         className={cn(
-          "w-full rounded-xl border bg-white px-5 py-4 transition group flex items-start gap-4",
+          "w-full rounded-xl border bg-white px-5 py-4 transition group flex items-start gap-3",
           isHidden
             ? "border-rule/60 opacity-60 hover:opacity-100"
             : "border-rule hover:border-emerald/40 hover:shadow-sm",
         )}
       >
+        <button
+          type="button"
+          draggable
+          onDragStart={onDragStartRow}
+          className="mt-0.5 cursor-grab active:cursor-grabbing text-ink-faint hover:text-ink"
+          title="Drag to reorder within this category"
+          aria-label="Drag to reorder"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
         <button
           type="button"
           onClick={onEdit}

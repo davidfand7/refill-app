@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.120.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.120.0 &mdash; Drag to reorder products within a category (full Services parity).</strong> Products now have the same <strong>grab-and-drag</strong> handle Services do &mdash; reorder brands within a category and the order sticks (persisted to a new <code>sort_order</code>, lower first; unset rows fall back to brand-alphabetical until you drag them). Combined with v2.119.0&rsquo;s shared category order, the Product catalog and Service catalog now order identically top to bottom. <strong>Touched</strong>: migration <code>v2_120_0_product_sort_order</code> (nullable <code>sort_order</code> on products), <code>refill-catalog.ts</code> (<code>reorderProductsFn</code> + list orders by sort_order, Product type), product list (drag handle + within-category reorder, mirrors the services list), generated DB types, <code>changelog.ts</code>. <strong>Run the migration.</strong>",
+    ],
+  },
+  {
     version: "v2.119.0",
     date: "June 2026",
     items: [

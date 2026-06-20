@@ -2581,6 +2581,7 @@ export type Database = {
           manufacturer: string | null
           notes: string | null
           sales_price_per_unit: number
+          sort_order: number | null
           subcategory_area: string | null
           subcategory_family: string | null
           tenant_id: string
@@ -2597,6 +2598,7 @@ export type Database = {
           manufacturer?: string | null
           notes?: string | null
           sales_price_per_unit: number
+          sort_order?: number | null
           subcategory_area?: string | null
           subcategory_family?: string | null
           tenant_id: string
@@ -2613,6 +2615,7 @@ export type Database = {
           manufacturer?: string | null
           notes?: string | null
           sales_price_per_unit?: number
+          sort_order?: number | null
           subcategory_area?: string | null
           subcategory_family?: string | null
           tenant_id?: string
