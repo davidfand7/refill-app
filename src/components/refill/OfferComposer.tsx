@@ -62,6 +62,13 @@ const COHORTS: Array<{ value: OfferCohort; label: string }> = [
   { value: "expiring", label: "Expiring reward" },
 ];
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
+/** Treatment kinds for the bought-X-not-Y filter (mirror PURCHASE_KINDS). */
+const KIND_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "toxin", label: "Tox" },
+  { value: "filler", label: "Filler" },
+  { value: "device", label: "Device" },
+  { value: "retail", label: "Retail" },
+];
 
 type Version = { offerType: AbType; value: string; addon: string };
 type Mode = "spa" | "mfr" | "arena";
@@ -79,7 +86,14 @@ function todayLocalIso(): string {
 
 /** Build a refine-targeting spec from the composer's raw input strings (shared
  *  by the live-count effect and the activate path so they never drift). */
-function buildTargetFilters(recencyMin: string, visitsMin: string, spendMin: string, reachable: boolean): OfferTargetFilters {
+function buildTargetFilters(
+  recencyMin: string,
+  visitsMin: string,
+  spendMin: string,
+  reachable: boolean,
+  bought: string[],
+  notBought: string[],
+): OfferTargetFilters {
   const f: OfferTargetFilters = {};
   const rm = recencyMin.trim() ? Number(recencyMin.trim()) : null;
   const vm = visitsMin.trim() ? Number(visitsMin.trim()) : null;
@@ -88,6 +102,8 @@ function buildTargetFilters(recencyMin: string, visitsMin: string, spendMin: str
   if (vm && vm > 0) f.visitCountMin = Math.round(vm);
   if (sm && sm > 0) f.spendMinUsd = Math.round(sm);
   if (reachable) f.reachableByTextOnly = true;
+  if (bought.length) f.boughtKinds = bought;
+  if (notBought.length) f.notBoughtKinds = notBought;
   return f;
 }
 
@@ -129,6 +145,8 @@ export function OfferComposer({
   const [fVisitsMin, setFVisitsMin] = useState("");
   const [fSpendMin, setFSpendMin] = useState("");
   const [fReachable, setFReachable] = useState(false);
+  const [fBought, setFBought] = useState<Set<string>>(new Set());
+  const [fNotBought, setFNotBought] = useState<Set<string>>(new Set());
   // Which expander is open (KISS: one at a time, resting view is plain English).
   const [openSec, setOpenSec] = useState<null | "offer" | "who" | "refine" | "when" | "delivery">("offer");
   const [pvTab, setPvTab] = useState<"badge" | "deals" | "email" | "text">("badge");
@@ -179,7 +197,7 @@ export function OfferComposer({
     if (!accessToken) return;
     let cancelled = false;
     setMatchLoading(true);
-    const filterSpec = buildTargetFilters(fRecencyMin, fVisitsMin, fSpendMin, fReachable);
+    const filterSpec = buildTargetFilters(fRecencyMin, fVisitsMin, fSpendMin, fReachable, [...fBought], [...fNotBought]);
     void (async () => {
       try {
         const r = await getCohortReachFn({ data: { accessToken, viewAsUserId, cohort, filterSpec } });
@@ -193,7 +211,7 @@ export function OfferComposer({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, viewAsUserId, cohort, fRecencyMin, fVisitsMin, fSpendMin, fReachable]);
+  }, [accessToken, viewAsUserId, cohort, fRecencyMin, fVisitsMin, fSpendMin, fReachable, fBought, fNotBought]);
 
   function switchMode(m: Mode) {
     setMode(m);
@@ -258,8 +276,8 @@ export function OfferComposer({
   // Refine targeting: build the spec from the inputs; a non-empty spec makes the
   // offer targeted (push-only) even when the base cohort is Everyone.
   const refineFilters = useMemo<OfferTargetFilters>(
-    () => buildTargetFilters(fRecencyMin, fVisitsMin, fSpendMin, fReachable),
-    [fRecencyMin, fVisitsMin, fSpendMin, fReachable],
+    () => buildTargetFilters(fRecencyMin, fVisitsMin, fSpendMin, fReachable, [...fBought], [...fNotBought]),
+    [fRecencyMin, fVisitsMin, fSpendMin, fReachable, fBought, fNotBought],
   );
   const isRefined = hasTargetFilters(refineFilters);
   // Targeted = reaches specific patients via push (no public badge). A refined
@@ -271,6 +289,8 @@ export function OfferComposer({
     if (refineFilters.lastVisitMinDays != null) parts.push(`not seen in ${refineFilters.lastVisitMinDays}+ days`);
     if (refineFilters.visitCountMin != null) parts.push(`${refineFilters.visitCountMin}+ visits`);
     if (refineFilters.spendMinUsd != null) parts.push(`spent $${refineFilters.spendMinUsd.toLocaleString()}+`);
+    if (refineFilters.boughtKinds?.length) parts.push(`had ${refineFilters.boughtKinds.map((k) => KIND_OPTIONS.find((o) => o.value === k)?.label ?? k).join("/")}`);
+    if (refineFilters.notBoughtKinds?.length) parts.push(`never ${refineFilters.notBoughtKinds.map((k) => KIND_OPTIONS.find((o) => o.value === k)?.label ?? k).join("/")}`);
     if (refineFilters.reachableByTextOnly) parts.push("reachable by text");
     return parts.join(" · ");
   }, [refineFilters]);
@@ -315,6 +335,7 @@ export function OfferComposer({
     setOptimize(false); setVersions([]); setCohort("all"); setOfferType("dollars_off");
     setShowOnDeals(true);
     setFRecencyMin(""); setFVisitsMin(""); setFSpendMin(""); setFReachable(false);
+    setFBought(new Set()); setFNotBought(new Set());
   }
 
   async function activate(draft = false) {
@@ -621,6 +642,32 @@ export function OfferComposer({
               <input type="number" min="1" value={fSpendMin} onChange={(e) => setFSpendMin(e.target.value)} placeholder="500" className={inputCls} />
             </Field>
           </div>
+          <Field label="Has had">
+            <div className="flex flex-wrap gap-1.5">
+              {KIND_OPTIONS.map((k) => (
+                <Chip
+                  key={k.value}
+                  on={fBought.has(k.value)}
+                  onClick={() => setFBought((prev) => { const n = new Set(prev); n.has(k.value) ? n.delete(k.value) : n.add(k.value); return n; })}
+                >
+                  {k.label}
+                </Chip>
+              ))}
+            </div>
+          </Field>
+          <Field label="…but never had">
+            <div className="flex flex-wrap gap-1.5">
+              {KIND_OPTIONS.map((k) => (
+                <Chip
+                  key={k.value}
+                  on={fNotBought.has(k.value)}
+                  onClick={() => setFNotBought((prev) => { const n = new Set(prev); n.has(k.value) ? n.delete(k.value) : n.add(k.value); return n; })}
+                >
+                  {k.label}
+                </Chip>
+              ))}
+            </div>
+          </Field>
           <label className="mt-1 flex items-center gap-2 text-[12px] font-medium text-ink-soft">
             <input type="checkbox" checked={fReachable} onChange={(e) => setFReachable(e.target.checked)} className="h-4 w-4 rounded border-rule text-emerald focus:ring-emerald/30" />
             Only patients reachable by text (phone on file)
@@ -631,7 +678,7 @@ export function OfferComposer({
             </p>
           )}
           <p className="mt-1 text-[10.5px] text-ink-faint">
-            Reads each patient&rsquo;s visit history &amp; spend. &ldquo;Bought X but not Y&rdquo; is coming next.
+            &ldquo;Has had Tox but never Filler&rdquo; is the classic cross-sell. Reads each patient&rsquo;s visit history, spend &amp; purchases.
           </p>
           {isAb && isRefined && (
             <p className="mt-1 text-[10.5px] font-semibold text-amber">

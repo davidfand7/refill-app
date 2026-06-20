@@ -115,15 +115,25 @@ export type OfferTargetFilters = {
   spendMaxUsd?: number | null;
   /** Only patients with a phone on file (reachable by text). */
   reachableByTextOnly?: boolean;
+  /** Has purchased ≥1 treatment in ANY of these product kinds (e.g. ["toxin"]
+   *  = "has had Botox/Jeuveau"). Resolved from patient_transactions. */
+  boughtKinds?: string[] | null;
+  /** Has purchased NONE of these product kinds (e.g. ["filler"] = "never had
+   *  filler"). Combine with boughtKinds for cross-sell ("toxin but not filler"). */
+  notBoughtKinds?: string[] | null;
 };
 
-/** The per-patient metrics the filter predicate reads (from attachments). */
+/** The per-patient metrics the filter predicate reads. lastVisit/totalVisits/
+ *  lifetimeSpendUsd/phone come from attachments; purchasedKinds from
+ *  patient_transactions (only loaded when a bought/not-bought filter is set). */
 export type PatientFilterMetrics = {
   /** ISO yyyy-mm-dd of the most recent visit, or null if unknown. */
   lastVisit?: string | null;
   totalVisits?: number | null;
   lifetimeSpendUsd?: number | null;
   phone?: string | null;
+  /** Distinct product kinds this patient has purchased (amount > 0). */
+  purchasedKinds?: string[] | null;
 };
 
 /** True when a spec actually constrains anything (any field set). An empty/
@@ -137,8 +147,15 @@ export function hasTargetFilters(spec: OfferTargetFilters | null | undefined): b
     spec.visitCountMax != null ||
     spec.spendMinUsd != null ||
     spec.spendMaxUsd != null ||
-    spec.reachableByTextOnly === true
+    spec.reachableByTextOnly === true ||
+    (spec.boughtKinds?.length ?? 0) > 0 ||
+    (spec.notBoughtKinds?.length ?? 0) > 0
   );
+}
+
+/** True when a spec needs each patient's purchase history (the heavier load). */
+export function needsPurchaseHistory(spec: OfferTargetFilters | null | undefined): boolean {
+  return (spec?.boughtKinds?.length ?? 0) > 0 || (spec?.notBoughtKinds?.length ?? 0) > 0;
 }
 
 /**
@@ -176,6 +193,17 @@ export function patientMatchesFilters(
   }
   if (s.reachableByTextOnly === true) {
     if (!(m.phone ?? "").trim()) return false;
+  }
+  if (s.boughtKinds?.length) {
+    const had = m.purchasedKinds ?? [];
+    // Has bought ANY of the listed kinds. Unknown history (no records) fails —
+    // we don't push to / pay for a patient we can't verify bought it.
+    if (!s.boughtKinds.some((k) => had.includes(k))) return false;
+  }
+  if (s.notBoughtKinds?.length) {
+    const had = m.purchasedKinds ?? [];
+    // Has bought NONE of the listed kinds.
+    if (s.notBoughtKinds.some((k) => had.includes(k))) return false;
   }
   return true;
 }

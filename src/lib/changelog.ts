@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.111.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.111.0 &mdash; Refine targeting, completed: &ldquo;has had Tox but never Filler.&rdquo;</strong> The composer&rsquo;s Refine section gains the cross-sell axis &mdash; two chip rows, <strong>Has had</strong> and <strong>&hellip;but never had</strong>, over Tox / Filler / Device / Retail. So the classic upsell &mdash; <em>&ldquo;patients who&rsquo;ve had Botox but never tried filler&rdquo;</em> &mdash; is two taps, AND-combined with the recency / visits / spend / reachable filters from v2.110. Purchase history reads from <code>patient_transactions</code> (real purchases, amount &gt; 0), only loaded when a bought/not-bought filter is set (kept cheap by scanning just the relevant kinds, fully paginated). It flows through the <em>same</em> resolver as everything else, so the live &ldquo;~N match&rdquo; count, the push audience, and the <strong>$5 win-integrity gate</strong> all honor it identically &mdash; a refined offer still only earns when the booking patient actually matches. No migration (rides the existing <code>filter_spec</code> jsonb). <strong>Touched</strong>: <code>promo-calendar.ts</code> (boughtKinds/notBoughtKinds on the spec + predicate + <code>needsPurchaseHistory</code>), <code>refill-promo-calendar.functions.ts</code> (<code>loadPurchasedKinds</code> + resolver/gate wiring, paginated), <code>OfferComposer.tsx</code> (Has had / never had chip rows), <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.110.0",
     date: "June 2026",
     items: [
