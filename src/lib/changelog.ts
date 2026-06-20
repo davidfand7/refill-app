@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.123.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.123.0 &mdash; Airtight substitution + cost reads in real units.</strong> Three sharpenings. <strong>(1) The recommender now substitutes within SUB-CATEGORY</strong>, not the whole Filler category &mdash; Biostim competes only with Biostim, Mid-face HA with Mid-face HA, etc. So a patient profile shows a recommendation per filler area (&ldquo;Filler &middot; Mid-face &rarr; Volux,&rdquo; &ldquo;Filler &middot; Biostim &rarr; Radiesse&rdquo;), and it will never suggest swapping a collagen biostimulator for a hyaluronic filler. A product tagged for several areas competes in each. <strong>(2) Cost now reads in the real unit</strong> &mdash; $/vial, $/syringe (from the product&rsquo;s unit type) across Brand economics and the product form labels, instead of a generic &ldquo;/u.&rdquo; <strong>(3) Brand economics category order</strong> now matches Services / Products / the booking page (the one shared category order). <strong>Touched</strong>: <code>brand-economics.ts</code> (unitType + subcategories on the snapshot), <code>refill-brand-economics.functions.ts</code> (substitution-group recommender), patient profile card, Brand economics (unit display + shared category order), product form (unit-aware labels), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.122.0",
     date: "June 2026",
     items: [

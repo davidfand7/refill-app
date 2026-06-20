@@ -885,6 +885,10 @@ function ProductFormCard({
   onDelete?: () => void;
   busy: boolean;
 }) {
+  const unitWord =
+    ({ vial: "vial", syringe: "syringe", bottle: "bottle", session: "session" } as Record<string, string>)[
+      draft.unitType
+    ] ?? "unit";
   const computedMargin = useMemo(() => {
     const cost = Number.parseFloat(draft.costPerUnit);
     const price = Number.parseFloat(draft.salesPricePerUnit);
@@ -995,7 +999,7 @@ function ProductFormCard({
           </select>
         </FormField>
 
-        <FormField label="Sales price per unit ($)">
+        <FormField label={`Sales price per ${unitWord} ($)`}>
           <input
             type="number"
             step="0.01"
@@ -1010,7 +1014,7 @@ function ProductFormCard({
           />
         </FormField>
 
-        <FormField label="Cost per unit ($)">
+        <FormField label={`Cost per ${unitWord} ($)`}>
           <input
             type="number"
             step="0.01"
@@ -1037,7 +1041,7 @@ function ProductFormCard({
 
       {computedMargin && (
         <div className="rounded-md bg-emerald-soft px-3 py-2 text-[13px] text-ink">
-          <span className="font-semibold">Margin per unit:</span>{" "}
+          <span className="font-semibold">Margin per {unitWord}:</span>{" "}
           <span className="tabular-nums">
             {fmtUsd(computedMargin.margin)}
             {computedMargin.pct !== null && (

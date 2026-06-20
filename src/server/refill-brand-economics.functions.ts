@@ -33,6 +33,7 @@ import {
   type IncentiveBeneficiary,
 } from "@/lib/brand-economics";
 import { recommendBrand, type BrandRecommendation } from "@/lib/brand-recommender";
+import { parseSubcategories } from "@/lib/product-subcategories";
 import type { PatientSummary } from "@/lib/patient-csv";
 import type { ValueTier, ReliabilityFlag } from "@/lib/patient-value";
 
@@ -209,6 +210,8 @@ type CatalogProductRow = {
   brand: string;
   category: string;
   manufacturer: string | null;
+  unit_type: string;
+  subcategory_area: string | null;
   cost_per_unit: string | number;
   sales_price_per_unit: string | number;
 };
@@ -223,7 +226,7 @@ async function loadBrandEconomicsBundle(
   const productRows = await fetchAllRows<CatalogProductRow>((from, to) =>
     sb
       .from("products")
-      .select("brand, category, manufacturer, cost_per_unit, sales_price_per_unit")
+      .select("brand, category, manufacturer, unit_type, subcategory_area, cost_per_unit, sales_price_per_unit")
       .eq("tenant_id", tenantId)
       .is("hidden_at", null)
       .order("category", { ascending: true })
@@ -234,6 +237,8 @@ async function loadBrandEconomicsBundle(
     brand: r.brand,
     manufacturer: r.manufacturer ?? null,
     category: r.category,
+    unitType: r.unit_type ?? "other",
+    subcategories: parseSubcategories(r.subcategory_area),
     costPerUnit: typeof r.cost_per_unit === "string" ? Number(r.cost_per_unit) : r.cost_per_unit,
     salesPricePerUnit:
       typeof r.sales_price_per_unit === "string"
@@ -274,6 +279,15 @@ const KIND_TO_CATEGORY: Record<string, string> = {
   biostimulator: "filler",
 };
 
+const CATEGORY_PRETTY: Record<string, string> = {
+  tox: "Tox",
+  filler: "Filler",
+  laser_consumable: "Laser consumable",
+  facial: "Facial",
+  skincare: "Skincare",
+  other: "Other",
+};
+
 export const getPatientBrandRecommendations = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => patientRecInput.parse(raw))
   .handler(async ({ data }): Promise<PatientBrandRecommendations> => {
@@ -293,34 +307,54 @@ export const getPatientBrandRecommendations = createServerFn({ method: "POST" })
     const summary = (node?.attachments ?? null) as PatientSummary | null;
 
     const bundle = await loadBrandEconomicsBundle(sb, effectiveUserId);
-    // Group economics by category (already ranked within category).
-    const byCategory = new Map<string, typeof bundle.economics>();
+
+    // Build SUBSTITUTION groups. Most categories substitute within the category,
+    // but FILLER substitutes within SUB-CATEGORY — you don't swap a biostim for
+    // an HA filler, or a lip filler for a cheek filler. A product with multiple
+    // sub-categories competes in each of its groups.
+    type Eco = (typeof bundle.economics)[number];
+    const groups = new Map<string, { label: string; economics: Eco[] }>();
+    const addToGroup = (key: string, label: string, e: Eco) => {
+      const g = groups.get(key) ?? { label, economics: [] };
+      g.economics.push(e);
+      groups.set(key, g);
+    };
     for (const e of bundle.economics) {
-      const arr = byCategory.get(e.category) ?? [];
-      arr.push(e);
-      byCategory.set(e.category, arr);
+      if (e.category === "filler") {
+        const subs = e.subcategories.length > 0 ? e.subcategories : ["(unsorted)"];
+        for (const s of subs) {
+          addToGroup(`filler:${s}`, s === "(unsorted)" ? "Filler" : `Filler · ${s}`, e);
+        }
+      } else {
+        addToGroup(e.category, CATEGORY_PRETTY[e.category] ?? e.category, e);
+      }
     }
 
-    // Categories the patient actually gets treated in (toxin/filler/biostim).
+    // Which substitution groups are relevant to THIS patient (by treatment kind).
     const kinds = summary?.purchasePatterns?.byKind ?? {};
-    const categories = new Set<string>();
-    for (const [kind, cat] of Object.entries(KIND_TO_CATEGORY)) {
-      const m = (kinds as Record<string, { visitCount?: number } | undefined>)[kind];
-      if (m && (m.visitCount ?? 0) > 0) categories.add(cat);
+    const hadKind = (k: string) => {
+      const m = (kinds as Record<string, { visitCount?: number } | undefined>)[k];
+      return !!m && (m.visitCount ?? 0) > 0;
+    };
+    const relevantKeys = new Set<string>();
+    if (hadKind("toxin")) relevantKeys.add("tox");
+    if (hadKind("filler") || hadKind("biostimulator")) {
+      for (const key of groups.keys()) if (key.startsWith("filler:")) relevantKeys.add(key);
     }
 
     const recommendations: BrandRecommendation[] = [];
-    for (const cat of categories) {
-      const economics = byCategory.get(cat);
-      if (!economics || economics.length === 0) continue;
+    for (const key of relevantKeys) {
+      const g = groups.get(key);
+      if (!g || g.economics.length === 0) continue;
       const rec = recommendBrand({
-        category: cat,
+        category: g.label,
         valueTier: summary?.valueTier ?? null,
         reliabilityFlag: summary?.reliabilityFlag ?? null,
-        economics,
+        economics: g.economics,
       });
       if (rec) recommendations.push(rec);
     }
+    recommendations.sort((a, b) => a.category.localeCompare(b.category));
 
     return {
       valueTier: summary?.valueTier ?? null,

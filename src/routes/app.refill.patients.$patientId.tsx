@@ -420,12 +420,6 @@ function SummaryCard({ patient }: { patient: PatientListRow }) {
 
 // ─── Brand recommendations card (Pillar 2.2) ──────────────────────────────
 
-const REC_CATEGORY_LABEL: Record<string, string> = {
-  tox: "Tox",
-  filler: "Filler",
-  biostimulator: "Biostimulator",
-};
-
 const REC_STRATEGY_META: Record<
   string,
   { label: string; cls: string }
@@ -453,7 +447,7 @@ function BrandRecsCard({ recs }: { recs: PatientBrandRecommendations | null }) {
             <li key={r.category} className="px-5 py-3.5">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint">
-                  {REC_CATEGORY_LABEL[r.category] ?? r.category}
+                  {r.category}
                 </span>
                 <span className="text-[15px] font-semibold text-ink">{r.recommendedBrand}</span>
                 {r.manufacturer && (

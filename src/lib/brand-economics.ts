@@ -78,6 +78,10 @@ export type BrandCostInput = {
   brand: string;
   manufacturer: string | null;
   category: string;
+  /** vial / syringe / bottle / session / other — drives $/unit display. */
+  unitType: string;
+  /** Sub-category tags (Mid-face / Lips / Biostim …) — the substitution group. */
+  subcategories: string[];
   costPerUnit: number;
   salesPricePerUnit: number;
 };
@@ -86,6 +90,8 @@ export type BrandEconomics = {
   brand: string;
   manufacturer: string | null;
   category: string;
+  unitType: string;
+  subcategories: string[];
   /** Patient-facing sales price per unit (premium-positioning signal). */
   pricePerUnit: number;
   /** price − cost, straight from the catalog (the unchanging baseline). */
@@ -161,6 +167,8 @@ export function computeBrandEconomics(
     brand: product.brand,
     manufacturer: product.manufacturer,
     category: product.category,
+    unitType: product.unitType,
+    subcategories: product.subcategories,
     pricePerUnit: product.salesPricePerUnit,
     baseMarginPerUnit: baseMargin,
     spaIncentivePerUnit: spaPerUnit,

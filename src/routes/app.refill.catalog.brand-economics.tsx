@@ -32,6 +32,8 @@ import {
   type IncentiveType,
 } from "@/lib/brand-economics";
 import { cn } from "@/lib/utils";
+import { getCategoryOrderFn } from "@/server/scheduling-settings.functions";
+import { orderedCategoryRank } from "@/lib/service-categories";
 
 export const Route = createFileRoute("/app/refill/catalog/brand-economics")({
   component: BrandEconomicsPage,
@@ -87,6 +89,15 @@ const inputCls =
 const fmtUsd = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 
+/** Per-unit suffix: $/vial, $/syringe, … (cost-equivalent reads the real unit). */
+const UNIT_ABBREV: Record<string, string> = {
+  vial: "vial",
+  syringe: "syringe",
+  bottle: "bottle",
+  session: "session",
+};
+const unitSuffix = (unitType: string) => UNIT_ABBREV[unitType] ?? "u";
+
 function BrandEconomicsPage() {
   const membership = useTenantMembership();
   const viewAsUserId =
@@ -97,6 +108,8 @@ function BrandEconomicsPage() {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [busy, setBusy] = useState(false);
+  // v2.123.0: shared category order (matches Services / Products / Bookable).
+  const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
 
   async function reload() {
     const { data: sess } = await supabase.auth.getSession();
@@ -115,8 +128,14 @@ function BrandEconomicsPage() {
         const { data: sess } = await supabase.auth.getSession();
         const token = sess.session?.access_token;
         if (!token) return;
-        const b = await getBrandEconomics({ data: { accessToken: token, viewAsUserId } });
-        if (!cancelled) setBundle(b);
+        const [b, catOrder] = await Promise.all([
+          getBrandEconomics({ data: { accessToken: token, viewAsUserId } }),
+          getCategoryOrderFn({ data: { accessToken: token, viewAsUserId } }).catch(() => ({ order: [] as string[] })),
+        ]);
+        if (!cancelled) {
+          setBundle(b);
+          setCategoryOrder(catOrder.order);
+        }
       } catch (err) {
         if (!cancelled) toast.error(err instanceof Error ? err.message : "Couldn't load brand economics.");
       } finally {
@@ -139,8 +158,14 @@ function BrandEconomicsPage() {
       }
       g.rows.push(e);
     }
+    // Order category groups by the shared tenant order (Services/Products/Bookable).
+    groups.sort(
+      (a, b) =>
+        orderedCategoryRank(a.category, categoryOrder) - orderedCategoryRank(b.category, categoryOrder) ||
+        (CATEGORY_LABEL[a.category] ?? a.category).localeCompare(CATEGORY_LABEL[b.category] ?? b.category),
+    );
     return groups;
-  }, [bundle]);
+  }, [bundle, categoryOrder]);
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
@@ -472,11 +497,11 @@ function BrandEconomicsPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-ink-soft">
-                          {fmtUsd(r.baseMarginPerUnit)}/u
+                          {fmtUsd(r.baseMarginPerUnit)}/{unitSuffix(r.unitType)}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
                           {lift ? (
-                            <span className="text-emerald-ink font-medium">+{fmtUsd(r.spaIncentivePerUnit)}/u</span>
+                            <span className="text-emerald-ink font-medium">+{fmtUsd(r.spaIncentivePerUnit)}/{unitSuffix(r.unitType)}</span>
                           ) : r.spaIncentiveFlat > 0 ? (
                             <span className="text-emerald-ink font-medium">+{fmtUsd(r.spaIncentiveFlat)} flat</span>
                           ) : (
@@ -486,7 +511,7 @@ function BrandEconomicsPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums font-semibold">
-                          {fmtUsd(r.marginNowPerUnit)}/u
+                          {fmtUsd(r.marginNowPerUnit)}/{unitSuffix(r.unitType)}
                           {r.marginNowPct != null && (
                             <span className="ml-1 text-[11px] font-normal text-ink-faint">
                               {Math.round(r.marginNowPct * 100)}%
