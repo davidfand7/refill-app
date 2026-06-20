@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.112.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.112.0 &mdash; Your spa&rsquo;s name in the live preview.</strong> The composer&rsquo;s Email and AI-text previews now show your real spa name instead of the &ldquo;Your spa&rdquo; placeholder &mdash; so the patient-facing artifact you&rsquo;re previewing reads exactly as it&rsquo;ll send (&ldquo;Hi Jordan! It&rsquo;s <em>Rejuv Skin Spa</em> &mdash; $50 off your next Botox&hellip;&rdquo;). Pulled from your spa profile (<code>getSpaProfileBundleFn</code>), with a neutral fallback until it loads. Small polish toward full mockup parity. <strong>Touched</strong>: <code>OfferComposer.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.111.0",
     date: "June 2026",
     items: [

@@ -40,6 +40,7 @@ import {
   type CohortReach,
 } from "@/server/refill-promo-calendar.functions";
 import { createAbExperiment } from "@/server/smart-ab.functions";
+import { getSpaProfileBundleFn } from "@/server/spa-profile.functions";
 import { listServicesFn, type Service } from "@/server/refill-catalog";
 import { groupServicesByCategory } from "@/lib/service-categories";
 import { hasTargetFilters, normalizeForMatch, productMatchesName, type OfferTargetFilters, type OfferType, type OfferCohort, type PromoOffer } from "@/lib/promo-calendar";
@@ -121,6 +122,8 @@ export function OfferComposer({
   const [mode, setMode] = useState<Mode>("spa");
   const [mfrOffers, setMfrOffers] = useState<PromoOffer[]>([]);
   const [selectedMfrId, setSelectedMfrId] = useState("");
+  // Spa name for the live preview copy (falls back to a neutral placeholder).
+  const [spaName, setSpaName] = useState("");
   // The base offer (version 1) — spa-authored mode.
   const [offerType, setOfferType] = useState<OfferType>("dollars_off");
   const [serviceName, setServiceName] = useState("");
@@ -158,11 +161,13 @@ export function OfferComposer({
   const load = useCallback(async () => {
     if (!accessToken) return;
     try {
-      const [svc, promos] = await Promise.all([
+      const [svc, promos, profile] = await Promise.all([
         listServicesFn({ data: { accessToken, viewAsUserId } }),
         listPromoOffers({ data: { accessToken, viewAsUserId } }).catch(() => [] as PromoOffer[]),
+        getSpaProfileBundleFn({ data: { accessToken, viewAsUserId } }).catch(() => null),
       ]);
       setServices(svc.filter((s) => s.onlineBookable));
+      setSpaName((profile?.spaName ?? "").trim());
       // Manufacturer promos still worth delivering (drop expired).
       const today = todayLocalIso();
       setMfrOffers(
@@ -243,6 +248,8 @@ export function OfferComposer({
     activeSvc?.displayName ||
     (mode === "mfr" ? titleCase(selectedMfr?.product) : serviceName) ||
     "your service";
+  // Spa name for preview copy; neutral fallback until the profile loads / is set.
+  const spaLabel = spaName || "your spa";
   const price = activeSvc?.servicePrice ?? null;
 
   const offerLabel = useMemo(() => {
@@ -861,7 +868,7 @@ export function OfferComposer({
           {pvTab === "email" && (
             <div className="overflow-hidden rounded-lg border border-rule bg-white shadow-sm">
               <div className="border-b border-rule p-2.5">
-                <div className="text-[12px] font-bold text-ink">Your spa</div>
+                <div className="text-[12px] font-bold text-ink">{titleCase(spaLabel)}</div>
                 <div className="text-[11px] text-ink-soft">We&rsquo;ve missed you — {offerLabel} your {svcDisplay} 💚</div>
               </div>
               <div className="p-3">
@@ -877,7 +884,7 @@ export function OfferComposer({
           {pvTab === "text" && (
             <div className="rounded-lg bg-paper p-3">
               <div className="ml-auto max-w-[88%] rounded-2xl bg-emerald px-3 py-2 text-[12.5px] leading-snug text-white">
-                Hi Jordan! It&rsquo;s your spa — {offerLabel.toLowerCase()} your next {svcDisplay}{cohort !== "all" ? ", just for you" : ""}. Book here: smartspa.app/s/… 💚
+                Hi Jordan! It&rsquo;s {spaLabel} — {offerLabel.toLowerCase()} your next {svcDisplay}{cohort !== "all" ? ", just for you" : ""}. Book here: smartspa.app/s/… 💚
               </div>
               <div className="mt-1.5 text-[10px] text-ink-faint">AI-drafted per patient · you review before it sends</div>
             </div>
