@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.119.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.119.0 &mdash; Products page now orders categories like Services (and Bookable).</strong> The Product catalog groups by category in the <em>same sequence</em> as your Service catalog &mdash; both read from the one shared category order (the same one the public booking page uses), so the three surfaces finally line up instead of each sorting its own way. Also fixed the category filter chips to include the new <strong>Biostimulator</strong> and <strong>Facial</strong> groups (they were stuck on the old five). <strong>Touched</strong>: <code>app.refill.catalog.products.tsx</code> (loads <code>getCategoryOrderFn</code>, sorts groups by <code>orderedCategoryRank</code>, filter chips from the full category list), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.118.0",
     date: "June 2026",
     items: [

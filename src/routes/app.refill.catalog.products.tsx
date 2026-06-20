@@ -53,6 +53,8 @@ import {
   type ProductUnitType,
 } from "@/server/refill-catalog";
 import { cn } from "@/lib/utils";
+import { getCategoryOrderFn } from "@/server/scheduling-settings.functions";
+import { orderedCategoryRank } from "@/lib/service-categories";
 
 export const Route = createFileRoute("/app/refill/catalog/products")({
   component: ProductsPage,
@@ -198,6 +200,9 @@ function ProductsPage() {
     | { ok: false; message: string; at: string }
     | null
   >(null);
+  // v2.119.0: tenant category order — SHARED with Services + Bookable so all
+  // three present categories in the same sequence.
+  const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
 
   useEffect(() => {
     if (membership.status !== "tenant") return;
@@ -208,10 +213,16 @@ function ProductsPage() {
         const { data: sess } = await supabase.auth.getSession();
         const token = sess.session?.access_token;
         if (!token) return;
-        const rows = await listProductsFn({
-          data: { accessToken: token, viewAsUserId, includeHidden: showHidden },
-        });
-        if (!cancelled) setProducts(rows);
+        const [rows, catOrder] = await Promise.all([
+          listProductsFn({
+            data: { accessToken: token, viewAsUserId, includeHidden: showHidden },
+          }),
+          getCategoryOrderFn({ data: { accessToken: token, viewAsUserId } }).catch(() => ({ order: [] as string[] })),
+        ]);
+        if (!cancelled) {
+          setProducts(rows);
+          setCategoryOrder(catOrder.order);
+        }
       } catch (err) {
         if (!cancelled) {
           toast.error(err instanceof Error ? err.message : "Couldn't load products.");
@@ -570,7 +581,7 @@ function ProductsPage() {
             <span className="text-[10px] uppercase tracking-wider font-semibold text-ink-faint">
               Filter
             </span>
-            {(["tox", "filler", "laser_consumable", "skincare", "other"] as ProductCategory[]).map((c) => {
+            {CATEGORY_OPTIONS.map((opt) => opt.value).map((c) => {
               const count = categoryCounts.get(c) ?? 0;
               if (count === 0) return null;
               const active = categoryFilter.has(c);
@@ -664,7 +675,13 @@ function ProductsPage() {
           )
         ) : (
           <>
-            {Array.from(byCategory.entries()).map(([cat, rows]) => (
+            {Array.from(byCategory.entries())
+              .sort(
+                ([a], [b]) =>
+                  orderedCategoryRank(a, categoryOrder) - orderedCategoryRank(b, categoryOrder) ||
+                  categoryLabel(a).localeCompare(categoryLabel(b)),
+              )
+              .map(([cat, rows]) => (
               <section key={cat} className="space-y-3">
                 <h2 className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint flex items-center gap-2">
                   <Sparkles className="h-3.5 w-3.5 text-emerald" />
