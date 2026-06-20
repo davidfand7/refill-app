@@ -270,7 +270,8 @@ export type PatientBrandRecommendations = {
 const KIND_TO_CATEGORY: Record<string, string> = {
   toxin: "tox",
   filler: "filler",
-  biostimulator: "biostimulator",
+  // v2.122.0: biostim is now a Filler sub-category, not its own category.
+  biostimulator: "filler",
 };
 
 export const getPatientBrandRecommendations = createServerFn({ method: "POST" })

@@ -48,7 +48,6 @@ const TYPE_OPTIONS: Array<{ value: IncentiveType; label: string }> = [
 const CATEGORY_LABEL: Record<string, string> = {
   tox: "Tox",
   filler: "Filler",
-  biostimulator: "Biostimulator",
   laser_consumable: "Laser consumable",
   facial: "Facial",
   skincare: "Skincare",
@@ -216,6 +215,24 @@ function BrandEconomicsPage() {
     });
     setAdding(true);
   }
+
+  // Inline "+ Add" from a row — pre-fills the form with that brand + the right
+  // beneficiary so the owner only enters amount + dates.
+  function openAddFor(r: BrandEconomics, beneficiary: IncentiveBeneficiary) {
+    setDraft({
+      ...EMPTY_DRAFT,
+      brand: r.brand,
+      manufacturer: r.manufacturer ?? "",
+      category: r.category,
+      beneficiary,
+      incentiveType: beneficiary === "spa" ? "rebate" : "voucher",
+    });
+    setAdding(true);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  const addBtnCls =
+    "inline-flex items-center gap-0.5 text-[11px] font-medium text-ink-faint hover:text-emerald-ink transition";
 
   return (
     <div>
@@ -463,7 +480,9 @@ function BrandEconomicsPage() {
                           ) : r.spaIncentiveFlat > 0 ? (
                             <span className="text-emerald-ink font-medium">+{fmtUsd(r.spaIncentiveFlat)} flat</span>
                           ) : (
-                            <span className="text-ink-faint">—</span>
+                            <button type="button" onClick={() => openAddFor(r, "spa")} className={addBtnCls}>
+                              <Plus className="h-3 w-3" /> Add
+                            </button>
                           )}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums font-semibold">
@@ -481,7 +500,9 @@ function BrandEconomicsPage() {
                               {fmtUsd(r.patientValueFeel)}
                             </span>
                           ) : (
-                            <span className="text-ink-faint">—</span>
+                            <button type="button" onClick={() => openAddFor(r, "patient")} className={addBtnCls}>
+                              <Plus className="h-3 w-3" /> Add
+                            </button>
                           )}
                         </td>
                       </tr>

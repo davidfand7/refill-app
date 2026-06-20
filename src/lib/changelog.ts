@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.122.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.122.0 &mdash; Catalog fine-tuning: defined sub-categories, one-click incentives, biostim under Filler.</strong> Three sharpenings. <strong>(1) Sub-categories are now a defined checklist</strong> instead of free text &mdash; multi-select chips: Mid-face / NLF / Lips / Liplines / Fine-lines / Marionettes / Jawline / Chin / Biostim (a product can carry several). Lives on the product form and the canonical registry; pick the ones that apply and they inherit on Recategorize. <strong>(2) One-click incentives</strong>: the Brand economics table now has a <strong>&ldquo;+ Add&rdquo;</strong> right inside each row&rsquo;s <em>Active incentive</em> and <em>Patient feels</em> cells &mdash; click it and the form opens pre-filled with that brand + the right beneficiary, so you only type the amount and dates. <strong>(3) Biostim is now a Filler sub-category</strong>, not its own top-level category (clinically it&rsquo;s a filler-family distinction) &mdash; existing biostim products + canonical brands (Sculptra, Radiesse) re-filed to Filler with a &ldquo;Biostim&rdquo; sub-category tag. <strong>Touched</strong>: migration <code>v2_122_0_biostim_to_filler_subcat</code>, new <code>product-subcategories.ts</code>, product + canonical forms (multi-select), Brand economics (inline +Add), recommender mapping (biostim&rarr;Filler), <code>changelog.ts</code>. <strong>Run the migration.</strong>",
+    ],
+  },
+  {
     version: "v2.121.0",
     date: "June 2026",
     items: [

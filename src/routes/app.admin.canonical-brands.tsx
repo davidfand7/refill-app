@@ -34,6 +34,7 @@ import {
   type ProductUnitType,
 } from "@/server/refill-catalog";
 import { cn } from "@/lib/utils";
+import { PRODUCT_SUBCATEGORIES, parseSubcategories, toggleSubcategory } from "@/lib/product-subcategories";
 
 export const Route = createFileRoute("/app/admin/canonical-brands")({
   component: CanonicalBrandsPage,
@@ -44,11 +45,11 @@ type CategoryValue = "tox" | "filler" | "biostimulator" | "laser" | "facial" | "
 const CATEGORY_OPTIONS: Array<{ value: CategoryValue; label: string }> = [
   { value: "tox", label: "Tox" },
   { value: "filler", label: "Filler" },
-  { value: "biostimulator", label: "Biostimulator" },
   { value: "laser", label: "Laser" },
   { value: "facial", label: "Facial" },
   { value: "skincare", label: "Skincare" },
   { value: "other", label: "Other" },
+  // 'biostimulator' retired → Filler + a "Biostim" sub-category.
 ];
 
 const UNIT_OPTIONS: Array<{ value: ProductUnitType; label: string }> = [
@@ -516,31 +517,34 @@ function BrandFormCard({
         </p>
       </FormField>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <FormField label="Sub-category — area (optional)">
-          <input
-            type="text"
-            value={draft.subcategoryArea}
-            onChange={(e) => onChange({ ...draft, subcategoryArea: e.target.value })}
-            placeholder="e.g. cheek, lip, jawline"
-            disabled={busy}
-            className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
-          />
-          <p className="text-[11px] text-ink-soft mt-1 leading-snug">
-            Primary substitution group. Products inherit this on Recategorize (blanks only).
-          </p>
-        </FormField>
-        <FormField label="Sub-category — family (optional)">
-          <input
-            type="text"
-            value={draft.subcategoryFamily}
-            onChange={(e) => onChange({ ...draft, subcategoryFamily: e.target.value })}
-            placeholder="e.g. Voluma-class, Volbella-class"
-            disabled={busy}
-            className="w-full rounded-md border border-rule bg-white px-3 py-2 text-[15px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30"
-          />
-        </FormField>
-      </div>
+      <FormField label="Sub-categories (optional)">
+        <div className="flex flex-wrap gap-1.5">
+          {PRODUCT_SUBCATEGORIES.map((sc) => {
+            const on = parseSubcategories(draft.subcategoryArea).includes(sc);
+            return (
+              <button
+                key={sc}
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  onChange({ ...draft, subcategoryArea: toggleSubcategory(draft.subcategoryArea, sc) })
+                }
+                className={cn(
+                  "inline-flex items-center rounded-full px-2.5 py-1 text-[12px] font-medium border transition",
+                  on
+                    ? "border-emerald bg-emerald-soft text-emerald-ink"
+                    : "border-rule bg-white text-ink-soft hover:border-emerald/40 hover:text-ink",
+                )}
+              >
+                {sc}
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-ink-soft mt-1 leading-snug">
+          Substitution groups. Products inherit these on Recategorize (blanks only).
+        </p>
+      </FormField>
 
       <FormField label="Notes (optional)">
         <input
