@@ -71,6 +71,10 @@ export type IncentiveLedgerEntry = {
   startsOn: string | null;
   endsOn: string | null;
   notes: string | null;
+  /** Sample-only metadata so the entry stays editable: how many free units +
+   *  which unit. amountUsd is the derived value (count × brand cost). */
+  freeUnits?: number | null;
+  sampleUnit?: string | null;
 };
 
 /** Minimal product shape this lib needs (decoupled from the server catalog). */

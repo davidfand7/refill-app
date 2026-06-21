@@ -237,6 +237,8 @@ function BrandEconomicsPage() {
             notes:
               draft.notes.trim() ||
               (isSample ? `${Number(draft.freeUnits)} free ${draft.sampleUnit}(s)` : null),
+            freeUnits: isSample ? Number(draft.freeUnits) : null,
+            sampleUnit: isSample ? draft.sampleUnit : null,
           },
         },
       });
@@ -280,10 +282,11 @@ function BrandEconomicsPage() {
       startsOn: entry.startsOn ?? "",
       endsOn: entry.endsOn ?? "",
       notes: entry.notes ?? "",
-      freeUnits: "",
-      sampleUnit: "vial",
+      freeUnits: entry.freeUnits != null ? String(entry.freeUnits) : "",
+      sampleUnit: entry.sampleUnit ?? "vial",
     });
     setAdding(true);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   // Inline "+ Add" from a row — pre-fills the form with that brand + the right

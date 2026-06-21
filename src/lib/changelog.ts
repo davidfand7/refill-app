@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.126.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.126.0 &mdash; Sample incentives are editable.</strong> A Sample incentive now remembers the <em>free-unit count + unit</em> (not just the computed dollars), so hitting <strong>Edit</strong> reopens it pre-filled (&ldquo;2 free vials&rdquo;) and re-values live as you change the count &mdash; or as the brand&rsquo;s cost changes. <strong>Touched</strong>: <code>brand-economics.ts</code> (freeUnits/sampleUnit on the entry), <code>refill-brand-economics.functions.ts</code> (store + hydrate them), Brand economics form (repopulate on edit), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.125.0",
     date: "June 2026",
     items: [
