@@ -224,6 +224,7 @@ type CatalogProductRow = {
   sort_order: number | null;
   cost_per_unit: string | number;
   sales_price_per_unit: string | number;
+  cost_source: string | null;
 };
 
 /** Shared loader — products catalog × active ledger → ranked economics. */
@@ -236,7 +237,7 @@ async function loadBrandEconomicsBundle(
   const productRows = await fetchAllRows<CatalogProductRow>((from, to) =>
     sb
       .from("products")
-      .select("brand, category, manufacturer, unit_type, subcategory_area, sort_order, cost_per_unit, sales_price_per_unit")
+      .select("brand, category, manufacturer, unit_type, subcategory_area, sort_order, cost_per_unit, sales_price_per_unit, cost_source")
       .eq("tenant_id", tenantId)
       .is("hidden_at", null)
       .order("category", { ascending: true })
@@ -256,6 +257,7 @@ async function loadBrandEconomicsBundle(
       typeof r.sales_price_per_unit === "string"
         ? Number(r.sales_price_per_unit)
         : r.sales_price_per_unit,
+    costSource: r.cost_source ?? "manual",
   }));
   const ledger = await loadLedger(sb, effectiveUserId);
   const todayIso = new Date().toISOString().slice(0, 10);

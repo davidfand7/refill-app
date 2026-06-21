@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.135.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.135.0 &mdash; Multi-manufacturer catalog: filter by vendor + know which costs are real (Phase 2.2).</strong> Now that your catalog spans Allergan, Galderma and Evolus, two upgrades on <strong>Products</strong> and <strong>Brand economics</strong>: <strong>(1) Manufacturer filter</strong> &mdash; chips to isolate one vendor&rsquo;s products on demand. The default view stays mixed and margin-ranked (so you can still compare Juvéderm vs Restylane vs Evolysse side-by-side in a category) &mdash; click <em>Galderma</em> or <em>Evolus</em> to focus, click again to clear. <strong>(2) Estimate-vs-verified badges</strong> &mdash; every cost now shows where it came from: <strong>Verified</strong> (your real portal &ldquo;Your Price&rdquo;), <strong>Estimate</strong> (computed from your loyalty tier &mdash; a nudge to confirm against your portal), or <strong>Set cost</strong> (a placeholder to fill in). Owner-entered costs stay clean with no badge. So you can trust the margin math at a glance and see exactly which numbers are real vs. estimated. <strong>Touched</strong>: new <code>CostSourceBadge.tsx</code>, <code>products.tsx</code>, <code>brand-economics.tsx</code> + <code>cost_source</code> threaded through <code>refill-catalog.ts</code> / <code>brand-economics.ts</code> / <code>refill-brand-economics.functions.ts</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.134.0",
     date: "June 2026",
     items: [

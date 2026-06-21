@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { Loader2, Plus, Save, Sparkles, Trash2, X } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { CostSourceBadge } from "@/components/CostSourceBadge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -55,6 +56,28 @@ const CATEGORY_LABEL: Record<string, string> = {
   skincare: "Skincare",
   other: "Other",
 };
+
+// v2.135.0: manufacturer display labels for the segregation filter (mirrors
+// Programs & tiers / Products). Unknown keys fall back to a title-cased string.
+const MANUFACTURER_LABEL: Record<string, string> = {
+  abbvie: "Allergan / AbbVie",
+  galderma: "Galderma",
+  evolus: "Evolus",
+  merz: "Merz",
+  revance: "Revance",
+  rha: "RHA / Revance",
+  skinceuticals: "SkinCeuticals",
+  eltamd: "EltaMD",
+  neocutis: "Neocutis",
+  obagi: "Obagi",
+  sciton: "Sciton",
+  "abbvie-coolsculpting": "CoolSculpting",
+  generic: "Generic",
+  in_house: "In-house",
+};
+function mfrLabel(m: string): string {
+  return MANUFACTURER_LABEL[m] ?? m.charAt(0).toUpperCase() + m.slice(1);
+}
 
 type Draft = {
   id?: string;
@@ -127,6 +150,9 @@ function BrandEconomicsPage() {
   const [busy, setBusy] = useState(false);
   // v2.123.0: shared category order (matches Services / Products / Bookable).
   const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
+  // v2.135.0: manufacturer segregation filter — isolate one vendor's margins
+  // on demand without breaking the default mixed, margin-ranked comparison.
+  const [manufacturerFilter, setManufacturerFilter] = useState<Set<string>>(new Set());
 
   async function reload() {
     const { data: sess } = await supabase.auth.getSession();
@@ -164,10 +190,33 @@ function BrandEconomicsPage() {
     };
   }, [membership.status, viewAsUserId]);
 
-  // Group ranked economics by category for the panel.
+  // Manufacturers present, by count (most-stocked first) — for the filter chips.
+  const manufacturerCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const e of bundle?.economics ?? []) {
+      if (e.manufacturer) counts.set(e.manufacturer, (counts.get(e.manufacturer) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort(
+      (a, b) => b[1] - a[1] || mfrLabel(a[0]).localeCompare(mfrLabel(b[0])),
+    );
+  }, [bundle]);
+
+  function toggleManufacturer(m: string) {
+    setManufacturerFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(m)) next.delete(m);
+      else next.add(m);
+      return next;
+    });
+  }
+
+  // Group ranked economics by category for the panel (manufacturer filter applied).
   const byCategory = useMemo(() => {
     const groups: Array<{ category: string; rows: BrandEconomics[] }> = [];
-    for (const e of bundle?.economics ?? []) {
+    const economics = (bundle?.economics ?? []).filter(
+      (e) => manufacturerFilter.size === 0 || (e.manufacturer != null && manufacturerFilter.has(e.manufacturer)),
+    );
+    for (const e of economics) {
       let g = groups.find((x) => x.category === e.category);
       if (!g) {
         g = { category: e.category, rows: [] };
@@ -182,7 +231,7 @@ function BrandEconomicsPage() {
         (CATEGORY_LABEL[a.category] ?? a.category).localeCompare(CATEGORY_LABEL[b.category] ?? b.category),
     );
     return groups;
-  }, [bundle, categoryOrder]);
+  }, [bundle, categoryOrder, manufacturerFilter]);
 
   // Look up a brand's per-unit cost + unit from the loaded economics (cost =
   // price − base margin). Powers the Sample → auto-$ computation.
@@ -592,6 +641,44 @@ function BrandEconomicsPage() {
           </form>
         )}
 
+        {/* v2.135.0: manufacturer filter — isolate one vendor's margins on demand
+            (default keeps brands mixed + margin-ranked for cross-mfr comparison). */}
+        {manufacturerCounts.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-ink-faint">
+              Manufacturer
+            </span>
+            {manufacturerCounts.map(([m, count]) => {
+              const active = manufacturerFilter.has(m);
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => toggleManufacturer(m)}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium border transition",
+                    active
+                      ? "border-emerald bg-emerald-soft text-emerald-ink"
+                      : "border-rule bg-white text-ink-soft hover:border-emerald/40 hover:text-ink",
+                  )}
+                >
+                  {mfrLabel(m)}
+                  <span className={cn(active ? "text-emerald-ink" : "text-ink-faint")}>{count}</span>
+                </button>
+              );
+            })}
+            {manufacturerFilter.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setManufacturerFilter(new Set())}
+                className="text-[11px] text-ink-soft hover:text-rose transition"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+
         {loading ? (
           <div className="flex items-center gap-2 text-ink-soft text-sm py-12 justify-center">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading brand economics…
@@ -645,8 +732,9 @@ function BrandEconomicsPage() {
                             </span>
                           )}
                           {r.manufacturer && (
-                            <span className="ml-2 text-[11px] text-ink-faint">{r.manufacturer}</span>
+                            <span className="ml-2 text-[11px] text-ink-faint">{mfrLabel(r.manufacturer)}</span>
                           )}
+                          <CostSourceBadge source={r.costSource} className="ml-2" />
                           {r.spaIncentiveFlat > 0 && (
                             <button
                               type="button"

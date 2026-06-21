@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { CostSourceBadge } from "@/components/CostSourceBadge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -332,10 +333,38 @@ function ProductsPage() {
     return counts;
   }, [products]);
 
+  // v2.135.0: manufacturer filter chips — isolate one vendor's products on
+  // demand WITHOUT breaking the default cross-manufacturer (mixed, by-category)
+  // view that powers substitution comparison. Multi-select, union; empty = all.
+  const [manufacturerFilter, setManufacturerFilter] = useState<Set<ProductManufacturer>>(
+    new Set(),
+  );
+
+  function toggleManufacturer(m: ProductManufacturer) {
+    setManufacturerFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(m)) next.delete(m);
+      else next.add(m);
+      return next;
+    });
+  }
+
+  // Manufacturers present in the catalog, ordered by count (most-stocked first).
+  const manufacturerCounts = useMemo(() => {
+    const counts = new Map<ProductManufacturer, number>();
+    for (const p of products) {
+      if (p.manufacturer) counts.set(p.manufacturer, (counts.get(p.manufacturer) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || manufacturerLabel(a[0]).localeCompare(manufacturerLabel(b[0])));
+  }, [products]);
+
   const filteredProducts = useMemo(() => {
-    if (categoryFilter.size === 0) return products;
-    return products.filter((p) => categoryFilter.has(p.category));
-  }, [products, categoryFilter]);
+    return products.filter(
+      (p) =>
+        (categoryFilter.size === 0 || categoryFilter.has(p.category)) &&
+        (manufacturerFilter.size === 0 || (p.manufacturer != null && manufacturerFilter.has(p.manufacturer))),
+    );
+  }, [products, categoryFilter, manufacturerFilter]);
 
   const byCategory = useMemo(() => {
     const groups = new Map<ProductCategory, Product[]>();
@@ -680,6 +709,44 @@ function ProductsPage() {
           </div>
         )}
 
+        {/* v2.135.0: manufacturer filter — only when 2+ vendors are stocked
+            (segregation only matters once the catalog is multi-manufacturer). */}
+        {manufacturerCounts.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-ink-faint">
+              Manufacturer
+            </span>
+            {manufacturerCounts.map(([m, count]) => {
+              const active = manufacturerFilter.has(m);
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => toggleManufacturer(m)}
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium border transition",
+                    active
+                      ? "border-emerald bg-emerald-soft text-emerald-ink"
+                      : "border-rule bg-white text-ink-soft hover:border-emerald/40 hover:text-ink",
+                  )}
+                >
+                  {manufacturerLabel(m)}
+                  <span className={cn(active ? "text-emerald-ink" : "text-ink-faint")}>{count}</span>
+                </button>
+              );
+            })}
+            {manufacturerFilter.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setManufacturerFilter(new Set())}
+                className="text-[11px] text-ink-soft hover:text-rose transition"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+
         {adding && (
           <ProductFormCard
             mode="add"
@@ -842,8 +909,11 @@ function ProductRow({
           )}
         </button>
         <div className="text-right tabular-nums shrink-0">
-          <div className="text-[13px] text-ink-soft">
-            {fmtUsd(product.salesPricePerUnit)} sell &middot; {fmtUsd(product.costPerUnit)} cost
+          <div className="text-[13px] text-ink-soft flex items-center justify-end gap-1.5">
+            <span>
+              {fmtUsd(product.salesPricePerUnit)} sell &middot; {fmtUsd(product.costPerUnit)} cost
+            </span>
+            <CostSourceBadge source={product.costSource} />
           </div>
           {product.salesPricePerUnit > 0 ? (
             <div className="text-[15px] font-semibold text-emerald mt-0.5">

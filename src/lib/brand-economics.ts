@@ -94,6 +94,10 @@ export type BrandCostInput = {
   sortOrder: number | null;
   costPerUnit: number;
   salesPricePerUnit: number;
+  /** Provenance of costPerUnit ('portal'/'manual' = verified, 'tier_estimate'/
+   *  'unset' = not yet real) — drives the estimate-vs-verified badge. Plain
+   *  string to keep this lib decoupled from the server catalog types. */
+  costSource: string;
 };
 
 export type BrandEconomics = {
@@ -103,6 +107,8 @@ export type BrandEconomics = {
   unitType: string;
   subcategories: string[];
   sortOrder: number | null;
+  /** Provenance of cost ('portal'/'manual' verified vs 'tier_estimate'/'unset'). */
+  costSource: string;
   /** Patient-facing sales price per unit (premium-positioning signal). */
   pricePerUnit: number;
   /** price − cost, straight from the catalog (the unchanging baseline). */
@@ -181,6 +187,7 @@ export function computeBrandEconomics(
     unitType: product.unitType,
     subcategories: product.subcategories,
     sortOrder: product.sortOrder,
+    costSource: product.costSource,
     pricePerUnit: product.salesPricePerUnit,
     baseMarginPerUnit: baseMargin,
     spaIncentivePerUnit: spaPerUnit,

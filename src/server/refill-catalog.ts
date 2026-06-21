@@ -42,6 +42,11 @@ export type ProductCategory =
 
 export type ProductUnitType = "vial" | "syringe" | "bottle" | "session" | "other";
 
+/** Provenance of a product's cost_per_unit (v2.135.0). portal/manual = verified;
+ *  tier_estimate/unset = not yet a real cost. Mirrors the products.cost_source
+ *  CHECK + the tier resolver's cost_source stamps. */
+export type ProductCostSource = "tier_estimate" | "portal" | "manual" | "unset";
+
 export type ProductManufacturer =
   | "abbvie"
   | "galderma"
@@ -69,6 +74,11 @@ export type Product = {
   marginPerUnit: number;
   marginPct: number | null;
   manufacturer: ProductManufacturer | null;
+  /** v2.135.0: provenance of costPerUnit — 'portal' (real "Your Price" via
+   *  vision) / 'manual' (owner-entered) = verified; 'tier_estimate' (computed
+   *  from a loyalty tier) / 'unset' (placeholder) = not yet real. Drives the
+   *  estimate-vs-verified badge. Pre-tier-engine rows default 'manual'. */
+  costSource: ProductCostSource;
   notes: string | null;
   /** v2.115.0: optional sub-category — area (primary substitution group, e.g.
    *  cheek/lip/jaw) + family (secondary refiner). Owner-authored; products
@@ -152,6 +162,7 @@ type ProductRow = {
   cost_per_unit: string | number;
   sales_price_per_unit: string | number;
   manufacturer: string | null;
+  cost_source: string | null;
   notes: string | null;
   subcategory_area: string | null;
   subcategory_family: string | null;
@@ -160,6 +171,15 @@ type ProductRow = {
   created_at: string;
   updated_at: string;
 };
+
+const COST_SOURCE_VALUES: readonly ProductCostSource[] = [
+  "tier_estimate", "portal", "manual", "unset",
+];
+function asCostSource(v: string | null): ProductCostSource {
+  return COST_SOURCE_VALUES.includes(v as ProductCostSource)
+    ? (v as ProductCostSource)
+    : "manual";
+}
 
 function rowToProduct(r: ProductRow): Product {
   const cost = typeof r.cost_per_unit === "string" ? Number(r.cost_per_unit) : r.cost_per_unit;
@@ -177,6 +197,7 @@ function rowToProduct(r: ProductRow): Product {
     marginPerUnit: margin,
     marginPct,
     manufacturer: (r.manufacturer as ProductManufacturer | null) ?? null,
+    costSource: asCostSource(r.cost_source),
     notes: r.notes,
     subcategoryArea: r.subcategory_area ?? null,
     subcategoryFamily: r.subcategory_family ?? null,
