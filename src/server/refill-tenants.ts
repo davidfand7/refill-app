@@ -32,6 +32,7 @@ import { z } from "zod";
 import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
 import { validateReferralToken } from "@/server/referral-tokens";
+import { seedTenantCatalog } from "@/server/refill-catalog-seed";
 
 // ─── reserved slugs ──────────────────────────────────────────────────────
 // Cleave fix 2026-05-24: inlined from src/lib/product-context.ts which is
@@ -137,6 +138,11 @@ export type ClaimSlugResult =
         name: string;
         trialEndsAt: string;
       };
+      /** v2.137.0: products auto-seeded from the master catalog on claim.
+       *  Best-effort — 0 if the seed errored or the master book is empty
+       *  (the manual "Load starter catalog" button is the fallback). Drives
+       *  the onboarding "we pre-loaded N products" nudge. */
+      seededCount: number;
     }
   | { ok: false; reason: SlugUnavailableReason | "already_owns" };
 
@@ -240,6 +246,22 @@ export const claimSlug = createServerFn({ method: "POST" })
       );
     }
 
+    // v2.137.0: boot the new spa fully loaded — auto-seed the master catalog.
+    // BEST-EFFORT: a catalog hiccup must never fail spa creation (the critical
+    // path is done above). On error we log and return seededCount 0; the owner
+    // can always hit "Load starter catalog" (idempotent) as the fallback.
+    let seededCount = 0;
+    try {
+      const seedRes = await seedTenantCatalog(sb, tenant.id);
+      seededCount = seedRes.inserted;
+    } catch (seedErr) {
+      console.error(
+        "[claimSlug] auto-seed failed for tenant",
+        tenant.id,
+        seedErr instanceof Error ? seedErr.message : seedErr,
+      );
+    }
+
     return {
       ok: true,
       tenant: {
@@ -248,6 +270,7 @@ export const claimSlug = createServerFn({ method: "POST" })
         name: tenant.name,
         trialEndsAt: tenant.trial_ends_at,
       },
+      seededCount,
     };
   });
 

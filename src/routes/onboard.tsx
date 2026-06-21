@@ -28,7 +28,7 @@
 
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Mail, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Mail, PackagePlus, X } from "lucide-react";
 
 import { useAuth } from "@/lib/auth";
 import { useShell } from "@/lib/shell";
@@ -1968,6 +1968,9 @@ function Step5Slug({
   const [claiming, setClaiming] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
   const [claimedTenant, setClaimedTenant] = useState<MyTenant | null>(null);
+  // v2.137.0: products auto-seeded on claim — drives the "we pre-loaded N
+  // products → pick your tiers" nudge on the success screen.
+  const [seededCount, setSeededCount] = useState(0);
 
   const handleClaim = async () => {
     if (!accessToken) {
@@ -2003,6 +2006,7 @@ function Step5Slug({
         // create from a different signup flow doesn't inherit stale state.
         clearStoredReferral();
         clearStoredDeliveryChannel();
+        setSeededCount(result.seededCount);
         setClaimedTenant({
           id: result.tenant.id,
           slug: result.tenant.slug,
@@ -2062,17 +2066,57 @@ function Step5Slug({
           Your dashboard is ready. Karen will follow up by email with anything
           else you need.
         </StepLede>
-        {/* v410: terminal CTA dispatches into the Refill standalone shell
-            at /app/refill (RefillHome). Closes Pinch #1 — the wizard no longer
-            dead-ends with a "close this tab" instruction. */}
-        <Link
-          to="/app/refill"
-          className="mt-4 inline-flex items-center gap-2 rounded-md px-5 py-2.5 text-[14px] font-semibold shadow-sm transition"
-          style={{ background: "#056048", color: "#fbfaf7" }}
-        >
-          Go to your dashboard
-          <ArrowRight className="h-4 w-4" aria-hidden />
-        </Link>
+        {/* v2.137.0: auto-seed nudge. When a fresh claim pre-loaded the master
+            catalog, announce it and point at the one next action (pick tiers
+            so costs snap to their pricing). Falls back to the plain dashboard
+            CTA when nothing seeded (seed failed / empty master book). */}
+        {isFresh && seededCount > 0 ? (
+          <div
+            className="mt-5 rounded-xl border px-5 py-4"
+            style={{ borderColor: "#cfe9df", background: "#f1faf6" }}
+          >
+            <div className="flex items-center gap-2">
+              <PackagePlus className="h-4 w-4" style={{ color: "#056048" }} aria-hidden />
+              <span className="text-[14px] font-semibold" style={{ color: "#1c2024" }}>
+                We pre-loaded {seededCount} real products.
+              </span>
+            </div>
+            <p className="mt-1 text-[13px] leading-snug" style={{ color: "#54585e" }}>
+              Your catalog booted fully loaded with the manufacturer product book —
+              real products, list prices and treatment areas already filled in. Next:
+              pick your loyalty tiers so costs snap to <em>your</em> pricing.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <Link
+                to="/app/refill/catalog/programs"
+                className="inline-flex items-center gap-2 rounded-md px-5 py-2.5 text-[14px] font-semibold shadow-sm transition"
+                style={{ background: "#056048", color: "#fbfaf7" }}
+              >
+                Pick my tiers
+                <ArrowRight className="h-4 w-4" aria-hidden />
+              </Link>
+              <Link
+                to="/app/refill"
+                className="text-[13px] font-medium underline decoration-dotted underline-offset-2"
+                style={{ color: "#54585e" }}
+              >
+                Skip for now
+              </Link>
+            </div>
+          </div>
+        ) : (
+          /* v410: terminal CTA dispatches into the Refill standalone shell
+             at /app/refill (RefillHome). Closes Pinch #1 — the wizard no longer
+             dead-ends with a "close this tab" instruction. */
+          <Link
+            to="/app/refill"
+            className="mt-4 inline-flex items-center gap-2 rounded-md px-5 py-2.5 text-[14px] font-semibold shadow-sm transition"
+            style={{ background: "#056048", color: "#fbfaf7" }}
+          >
+            Go to your dashboard
+            <ArrowRight className="h-4 w-4" aria-hidden />
+          </Link>
+        )}
       </>
     );
   }

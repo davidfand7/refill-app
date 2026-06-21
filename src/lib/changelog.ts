@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.137.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.137.0 &mdash; New spas now boot <em>fully loaded</em> (Phase 3).</strong> Until now a new spa started with an empty catalog and had to click <em>Load starter catalog</em> to populate it. Now the moment you claim your URL, <strong>your catalog auto-loads from the manufacturer master book</strong> &mdash; real products, list prices, packaging and treatment areas already filled in (Allergan, Evolus, and more as they come online). The onboarding finish screen now tells you exactly what landed (&ldquo;<strong>We pre-loaded 67 real products</strong>&rdquo;) and points at the one next step: <strong>Pick my tiers</strong> &mdash; choose your loyalty tier with each manufacturer and every cost snaps to <em>your</em> pricing. It&rsquo;s best-effort and safe: if anything hiccups, your spa is still created and the manual <em>Load starter catalog</em> button is always there (it never duplicates). Costs start as estimates until you pick a tier or enter your real portal price. <strong>Touched</strong>: extracted a shared <code>seedTenantCatalog</code> core in <code>refill-catalog-seed.ts</code> (one engine for the button + onboarding), auto-seed wired into <code>claimSlug</code> (<code>refill-tenants.ts</code>, non-fatal), onboarding nudge in <code>onboard.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.136.0",
     date: "June 2026",
     items: [

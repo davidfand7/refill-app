@@ -115,6 +115,79 @@ const seedInput = z.object({
   manufacturers: z.array(z.string()).optional(),
 });
 
+/**
+ * Core seed — copy the active master catalog into a tenant's products under
+ * their current tier selections. Idempotent by catalog_ref_id (never dups);
+ * never clobbers existing rows. Callable directly with a tenantId + admin
+ * client, so BOTH the manual "Load starter catalog" button and onboarding
+ * (claimSlug auto-seed, v2.137.0) share one implementation. A brand-new tenant
+ * has no selections → every row seeds 'unset' at list price; the owner picks
+ * tiers afterward to resolve estimate costs.
+ */
+export async function seedTenantCatalog(
+  sb: ReturnType<typeof admin>,
+  tenantId: string,
+  manufacturers?: string[],
+): Promise<{ inserted: number; skipped: number }> {
+  const master = await fetchAllRows<MasterRow>((from, to) =>
+    (manufacturers?.length
+      ? sb
+          .from("manufacturer_catalog")
+          .select("*")
+          .eq("status", "active")
+          .in("manufacturer", manufacturers)
+      : sb.from("manufacturer_catalog").select("*").eq("status", "active")
+    )
+      .order("sort_order", { ascending: true, nullsFirst: false })
+      .range(from, to),
+  );
+
+  const [programs, selections] = await Promise.all([loadPrograms(sb), loadSelections(sb, tenantId)]);
+
+  // Already-seeded master rows (by catalog_ref_id) — never duplicate.
+  const existingRefs = new Set(
+    (
+      await fetchAllRows<{ catalog_ref_id: string | null }>((from, to) =>
+        sb.from("products").select("catalog_ref_id").eq("tenant_id", tenantId).range(from, to),
+      )
+    )
+      .map((r) => r.catalog_ref_id)
+      .filter((x): x is string => !!x),
+  );
+
+  const toInsert = master
+    .filter((m) => !existingRefs.has(m.id))
+    .map((m) => {
+      const r = resolveRow(m, programs.get(m.manufacturer), selections.get(m.manufacturer));
+      return {
+        tenant_id: tenantId,
+        brand: m.product_name,
+        category: m.category,
+        unit_type: m.unit_type,
+        cost_per_unit: r.costPerUnit,
+        sales_price_per_unit: 0, // spa sets their own retail/treatment price
+        manufacturer: m.manufacturer,
+        brand_family: m.brand_family,
+        sku: m.sku,
+        units_per_box: m.units_per_box,
+        list_price: r.listPricePerUnit,
+        subcategory_area: m.default_subcategory_area,
+        cost_source: r.costSource,
+        catalog_ref_id: m.id,
+        notes: m.notes,
+      };
+    });
+
+  if (toInsert.length > 0) {
+    // Chunk to keep payloads sane.
+    for (let i = 0; i < toInsert.length; i += 200) {
+      const { error } = await sb.from("products").insert(toInsert.slice(i, i + 200));
+      if (error) throw new Error(`Seed insert failed: ${error.message}`);
+    }
+  }
+  return { inserted: toInsert.length, skipped: existingRefs.size };
+}
+
 export const seedTenantCatalogFromMasterFn = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => seedInput.parse(raw))
   .handler(async ({ data }): Promise<{ inserted: number; skipped: number }> => {
@@ -124,64 +197,7 @@ export const seedTenantCatalogFromMasterFn = createServerFn({ method: "POST" })
     });
     const sb = admin();
     const tenantId = await getTenantIdForUser(sb, effectiveUserId, SEED_NO_TENANT_MSG);
-
-    const master = await fetchAllRows<MasterRow>((from, to) =>
-      (data.manufacturers?.length
-        ? sb
-            .from("manufacturer_catalog")
-            .select("*")
-            .eq("status", "active")
-            .in("manufacturer", data.manufacturers)
-        : sb.from("manufacturer_catalog").select("*").eq("status", "active")
-      )
-        .order("sort_order", { ascending: true, nullsFirst: false })
-        .range(from, to),
-    );
-
-    const [programs, selections] = await Promise.all([loadPrograms(sb), loadSelections(sb, tenantId)]);
-
-    // Already-seeded master rows (by catalog_ref_id) — never duplicate.
-    const existingRefs = new Set(
-      (
-        await fetchAllRows<{ catalog_ref_id: string | null }>((from, to) =>
-          sb.from("products").select("catalog_ref_id").eq("tenant_id", tenantId).range(from, to),
-        )
-      )
-        .map((r) => r.catalog_ref_id)
-        .filter((x): x is string => !!x),
-    );
-
-    const toInsert = master
-      .filter((m) => !existingRefs.has(m.id))
-      .map((m) => {
-        const r = resolveRow(m, programs.get(m.manufacturer), selections.get(m.manufacturer));
-        return {
-          tenant_id: tenantId,
-          brand: m.product_name,
-          category: m.category,
-          unit_type: m.unit_type,
-          cost_per_unit: r.costPerUnit,
-          sales_price_per_unit: 0, // spa sets their own retail/treatment price
-          manufacturer: m.manufacturer,
-          brand_family: m.brand_family,
-          sku: m.sku,
-          units_per_box: m.units_per_box,
-          list_price: r.listPricePerUnit,
-          subcategory_area: m.default_subcategory_area,
-          cost_source: r.costSource,
-          catalog_ref_id: m.id,
-          notes: m.notes,
-        };
-      });
-
-    if (toInsert.length > 0) {
-      // Chunk to keep payloads sane.
-      for (let i = 0; i < toInsert.length; i += 200) {
-        const { error } = await sb.from("products").insert(toInsert.slice(i, i + 200));
-        if (error) throw new Error(`Seed insert failed: ${error.message}`);
-      }
-    }
-    return { inserted: toInsert.length, skipped: existingRefs.size };
+    return seedTenantCatalog(sb, tenantId, data.manufacturers);
   });
 
 // ─── applyTenantTierSelection ───────────────────────────────────────────────
