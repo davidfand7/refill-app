@@ -9,6 +9,7 @@
  */
 
 export const PRODUCT_SUBCATEGORIES = [
+  "Undereyes / Tear trough",
   "Mid-face",
   "NLF",
   "Lips",

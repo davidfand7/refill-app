@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.129.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.129.0 &mdash; A new treatment area, found by the brochure.</strong> Added <strong>&ldquo;Undereyes / Tear trough&rdquo;</strong> to the sub-category picklist &mdash; the one filler injection area your taxonomy was missing. It surfaced the way the best data does: Allergan&rsquo;s own Juvéderm treatment map lists <em>undereye hollows</em> as Volbella&rsquo;s lead indication, but there was no bucket for it, so the substitution recommender couldn&rsquo;t group on it. Now it can. One canonical value (both names on one chip, since they&rsquo;re used interchangeably &mdash; and a single bucket so undereye products actually compete with each other). Tag it on the Products tab like any other area; it feeds <code>Filler · Undereyes / Tear trough</code> recommendations on the patient profile. <strong>Touched</strong>: <code>product-subcategories.ts</code> (one canonical value), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.128.0",
     date: "June 2026",
     items: [
