@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.132.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.132.0 &mdash; Ships fully loaded (Phase 2: pick your tier, costs snap).</strong> New <strong>Programs &amp; tiers</strong> sub-tab in the Catalog. <strong>Load starter catalog</strong> boots your catalog fully populated with the manufacturer book (real products, list prices, packaging, treatment areas) instead of a blank slate &mdash; idempotent, never duplicates or overwrites a verified cost. Then per-manufacturer cards: <strong>Allergan</strong> &mdash; choose your <em>Portfolio Level</em> + <em>Brand Tiers</em> (Hylacross / Vycross / Skincare / Surgery) and hit <strong>Apply</strong>; the catalog cost layer re-resolves (<code>list × (1 − brandTier%) × (1 − portfolio%)</code>) for your estimate-priced products only &mdash; your real verified portal costs stay put. Galderma / Merz / Evolus / Revance show &ldquo;coming soon &mdash; forward your price list&rdquo; (the snap-a-photo growth hook). Estimates are clearly framed as estimates until your real &ldquo;Your Price&rdquo; overrides them. <strong>Touched</strong>: new <code>app.refill.catalog.programs.tsx</code> + 4th tab on services/products/brand-economics, <code>changelog.ts</code>. Wires the v2.131 seed engine. No migration.",
+    ],
+  },
+  {
     version: "v2.131.0",
     date: "June 2026",
     items: [

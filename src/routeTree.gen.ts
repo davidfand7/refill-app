@@ -127,6 +127,7 @@ import { Route as AppRefillPatientsContactsRouteImport } from './routes/app.refi
 import { Route as AppRefillPatientsAListRulesRouteImport } from './routes/app.refill.patients.a-list-rules'
 import { Route as AppRefillPatientsPatientIdRouteImport } from './routes/app.refill.patients.$patientId'
 import { Route as AppRefillCatalogServicesRouteImport } from './routes/app.refill.catalog.services'
+import { Route as AppRefillCatalogProgramsRouteImport } from './routes/app.refill.catalog.programs'
 import { Route as AppRefillCatalogProductsRouteImport } from './routes/app.refill.catalog.products'
 import { Route as AppRefillCatalogImportRouteImport } from './routes/app.refill.catalog.import'
 import { Route as AppRefillCatalogBrandEconomicsRouteImport } from './routes/app.refill.catalog.brand-economics'
@@ -785,6 +786,12 @@ const AppRefillCatalogServicesRoute =
     path: '/catalog/services',
     getParentRoute: () => AppRefillRoute,
   } as any)
+const AppRefillCatalogProgramsRoute =
+  AppRefillCatalogProgramsRouteImport.update({
+    id: '/catalog/programs',
+    path: '/catalog/programs',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
 const AppRefillCatalogProductsRoute =
   AppRefillCatalogProductsRouteImport.update({
     id: '/catalog/products',
@@ -1137,6 +1144,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/catalog/brand-economics': typeof AppRefillCatalogBrandEconomicsRoute
   '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
   '/app/refill/catalog/products': typeof AppRefillCatalogProductsRoute
+  '/app/refill/catalog/programs': typeof AppRefillCatalogProgramsRoute
   '/app/refill/catalog/services': typeof AppRefillCatalogServicesRoute
   '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
   '/app/refill/patients/a-list-rules': typeof AppRefillPatientsAListRulesRoute
@@ -1289,6 +1297,7 @@ export interface FileRoutesByTo {
   '/app/refill/catalog/brand-economics': typeof AppRefillCatalogBrandEconomicsRoute
   '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
   '/app/refill/catalog/products': typeof AppRefillCatalogProductsRoute
+  '/app/refill/catalog/programs': typeof AppRefillCatalogProgramsRoute
   '/app/refill/catalog/services': typeof AppRefillCatalogServicesRoute
   '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
   '/app/refill/patients/a-list-rules': typeof AppRefillPatientsAListRulesRoute
@@ -1450,6 +1459,7 @@ export interface FileRoutesById {
   '/app/refill/catalog/brand-economics': typeof AppRefillCatalogBrandEconomicsRoute
   '/app/refill/catalog/import': typeof AppRefillCatalogImportRoute
   '/app/refill/catalog/products': typeof AppRefillCatalogProductsRoute
+  '/app/refill/catalog/programs': typeof AppRefillCatalogProgramsRoute
   '/app/refill/catalog/services': typeof AppRefillCatalogServicesRoute
   '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
   '/app/refill/patients/a-list-rules': typeof AppRefillPatientsAListRulesRoute
@@ -1612,6 +1622,7 @@ export interface FileRouteTypes {
     | '/app/refill/catalog/brand-economics'
     | '/app/refill/catalog/import'
     | '/app/refill/catalog/products'
+    | '/app/refill/catalog/programs'
     | '/app/refill/catalog/services'
     | '/app/refill/patients/$patientId'
     | '/app/refill/patients/a-list-rules'
@@ -1764,6 +1775,7 @@ export interface FileRouteTypes {
     | '/app/refill/catalog/brand-economics'
     | '/app/refill/catalog/import'
     | '/app/refill/catalog/products'
+    | '/app/refill/catalog/programs'
     | '/app/refill/catalog/services'
     | '/app/refill/patients/$patientId'
     | '/app/refill/patients/a-list-rules'
@@ -1924,6 +1936,7 @@ export interface FileRouteTypes {
     | '/app/refill/catalog/brand-economics'
     | '/app/refill/catalog/import'
     | '/app/refill/catalog/products'
+    | '/app/refill/catalog/programs'
     | '/app/refill/catalog/services'
     | '/app/refill/patients/$patientId'
     | '/app/refill/patients/a-list-rules'
@@ -2861,6 +2874,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillCatalogServicesRouteImport
       parentRoute: typeof AppRefillRoute
     }
+    '/app/refill/catalog/programs': {
+      id: '/app/refill/catalog/programs'
+      path: '/catalog/programs'
+      fullPath: '/app/refill/catalog/programs'
+      preLoaderRoute: typeof AppRefillCatalogProgramsRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/catalog/products': {
       id: '/app/refill/catalog/products'
       path: '/catalog/products'
@@ -3283,6 +3303,7 @@ interface AppRefillRouteChildren {
   AppRefillCatalogBrandEconomicsRoute: typeof AppRefillCatalogBrandEconomicsRoute
   AppRefillCatalogImportRoute: typeof AppRefillCatalogImportRoute
   AppRefillCatalogProductsRoute: typeof AppRefillCatalogProductsRoute
+  AppRefillCatalogProgramsRoute: typeof AppRefillCatalogProgramsRoute
   AppRefillCatalogServicesRoute: typeof AppRefillCatalogServicesRoute
   AppRefillRecognitionAllocationRoute: typeof AppRefillRecognitionAllocationRoute
   AppRefillRecognitionBrandPromosRoute: typeof AppRefillRecognitionBrandPromosRoute
@@ -3333,6 +3354,7 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillCatalogBrandEconomicsRoute: AppRefillCatalogBrandEconomicsRoute,
   AppRefillCatalogImportRoute: AppRefillCatalogImportRoute,
   AppRefillCatalogProductsRoute: AppRefillCatalogProductsRoute,
+  AppRefillCatalogProgramsRoute: AppRefillCatalogProgramsRoute,
   AppRefillCatalogServicesRoute: AppRefillCatalogServicesRoute,
   AppRefillRecognitionAllocationRoute: AppRefillRecognitionAllocationRoute,
   AppRefillRecognitionBrandPromosRoute: AppRefillRecognitionBrandPromosRoute,
