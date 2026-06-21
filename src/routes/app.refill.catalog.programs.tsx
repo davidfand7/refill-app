@@ -262,6 +262,8 @@ function ProgramsPage() {
               const d = drafts[p.manufacturer] ?? { portfolioLevel: null, brandTiers: {} };
               const levels = p.tiers.portfolioLevels ?? [];
               const families = p.tiers.brandFamilies ?? {};
+              const isVolume = p.tiers.programType === "volume_tier";
+              const ladders = Object.entries(p.tiers.productLadders ?? {});
               return (
                 <div key={p.manufacturer} className="rounded-xl border border-rule bg-white overflow-hidden">
                   <div className="px-5 py-3 border-b border-rule bg-rule-soft/60 flex items-center justify-between">
@@ -274,7 +276,35 @@ function ProgramsPage() {
                     </span>
                   </div>
                   <div className="px-5 py-4 space-y-4">
-                    {levels.length > 0 && (
+                    {isVolume && ladders.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {ladders.map(([family, ladder]) => {
+                          const unit = ladder.unitType ?? "unit";
+                          return (
+                            <div key={family}>
+                              <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1.5 block">
+                                {family} volume tier
+                              </label>
+                              <select
+                                className={inputCls}
+                                value={d.brandTiers[family] ?? 0}
+                                onChange={(e) => setBrandTier(p.manufacturer, family, Number(e.target.value))}
+                              >
+                                <option value={0}>— select your tier —</option>
+                                {ladder.tiers.map((step) => (
+                                  <option key={step.tier} value={step.tier}>
+                                    Tier {step.tier} — ${step.price}/{unit}
+                                    {step.minUnits ? ` (${step.minUnits}+ ${unit}s)` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {!isVolume && levels.length > 0 && (
                       <div>
                         <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1.5 block">
                           Portfolio level
@@ -294,7 +324,7 @@ function ProgramsPage() {
                       </div>
                     )}
 
-                    {Object.keys(families).length > 0 && (
+                    {!isVolume && Object.keys(families).length > 0 && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {orderedFamilies(families).map(([family, schedule]) => (
                           <div key={family}>
@@ -320,8 +350,9 @@ function ProgramsPage() {
 
                     <div className="flex items-center justify-between pt-1">
                       <p className="text-[12px] text-ink-faint leading-snug max-w-[420px]">
-                        Brand tier applied first, then portfolio. Updates estimate-priced products only —
-                        your verified portal costs stay put.
+                        {isVolume
+                          ? "Your tier sets the per-unit price directly. Updates estimate-priced products only — your verified portal costs stay put."
+                          : "Brand tier applied first, then portfolio. Updates estimate-priced products only — your verified portal costs stay put."}
                       </p>
                       <button
                         type="button"

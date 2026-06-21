@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.134.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.134.0 &mdash; Evolus joins the catalog (a third pricing shape).</strong> Two manufacturers already ship loaded with very different loyalty math &mdash; Allergan&rsquo;s APP is a <em>formula</em> (portfolio × brand tier), Galderma&rsquo;s ASPIRE is a <em>price table</em>. <strong>Evolus is a third shape: a volume ladder</strong> &mdash; buy more cumulative units, unlock a lower price <em>per unit</em>. Each product carries its own ladder; you just sit at a tier. New on <strong>Programs &amp; tiers</strong>: an Evolus card where you pick your volume tier for <strong>Jeuveau</strong> (tox) and <strong>Evolysse</strong> (filler) and the cost snaps to that rung (e.g. Jeuveau Tier&nbsp;2 → $389/vial). <strong>Jeuveau</strong> and <strong>Evolysse</strong> added to the starter catalog. Resolver gained a <code>volume_tier</code> branch (reads the product&rsquo;s ladder at your tier &mdash; an absolute $/unit, not a % off list); estimate-priced rows only, verified portal costs untouched. Evolysse&rsquo;s treatment-area map isn&rsquo;t captured yet (forward the face-map and it joins cross-manufacturer filler substitution). <strong>Touched</strong>: <code>manufacturer-tier-resolver.ts</code>, <code>programs.tsx</code>, <code>changelog.ts</code> + migration <code>v2_134_0_evolus_volume_tier</code>.",
+    ],
+  },
+  {
     version: "v2.133.0",
     date: "June 2026",
     items: [

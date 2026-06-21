@@ -7,21 +7,33 @@
  * 'tier_estimate'); a real portal "Your Price" later overrides it. See
  * reference_allergan_app_tiers + the v2.130.0 migration.
  *
- * Allergan APP model: cost = list × (1 − brandTier%) × (1 − portfolio%) —
- * brand tier applied FIRST, then portfolio (multiplicative). Stub
- * manufacturers (no program) return list unchanged. list_price is per BOX;
+ * Two program shapes today:
+ *   • portfolio_plus_brand_tier (Allergan APP): cost = list × (1 − brandTier%)
+ *     × (1 − portfolio%) — brand tier applied FIRST, then portfolio.
+ *   • volume_tier (Evolus): per-unit price comes straight from the product's
+ *     own ladder at the selected tier — an absolute $/unit, not a % off list.
+ * Stub manufacturers (no program) return list unchanged. list_price is per BOX;
  * resolvePerUnitCost divides by units_per_box for the per-unit catalog cost.
  */
 
 export type PortfolioLevel = { key: string; points?: number; discountPct: number };
 
+/** One rung of a volume-tier ladder: cumulative-units threshold → price PER UNIT. */
+export type VolumeTierStep = { tier: number; minUnits?: number; price: number };
+/** A product's volume ladder (volume_tier programs, e.g. Evolus). Keyed by brand_family. */
+export type ProductLadder = { unitType?: string; tiers: VolumeTierStep[] };
+
 export type ManufacturerProgramTiers = {
+  /** Program shape: 'portfolio_plus_brand_tier' (Allergan) | 'volume_tier' (Evolus). */
+  programType?: string;
   stacking?: string;
   dollarsPerPoint?: number;
   portfolioLevels?: PortfolioLevel[];
   brandTierThresholds?: { tier: number; points?: number }[];
   /** brand family → per-tier discount % array (index 0 = tier 1). */
   brandFamilies?: Record<string, number[]>;
+  /** volume_tier: brand family → that product's price ladder. */
+  productLadders?: Record<string, ProductLadder>;
 };
 
 export type TierSelection = {
@@ -47,6 +59,25 @@ export function brandDiscountPct(
   if (!tier || tier < 1) return 0;
   const idx = Math.min(tier, schedule.length) - 1;
   return schedule[idx] ?? 0;
+}
+
+/**
+ * volume_tier per-unit price: the ladder rung for the selected tier of this
+ * product's brand family (absolute $/unit, not a discount). null if there's no
+ * ladder for the family or no tier is picked.
+ */
+export function volumeTierUnitPrice(
+  brandFamily: string | null | undefined,
+  selection: TierSelection | null | undefined,
+  program: ManufacturerProgramTiers | null | undefined,
+): number | null {
+  if (!brandFamily) return null;
+  const ladder = program?.productLadders?.[brandFamily];
+  if (!ladder?.tiers?.length) return null;
+  const tier = selection?.brandTiers?.[brandFamily];
+  if (!tier || tier < 1) return null;
+  const step = ladder.tiers.find((s) => s.tier === tier);
+  return step ? round2(step.price) : null;
 }
 
 /** Portfolio-level discount % under the current selection (0 if none). */
@@ -91,6 +122,14 @@ export function resolvePerUnitCost(args: {
   program: ManufacturerProgramTiers | null | undefined;
 }): { listPricePerUnit: number; costPerUnit: number } {
   const units = args.unitsPerBox > 0 ? args.unitsPerBox : 1;
+  // Volume-tier (Evolus): per-unit price comes straight from the product's
+  // ladder at the selected tier — an absolute $/unit, not a % off list. The
+  // ladder is already per unit (1 box = 1 vial/syringe), so no box division.
+  if (args.program?.programType === "volume_tier") {
+    const listPerUnit = round2(args.listPriceBox / units);
+    const price = volumeTierUnitPrice(args.brandFamily, args.selection, args.program);
+    return { listPricePerUnit: listPerUnit, costPerUnit: price ?? listPerUnit };
+  }
   const boxCost = resolveEffectiveBoxCost({
     listPrice: args.listPriceBox,
     brandFamily: args.brandFamily,
