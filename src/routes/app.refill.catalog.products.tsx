@@ -845,9 +845,17 @@ function ProductRow({
           <div className="text-[13px] text-ink-soft">
             {fmtUsd(product.salesPricePerUnit)} sell &middot; {fmtUsd(product.costPerUnit)} cost
           </div>
-          <div className="text-[15px] font-semibold text-emerald mt-0.5">
-            {fmtUsd(product.marginPerUnit)} <span className="text-[12px] text-ink-soft font-normal">({fmtPct(product.marginPct)})</span>
-          </div>
+          {product.salesPricePerUnit > 0 ? (
+            <div className="text-[15px] font-semibold text-emerald mt-0.5">
+              {fmtUsd(product.marginPerUnit)} <span className="text-[12px] text-ink-soft font-normal">({fmtPct(product.marginPct)})</span>
+            </div>
+          ) : (
+            <div className="mt-0.5">
+              <span className="inline-flex items-center rounded-full bg-rule-soft text-ink-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
+                Set price
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex flex-col gap-1.5 shrink-0">
           <button

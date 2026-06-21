@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.133.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.133.0 &mdash; Unpriced reads &ldquo;Set price,&rdquo; not a scary negative.</strong> A freshly-loaded product has a real <em>cost</em> but no <em>sell price</em> yet (you set that) &mdash; so margin = $0 − cost came out <em>negative</em> and looked broken. Now any product with no sell price shows a quiet <strong>&ldquo;Set price&rdquo;</strong> chip (Brand economics + Products) instead of a red negative number &mdash; unpriced ≠ unprofitable. Also tidied the Allergan tier selectors to a sensible order (<strong>Hylacross → Vycross → Skincare → Surgery</strong>; Postgres jsonb had alphabetized them). <strong>Touched</strong>: <code>brand-economics.tsx</code>, <code>products.tsx</code>, <code>programs.tsx</code>, <code>changelog.ts</code>. No migration. Phase 2 polish following the proven seed→tier end-to-end on demo.",
+    ],
+  },
+  {
     version: "v2.132.0",
     date: "June 2026",
     items: [

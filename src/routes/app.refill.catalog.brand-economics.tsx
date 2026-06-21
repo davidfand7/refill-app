@@ -659,7 +659,13 @@ function BrandEconomicsPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-ink-soft">
-                          {fmtUsd(r.baseMarginPerUnit)}/{unitSuffix(r.unitType)}
+                          {r.pricePerUnit > 0 ? (
+                            <>
+                              {fmtUsd(r.baseMarginPerUnit)}/{unitSuffix(r.unitType)}
+                            </>
+                          ) : (
+                            <span className="text-ink-faint">—</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
                           {lift ? (
@@ -678,10 +684,18 @@ function BrandEconomicsPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums font-semibold">
-                          {fmtUsd(r.marginNowPerUnit)}/{unitSuffix(r.unitType)}
-                          {r.marginNowPct != null && (
-                            <span className="ml-1 text-[11px] font-normal text-ink-faint">
-                              {Math.round(r.marginNowPct * 100)}%
+                          {r.pricePerUnit > 0 ? (
+                            <>
+                              {fmtUsd(r.marginNowPerUnit)}/{unitSuffix(r.unitType)}
+                              {r.marginNowPct != null && (
+                                <span className="ml-1 text-[11px] font-normal text-ink-faint">
+                                  {Math.round(r.marginNowPct * 100)}%
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full bg-rule-soft text-ink-soft px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
+                              Set price
                             </span>
                           )}
                         </td>

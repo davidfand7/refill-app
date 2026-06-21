@@ -57,6 +57,15 @@ function mfrLabel(m: string): string {
 const inputCls =
   "w-full rounded-md border border-rule bg-white px-3 py-2 text-[14px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30";
 
+/** Preferred display order for brand-family tier selectors (jsonb doesn't
+ *  preserve key order; the two filler families a spa uses most go first). */
+const FAMILY_ORDER = ["Hylacross", "Vycross", "Skincare", "Surgery"];
+function orderedFamilies(families: Record<string, number[]>): Array<[string, number[]]> {
+  return Object.entries(families).sort(
+    ([a], [b]) => (FAMILY_ORDER.indexOf(a) + 1 || 99) - (FAMILY_ORDER.indexOf(b) + 1 || 99),
+  );
+}
+
 function ProgramsPage() {
   const membership = useTenantMembership();
   const viewAsUserId =
@@ -287,7 +296,7 @@ function ProgramsPage() {
 
                     {Object.keys(families).length > 0 && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {Object.entries(families).map(([family, schedule]) => (
+                        {orderedFamilies(families).map(([family, schedule]) => (
                           <div key={family}>
                             <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1.5 block">
                               {family} tier
