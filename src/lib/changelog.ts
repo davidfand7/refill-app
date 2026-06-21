@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.130.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.130.0 &mdash; Ships fully loaded (Phase 1: the master catalog).</strong> Backend substrate so a spa can boot into a <em>fully-populated</em> catalog with real manufacturer products + real numbers, then just pick their loyalty tier and the cost layer snaps to their economics &mdash; with their real portal &ldquo;Your Price&rdquo; overriding the estimate later. Ships three cross-tenant reference tables (<code>manufacturer_programs</code>, <code>manufacturer_catalog</code>, <code>tenant_manufacturer_tiers</code>) + 6 columns on <code>products</code> (<code>list_price</code>, <code>brand_family</code>, <code>sku</code>, <code>units_per_box</code>, <code>cost_source</code>, <code>catalog_ref_id</code>). Seeds the <strong>full Allergan Advantage book</strong> (~65 SKUs &mdash; BOTOX, the whole Juvéderm line in both fills, Kybella, the SkinMedica wall, Latisse, Diamond Glow), captured via vision, with packaging + brand-family + face-map sub-categories; plus the complete <strong>Allergan Partner Privileges</strong> tier matrix. Galderma / Merz / Evolus / Revance seeded as &ldquo;coming soon&rdquo; shells. New pure resolver <code>manufacturer-tier-resolver.ts</code> computes <code>cost = list × (1 − brandTier%) × (1 − portfolio%)</code> (verified 7/7). <strong>Multi-manufacturer but segregated</strong> &mdash; one catalog, programs never bleed. <strong>Touched</strong>: new migration <code>v2_130_0_manufacturer_master_catalog.sql</code>, <code>manufacturer-tier-resolver.ts</code>, <code>changelog.ts</code>. <strong>Migration required.</strong> Phase 2 (seed-into-tenant + select-your-tier UI) next.",
+    ],
+  },
+  {
     version: "v2.129.0",
     date: "June 2026",
     items: [
