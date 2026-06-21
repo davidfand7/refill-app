@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.128.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.128.0 &mdash; Deal-aware samples: cake, and eating it.</strong> A Sample now reads two ways and <em>you pick per entry</em> by filling one optional field &mdash; <strong>&ldquo;…on an order of N&rdquo;</strong>. <strong>Fill it</strong> (the real deal, e.g. buy 10 get 2 free) and SmartSpa drops your <em>effective per-unit cost</em> (cost &times; paid ÷ (paid+free)) and shows it as a genuine <strong>per-vial margin lift</strong> that flows into Margin now <em>and</em> the recommender. <strong>Leave it blank</strong> and it&rsquo;s one-time <strong>free stock</strong> &mdash; shown as its own 🎁 chip on the brand, never faking a per-unit number. The math reads honestly either way: per-unit levers (rebates + deal-samples) feed Margin now; lump freebies sit in their own lane. Live preview shows exactly which lens you&rsquo;re in as you type; fully editable. The flexible thing nobody ships because &ldquo;it&rsquo;s hard.&rdquo; <strong>Touched</strong>: <code>brand-economics.ts</code> + <code>refill-brand-economics.functions.ts</code> (paidUnits on the entry), Brand economics form (order field + effective-cost math + live two-lens preview) and table (per-unit vs free-stock split), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.127.0",
     date: "June 2026",
     items: [

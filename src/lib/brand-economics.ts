@@ -72,9 +72,13 @@ export type IncentiveLedgerEntry = {
   endsOn: string | null;
   notes: string | null;
   /** Sample-only metadata so the entry stays editable: how many free units +
-   *  which unit. amountUsd is the derived value (count × brand cost). */
+   *  which unit. When `paidUnits` is set, the sample is "deal-aware" — it
+   *  lowers the effective per-unit cost (perUnit=true, amountUsd = the per-unit
+   *  lift). When `paidUnits` is null, it's lump free stock (perUnit=false,
+   *  amountUsd = free × cost). */
   freeUnits?: number | null;
   sampleUnit?: string | null;
+  paidUnits?: number | null;
 };
 
 /** Minimal product shape this lib needs (decoupled from the server catalog). */

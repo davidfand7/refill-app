@@ -68,9 +68,11 @@ type Draft = {
   startsOn: string;
   endsOn: string;
   notes: string;
-  /** Sample-only: how many free units + which unit (Vial/Syringe…). */
+  /** Sample-only: free units + unit, and an optional order qty it came with
+   *  (the "deal" → lifts per-unit margin; blank → lump free stock). */
   freeUnits: string;
   sampleUnit: string;
+  paidUnits: string;
 };
 
 const EMPTY_DRAFT: Draft = {
@@ -86,6 +88,7 @@ const EMPTY_DRAFT: Draft = {
   notes: "",
   freeUnits: "",
   sampleUnit: "vial",
+  paidUnits: "",
 };
 
 // Vial + Syringe first — the most common sample units.
@@ -192,7 +195,16 @@ function BrandEconomicsPage() {
 
   const isSample = draft.incentiveType === "sample";
   const sampleInfo = isSample ? brandLookup(draft.brand) : null;
-  const sampleValue = isSample ? (Number(draft.freeUnits) || 0) * (sampleInfo?.cost ?? 0) : 0;
+  // Two lenses, chosen by whether an order qty is given:
+  //   deal (paid>0):  effective cost = cost·paid/(paid+free); per-unit lift = cost·free/(paid+free)
+  //   lump (paid=0):  free-stock value = free·cost
+  const sFree = Number(draft.freeUnits) || 0;
+  const sPaid = Number(draft.paidUnits) || 0;
+  const sCost = sampleInfo?.cost ?? 0;
+  const isDeal = sPaid > 0;
+  const samplePerUnitLift = isDeal ? (sCost * sFree) / (sPaid + sFree) : 0;
+  const sampleEffectiveCost = isDeal ? (sCost * sPaid) / (sPaid + sFree) : sCost;
+  const sampleLumpValue = sFree * sCost;
 
   async function onSave(e: FormEvent) {
     e.preventDefault();
@@ -203,13 +215,19 @@ function BrandEconomicsPage() {
     let perUnit = draft.perUnit;
     let beneficiary = draft.beneficiary;
     if (isSample) {
-      const count = Number(draft.freeUnits);
-      if (!Number.isFinite(count) || count <= 0) return toast.error("Enter how many free units.");
-      if (!sampleInfo || sampleInfo.cost <= 0)
+      if (!Number.isFinite(sFree) || sFree <= 0) return toast.error("Enter how many free units.");
+      if (!sampleInfo || sCost <= 0)
         return toast.error(`Set ${draft.brand.trim()}'s cost on the Products tab first.`);
-      amount = Math.round(count * sampleInfo.cost * 100) / 100;
-      perUnit = false; // a sample is a one-time flat value
-      beneficiary = "spa"; // free units lower YOUR cost
+      beneficiary = "spa"; // free units accrue to you
+      if (isDeal) {
+        // Deal-aware: lowers effective per-unit cost → per-unit margin lift.
+        amount = Math.round(samplePerUnitLift * 100) / 100;
+        perUnit = true;
+      } else {
+        // Lump free stock: one-time value, not a per-unit lever.
+        amount = Math.round(sampleLumpValue * 100) / 100;
+        perUnit = false;
+      }
     } else {
       amount = Number(draft.amountUsd.trim());
       if (!Number.isFinite(amount) || amount < 0) return toast.error("Enter a valid amount.");
@@ -237,8 +255,9 @@ function BrandEconomicsPage() {
             notes:
               draft.notes.trim() ||
               (isSample ? `${Number(draft.freeUnits)} free ${draft.sampleUnit}(s)` : null),
-            freeUnits: isSample ? Number(draft.freeUnits) : null,
+            freeUnits: isSample ? sFree : null,
             sampleUnit: isSample ? draft.sampleUnit : null,
+            paidUnits: isSample && isDeal ? sPaid : null,
           },
         },
       });
@@ -284,6 +303,7 @@ function BrandEconomicsPage() {
       notes: entry.notes ?? "",
       freeUnits: entry.freeUnits != null ? String(entry.freeUnits) : "",
       sampleUnit: entry.sampleUnit ?? "vial",
+      paidUnits: entry.paidUnits != null ? String(entry.paidUnits) : "",
     });
     setAdding(true);
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
@@ -480,16 +500,20 @@ function BrandEconomicsPage() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
               {isSample ? (
-                <div className="text-[12px] text-ink-soft">
-                  {sampleInfo ? (
-                    <>
-                      <span className="font-semibold text-emerald-ink">= {fmtUsd(sampleValue)}</span>{" "}
-                      value to you ({Number(draft.freeUnits) || 0} × {fmtUsd(sampleInfo.cost)}/{draft.sampleUnit}).
-                    </>
-                  ) : (
-                    <span className="text-amber">Set this brand&rsquo;s cost on the Products tab to auto-value the sample.</span>
-                  )}
-                </div>
+                <label className="block">
+                  <span className="text-[12px] font-medium text-ink-soft">
+                    …on an order of (optional)
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    className={inputCls}
+                    value={draft.paidUnits}
+                    onChange={(e) => setDraft((d) => ({ ...d, paidUnits: e.target.value }))}
+                    placeholder={`e.g. 10 ${draft.sampleUnit}s bought`}
+                  />
+                </label>
               ) : (
                 <label className="flex items-center gap-2 text-[13px] font-medium text-ink-soft">
                   <input
@@ -520,6 +544,23 @@ function BrandEconomicsPage() {
                 />
               </label>
             </div>
+            {isSample && (
+              <div className="rounded-md bg-emerald-soft px-3 py-2 text-[12.5px] text-ink">
+                {!sampleInfo ? (
+                  <span className="text-amber">Set this brand&rsquo;s cost on the Products tab to auto-value the sample.</span>
+                ) : isDeal ? (
+                  <>
+                    <span className="font-semibold text-emerald-ink">Deal &rarr; +{fmtUsd(samplePerUnitLift)}/{draft.sampleUnit}</span>{" "}
+                    margin lift (effective cost {fmtUsd(sampleInfo.cost)} &rarr; {fmtUsd(sampleEffectiveCost)} on {sPaid}+{sFree} {draft.sampleUnit}s). Lifts Margin now.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-semibold text-emerald-ink">Free stock &rarr; {fmtUsd(sampleLumpValue)}</span>{" "}
+                    one-time value ({sFree} × {fmtUsd(sampleInfo.cost)}/{draft.sampleUnit}). Add an order qty above to make it a per-unit margin lift instead.
+                  </>
+                )}
+              </div>
+            )}
             <label className="block">
               <span className="text-[12px] font-medium text-ink-soft">Notes (optional)</span>
               <input
@@ -581,7 +622,8 @@ function BrandEconomicsPage() {
                     const bestMargin = Math.max(...g.rows.map((x) => x.marginNowPerUnit));
                     const topOfCat = r.marginNowPerUnit === bestMargin && bestMargin > 0 && g.rows.length > 1;
                     // The ledger entries behind each cell — click a filled value to edit it.
-                    const spaEntry = r.activeIncentives.find((x) => x.beneficiary === "spa");
+                    const spaPerUnitEntry = r.activeIncentives.find((x) => x.beneficiary === "spa" && x.perUnit);
+                    const spaFlatEntry = r.activeIncentives.find((x) => x.beneficiary === "spa" && !x.perUnit);
                     const patientEntry = r.activeIncentives.find((x) => x.beneficiary === "patient");
                     const editCls = "font-medium underline decoration-dotted decoration-ink-faint/40 underline-offset-2 hover:decoration-emerald-ink cursor-pointer";
                     return (
@@ -599,21 +641,29 @@ function BrandEconomicsPage() {
                           {r.manufacturer && (
                             <span className="ml-2 text-[11px] text-ink-faint">{r.manufacturer}</span>
                           )}
+                          {r.spaIncentiveFlat > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => spaFlatEntry && startEdit(spaFlatEntry)}
+                              title="Free stock (one-time) — click to edit"
+                              className="ml-2 inline-flex items-center gap-1 rounded-full bg-rule-soft text-ink-soft px-2 py-0.5 text-[10px] font-medium hover:text-ink"
+                            >
+                              🎁 {fmtUsd(r.spaIncentiveFlat)} stock
+                            </button>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-ink-soft">
                           {fmtUsd(r.baseMarginPerUnit)}/{unitSuffix(r.unitType)}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
-                          {lift || r.spaIncentiveFlat > 0 ? (
+                          {lift ? (
                             <button
                               type="button"
-                              onClick={() => (spaEntry ? startEdit(spaEntry) : openAddFor(r, "spa"))}
+                              onClick={() => (spaPerUnitEntry ? startEdit(spaPerUnitEntry) : openAddFor(r, "spa"))}
                               title="Click to edit"
                               className={cn("text-emerald-ink", editCls)}
                             >
-                              {lift
-                                ? `+${fmtUsd(r.spaIncentivePerUnit)}/${unitSuffix(r.unitType)}`
-                                : `+${fmtUsd(r.spaIncentiveFlat)} flat`}
+                              +{fmtUsd(r.spaIncentivePerUnit)}/{unitSuffix(r.unitType)}
                             </button>
                           ) : (
                             <button type="button" onClick={() => openAddFor(r, "spa")} className={addBtnCls}>

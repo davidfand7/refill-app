@@ -60,6 +60,7 @@ const entryPayload = z.object({
   notes: z.string().trim().max(500).nullable(),
   freeUnits: z.number().nonnegative().max(100000).nullable().optional(),
   sampleUnit: z.string().trim().max(40).nullable().optional(),
+  paidUnits: z.number().nonnegative().max(1000000).nullable().optional(),
 });
 
 const upsertInput = accessInput.extend({ entry: entryPayload });
@@ -90,6 +91,7 @@ function hydrateEntry(row: LedgerNodeRow): IncentiveLedgerEntry | null {
     notes: a.notes ?? null,
     freeUnits: typeof a.freeUnits === "number" ? a.freeUnits : null,
     sampleUnit: a.sampleUnit ?? null,
+    paidUnits: typeof a.paidUnits === "number" ? a.paidUnits : null,
   };
 }
 
@@ -147,6 +149,7 @@ export const upsertIncentiveLedgerEntry = createServerFn({ method: "POST" })
       notes: p.notes,
       freeUnits: p.freeUnits ?? null,
       sampleUnit: p.sampleUnit ?? null,
+      paidUnits: p.paidUnits ?? null,
     };
     const title = `${p.brand} — ${p.incentiveType}`;
     const nowIso = new Date().toISOString();
