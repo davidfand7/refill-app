@@ -580,6 +580,10 @@ function BrandEconomicsPage() {
                     // highest-margin brand wherever it sits.
                     const bestMargin = Math.max(...g.rows.map((x) => x.marginNowPerUnit));
                     const topOfCat = r.marginNowPerUnit === bestMargin && bestMargin > 0 && g.rows.length > 1;
+                    // The ledger entries behind each cell — click a filled value to edit it.
+                    const spaEntry = r.activeIncentives.find((x) => x.beneficiary === "spa");
+                    const patientEntry = r.activeIncentives.find((x) => x.beneficiary === "patient");
+                    const editCls = "font-medium underline decoration-dotted decoration-ink-faint/40 underline-offset-2 hover:decoration-emerald-ink cursor-pointer";
                     return (
                       <tr key={r.brand} className="border-t border-rule/60">
                         <td className="px-5 py-3">
@@ -600,10 +604,17 @@ function BrandEconomicsPage() {
                           {fmtUsd(r.baseMarginPerUnit)}/{unitSuffix(r.unitType)}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
-                          {lift ? (
-                            <span className="text-emerald-ink font-medium">+{fmtUsd(r.spaIncentivePerUnit)}/{unitSuffix(r.unitType)}</span>
-                          ) : r.spaIncentiveFlat > 0 ? (
-                            <span className="text-emerald-ink font-medium">+{fmtUsd(r.spaIncentiveFlat)} flat</span>
+                          {lift || r.spaIncentiveFlat > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => (spaEntry ? startEdit(spaEntry) : openAddFor(r, "spa"))}
+                              title="Click to edit"
+                              className={cn("text-emerald-ink", editCls)}
+                            >
+                              {lift
+                                ? `+${fmtUsd(r.spaIncentivePerUnit)}/${unitSuffix(r.unitType)}`
+                                : `+${fmtUsd(r.spaIncentiveFlat)} flat`}
+                            </button>
                           ) : (
                             <button type="button" onClick={() => openAddFor(r, "spa")} className={addBtnCls}>
                               <Plus className="h-3 w-3" /> Add
@@ -620,10 +631,15 @@ function BrandEconomicsPage() {
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums">
                           {r.patientValueFeel > 0 ? (
-                            <span className="text-ink inline-flex items-center gap-1 justify-end">
+                            <button
+                              type="button"
+                              onClick={() => (patientEntry ? startEdit(patientEntry) : openAddFor(r, "patient"))}
+                              title="Click to edit"
+                              className={cn("text-ink inline-flex items-center gap-1 justify-end", editCls)}
+                            >
                               <Sparkles className="h-3 w-3 text-emerald" />
                               {fmtUsd(r.patientValueFeel)}
-                            </span>
+                            </button>
                           ) : (
                             <button type="button" onClick={() => openAddFor(r, "patient")} className={addBtnCls}>
                               <Plus className="h-3 w-3" /> Add

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.127.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.127.0 &mdash; Click a live incentive to edit it.</strong> In the Brand economics table, the existing values in the <em>Active incentive</em> and <em>Patient feels</em> columns (e.g. Botox&rsquo;s &ldquo;+$1,220 flat&rdquo;) are now clickable &mdash; click one and its incentive opens in the form ready to edit, same as the &ldquo;+ Add&rdquo; on empty cells. So every cell in those two columns is now actionable: add when empty, edit when filled. <strong>Touched</strong>: Brand economics panel (filled cells link to their ledger entry via <code>activeIncentives</code>), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.126.0",
     date: "June 2026",
     items: [
