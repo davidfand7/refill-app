@@ -977,9 +977,13 @@ function ProductFormCard({
     const cost = Number.parseFloat(draft.costPerUnit);
     const price = Number.parseFloat(draft.salesPricePerUnit);
     if (!Number.isFinite(cost) || !Number.isFinite(price)) return null;
+    // Unpriced (price 0) ≠ a loss — don't show a negative margin as if the spa
+    // is selling below cost. A real positive-but-below-cost price still shows
+    // its (negative) margin, which is meaningful signal.
+    const priced = price > 0;
     const margin = price - cost;
-    const pct = price > 0 ? margin / price : null;
-    return { margin, pct };
+    const pct = priced ? margin / price : null;
+    return { margin, pct, priced };
   }, [draft.costPerUnit, draft.salesPricePerUnit]);
 
   return (
@@ -1123,17 +1127,23 @@ function ProductFormCard({
         />
       </FormField>
 
-      {computedMargin && (
-        <div className="rounded-md bg-emerald-soft px-3 py-2 text-[13px] text-ink">
-          <span className="font-semibold">Margin per {unitWord}:</span>{" "}
-          <span className="tabular-nums">
-            {fmtUsd(computedMargin.margin)}
-            {computedMargin.pct !== null && (
-              <span className="text-ink-soft"> ({fmtPct(computedMargin.pct)})</span>
-            )}
-          </span>
-        </div>
-      )}
+      {computedMargin &&
+        (computedMargin.priced ? (
+          <div className="rounded-md bg-emerald-soft px-3 py-2 text-[13px] text-ink">
+            <span className="font-semibold">Margin per {unitWord}:</span>{" "}
+            <span className="tabular-nums">
+              {fmtUsd(computedMargin.margin)}
+              {computedMargin.pct !== null && (
+                <span className="text-ink-soft"> ({fmtPct(computedMargin.pct)})</span>
+              )}
+            </span>
+          </div>
+        ) : (
+          <div className="rounded-md bg-rule-soft px-3 py-2 text-[13px] text-ink-soft">
+            <span className="font-semibold text-ink">Set a sales price</span> to see your
+            margin per {unitWord}.
+          </div>
+        ))}
 
       <div className="flex items-center gap-3 pt-1">
         <button

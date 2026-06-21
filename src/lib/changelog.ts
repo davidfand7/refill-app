@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.136.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.136.0 &mdash; &ldquo;Set price&rdquo; now reaches the product editor too.</strong> v2.133.0 made unpriced products read <em>&ldquo;Set price&rdquo;</em> instead of a scary negative in the <strong>Products</strong> list and <strong>Brand economics</strong> table &mdash; but one spot slipped through: opening a freshly-loaded product to <strong>edit</strong> it still flashed a green &ldquo;Margin per vial: &minus;$389.00&rdquo; box (cost is real, sell price is $0, so 0 &minus; cost looked like a loss). Now the editor shows a quiet <strong>&ldquo;Set a sales price to see your margin&rdquo;</strong> prompt until you actually price it. Important: this only hides the <em>unpriced</em> case &mdash; if you type a real price that&rsquo;s <em>below</em> cost, you still see the (negative) margin, because that&rsquo;s genuine &ldquo;selling at a loss&rdquo; signal you want. <strong>Touched</strong>: <code>products.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.135.0",
     date: "June 2026",
     items: [
