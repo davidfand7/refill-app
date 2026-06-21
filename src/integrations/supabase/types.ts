@@ -2570,59 +2570,209 @@ export type Database = {
           },
         ]
       }
+      manufacturer_catalog: {
+        Row: {
+          brand_family: string | null
+          category: string
+          created_at: string
+          default_subcategory_area: string | null
+          id: string
+          list_price: number
+          manufacturer: string
+          notes: string | null
+          product_name: string
+          sku: string | null
+          sort_order: number | null
+          status: string
+          unit_type: string
+          units_per_box: number
+          updated_at: string
+        }
+        Insert: {
+          brand_family?: string | null
+          category: string
+          created_at?: string
+          default_subcategory_area?: string | null
+          id?: string
+          list_price: number
+          manufacturer: string
+          notes?: string | null
+          product_name: string
+          sku?: string | null
+          sort_order?: number | null
+          status?: string
+          unit_type: string
+          units_per_box?: number
+          updated_at?: string
+        }
+        Update: {
+          brand_family?: string | null
+          category?: string
+          created_at?: string
+          default_subcategory_area?: string | null
+          id?: string
+          list_price?: number
+          manufacturer?: string
+          notes?: string | null
+          product_name?: string
+          sku?: string | null
+          sort_order?: number | null
+          status?: string
+          unit_type?: string
+          units_per_box?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      manufacturer_programs: {
+        Row: {
+          created_at: string
+          id: string
+          manufacturer: string
+          notes: string | null
+          program_name: string
+          program_type: string | null
+          status: string
+          tiers: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          manufacturer: string
+          notes?: string | null
+          program_name: string
+          program_type?: string | null
+          status?: string
+          tiers?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          manufacturer?: string
+          notes?: string | null
+          program_name?: string
+          program_type?: string | null
+          status?: string
+          tiers?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tenant_manufacturer_tiers: {
+        Row: {
+          created_at: string
+          id: string
+          manufacturer: string
+          selection: Json
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          manufacturer: string
+          selection?: Json
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          manufacturer?: string
+          selection?: Json
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_manufacturer_tiers_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           brand: string
+          brand_family: string | null
+          catalog_ref_id: string | null
           category: string
           cost_per_unit: number
+          cost_source: string
           created_at: string
           hidden_at: string | null
           id: string
+          list_price: number | null
           manufacturer: string | null
           notes: string | null
           sales_price_per_unit: number
+          sku: string | null
           sort_order: number | null
           subcategory_area: string | null
           subcategory_family: string | null
           tenant_id: string
           unit_type: string
+          units_per_box: number | null
           updated_at: string
         }
         Insert: {
           brand: string
+          brand_family?: string | null
+          catalog_ref_id?: string | null
           category: string
           cost_per_unit: number
+          cost_source?: string
           created_at?: string
           hidden_at?: string | null
           id?: string
+          list_price?: number | null
           manufacturer?: string | null
           notes?: string | null
           sales_price_per_unit: number
+          sku?: string | null
           sort_order?: number | null
           subcategory_area?: string | null
           subcategory_family?: string | null
           tenant_id: string
           unit_type: string
+          units_per_box?: number | null
           updated_at?: string
         }
         Update: {
           brand?: string
+          brand_family?: string | null
+          catalog_ref_id?: string | null
           category?: string
           cost_per_unit?: number
+          cost_source?: string
           created_at?: string
           hidden_at?: string | null
           id?: string
+          list_price?: number | null
           manufacturer?: string | null
           notes?: string | null
           sales_price_per_unit?: number
+          sku?: string | null
           sort_order?: number | null
           subcategory_area?: string | null
           subcategory_family?: string | null
           tenant_id?: string
           unit_type?: string
+          units_per_box?: number | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "products_catalog_ref_id_fkey"
+            columns: ["catalog_ref_id"]
+            isOneToOne: false
+            referencedRelation: "manufacturer_catalog"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "products_tenant_id_fkey"
             columns: ["tenant_id"]

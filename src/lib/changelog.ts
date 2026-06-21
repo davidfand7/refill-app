@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.131.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.131.0 &mdash; Ships fully loaded (Phase 1b: the seed engine).</strong> The server logic that turns the master catalog into a tenant&rsquo;s living catalog. <code>seedTenantCatalogFromMaster</code> copies the master book into a spa&rsquo;s products, computing each cost from their selected loyalty tier (via the v2.130 resolver) &mdash; <strong>idempotent</strong> (reconciles by <code>catalog_ref_id</code>, never duplicates) and it <strong>never clobbers a real cost</strong> (only touches <code>tier_estimate</code>/<code>unset</code> rows, leaving <code>portal</code>/<code>manual</code> truth intact). <code>applyTenantTierSelection</code> is &ldquo;pick your tier &rarr; costs snap&rdquo;: saves the selection and re-resolves just the estimate rows. Plus reads for the tier-selector UI (<code>getManufacturerPrograms</code>, <code>getTenantTierSelections</code>). Backend only &mdash; the select-your-tier surface is Phase 2. <strong>Touched</strong>: new <code>refill-catalog-seed.ts</code>, <code>types.ts</code> (3 tables + 6 product cols), <code>changelog.ts</code>. No migration (uses v2.130).",
+    ],
+  },
+  {
     version: "v2.130.0",
     date: "June 2026",
     items: [
