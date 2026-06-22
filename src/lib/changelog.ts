@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.142.3",
+    date: "June 2026",
+    items: [
+      "<strong>v2.142.3 &mdash; Emailed screenshots stage exactly once (de-dupe).</strong> Resend can hand the same inbound email to more than one of our webhooks (we saw a forwarded screenshot hit both inbound endpoints), which staged the import <em>twice</em> — two identical batches in your review inbox. Fixed: each emailed batch is now stamped with the email’s message id, with a one-per-message database guard, so a double-delivery collapses to a single batch (the second is recognized and skipped, even when both arrive at the same instant). In-app uploads are unaffected (each is intentional). <strong>Touched</strong>: migration <code>v2_142_3_portal_import_dedup</code> (<code>source_message_id</code> + partial-unique index), <code>portal-import-core.ts</code> (pre-check + race-safe conflict handling), <code>portal-import-email.ts</code>, Supabase types, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.142.2",
     date: "June 2026",
     items: [

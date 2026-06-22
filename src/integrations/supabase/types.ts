@@ -2670,6 +2670,7 @@ export type Database = {
           reviewed_at: string | null
           rows: Json
           source: string
+          source_message_id: string | null
           status: string
           tenant_id: string
         }
@@ -2682,6 +2683,7 @@ export type Database = {
           reviewed_at?: string | null
           rows?: Json
           source: string
+          source_message_id?: string | null
           status?: string
           tenant_id: string
         }
@@ -2694,6 +2696,7 @@ export type Database = {
           reviewed_at?: string | null
           rows?: Json
           source?: string
+          source_message_id?: string | null
           status?: string
           tenant_id?: string
         }

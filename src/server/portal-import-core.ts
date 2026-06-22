@@ -274,8 +274,24 @@ export async function ingestPortalImport(args: {
   source: "upload" | "email";
   images: Array<{ data: string; mediaType: ImageMedia }>;
   manufacturerHint?: string | null;
-}): Promise<{ batchId: string; manufacturer: string | null; proposals: PortalImportProposal[] }> {
-  const { sb, tenantId, source, images, manufacturerHint } = args;
+  /** Resend message id (email lane) → idempotency: one batch per message, so a
+   *  double-delivery to >1 inbound webhook doesn't double-stage. */
+  sourceMessageId?: string | null;
+}): Promise<{
+  batchId: string;
+  manufacturer: string | null;
+  proposals: PortalImportProposal[];
+  deduped?: boolean;
+}> {
+  const { sb, tenantId, source, images, manufacturerHint, sourceMessageId } = args;
+
+  // Return an already-staged batch for this message (skips a second vision
+  // call when the re-delivery is not simultaneous).
+  if (sourceMessageId) {
+    const existing = await findBatchByMessageId(sb, tenantId, sourceMessageId);
+    if (existing) return { ...existing, deduped: true };
+  }
+
   const extracted = await extractPortalPrices(images, manufacturerHint);
   const manufacturer = manufacturerHint || extracted.manufacturer;
   // Match within the manufacturer when known (tighter), else whole catalog.
@@ -291,9 +307,38 @@ export async function ingestPortalImport(args: {
       status: "pending_review",
       rows: proposals as unknown as Json,
       raw_extract: extracted.raw,
+      source_message_id: sourceMessageId ?? null,
     })
     .select("id")
     .single();
-  if (error) throw new Error(`Couldn't stage the import: ${error.message}`);
+  if (error) {
+    // 23505 = unique violation: a concurrent delivery won the race. Return its
+    // batch instead of erroring (the dedup index did its job).
+    if ((error as { code?: string }).code === "23505" && sourceMessageId) {
+      const existing = await findBatchByMessageId(sb, tenantId, sourceMessageId);
+      if (existing) return { ...existing, deduped: true };
+    }
+    throw new Error(`Couldn't stage the import: ${error.message}`);
+  }
   return { batchId: batch.id, manufacturer: manufacturer ?? null, proposals };
+}
+
+/** Look up an already-staged batch by Resend message id. */
+async function findBatchByMessageId(
+  sb: ReturnType<typeof admin>,
+  tenantId: string,
+  sourceMessageId: string,
+): Promise<{ batchId: string; manufacturer: string | null; proposals: PortalImportProposal[] } | null> {
+  const { data } = await sb
+    .from("portal_import_batches")
+    .select("id, manufacturer, rows")
+    .eq("tenant_id", tenantId)
+    .eq("source_message_id", sourceMessageId)
+    .maybeSingle();
+  if (!data) return null;
+  return {
+    batchId: data.id,
+    manufacturer: data.manufacturer ?? null,
+    proposals: (Array.isArray(data.rows) ? data.rows : []) as unknown as PortalImportProposal[],
+  };
 }

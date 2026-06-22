@@ -185,6 +185,7 @@ export async function tryPortalEmailImport(args: {
       source: "email",
       images: images.slice(0, 8),
       manufacturerHint: manufacturerHintFromSubject(args.subject),
+      sourceMessageId: args.emailId, // idempotency across double-delivery
     });
     const matched = r.proposals.filter((p) => p.matchedProductId).length;
     console.log("[portal-email] import", {
