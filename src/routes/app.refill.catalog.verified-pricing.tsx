@@ -22,10 +22,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Camera,
+  Check,
   CheckCircle2,
   Clock,
+  Copy,
   ImageUp,
   Loader2,
+  Mail,
   Plus,
   ShieldCheck,
   Sparkles,
@@ -48,6 +51,7 @@ import {
   type PortalImportProposal,
 } from "@/server/portal-import.functions";
 import type { ProductCategory, ProductUnitType } from "@/server/refill-catalog";
+import { getOrCreateRewardIngestToken } from "@/server/manufacturer-reward-ingest.functions";
 
 // Inline-add option lists (mirror the product editor; biostimulator is folded
 // into Filler + a sub-category, so it's omitted from the picker).
@@ -207,6 +211,11 @@ function VerifiedPricingPage() {
   // Unmatched rows the owner has added to the catalog this session (by index).
   const [addedRows, setAddedRows] = useState<Set<number>>(new Set());
 
+  // Email lane — the spa's private drop-address (same one the rewards lane
+  // uses); surfaced here so the email option lives where portal-import lives.
+  const [dropAddress, setDropAddress] = useState<string | null>(null);
+  const [copiedAddr, setCopiedAddr] = useState(false);
+
   async function withToken<T>(fn: (token: string) => Promise<T>): Promise<T> {
     const { data: sess } = await supabase.auth.getSession();
     const token = sess.session?.access_token;
@@ -242,6 +251,26 @@ function VerifiedPricingPage() {
       cancelled = true;
     };
   }, [membership.status, loadBatches]);
+
+  // Fetch the spa's private drop-address for the email lane (non-fatal — the
+  // email card simply doesn't render if it can't load).
+  useEffect(() => {
+    if (membership.status !== "tenant") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await withToken((token) =>
+          getOrCreateRewardIngestToken({ data: { accessToken: token, viewAsUserId } }),
+        );
+        if (!cancelled) setDropAddress(r.address);
+      } catch {
+        // non-fatal
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [membership.status, viewAsUserId]);
 
   const activeBatch = useMemo(
     () => batches.find((b) => b.id === activeId) ?? null,
@@ -419,6 +448,26 @@ function VerifiedPricingPage() {
     toast.success(`Added ${brand} — Verified from your portal.`, { duration: 8000 });
   }
 
+  async function copyAddress() {
+    if (!dropAddress) return;
+    try {
+      await navigator.clipboard.writeText(dropAddress);
+      setCopiedAddr(true);
+      setTimeout(() => setCopiedAddr(false), 1500);
+    } catch {
+      toast.error("Couldn't copy — select and copy the address manually.");
+    }
+  }
+
+  // Pre-filled compose link: opens the user's mail app with the address +
+  // subject + a do-this nudge in the body. (mailto can't pre-attach a file —
+  // OS limitation — so the body tells them to attach the screenshot.)
+  const mailtoHref = dropAddress
+    ? `mailto:${dropAddress}?subject=${encodeURIComponent("Portal pricing")}&body=${encodeURIComponent(
+        'Attach your manufacturer portal "Your Price" screenshot to this email and send. SmartSpa will read it and stage it on your Verified pricing tab for review.',
+      )}`
+    : "#";
+
   return (
     <div>
       <PageHeader
@@ -563,6 +612,59 @@ function VerifiedPricingPage() {
             </div>
           )}
         </div>
+
+        {/* ── Email lane — forward a screenshot, no upload needed ─────────── */}
+        {dropAddress && (
+          <div className="rounded-xl border border-rule bg-white px-5 py-5 space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="inline-flex items-center justify-center rounded-full bg-emerald-soft p-1.5">
+                <Mail className="h-4 w-4 text-emerald" />
+              </div>
+              <h2 className="text-[15px] font-semibold text-ink">Or email it in</h2>
+              <span className="text-[12px] text-ink-soft">— forward from your inbox, no upload needed</span>
+            </div>
+            <p className="text-[13px] text-ink-soft leading-relaxed">
+              Send (or forward) your portal screenshot to your private SmartSpa address — it lands right back here for review. Perfect from your phone: snap the portal in the manufacturer app and share it straight to email.
+            </p>
+
+            <ol className="space-y-1.5 text-[13px] text-ink-soft">
+              <li className="flex gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-soft text-[11px] font-bold text-emerald-ink">1</span>
+                <span>Tap <span className="font-semibold text-ink">Open my email</span> below — a new message opens, already addressed to you.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-soft text-[11px] font-bold text-emerald-ink">2</span>
+                <span>Attach your portal “Your Price” screenshot and send.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-soft text-[11px] font-bold text-emerald-ink">3</span>
+                <span>It appears in <span className="font-semibold text-ink">Awaiting review</span> below in under a minute — confirm and you’re done.</span>
+              </li>
+            </ol>
+
+            <div className="flex items-center gap-3 flex-wrap pt-1">
+              <a
+                href={mailtoHref}
+                className="inline-flex items-center gap-1.5 rounded-md bg-emerald px-4 py-2 text-[14px] font-semibold text-paper shadow-sm hover:opacity-95 transition"
+              >
+                <Mail className="h-4 w-4" />
+                Open my email
+              </a>
+              <button
+                type="button"
+                onClick={copyAddress}
+                className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-emerald hover:border-emerald/40 transition"
+                title={dropAddress}
+              >
+                {copiedAddr ? <Check className="h-3.5 w-3.5 text-emerald" /> : <Copy className="h-3.5 w-3.5" />}
+                {copiedAddr ? "Copied" : "Copy address"}
+              </button>
+              <span className="text-[11px] text-ink-faint">
+                Forwarding from any staff inbox works too — it’s tied to your spa, not the sender.
+              </span>
+            </div>
+          </div>
+        )}
 
         {/* ── Pending review picker (when 2+ await review) ────────────────── */}
         {pending.length > 1 && (

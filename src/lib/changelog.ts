@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.142.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.142.0 &mdash; Email lane, now guided right on the Verified pricing tab.</strong> Ship 3 made email work; this makes it <em>obvious</em>. The <strong>Verified pricing</strong> tab now has an <strong>“Or email it in”</strong> card directly under the upload box, with a numbered 1-2-3 and a one-tap <strong>Open my email</strong> button that opens a new message <em>already addressed to your private SmartSpa drop-address</em> (subject pre-filled too) — you just attach the screenshot and hit send. No hunting for an address on another page, no copy-paste dance. A <strong>Copy address</strong> fallback is right there for phone/forwarding setups, and a note reminds you a forward from any staff inbox works (it’s tied to your spa, not the sender). The address is your existing hands-free auto-import address — so email price screenshots and reward CSVs ride the same private inbox. <strong>Touched</strong>: <code>verified-pricing.tsx</code> (email-lane card + <code>mailto:</code> compose link, reuses <code>getOrCreateRewardIngestToken</code>), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.141.0",
     date: "June 2026",
     items: [
