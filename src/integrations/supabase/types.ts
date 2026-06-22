@@ -2660,6 +2660,53 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_import_batches: {
+        Row: {
+          created_at: string
+          id: string
+          manufacturer: string | null
+          note: string | null
+          raw_extract: string | null
+          reviewed_at: string | null
+          rows: Json
+          source: string
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          manufacturer?: string | null
+          note?: string | null
+          raw_extract?: string | null
+          reviewed_at?: string | null
+          rows?: Json
+          source: string
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          manufacturer?: string | null
+          note?: string | null
+          raw_extract?: string | null
+          reviewed_at?: string | null
+          rows?: Json
+          source?: string
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_import_batches_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_manufacturer_tiers: {
         Row: {
           created_at: string

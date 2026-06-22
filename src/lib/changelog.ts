@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.138.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.138.0 &mdash; Vision portal-import: the engine (Ship 1 of 3).</strong> Phase 3 boots your catalog with <em>estimate</em> costs; this is the path to flip them to <strong>Verified</strong> by reading your real manufacturer-portal &ldquo;Your Price&rdquo; &mdash; the auth-walled, per-spa numbers no spreadsheet or scraper can reach, only a photo from inside your account. This ship lays the backend: Claude vision reads a portal screenshot into <code>{product, price, unit-basis, sku}</code> rows, fuzzy-matches them to your catalog (SKU first, then name), and stages the proposals for your review &mdash; it <strong>never</strong> writes a cost without your confirm, and it does the per-box &divide; units conversion so a 2-syringe Allergan box doesn&rsquo;t double your filler cost. Confirmed rows become <code>cost_source='portal'</code> (the green Verified badge). Next ships wire the in-app upload screen + a review table (Ship 2) and an email-a-photo lane (Ship 3). <strong>Touched</strong>: new <code>portal-import.functions.ts</code> (extract + match + apply/dismiss server fns) + migration <code>v2_138_0_portal_import_staging</code> (<code>portal_import_batches</code>) + Supabase types. Backend only this ship &mdash; no UI yet.",
+    ],
+  },
+  {
     version: "v2.137.0",
     date: "June 2026",
     items: [
