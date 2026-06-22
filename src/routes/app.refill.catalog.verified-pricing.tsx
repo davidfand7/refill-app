@@ -459,13 +459,21 @@ function VerifiedPricingPage() {
     }
   }
 
-  // Pre-filled compose link: opens the user's mail app with the address +
-  // subject + a do-this nudge in the body. (mailto can't pre-attach a file —
-  // OS limitation — so the body tells them to attach the screenshot.)
+  // Pre-filled compose links. mailto: works for users with a desktop mail app
+  // set as default; webmail users (Gmail/Outlook in the browser) need the
+  // provider web-compose URLs, which open a pre-filled compose tab directly.
+  // (None can pre-attach a file — OS limitation — so the body says to attach.)
+  const COMPOSE_SUBJECT = "Portal pricing";
+  const COMPOSE_BODY =
+    'Attach your manufacturer portal "Your Price" screenshot to this email and send. SmartSpa will read it and stage it on your Verified pricing tab for review.';
   const mailtoHref = dropAddress
-    ? `mailto:${dropAddress}?subject=${encodeURIComponent("Portal pricing")}&body=${encodeURIComponent(
-        'Attach your manufacturer portal "Your Price" screenshot to this email and send. SmartSpa will read it and stage it on your Verified pricing tab for review.',
-      )}`
+    ? `mailto:${dropAddress}?subject=${encodeURIComponent(COMPOSE_SUBJECT)}&body=${encodeURIComponent(COMPOSE_BODY)}`
+    : "#";
+  const gmailHref = dropAddress
+    ? `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(dropAddress)}&su=${encodeURIComponent(COMPOSE_SUBJECT)}&body=${encodeURIComponent(COMPOSE_BODY)}`
+    : "#";
+  const outlookHref = dropAddress
+    ? `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(dropAddress)}&subject=${encodeURIComponent(COMPOSE_SUBJECT)}&body=${encodeURIComponent(COMPOSE_BODY)}`
     : "#";
 
   return (
@@ -630,7 +638,7 @@ function VerifiedPricingPage() {
             <ol className="space-y-1.5 text-[13px] text-ink-soft">
               <li className="flex gap-2">
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-soft text-[11px] font-bold text-emerald-ink">1</span>
-                <span>Tap <span className="font-semibold text-ink">Open my email</span> below — a new message opens, already addressed to you.</span>
+                <span>Pick your email below (<span className="font-semibold text-ink">Gmail</span>, Outlook, or Mail app) — a new message opens, already addressed to you.</span>
               </li>
               <li className="flex gap-2">
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-soft text-[11px] font-bold text-emerald-ink">2</span>
@@ -642,13 +650,32 @@ function VerifiedPricingPage() {
               </li>
             </ol>
 
-            <div className="flex items-center gap-3 flex-wrap pt-1">
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <span className="text-[12px] font-semibold text-ink-soft">Compose in:</span>
               <a
-                href={mailtoHref}
+                href={gmailHref}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-md bg-emerald px-4 py-2 text-[14px] font-semibold text-paper shadow-sm hover:opacity-95 transition"
               >
                 <Mail className="h-4 w-4" />
-                Open my email
+                Gmail
+              </a>
+              <a
+                href={outlookHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-emerald hover:border-emerald/40 transition"
+              >
+                <Mail className="h-3.5 w-3.5" />
+                Outlook
+              </a>
+              <a
+                href={mailtoHref}
+                className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-emerald hover:border-emerald/40 transition"
+              >
+                <Mail className="h-3.5 w-3.5" />
+                Mail app
               </a>
               <button
                 type="button"
@@ -659,10 +686,10 @@ function VerifiedPricingPage() {
                 {copiedAddr ? <Check className="h-3.5 w-3.5 text-emerald" /> : <Copy className="h-3.5 w-3.5" />}
                 {copiedAddr ? "Copied" : "Copy address"}
               </button>
-              <span className="text-[11px] text-ink-faint">
-                Forwarding from any staff inbox works too — it’s tied to your spa, not the sender.
-              </span>
             </div>
+            <p className="text-[11px] text-ink-faint">
+              Each opens a new message already addressed to you — attach the screenshot and send. Forwarding from any staff inbox works too; it’s tied to your spa, not the sender.
+            </p>
           </div>
         )}
 

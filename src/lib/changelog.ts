@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.142.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.142.1 &mdash; Email lane: compose buttons that actually open (Gmail / Outlook / Mail app).</strong> The v2.142.0 “Open my email” button used a <code>mailto:</code> link, which only fires if you have a desktop mail app set as your system default &mdash; so webmail users (Gmail or Outlook in the browser) clicked it and nothing happened. Fixed: the card now offers <strong>Compose in: Gmail · Outlook · Mail app</strong> &mdash; Gmail and Outlook open a pre-filled compose <em>tab</em> directly (addressed to your drop-address, subject filled), and Mail app keeps the <code>mailto:</code> path for desktop-client users. Copy address is still there for anything else. <strong>Touched</strong>: <code>verified-pricing.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.142.0",
     date: "June 2026",
     items: [
