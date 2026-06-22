@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.143.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.143.0 &mdash; Capture Lane (P1): one-click portal capture from your browser.</strong> A 4th way to get portal prices into SmartSpa, alongside upload, email, and the Agent. Install the new <strong>“Capture to SmartSpa”</strong> browser extension, paste your token once, and on any manufacturer-portal “Your Price” page just click it &mdash; it screenshots the page <em>you’re</em> logged into and sends it straight to your <strong>Verified pricing</strong> inbox. No screenshot-save-find-upload, no email. <strong>Credential-free by design:</strong> SmartSpa never logs into the manufacturer and never stores a portal password &mdash; the capture happens in your own authenticated tab, tagged to your spa by the same token the email/Agent lanes use. Backend is a thin new endpoint (<code>/api/ingest/portal-capture</code>) over the <em>existing</em> vision → match → review-inbox engine (~95% reuse); the extension is a small side-loadable Chrome/Edge add-on under <code>capture-extension/</code>. P1 = visible-tab capture, stages as a normal import for review (you still confirm before any cost is written). <strong>Touched</strong>: new route <code>api.ingest.portal-capture.ts</code> + <code>capture-extension/</code> (manifest + popup), <code>changelog.ts</code>. No migration. Realizes the vision-ingestion moat &mdash; see the Capture Lane spec.",
+    ],
+  },
+  {
     version: "v2.142.3",
     date: "June 2026",
     items: [

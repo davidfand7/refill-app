@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Capture to SmartSpa",
+  "version": "0.1.0",
+  "description": "One-click capture of a manufacturer-portal price page → your SmartSpa Verified-pricing inbox. Credential-free: uses your own logged-in session.",
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": ["https://smartspa.app/*"],
+  "action": {
+    "default_title": "Capture to SmartSpa",
+    "default_popup": "popup.html"
+  }
+}

@@ -75,6 +75,7 @@ import { Route as ApiResendInboundRewardsRouteImport } from './routes/api.resend
 import { Route as ApiResendInboundLiteRouteImport } from './routes/api.resend.inbound-lite'
 import { Route as ApiResendInboundRouteImport } from './routes/api.resend.inbound'
 import { Route as ApiIngestRewardsRouteImport } from './routes/api.ingest.rewards'
+import { Route as ApiIngestPortalCaptureRouteImport } from './routes/api.ingest.portal-capture'
 import { Route as ApiCronSchedulingRemindersRouteImport } from './routes/api.cron.scheduling-reminders'
 import { Route as ApiCronRefillTrialDripRouteImport } from './routes/api.cron.refill-trial-drip'
 import { Route as ApiCronRefillInvoiceRouteImport } from './routes/api.cron.refill-invoice'
@@ -498,6 +499,11 @@ const ApiResendInboundRoute = ApiResendInboundRouteImport.update({
 const ApiIngestRewardsRoute = ApiIngestRewardsRouteImport.update({
   id: '/api/ingest/rewards',
   path: '/api/ingest/rewards',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiIngestPortalCaptureRoute = ApiIngestPortalCaptureRouteImport.update({
+  id: '/api/ingest/portal-capture',
+  path: '/api/ingest/portal-capture',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiCronSchedulingRemindersRoute =
@@ -1073,6 +1079,7 @@ export interface FileRoutesByFullPath {
   '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/cron/scheduling-reminders': typeof ApiCronSchedulingRemindersRoute
+  '/api/ingest/portal-capture': typeof ApiIngestPortalCaptureRoute
   '/api/ingest/rewards': typeof ApiIngestRewardsRoute
   '/api/resend/inbound': typeof ApiResendInboundRoute
   '/api/resend/inbound-lite': typeof ApiResendInboundLiteRoute
@@ -1232,6 +1239,7 @@ export interface FileRoutesByTo {
   '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/cron/scheduling-reminders': typeof ApiCronSchedulingRemindersRoute
+  '/api/ingest/portal-capture': typeof ApiIngestPortalCaptureRoute
   '/api/ingest/rewards': typeof ApiIngestRewardsRoute
   '/api/resend/inbound': typeof ApiResendInboundRoute
   '/api/resend/inbound-lite': typeof ApiResendInboundLiteRoute
@@ -1390,6 +1398,7 @@ export interface FileRoutesById {
   '/api/cron/refill-invoice': typeof ApiCronRefillInvoiceRoute
   '/api/cron/refill-trial-drip': typeof ApiCronRefillTrialDripRoute
   '/api/cron/scheduling-reminders': typeof ApiCronSchedulingRemindersRoute
+  '/api/ingest/portal-capture': typeof ApiIngestPortalCaptureRoute
   '/api/ingest/rewards': typeof ApiIngestRewardsRoute
   '/api/resend/inbound': typeof ApiResendInboundRoute
   '/api/resend/inbound-lite': typeof ApiResendInboundLiteRoute
@@ -1554,6 +1563,7 @@ export interface FileRouteTypes {
     | '/api/cron/refill-invoice'
     | '/api/cron/refill-trial-drip'
     | '/api/cron/scheduling-reminders'
+    | '/api/ingest/portal-capture'
     | '/api/ingest/rewards'
     | '/api/resend/inbound'
     | '/api/resend/inbound-lite'
@@ -1713,6 +1723,7 @@ export interface FileRouteTypes {
     | '/api/cron/refill-invoice'
     | '/api/cron/refill-trial-drip'
     | '/api/cron/scheduling-reminders'
+    | '/api/ingest/portal-capture'
     | '/api/ingest/rewards'
     | '/api/resend/inbound'
     | '/api/resend/inbound-lite'
@@ -1870,6 +1881,7 @@ export interface FileRouteTypes {
     | '/api/cron/refill-invoice'
     | '/api/cron/refill-trial-drip'
     | '/api/cron/scheduling-reminders'
+    | '/api/ingest/portal-capture'
     | '/api/ingest/rewards'
     | '/api/resend/inbound'
     | '/api/resend/inbound-lite'
@@ -2030,6 +2042,7 @@ export interface RootRouteChildren {
   ApiCronRefillInvoiceRoute: typeof ApiCronRefillInvoiceRoute
   ApiCronRefillTrialDripRoute: typeof ApiCronRefillTrialDripRoute
   ApiCronSchedulingRemindersRoute: typeof ApiCronSchedulingRemindersRoute
+  ApiIngestPortalCaptureRoute: typeof ApiIngestPortalCaptureRoute
   ApiIngestRewardsRoute: typeof ApiIngestRewardsRoute
   ApiResendInboundRoute: typeof ApiResendInboundRoute
   ApiResendInboundLiteRoute: typeof ApiResendInboundLiteRoute
@@ -2521,6 +2534,13 @@ declare module '@tanstack/react-router' {
       path: '/api/ingest/rewards'
       fullPath: '/api/ingest/rewards'
       preLoaderRoute: typeof ApiIngestRewardsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/ingest/portal-capture': {
+      id: '/api/ingest/portal-capture'
+      path: '/api/ingest/portal-capture'
+      fullPath: '/api/ingest/portal-capture'
+      preLoaderRoute: typeof ApiIngestPortalCaptureRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/cron/scheduling-reminders': {
@@ -3507,6 +3527,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiCronRefillInvoiceRoute: ApiCronRefillInvoiceRoute,
   ApiCronRefillTrialDripRoute: ApiCronRefillTrialDripRoute,
   ApiCronSchedulingRemindersRoute: ApiCronSchedulingRemindersRoute,
+  ApiIngestPortalCaptureRoute: ApiIngestPortalCaptureRoute,
   ApiIngestRewardsRoute: ApiIngestRewardsRoute,
   ApiResendInboundRoute: ApiResendInboundRoute,
   ApiResendInboundLiteRoute: ApiResendInboundLiteRoute,

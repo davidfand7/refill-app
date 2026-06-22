@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  :root{ --ink:#1c2526; --soft:#4a5658; --faint:#879096; --emerald:#0f7a5a; --emerald-soft:#e6f4ee; --rule:#e4e8e7; --paper:#fbfcfb; }
+  *{box-sizing:border-box;}
+  body{ width:320px; margin:0; padding:16px; font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:var(--paper); }
+  h1{ font-size:14px; margin:0 0 2px; display:flex; align-items:center; gap:6px; }
+  .dot{ width:18px; height:18px; border-radius:6px; background:var(--emerald); display:inline-block; }
+  p.sub{ margin:0 0 12px; color:var(--soft); font-size:11.5px; }
+  label{ font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--faint); font-weight:700; display:block; margin:10px 0 4px; }
+  input{ width:100%; padding:7px 9px; border:1px solid var(--rule); border-radius:7px; font-size:12px; font-family:ui-monospace,Menlo,monospace; outline:none; }
+  input:focus{ border-color:var(--emerald); box-shadow:0 0 0 2px var(--emerald-soft); }
+  .row{ display:flex; gap:8px; margin-top:10px; }
+  button{ flex:1; padding:9px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:1px solid var(--rule); background:#fff; color:var(--soft); }
+  button.primary{ background:var(--emerald); color:#fff; border-color:var(--emerald); }
+  button:disabled{ opacity:.6; cursor:default; }
+  #status{ margin-top:11px; font-size:12px; min-height:16px; }
+  #status.ok{ color:var(--emerald); } #status.err{ color:#b4232a; }
+  .hint{ margin-top:12px; font-size:10.5px; color:var(--faint); line-height:1.5; border-top:1px solid var(--rule); padding-top:9px; }
+  a{ color:var(--emerald); }
+</style>
+</head>
+<body>
+  <h1><span class="dot"></span> Capture to SmartSpa</h1>
+  <p class="sub">On your manufacturer-portal price page, capture it straight to your Verified-pricing inbox.</p>
+
+  <label for="token">Your SmartSpa token</label>
+  <input id="token" type="password" placeholder="paste from Rewards → Hands-free → Option B" autocomplete="off" />
+  <div class="row">
+    <button id="save">Save token</button>
+    <button id="capture" class="primary">Capture this page</button>
+  </div>
+  <div id="status"></div>
+
+  <div class="hint">
+    Get your token in SmartSpa: <strong>Recognition → Rewards → Hands-free auto-import → Option B → Copy</strong>. Then open the portal page and click <em>Capture this page</em>.
+    <br/><br/>
+    <a href="https://smartspa.app/app/refill/catalog/verified-pricing" target="_blank">Open Verified pricing →</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
