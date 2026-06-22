@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.141.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.141.0 &mdash; Verified pricing by email: just forward the screenshot (Ship 3 of 3 &mdash; the arc is complete).</strong> You already forward manufacturer emails to your SmartSpa drop-address for reward CSVs. Now that <em>same address</em> also takes <strong>price screenshots</strong>: email (or forward) a manufacturer-portal &ldquo;Your Price&rdquo; screen as an image attachment, and SmartSpa reads it with vision, matches it to your catalog, and stages it in the <strong>Verified pricing</strong> tab&rsquo;s review inbox &mdash; exactly where an in-app upload lands. You open the tab, confirm, done. No app, no login, no upload screen &mdash; the most effortless lane there is. SmartSpa routes by attachment type: a CSV still goes to your rewards/transactions ingest unchanged; an <strong>image</strong> (and only when there&rsquo;s no CSV) goes to portal-import. The token in your drop-address is the only credential (we never trust the sender, so a forward from any staff inbox works), and the subject line sharpens manufacturer matching when it names the brand. Two ingest mouths &mdash; in-app upload + email &mdash; now feed one shared engine and one review inbox. <strong>Touched</strong>: <code>api.resend.inbound-rewards.ts</code> (additive image lane: detect image attachments &rarr; resolve token&rarr;tenant &rarr; <code>ingestPortalImport(source='email')</code>; CSV path byte-for-byte unchanged), <code>changelog.ts</code>. No migration. <em>(Live email delivery needs the rewards inbound address configured in Resend; the lane is testable by POSTing a sample payload until then.)</em>",
+    ],
+  },
+  {
     version: "v2.140.0",
     date: "June 2026",
     items: [
