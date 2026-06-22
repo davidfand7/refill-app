@@ -931,6 +931,12 @@ function ServicesPage() {
           >
             Programs &amp; tiers
           </Link>
+          <Link
+            to="/app/refill/catalog/verified-pricing"
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-[12px] font-medium border-b-2 -mb-px border-transparent text-ink-soft hover:text-ink transition"
+          >
+            Verified pricing
+          </Link>
         </div>
       </div>
 

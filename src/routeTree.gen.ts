@@ -126,6 +126,7 @@ import { Route as AppRefillPatientsImportRouteImport } from './routes/app.refill
 import { Route as AppRefillPatientsContactsRouteImport } from './routes/app.refill.patients.contacts'
 import { Route as AppRefillPatientsAListRulesRouteImport } from './routes/app.refill.patients.a-list-rules'
 import { Route as AppRefillPatientsPatientIdRouteImport } from './routes/app.refill.patients.$patientId'
+import { Route as AppRefillCatalogVerifiedPricingRouteImport } from './routes/app.refill.catalog.verified-pricing'
 import { Route as AppRefillCatalogServicesRouteImport } from './routes/app.refill.catalog.services'
 import { Route as AppRefillCatalogProgramsRouteImport } from './routes/app.refill.catalog.programs'
 import { Route as AppRefillCatalogProductsRouteImport } from './routes/app.refill.catalog.products'
@@ -780,6 +781,12 @@ const AppRefillPatientsPatientIdRoute =
     path: '/$patientId',
     getParentRoute: () => AppRefillPatientsRoute,
   } as any)
+const AppRefillCatalogVerifiedPricingRoute =
+  AppRefillCatalogVerifiedPricingRouteImport.update({
+    id: '/catalog/verified-pricing',
+    path: '/catalog/verified-pricing',
+    getParentRoute: () => AppRefillRoute,
+  } as any)
 const AppRefillCatalogServicesRoute =
   AppRefillCatalogServicesRouteImport.update({
     id: '/catalog/services',
@@ -1146,6 +1153,7 @@ export interface FileRoutesByFullPath {
   '/app/refill/catalog/products': typeof AppRefillCatalogProductsRoute
   '/app/refill/catalog/programs': typeof AppRefillCatalogProgramsRoute
   '/app/refill/catalog/services': typeof AppRefillCatalogServicesRoute
+  '/app/refill/catalog/verified-pricing': typeof AppRefillCatalogVerifiedPricingRoute
   '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
   '/app/refill/patients/a-list-rules': typeof AppRefillPatientsAListRulesRoute
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
@@ -1299,6 +1307,7 @@ export interface FileRoutesByTo {
   '/app/refill/catalog/products': typeof AppRefillCatalogProductsRoute
   '/app/refill/catalog/programs': typeof AppRefillCatalogProgramsRoute
   '/app/refill/catalog/services': typeof AppRefillCatalogServicesRoute
+  '/app/refill/catalog/verified-pricing': typeof AppRefillCatalogVerifiedPricingRoute
   '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
   '/app/refill/patients/a-list-rules': typeof AppRefillPatientsAListRulesRoute
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
@@ -1461,6 +1470,7 @@ export interface FileRoutesById {
   '/app/refill/catalog/products': typeof AppRefillCatalogProductsRoute
   '/app/refill/catalog/programs': typeof AppRefillCatalogProgramsRoute
   '/app/refill/catalog/services': typeof AppRefillCatalogServicesRoute
+  '/app/refill/catalog/verified-pricing': typeof AppRefillCatalogVerifiedPricingRoute
   '/app/refill/patients/$patientId': typeof AppRefillPatientsPatientIdRoute
   '/app/refill/patients/a-list-rules': typeof AppRefillPatientsAListRulesRoute
   '/app/refill/patients/contacts': typeof AppRefillPatientsContactsRoute
@@ -1624,6 +1634,7 @@ export interface FileRouteTypes {
     | '/app/refill/catalog/products'
     | '/app/refill/catalog/programs'
     | '/app/refill/catalog/services'
+    | '/app/refill/catalog/verified-pricing'
     | '/app/refill/patients/$patientId'
     | '/app/refill/patients/a-list-rules'
     | '/app/refill/patients/contacts'
@@ -1777,6 +1788,7 @@ export interface FileRouteTypes {
     | '/app/refill/catalog/products'
     | '/app/refill/catalog/programs'
     | '/app/refill/catalog/services'
+    | '/app/refill/catalog/verified-pricing'
     | '/app/refill/patients/$patientId'
     | '/app/refill/patients/a-list-rules'
     | '/app/refill/patients/contacts'
@@ -1938,6 +1950,7 @@ export interface FileRouteTypes {
     | '/app/refill/catalog/products'
     | '/app/refill/catalog/programs'
     | '/app/refill/catalog/services'
+    | '/app/refill/catalog/verified-pricing'
     | '/app/refill/patients/$patientId'
     | '/app/refill/patients/a-list-rules'
     | '/app/refill/patients/contacts'
@@ -2867,6 +2880,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRefillPatientsPatientIdRouteImport
       parentRoute: typeof AppRefillPatientsRoute
     }
+    '/app/refill/catalog/verified-pricing': {
+      id: '/app/refill/catalog/verified-pricing'
+      path: '/catalog/verified-pricing'
+      fullPath: '/app/refill/catalog/verified-pricing'
+      preLoaderRoute: typeof AppRefillCatalogVerifiedPricingRouteImport
+      parentRoute: typeof AppRefillRoute
+    }
     '/app/refill/catalog/services': {
       id: '/app/refill/catalog/services'
       path: '/catalog/services'
@@ -3305,6 +3325,7 @@ interface AppRefillRouteChildren {
   AppRefillCatalogProductsRoute: typeof AppRefillCatalogProductsRoute
   AppRefillCatalogProgramsRoute: typeof AppRefillCatalogProgramsRoute
   AppRefillCatalogServicesRoute: typeof AppRefillCatalogServicesRoute
+  AppRefillCatalogVerifiedPricingRoute: typeof AppRefillCatalogVerifiedPricingRoute
   AppRefillRecognitionAllocationRoute: typeof AppRefillRecognitionAllocationRoute
   AppRefillRecognitionBrandPromosRoute: typeof AppRefillRecognitionBrandPromosRoute
   AppRefillRecognitionInventoryRoute: typeof AppRefillRecognitionInventoryRoute
@@ -3356,6 +3377,7 @@ const AppRefillRouteChildren: AppRefillRouteChildren = {
   AppRefillCatalogProductsRoute: AppRefillCatalogProductsRoute,
   AppRefillCatalogProgramsRoute: AppRefillCatalogProgramsRoute,
   AppRefillCatalogServicesRoute: AppRefillCatalogServicesRoute,
+  AppRefillCatalogVerifiedPricingRoute: AppRefillCatalogVerifiedPricingRoute,
   AppRefillRecognitionAllocationRoute: AppRefillRecognitionAllocationRoute,
   AppRefillRecognitionBrandPromosRoute: AppRefillRecognitionBrandPromosRoute,
   AppRefillRecognitionInventoryRoute: AppRefillRecognitionInventoryRoute,

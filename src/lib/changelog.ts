@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.139.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.139.0 &mdash; Verified pricing: snap your portal, confirm, done (Ship 2 of 3).</strong> Ship 1 built the engine; this is the screen you actually use. New <strong>Verified pricing</strong> tab in the catalog: <strong>upload (or drag) a screenshot of your manufacturer portal&rsquo;s &ldquo;Your Price&rdquo; screen</strong> &mdash; Allergan APP, Galderma ASPIRE, Evolus, up to 8 images at once &mdash; and Claude vision reads the prices and matches them to your catalog. You get a <strong>review table</strong>: each row shows what the screenshot said (price + whether it&rsquo;s per box or per unit), the <strong>per-box &divide; units conversion</strong> spelled out (so a 2-syringe Allergan box can&rsquo;t secretly double your filler cost &mdash; the #1 import trap, now visible for a human eye-check), the per-unit cost we&rsquo;d write, and your current cost beside it. Tick the rows you trust (strong matches start pre-ticked), hit <strong>Verify</strong>, and those products flip from <em>Estimate</em> to the green <strong>Verified</strong> badge. Nothing is ever written without your confirm. Unmatched prices are shown but parked. The tab doubles as a <strong>review inbox</strong> &mdash; pending imports wait there, and Ship 3&rsquo;s email-a-photo lane will land in the same place. <strong>Touched</strong>: new route <code>verified-pricing.tsx</code> (upload + review table) + the catalog tab nav across all four sibling pages; split the vision engine into a server-only <code>portal-import-core.ts</code> (keeps the Anthropic SDK out of the browser bundle, reached via a dynamic import inside the server handlers), <code>changelog.ts</code>. No migration &mdash; rides the v2.138.0 <code>portal_import_batches</code> table.",
+    ],
+  },
+  {
     version: "v2.138.0",
     date: "June 2026",
     items: [
