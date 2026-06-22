@@ -40,6 +40,7 @@ import {
   routeInboundOutreachReply,
 } from "@/server/refill-inbox";
 import { routeInboundPatientReply } from "@/server/emma-optout.functions";
+import { tryPortalEmailImport } from "@/server/portal-import-email";
 
 function jsonResp(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -223,6 +224,30 @@ export const Route = createFileRoute("/api/resend/inbound")({
             action: patient.action,
             patientNodeId: patient.patientNodeId,
           });
+        }
+
+        // ── Portal-price screenshot lane: a forwarded manufacturer-portal
+        // "Your Price" IMAGE to the rewards drop-address (<token>@rewards.…)
+        // → stage a portal-import batch the owner reviews in-app. Runs only
+        // after the reply routers miss, and only when the to-address carries a
+        // rewards token + an image attachment — so it never collides with a
+        // genuine reply. Same drop-address as the CSV rewards lane.
+        const portalSrc = ((): Record<string, unknown> => {
+          if (!payload || typeof payload !== "object") return {};
+          const pp = payload as Record<string, unknown>;
+          return (pp.data ?? pp.email ?? pp) as Record<string, unknown>;
+        })();
+        const portal = await tryPortalEmailImport({
+          to: msg.to,
+          subject: msg.subject,
+          metaAttachments:
+            portalSrc.attachments ??
+            (payload as Record<string, unknown> | null)?.attachments ??
+            [],
+          emailId: msg.emailId,
+        });
+        if (portal.handled) {
+          return jsonResp(200, portal.body ?? { lane: "portal_import" });
         }
 
         console.log(

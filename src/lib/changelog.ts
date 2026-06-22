@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.142.2",
+    date: "June 2026",
+    items: [
+      "<strong>v2.142.2 &mdash; Email lane now fires wherever the mail lands.</strong> Live testing surfaced that Resend delivers a forwarded screenshot to the <em>general</em> inbound webhook (<code>/api/resend/inbound</code>, the reply handler), not the rewards endpoint where Ship 3 first put the image lane — so the screenshot hit a dead-end (&ldquo;no router matched&rdquo;). Fixed by extracting the portal email-import into a shared <code>portal-import-email.ts</code> and calling it from <strong>both</strong> inbound webhooks: after the reply routers miss, if the message is addressed to your rewards drop-address <em>and</em> carries an image, it stages a portal-import batch. So a forwarded portal screenshot now works no matter which endpoint Resend routes it to. Never collides with real replies (requires the rewards token + an image). <strong>Touched</strong>: new <code>portal-import-email.ts</code> (shared token-extract + image-fetch + ingest), <code>api.resend.inbound.ts</code> + <code>api.resend.inbound-rewards.ts</code> (both call it), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.142.1",
     date: "June 2026",
     items: [
