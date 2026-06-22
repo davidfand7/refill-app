@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.140.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.140.0 &mdash; Verified pricing: add an unrecognized product right from the review (Ship 2.1).</strong> When a portal screenshot has a price for something not yet in your catalog, that row used to be a dead-end (&ldquo;add the product first&rdquo;). Now each unmatched price has a <strong>+ Add product</strong> button inline: it opens a tiny form pre-filled with the product name, you pick the two things a screenshot can&rsquo;t tell us (<strong>category</strong> + <strong>unit type</strong>, plus units-per-box if the price is per box, and an optional sales price), and the portal price comes straight in as a <strong>Verified</strong> cost. One click and the unrecognized product is in your catalog, already verified &mdash; no detour to the Products tab. The cost is read server-side from the stored portal price (you can&rsquo;t accidentally type a wrong number), and the per-box &divide; units conversion shows live so you see the per-unit cost before you save. <strong>Touched</strong>: <code>createProductFromPortalRowFn</code> (new server fn, stamps <code>cost_source='portal'</code>) in <code>portal-import.functions.ts</code> + inline add UI in <code>verified-pricing.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.139.0",
     date: "June 2026",
     items: [

@@ -26,6 +26,7 @@ import {
   Clock,
   ImageUp,
   Loader2,
+  Plus,
   ShieldCheck,
   Sparkles,
   Trash2,
@@ -40,11 +41,40 @@ import { cn } from "@/lib/utils";
 import {
   applyPortalImportBatchFn,
   createPortalImportFromUploadFn,
+  createProductFromPortalRowFn,
   dismissPortalImportBatchFn,
   listPortalImportBatchesFn,
   type PortalImportBatch,
   type PortalImportProposal,
 } from "@/server/portal-import.functions";
+import type { ProductCategory, ProductUnitType } from "@/server/refill-catalog";
+
+// Inline-add option lists (mirror the product editor; biostimulator is folded
+// into Filler + a sub-category, so it's omitted from the picker).
+const ADD_CATEGORY_OPTIONS: Array<{ value: ProductCategory; label: string }> = [
+  { value: "tox", label: "Tox" },
+  { value: "filler", label: "Filler" },
+  { value: "laser_consumable", label: "Laser consumable" },
+  { value: "facial", label: "Facial" },
+  { value: "skincare", label: "Skincare" },
+  { value: "other", label: "Other" },
+];
+
+const ADD_UNIT_OPTIONS: Array<{ value: ProductUnitType; label: string }> = [
+  { value: "vial", label: "Vial" },
+  { value: "syringe", label: "Syringe" },
+  { value: "bottle", label: "Bottle" },
+  { value: "session", label: "Session" },
+  { value: "other", label: "Other" },
+];
+
+type AddProductValues = {
+  brand: string;
+  category: ProductCategory;
+  unitType: ProductUnitType;
+  salesPrice: number;
+  unitsPerBox?: number;
+};
 
 export const Route = createFileRoute("/app/refill/catalog/verified-pricing")({
   component: VerifiedPricingPage,
@@ -174,6 +204,8 @@ function VerifiedPricingPage() {
   // Review state.
   const [checked, setChecked] = useState<Set<number>>(new Set());
   const [applying, setApplying] = useState(false);
+  // Unmatched rows the owner has added to the catalog this session (by index).
+  const [addedRows, setAddedRows] = useState<Set<number>>(new Set());
 
   async function withToken<T>(fn: (token: string) => Promise<T>): Promise<T> {
     const { data: sess } = await supabase.auth.getSession();
@@ -221,6 +253,7 @@ function VerifiedPricingPage() {
   // When the active batch changes, default-check applicable rows whose match is
   // confident (strong/likely). Loose + unmatched start unticked — opt-in.
   useEffect(() => {
+    setAddedRows(new Set());
     if (!activeBatch || activeBatch.status !== "pending_review") {
       setChecked(new Set());
       return;
@@ -361,6 +394,29 @@ function VerifiedPricingPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't discard that import.");
     }
+  }
+
+  /** Create a catalog product from an unmatched row. Throws on failure so the
+   *  inline form can reset its busy state; success toast handled here. */
+  async function onCreateProductFromRow(rowIndex: number, values: AddProductValues): Promise<void> {
+    if (!activeBatch) return;
+    const { brand } = await withToken((token) =>
+      createProductFromPortalRowFn({
+        data: {
+          accessToken: token,
+          viewAsUserId,
+          batchId: activeBatch.id,
+          rowIndex,
+          brand: values.brand,
+          category: values.category,
+          unitType: values.unitType,
+          salesPricePerUnit: values.salesPrice,
+          unitsPerBox: values.unitsPerBox,
+        },
+      }),
+    );
+    setAddedRows((prev) => new Set(prev).add(rowIndex));
+    toast.success(`Added ${brand} — Verified from your portal.`, { duration: 8000 });
   }
 
   return (
@@ -552,6 +608,8 @@ function VerifiedPricingPage() {
             applying={applying}
             onApply={onApply}
             onDismiss={() => onDismiss(activeBatch.id)}
+            addedRows={addedRows}
+            onCreateProductFromRow={onCreateProductFromRow}
           />
         ) : pending.length === 0 ? (
           <div className="rounded-xl border border-dashed border-rule bg-white px-6 py-10 text-center">
@@ -628,6 +686,8 @@ function ReviewTable({
   applying,
   onApply,
   onDismiss,
+  addedRows,
+  onCreateProductFromRow,
 }: {
   batch: PortalImportBatch;
   checked: Set<number>;
@@ -637,10 +697,16 @@ function ReviewTable({
   applying: boolean;
   onApply: () => void;
   onDismiss: () => void;
+  addedRows: Set<number>;
+  onCreateProductFromRow: (rowIndex: number, values: AddProductValues) => Promise<void>;
 }) {
   const rows = batch.proposals;
   const matched = rows.filter((p) => p.matchedProductId);
-  const unmatched = rows.filter((p) => !p.matchedProductId);
+  // Keep the original proposal index so the inline-add can point the server at
+  // the exact staged row (server reads the trusted price from there).
+  const unmatchedIdx = rows
+    .map((p, i) => ({ p, i }))
+    .filter((x) => !x.p.matchedProductId);
   const allApplicableChecked =
     applicableCount > 0 &&
     rows.every((p, i) => !isApplicable(p) || checked.has(i));
@@ -654,7 +720,8 @@ function ReviewTable({
           {manufacturerLabel(batch.manufacturer)}
         </span>
         <span className="text-[12px] text-ink-soft">
-          · {matched.length} matched{unmatched.length > 0 ? ` · ${unmatched.length} unmatched` : ""}
+          · {matched.length} matched
+          {unmatchedIdx.length > 0 ? ` · ${unmatchedIdx.length} unmatched` : ""}
         </span>
         <span className="ml-auto text-[11px] text-ink-faint">{fmtWhen(batch.createdAt)}</span>
       </div>
@@ -754,27 +821,26 @@ function ReviewTable({
         </table>
       </div>
 
-      {/* Unmatched — info only */}
-      {unmatched.length > 0 && (
-        <div className="px-5 py-3 border-t border-rule bg-paper/30">
-          <details>
-            <summary className="cursor-pointer text-[12px] text-ink-soft hover:text-ink">
-              {unmatched.length} price{unmatched.length === 1 ? "" : "s"} we couldn’t match to your catalog
-            </summary>
-            <ul className="mt-2 space-y-1 text-[12px] text-ink-soft">
-              {unmatched.map((p, i) => (
-                <li key={i} className="flex items-center justify-between gap-3 tabular-nums">
-                  <span className="truncate">{p.parsedName}</span>
-                  <span className="text-ink-faint shrink-0">
-                    {fmtUsd(p.parsedPrice)} / {p.parsedUnitBasis === "unknown" ? "unit?" : p.parsedUnitBasis}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-[11px] text-ink-faint leading-snug">
-              These don’t line up with a product you stock — add the product first, or this may be a different manufacturer than selected. They won’t be applied.
-            </p>
-          </details>
+      {/* Unmatched — add them to the catalog right here (portal-verified). */}
+      {unmatchedIdx.length > 0 && (
+        <div className="px-5 py-4 border-t border-rule bg-paper/30 space-y-2">
+          <div className="text-[12px] text-ink-soft">
+            <span className="font-semibold text-ink">
+              {unmatchedIdx.length} price{unmatchedIdx.length === 1 ? "" : "s"} we couldn’t match
+            </span>{" "}
+            to a product you stock. Add it to your catalog right here — the portal price comes in as a{" "}
+            <span className="font-semibold text-emerald-ink">Verified</span> cost.
+          </div>
+          <ul className="space-y-2">
+            {unmatchedIdx.map(({ p, i }) => (
+              <UnmatchedAddRow
+                key={i}
+                proposal={p}
+                added={addedRows.has(i)}
+                onCreate={(values) => onCreateProductFromRow(i, values)}
+              />
+            ))}
+          </ul>
         </div>
       )}
 
@@ -817,6 +883,214 @@ function ReviewTable({
         </button>
       </div>
     </div>
+  );
+}
+
+// ─── Inline "add unmatched product" row ───────────────────────────────────────
+
+function AddField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="text-[10px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+const ADD_INPUT_CLS =
+  "w-full rounded-md border border-rule bg-white px-2.5 py-1.5 text-[13px] text-ink outline-none focus:border-emerald focus:ring-2 focus:ring-emerald/30";
+
+function UnmatchedAddRow({
+  proposal,
+  added,
+  onCreate,
+}: {
+  proposal: PortalImportProposal;
+  added: boolean;
+  onCreate: (values: AddProductValues) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [brand, setBrand] = useState(proposal.parsedName);
+  const [category, setCategory] = useState<ProductCategory>("filler");
+  const [unitType, setUnitType] = useState<ProductUnitType>("syringe");
+  const [unitsPerBox, setUnitsPerBox] = useState("1");
+  const [salesPrice, setSalesPrice] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const isBox = proposal.parsedUnitBasis === "box";
+  const units = isBox ? Math.max(1, Number.parseInt(unitsPerBox, 10) || 1) : 1;
+  const perUnitCost = isBox && units > 1 ? proposal.parsedPrice / units : proposal.parsedPrice;
+
+  if (added) {
+    return (
+      <li className="flex items-center gap-2 rounded-lg border border-emerald/30 bg-emerald-soft/40 px-3 py-2.5 text-[13px]">
+        <CheckCircle2 className="h-4 w-4 text-emerald shrink-0" />
+        <span className="font-semibold text-ink">{brand}</span>
+        <span className="text-ink-soft">added to your catalog</span>
+        <CostSourceBadge source="portal" className="ml-1" />
+      </li>
+    );
+  }
+
+  async function submit() {
+    if (busy || !brand.trim()) return;
+    setBusy(true);
+    try {
+      await onCreate({
+        brand: brand.trim(),
+        category,
+        unitType,
+        salesPrice: salesPrice.trim() ? Math.max(0, Number.parseFloat(salesPrice) || 0) : 0,
+        unitsPerBox: isBox ? units : undefined,
+      });
+      // Parent flips `added` on success → this row re-renders into added state.
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't add that product.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li className="rounded-lg border border-rule bg-white">
+      <div className="flex items-center gap-3 px-3 py-2.5">
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-medium text-ink truncate">{proposal.parsedName}</div>
+          <div className="text-[11px] text-ink-faint tabular-nums">
+            {fmtUsd(proposal.parsedPrice)} /{" "}
+            {proposal.parsedUnitBasis === "unknown" ? "unit?" : proposal.parsedUnitBasis}
+          </div>
+        </div>
+        {!open && (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="inline-flex items-center gap-1 rounded-md border border-rule bg-white px-2.5 py-1.5 text-[12px] font-semibold text-ink-soft hover:text-emerald hover:border-emerald/40 transition shrink-0"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add product
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div className="px-3 pb-3 pt-1 border-t border-rule/60 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <AddField label="Product name">
+              <input
+                type="text"
+                value={brand}
+                onChange={(e) => setBrand(e.target.value)}
+                disabled={busy}
+                className={ADD_INPUT_CLS}
+              />
+            </AddField>
+            <AddField label="Category">
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value as ProductCategory)}
+                disabled={busy}
+                className={ADD_INPUT_CLS}
+              >
+                {ADD_CATEGORY_OPTIONS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </AddField>
+            <AddField label="Unit type">
+              <select
+                value={unitType}
+                onChange={(e) => setUnitType(e.target.value as ProductUnitType)}
+                disabled={busy}
+                className={ADD_INPUT_CLS}
+              >
+                {ADD_UNIT_OPTIONS.map((u) => (
+                  <option key={u.value} value={u.value}>
+                    {u.label}
+                  </option>
+                ))}
+              </select>
+            </AddField>
+            {isBox && (
+              <AddField label="Units per box">
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={unitsPerBox}
+                  onChange={(e) => setUnitsPerBox(e.target.value)}
+                  disabled={busy}
+                  className={`${ADD_INPUT_CLS} tabular-nums`}
+                />
+              </AddField>
+            )}
+            <AddField label="Sales price / unit (optional)">
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={salesPrice}
+                onChange={(e) => setSalesPrice(e.target.value)}
+                placeholder="Set later"
+                disabled={busy}
+                className={`${ADD_INPUT_CLS} tabular-nums`}
+              />
+            </AddField>
+          </div>
+
+          <div className="flex items-center gap-1.5 flex-wrap rounded-md bg-emerald-soft/60 px-3 py-2 text-[12px] text-ink">
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald" />
+            <span>
+              Cost: <span className="font-semibold tabular-nums">{fmtUsd(perUnitCost)}</span> / unit
+            </span>
+            {isBox && units > 1 && (
+              <span className="text-ink-soft tabular-nums">
+                ({fmtUsd(proposal.parsedPrice)} ÷ {units})
+              </span>
+            )}
+            <span className="text-ink-soft">· from your portal · saved as Verified</span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={submit}
+              disabled={busy || !brand.trim()}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-4 py-2 text-[13px] font-semibold shadow-sm transition",
+                busy || !brand.trim()
+                  ? "bg-rule text-ink-faint cursor-not-allowed"
+                  : "bg-emerald text-paper hover:opacity-95",
+              )}
+            >
+              {busy ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Adding&hellip;
+                </>
+              ) : (
+                <>
+                  <Plus className="h-3.5 w-3.5" />
+                  Add as Verified
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              disabled={busy}
+              className="text-[12px] text-ink-soft hover:text-ink transition"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </li>
   );
 }
 

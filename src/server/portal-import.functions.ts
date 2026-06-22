@@ -187,6 +187,89 @@ export const applyPortalImportBatchFn = createServerFn({ method: "POST" })
     return { updated };
   });
 
+// Valid product manufacturer enum (mirrors refill-catalog MANUFACTURER_VALUES);
+// the batch's free-string manufacturer is only kept if it maps to a real one.
+const PRODUCT_MANUFACTURERS = [
+  "abbvie", "galderma", "evolus", "merz", "skinceuticals", "eltamd", "neocutis",
+  "obagi", "revance", "rha", "sciton", "abbvie-coolsculpting", "generic", "in_house",
+] as const;
+
+const createFromRowInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+  batchId: z.string().uuid(),
+  /** Index into the batch's staged proposals (the unmatched row being added). */
+  rowIndex: z.number().int().nonnegative(),
+  brand: z.string().trim().min(1).max(120),
+  category: z.enum(["tox", "filler", "biostimulator", "laser_consumable", "facial", "skincare", "other"]),
+  unitType: z.enum(["vial", "syringe", "bottle", "session", "other"]),
+  salesPricePerUnit: z.number().nonnegative().default(0),
+  /** Units per box — used to convert a box-priced row to per-unit cost. */
+  unitsPerBox: z.number().int().positive().max(100).optional(),
+});
+
+/** Create a brand-new catalog product from an unmatched portal row. The cost is
+ *  read from the SERVER-stored parsed price (never a client value) and stamped
+ *  cost_source='portal' (Verified) — the portal number is the authority. Closes
+ *  the dead-end where an unrecognized product had no path forward. */
+export const createProductFromPortalRowFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => createFromRowInput.parse(raw))
+  .handler(async ({ data }): Promise<{ productId: string; brand: string }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, NO_TENANT_MSG);
+
+    const { data: batch, error: bErr } = await sb
+      .from("portal_import_batches")
+      .select("manufacturer, rows")
+      .eq("id", data.batchId)
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
+    if (bErr) throw new Error(`Couldn't load that import: ${bErr.message}`);
+    if (!batch) throw new Error("That import batch wasn't found.");
+
+    const proposals: PortalImportProposal[] = (
+      Array.isArray(batch.rows) ? batch.rows : []
+    ) as unknown as PortalImportProposal[];
+    const row = proposals[data.rowIndex];
+    if (!row) throw new Error("That price row wasn't found in the import.");
+
+    // Server-trusted per-unit cost from the stored portal price (GIGO-safe):
+    // box price ÷ units_per_box; a per-unit / unknown price is already per unit.
+    const units = data.unitsPerBox && data.unitsPerBox > 1 ? data.unitsPerBox : 1;
+    const cost =
+      row.parsedUnitBasis === "box" && units > 1
+        ? Math.round((row.parsedPrice / units) * 100) / 100
+        : row.parsedPrice;
+
+    const manufacturer =
+      batch.manufacturer && (PRODUCT_MANUFACTURERS as readonly string[]).includes(batch.manufacturer)
+        ? batch.manufacturer
+        : null;
+
+    const { data: created, error } = await sb
+      .from("products")
+      .insert({
+        tenant_id: tenantId,
+        brand: data.brand,
+        category: data.category,
+        unit_type: data.unitType,
+        cost_per_unit: cost,
+        sales_price_per_unit: data.salesPricePerUnit,
+        cost_source: "portal",
+        manufacturer,
+        units_per_box: units > 1 ? units : null,
+        notes: null,
+      })
+      .select("id, brand")
+      .single();
+    if (error) throw new Error(`Couldn't add product: ${error.message}`);
+    return { productId: created.id, brand: created.brand };
+  });
+
 const dismissInput = z.object({
   accessToken: z.string().min(1),
   viewAsUserId: z.string().uuid().optional(),
