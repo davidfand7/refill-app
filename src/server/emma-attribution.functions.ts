@@ -49,7 +49,8 @@ export type RecoveryAgent =
   | "preshow"
   | "recall"
   | "cross_sell"
-  | "reschedule";
+  | "reschedule"
+  | "allocation";
 export type VerificationSource = "qbo" | "stripe" | "square" | "manual";
 
 export type RecoveryEvent = {

@@ -43,8 +43,15 @@ export type IncentiveScoreboard = {
   /** Recall + cross-sell each settle as a verified recovery_event. */
   recall: { count: number; recoveredUsd: number };
   crossSell: { count: number; recoveredUsd: number };
-  /** Send-only: no $ until allocation→booking attribution ships. */
-  allocation: { sentCount: number; units: number };
+  /** v2.159.0: now a full lane. sentCount/units = deployed allocations
+   * (knowledge_nodes); bookedCount/recoveredUsd = verified allocation_booking
+   * recovery_events (a patient who received an allocation then booked). */
+  allocation: {
+    sentCount: number;
+    units: number;
+    bookedCount: number;
+    recoveredUsd: number;
+  };
 };
 
 const accessInput = z.object({
@@ -78,12 +85,17 @@ export const getIncentiveScoreboard = createServerFn({ method: "POST" })
 
     const recall = agg.get("recall_booking") ?? { count: 0, revenueUsd: 0 };
     const crossSell = agg.get("cross_sell_addon") ?? { count: 0, revenueUsd: 0 };
+    const allocBooked = agg.get("allocation_booking") ?? { count: 0, revenueUsd: 0 };
 
     return {
       windowDays: WINDOW_DAYS,
       recall: { count: recall.count, recoveredUsd: +recall.revenueUsd.toFixed(2) },
       crossSell: { count: crossSell.count, recoveredUsd: +crossSell.revenueUsd.toFixed(2) },
-      allocation,
+      allocation: {
+        ...allocation,
+        bookedCount: allocBooked.count,
+        recoveredUsd: +allocBooked.revenueUsd.toFixed(2),
+      },
     };
   });
 

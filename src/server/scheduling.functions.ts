@@ -50,6 +50,7 @@ import {
   recordCrossSellWin,
 } from "@/server/refill-promo-calendar.functions";
 import { recordRescheduleWinIfNudged } from "@/server/reschedule.functions";
+import { recordAllocationWinIfBooked } from "@/server/refill-recognition-allocation.functions";
 import { getTenantOwnerUserId, tenantBooksOnExternalPms } from "@/server/scheduling-settings.functions";
 import { verifyAuth } from "@/server/auth-helpers";
 import { resolveBrand, resolveBrandForTenant, toPublicBrand, type PublicBrand } from "@/server/brand-resolver";
@@ -1095,6 +1096,20 @@ export const confirmBooking = createServerFn({ method: "POST" })
         });
       } catch (e) {
         console.error("[reschedule] public self-book win failed:", e);
+      }
+      // Allocation: LOWEST-priority agent (last). If a patient who received a
+      // deployed rebate allocation books and no more-specific agent claimed this
+      // appointment, credit an 'allocation_booking' win. Best-effort.
+      try {
+        await recordAllocationWinIfBooked({
+          sb,
+          userId: updated.user_id,
+          appointmentId: updated.id,
+          email: data.email,
+          phone: data.phone || null,
+        });
+      } catch (e) {
+        console.error("[allocation] public self-book win failed:", e);
       }
     }
 

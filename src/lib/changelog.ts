@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.159.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.159.0 &mdash; Allocation becomes a real ROI lane.</strong> Last ship&rsquo;s &ldquo;Incentives at work&rdquo; band showed <strong>Allocation</strong> as send-only with a &ldquo;conversion tracking soon&rdquo; tag &mdash; honest, but incomplete. Now it&rsquo;s <em>wired</em>: when a patient who received a <strong>deployed rebate allocation</strong> (a confirmed/sent suggestion) books a visit, SmartSpa settles it as a recovery event (<code>recovery_agent='allocation'</code>) and back-references the booking onto the suggestion &mdash; so the Allocation lane shows real <strong>bookings + dollars recovered</strong>, folded into the headline total alongside Recall and Cross-sell. <strong>Honest by construction</strong>: allocation is the <em>lowest-priority</em> agent &mdash; there&rsquo;s one win per booking, so if a more specific agent (recall / cross-sell / reschedule) already claimed that visit, allocation does <em>not</em> double-count the revenue; it only credits bookings nothing else claimed. Credit is bounded by a 120-day look-back and one-allocation-one-booking, and stale/pending suggestions never qualify. Until a patient actually books, the lane reads &ldquo;N sent &middot; awaiting first booking.&rdquo; <strong>Not billed</strong> &mdash; allocation deploys the spa&rsquo;s <em>own</em> rebate units, so it&rsquo;s scored for the scoreboard but charges no fee. <strong>New</strong>: <code>recordAllocationWinIfBooked</code> (wired into both booking flows, best-effort, never blocks a booking). <strong>Migration</strong>: widen the <code>recovery_agent</code> CHECK to accept <code>'allocation'</code>. <strong>Touched</strong>: <code>refill-recognition-allocation.functions.ts</code>, <code>scheduling.functions.ts</code>, <code>scheduling-owner.functions.ts</code>, <code>refill-incentive-scoreboard.functions.ts</code>, <code>IncentivesAtWorkBand.tsx</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.158.0",
     date: "June 2026",
     items: [

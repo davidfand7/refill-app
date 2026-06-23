@@ -65,8 +65,12 @@ export function IncentivesAtWorkBand({
     );
   }
 
-  const recoveredUsd = data.recall.recoveredUsd + data.crossSell.recoveredUsd;
-  const recoveredBookings = data.recall.count + data.crossSell.count;
+  const recoveredUsd =
+    data.recall.recoveredUsd +
+    data.crossSell.recoveredUsd +
+    data.allocation.recoveredUsd;
+  const recoveredBookings =
+    data.recall.count + data.crossSell.count + data.allocation.bookedCount;
   const allEmpty =
     recoveredBookings === 0 &&
     recoveredUsd === 0 &&
@@ -128,15 +132,24 @@ export function IncentivesAtWorkBand({
                 data.crossSell.count === 1 ? "booking" : "bookings"
               } recovered`}
             />
-            <LaneTile
-              icon={<Activity className="h-3.5 w-3.5" />}
-              label="Allocation"
-              primary={`${data.allocation.sentCount} sent`}
-              secondary={`${data.allocation.units} ${
-                data.allocation.units === 1 ? "unit" : "units"
-              } to patients`}
-              tag="Conversion tracking soon"
-            />
+            {data.allocation.bookedCount > 0 ? (
+              <LaneTile
+                icon={<Activity className="h-3.5 w-3.5" />}
+                label="Allocation"
+                primary={usd(data.allocation.recoveredUsd)}
+                secondary={`${data.allocation.bookedCount} booked · ${data.allocation.sentCount} sent`}
+              />
+            ) : (
+              <LaneTile
+                icon={<Activity className="h-3.5 w-3.5" />}
+                label="Allocation"
+                primary={`${data.allocation.sentCount} sent`}
+                secondary={`${data.allocation.units} ${
+                  data.allocation.units === 1 ? "unit" : "units"
+                } to patients`}
+                tag={data.allocation.sentCount > 0 ? "Awaiting first booking" : undefined}
+              />
+            )}
           </div>
         </>
       )}

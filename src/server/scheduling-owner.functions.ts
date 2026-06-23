@@ -26,6 +26,7 @@ import {
   recordCrossSellWin,
 } from "@/server/refill-promo-calendar.functions";
 import { recordRescheduleWinIfNudged } from "@/server/reschedule.functions";
+import { recordAllocationWinIfBooked } from "@/server/refill-recognition-allocation.functions";
 import { bestActiveOfferForName, badgeableOffers, type AddOnOffer } from "@/lib/promo-calendar";
 import { zonedWallClockToUtc, zonedDateParts, todayIsoInTz } from "@/lib/scheduling-slots";
 import { sendBookingConfirmation } from "@/server/scheduling-email";
@@ -835,6 +836,20 @@ export const ownerCreateAppointmentFn = createServerFn({ method: "POST" })
       });
     } catch (e) {
       console.error("[reschedule] win record failed:", e);
+    }
+    // Allocation: LOWEST-priority agent (last). Credits an 'allocation_booking'
+    // win when a patient who received a deployed rebate allocation books and no
+    // more-specific agent claimed this appointment. Best-effort.
+    try {
+      await recordAllocationWinIfBooked({
+        sb,
+        userId: effectiveUserId,
+        appointmentId: created.id,
+        email: data.patientEmail ?? null,
+        phone: data.patientPhone ?? null,
+      });
+    } catch (e) {
+      console.error("[allocation] win record failed:", e);
     }
 
     return { ok: true, id: created.id };

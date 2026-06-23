@@ -32,6 +32,8 @@ import type { PatientSummary } from "@/lib/patient-csv";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
 import { postResendEmail } from "@/server/resend-send";
+import { recordRecoveryEvent } from "@/server/emma-attribution.functions";
+import { resolvePatientNodeByContact } from "@/server/refill-promo-calendar.functions";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -230,6 +232,12 @@ type SuggestionAttachments = {
   score: number;
   rationale: string;
   status: "pending" | "confirmed" | "dismissed" | "dispatched" | "sent";
+  /** v2.159.0 allocation→booking attribution backref — set once the patient who
+   * received this deployed allocation books a visit. Presence = "already
+   * attributed" (one allocation credits one booking). */
+  bookedAt?: string;
+  bookedRecoveryEventId?: string;
+  bookedAppointmentId?: string;
 };
 
 export const listAllocationSuggestions = createServerFn({ method: "POST" })
@@ -877,3 +885,118 @@ export const dispatchAllocationBatch = createServerFn({ method: "POST" })
       };
     },
   );
+
+// ─── Allocation → booking attribution (v2.159.0, Part B fast-follow) ────────
+
+const ALLOCATION_BOOKING_WINDOW_DAYS = 120;
+const DEPLOYED_STATUSES = new Set(["confirmed", "dispatched", "sent"]);
+
+/**
+ * Best-effort: when a patient who RECEIVED a deployed rebate allocation books a
+ * visit, settle it as a recovery event (recovery_agent='allocation',
+ * metric_key='allocation_booking') and back-reference the booking onto the
+ * suggestion. This is the (b) half of the incentive-ROI scoreboard — it turns
+ * the Allocation lane from send-only into a real {booked, $recovered}.
+ *
+ * Mirrors recordCrossSellWin: resolves the patient by contact, idempotent on
+ * appointment_id (the recovery_events unique index), and NEVER throws into the
+ * booking flow (callers wrap in try/catch; we also fail soft).
+ *
+ * LOWEST-PRIORITY agent: recovery_events allows ONE event per appointment, so
+ * allocation must be recorded AFTER recall/cross_sell/reschedule. If a more
+ * specific agent already claimed this booking, recordRecoveryEvent returns the
+ * existing row (created=false) and we DON'T attribute or backref — no revenue
+ * double-count, the allocation stays open for a future un-claimed booking.
+ *
+ * Attribution rules that keep the credit honest:
+ *   - the patient must have a suggestion in a DEPLOYED status (confirmed/
+ *     dispatched/sent) — a pending/dismissed suggestion never went out;
+ *   - within a 120-day look-back (a stale allocation shouldn't claim a random
+ *     future booking);
+ *   - not already attributed (bookedAt unset).
+ *
+ * NOT billable: 'allocation_booking' is absent from BILLABLE_METRICS, so this
+ * scores for the scoreboard without auto-charging a $5 fee (the spa's own
+ * rebate units drove it).
+ */
+export async function recordAllocationWinIfBooked(args: {
+  sb: ReturnType<typeof admin>;
+  userId: string;
+  appointmentId: string;
+  email: string | null;
+  phone: string | null;
+}): Promise<{ recorded: boolean; reason?: string }> {
+  const { sb, userId, appointmentId, email, phone } = args;
+
+  const patientNodeId = await resolvePatientNodeByContact(
+    sb as unknown as Parameters<typeof resolvePatientNodeByContact>[0],
+    userId,
+    email,
+    phone,
+  );
+  if (!patientNodeId) return { recorded: false, reason: "unmatched_patient" };
+
+  const sinceIso = new Date(
+    Date.now() - ALLOCATION_BOOKING_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+
+  // Narrow by patient via the jsonb path (loose handle — attachments->> isn't a
+  // typed column), then pick the most recent DEPLOYED, not-yet-attributed
+  // suggestion inside the look-back window.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const nodes = (sb as unknown as { from(t: string): any }).from("knowledge_nodes");
+  const { data: rows } = await nodes
+    .select("id, attachments, created_at")
+    .eq("user_id", userId)
+    .eq("node_type", "allocation_suggestion")
+    .eq("attachments->>patientNodeId", patientNodeId)
+    .gte("created_at", sinceIso)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  const candidate = ((rows ?? []) as Array<{ id: string; attachments: Json | null }>).find(
+    (r) => {
+      const a = (r.attachments ?? {}) as SuggestionAttachments;
+      return DEPLOYED_STATUSES.has(a.status) && !a.bookedAt;
+    },
+  );
+  if (!candidate) return { recorded: false, reason: "no_deployed_allocation" };
+
+  const att = (candidate.attachments ?? {}) as SuggestionAttachments;
+
+  const ev = await recordRecoveryEvent({
+    sb: sb as unknown as Parameters<typeof recordRecoveryEvent>[0]["sb"],
+    userId,
+    appointmentId,
+    patientNodeId,
+    recoveryAgent: "allocation",
+    metricKey: "allocation_booking",
+    attributionMethod: "direct",
+    notes: `Allocation→booking: ${att.brand ?? "rebate units"}`,
+  });
+
+  // A more specific agent already settled this appointment → don't double-credit.
+  if (!ev.created) {
+    return { recorded: false, reason: "appointment_already_attributed" };
+  }
+
+  // Back-reference the booking onto the suggestion so it isn't re-attributed and
+  // the Allocation surface can show "booked." Best-effort — the recovery event
+  // is the scoreboard's source of truth either way.
+  const next: SuggestionAttachments = {
+    ...att,
+    bookedAt: new Date().toISOString(),
+    bookedRecoveryEventId: ev.id,
+    bookedAppointmentId: appointmentId,
+  };
+  await nodes
+    .update({ attachments: next as unknown as Json, updated_at: new Date().toISOString() })
+    .eq("id", candidate.id)
+    .then((res: { error: { message: string } | null }) => {
+      if (res.error) {
+        console.error("[allocation-win] backref update failed:", res.error.message);
+      }
+    });
+
+  return { recorded: true };
+}
