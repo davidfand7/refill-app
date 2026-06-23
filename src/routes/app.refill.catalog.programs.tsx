@@ -35,6 +35,10 @@ import {
   type VerifiedLadder,
 } from "@/server/refill-catalog-seed";
 import { composeRepProposalFn } from "@/server/rep-dealmaker.functions";
+import {
+  getManufacturerBurnRatesFn,
+  type ManufacturerBurn,
+} from "@/server/manufacturer-burn-rate.functions";
 import type { ManufacturerProgramTiers } from "@/lib/manufacturer-tier-resolver";
 import { computeLeverageWindow } from "@/lib/manufacturer-fiscal-calendar";
 import { cn } from "@/lib/utils";
@@ -116,6 +120,30 @@ function nextBreakForMfr(
   return null;
 }
 
+/** Compact USD ("$8.4k", "$34k", "$950"). */
+function fmtSpend(n: number): string {
+  if (n >= 1000) {
+    const k = n / 1000;
+    return `$${k >= 10 ? Math.round(k) : k.toFixed(1)}k`;
+  }
+  return `$${Math.round(n)}`;
+}
+
+/** Best burn product matching a focus name (family ↔ product_name, either way). */
+function matchBurnProduct(
+  burn: ManufacturerBurn | null | undefined,
+  focusName: string,
+): ManufacturerBurn["products"][number] | null {
+  if (!burn || !focusName.trim()) return null;
+  const f = focusName.trim().toLowerCase();
+  return (
+    burn.products.find((p) => {
+      const n = p.productName.toLowerCase();
+      return n.includes(f) || f.includes(n);
+    }) ?? null
+  );
+}
+
 const dealInputCls =
   "w-full rounded-md border border-rule bg-white px-3 py-2 text-[14px] text-ink outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-400/30";
 
@@ -123,11 +151,12 @@ function RepDealMakerDialog(props: {
   manufacturerKey: string | null;
   manufacturerLabel: string;
   hint: VolumeHint | null;
+  burn: ManufacturerBurn | null;
   getToken: () => Promise<string>;
   viewAsUserId?: string;
   onClose: () => void;
 }) {
-  const { manufacturerKey, manufacturerLabel, hint, getToken, viewAsUserId, onClose } = props;
+  const { manufacturerKey, manufacturerLabel, hint, burn, getToken, viewAsUserId, onClose } = props;
   const open = manufacturerKey != null;
   const win = useMemo(
     () => (manufacturerKey ? computeLeverageWindow(manufacturerKey) : null),
@@ -152,9 +181,12 @@ function RepDealMakerDialog(props: {
     setRepName("");
     setTone("warm");
     setChannel("email");
-    setProductName(hint?.productName ?? "");
+    const initialFocus = hint?.productName ?? "";
+    setProductName(initialFocus);
     setTargetQty(hint?.targetQty != null ? String(hint.targetQty) : "");
-    setTypicalQty("");
+    // Pre-fill the owner's pace from their records (estimate — owner confirms).
+    const matched = matchBurnProduct(burn, initialFocus) ?? burn?.products[0] ?? null;
+    setTypicalQty(matched ? String(Math.round(matched.unitsPerQuarter)) : "");
     setRelationshipNote("");
     setSubject("");
     setBody("");
@@ -183,6 +215,8 @@ function RepDealMakerDialog(props: {
           targetUnitPrice: hint?.targetUnitPrice ?? undefined,
           unitLabel: hint?.unitLabel ?? undefined,
           typicalQtyPerQuarter: typicalQty.trim() ? Number(typicalQty) : undefined,
+          quarterlySpendUsd: burn?.quarterlySpendUsd ?? undefined,
+          annualSpendUsd: burn?.annualSpendUsd ?? undefined,
           relationshipNote: relationshipNote.trim() || undefined,
           tone,
           channel,
@@ -233,6 +267,14 @@ function RepDealMakerDialog(props: {
         {win && (
           <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-900 leading-snug">
             {win.headline}
+          </div>
+        )}
+
+        {burn && burn.annualSpendUsd > 0 && (
+          <div className="text-[12px] text-ink-soft">
+            <span className="font-semibold text-ink">Your volume with {manufacturerLabel}:</span>{" "}
+            ~{fmtSpend(burn.quarterlySpendUsd)}/qtr · ~{fmtSpend(burn.annualSpendUsd)}/yr
+            <span className="text-ink-faint"> — credible leverage that's all yours.</span>
           </div>
         )}
 
@@ -300,6 +342,16 @@ function RepDealMakerDialog(props: {
                 onChange={(e) => setTypicalQty(e.target.value)}
                 placeholder="makes the ask credible"
               />
+              {(() => {
+                const m = matchBurnProduct(burn, productName) ?? burn?.products[0] ?? null;
+                if (!m) return null;
+                return (
+                  <p className="mt-1 text-[10px] text-ink-faint leading-snug">
+                    ~{Math.round(m.unitsPerQuarter)}/qtr of {m.productName} from your records
+                    {m.fromDollarEstimate ? " (estimated)" : ""} — adjust if off.
+                  </p>
+                );
+              })()}
             </div>
             <div>
               <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
@@ -402,6 +454,8 @@ function ProgramsPage() {
   >({});
   // Rep Deal-Maker: which manufacturer's ghostwriter dialog is open (null = closed).
   const [dealMfr, setDealMfr] = useState<string | null>(null);
+  // Burn-rate (slice 2): manufacturer → the spa's own buying pace.
+  const [burnByMfr, setBurnByMfr] = useState<Record<string, ManufacturerBurn>>({});
 
   async function token(): Promise<string> {
     const { data: sess } = await supabase.auth.getSession();
@@ -414,9 +468,11 @@ function ProgramsPage() {
     setLoading(true);
     try {
       const t = await token();
-      const [progs, sels] = await Promise.all([
+      const [progs, sels, burn] = await Promise.all([
         getManufacturerProgramsFn({ data: { accessToken: t, viewAsUserId } }),
         getTenantTierSelectionsFn({ data: { accessToken: t, viewAsUserId } }),
+        // Non-critical: a burn failure must not break the programs page.
+        getManufacturerBurnRatesFn({ data: { accessToken: t, viewAsUserId } }).catch(() => null),
       ]);
       const selByMfr = new Map(sels.map((s) => [s.manufacturer, s.selection]));
       const verByMfr: Record<string, Record<string, VerifiedLadder>> = {};
@@ -438,6 +494,7 @@ function ProgramsPage() {
       setPrograms(progs as Program[]);
       setDrafts(nextDrafts);
       setVerifiedByMfr(verByMfr);
+      setBurnByMfr(burn?.byManufacturer ?? {});
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't load programs.");
     } finally {
@@ -788,6 +845,16 @@ function ProgramsPage() {
                             </span>
                           </div>
                           <p className="mt-1.5 text-[13px] text-amber-900 leading-snug">{win.headline}</p>
+                          {(() => {
+                            const b = burnByMfr[p.manufacturer];
+                            if (!b || b.annualSpendUsd <= 0) return null;
+                            return (
+                              <p className="mt-1 text-[12px] text-amber-800/90 leading-snug">
+                                Your volume: <span className="font-semibold">~{fmtSpend(b.quarterlySpendUsd)}/qtr</span> ·
+                                ~{fmtSpend(b.annualSpendUsd)}/yr — you're a real account.
+                              </p>
+                            );
+                          })()}
                           <div className="mt-2.5 flex items-center justify-between gap-3 flex-wrap">
                             <button
                               type="button"
@@ -861,6 +928,7 @@ function ProgramsPage() {
         manufacturerKey={dealMfr}
         manufacturerLabel={dealMfr ? mfrLabel(dealMfr) : ""}
         hint={dealMfr ? nextBreakForMfr(verifiedByMfr[dealMfr]) : null}
+        burn={dealMfr ? burnByMfr[dealMfr] ?? null : null}
         getToken={token}
         viewAsUserId={viewAsUserId}
         onClose={() => setDealMfr(null)}

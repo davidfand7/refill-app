@@ -51,8 +51,11 @@ export type RepProposalInput = {
   targetQty?: number | null;
   targetUnitPrice?: number | null;
   unitLabel?: string | null;
-  /** Optional owner-entered burn ("I usually buy ~N per quarter"). */
+  /** Optional owner-entered/derived burn ("I usually buy ~N per quarter"). */
   typicalQtyPerQuarter?: number | null;
+  /** Owner's OWN spend with this manufacturer (reliable; credible volume leverage). */
+  quarterlySpendUsd?: number | null;
+  annualSpendUsd?: number | null;
   /** Optional free-text relationship colour ("we've worked together 6 years"). */
   relationshipNote?: string | null;
   tone: RepProposalTone;
@@ -132,6 +135,15 @@ function buildUserMessage(input: RepProposalInput): string {
   if (input.typicalQtyPerQuarter != null) {
     lines.push("");
     lines.push(`OWNER'S TYPICAL PACE: about ${input.typicalQtyPerQuarter} ${unit}s per quarter (use to make the commitment feel real and credible).`);
+  }
+
+  const qSpend = fmtMoney(input.quarterlySpendUsd);
+  const aSpend = fmtMoney(input.annualSpendUsd);
+  if (qSpend || aSpend) {
+    lines.push("");
+    lines.push("OWNER'S OWN VOLUME WITH THIS MANUFACTURER (the owner's own real spend — credible leverage; reference it as 'my business with you', NEVER compare to anyone else):");
+    if (qSpend) lines.push(`- About ${qSpend} per quarter.`);
+    if (aSpend) lines.push(`- About ${aSpend} per year.`);
   }
 
   if (input.relationshipNote?.trim()) {

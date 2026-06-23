@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.149.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.149.0 &mdash; Rep Deal-Maker (slice 2): your own buying pace, armed for the ask.</strong> The Leverage window now knows how big an account you are. SmartSpa reads your own transaction history and surfaces your <strong>volume with each manufacturer</strong> right on the card &mdash; e.g. <em>&ldquo;Your volume: ~$8.4k/qtr · ~$34k/yr &mdash; you&rsquo;re a real account.&rdquo;</em> That spend figure is rock-solid (it&rsquo;s just the sum of your own purchases, no guesswork), and it&rsquo;s the kind of leverage a rep actually responds to. When you open <strong>&ldquo;Draft my Rep ask,&rdquo;</strong> the Ghostwriter now weaves that volume in as <em>your</em> credible leverage (&ldquo;the business I do with you&rdquo;) and pre-fills <strong>&ldquo;Your usual / quarter&rdquo;</strong> with your derived pace from your records &mdash; so you&rsquo;re not typing numbers, just confirming them. The unit pace is an estimate (toxin dosing-units aren&rsquo;t vials, and not every line records a quantity), so it&rsquo;s clearly labeled and editable &mdash; you have the final say. <strong>The guardrail holds</strong>: every number is <em>yours</em> &mdash; your spend, your pace &mdash; never a word about what anyone else pays. Trailing 12 months; nothing new is stored. <strong>Touched</strong>: new <code>manufacturer-burn-rate.functions.ts</code> (spend + unit-pace aggregation), <code>rep-proposal-core.ts</code> + <code>rep-dealmaker.functions.ts</code> (spend leverage), <code>programs.tsx</code> (volume line + auto-fill), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.148.0",
     date: "June 2026",
     items: [
