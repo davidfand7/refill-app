@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.158.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.158.0 &mdash; Incentives at work: one honest scoreboard for what your incentives actually do.</strong> The <strong>Incentives</strong> tab managed your rebate pool and promos &mdash; but never showed the <em>payoff</em>. New band atop the tab unifies all three incentive surfaces under one lens (trailing 12 months): <strong>Recall</strong> and <strong>Cross-sell offers</strong> show <em>verified</em> bookings + <strong>dollars recovered</strong> &mdash; and that dollar is <em>your</em> recovered treatment revenue (reconciled from your transactions), not SmartSpa&rsquo;s fee. The headline totals the two into one &ldquo;<strong>$X recovered across N bookings</strong>.&rdquo; <strong>Allocation</strong> sits beside them honestly as <em>send-only</em> &mdash; incentives + units you&rsquo;ve put to work for specific patients &mdash; tagged &ldquo;<strong>Conversion tracking soon</strong>&rdquo; rather than faking a dollar it can&rsquo;t yet prove (booking attribution is the fast-follow). Reuses billing&rsquo;s exact <code>aggregateMetricsForTenant</code> math, so the scoreboard and the invoice can&rsquo;t drift; paginated reads on both lanes (no silent under-count). Empty practice gets a plain &ldquo;shows up here as recalls and offers convert&rdquo; state. <strong>New</strong>: <code>refill-incentive-scoreboard.functions.ts</code>, <code>IncentivesAtWorkBand.tsx</code>. <strong>Touched</strong>: <code>recognition.inventory.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.157.0",
     date: "June 2026",
     items: [

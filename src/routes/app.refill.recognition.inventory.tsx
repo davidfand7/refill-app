@@ -40,6 +40,7 @@ import {
 
 import { PageHeader } from "@/components/PageHeader";
 import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
+import { IncentivesAtWorkBand } from "@/components/refill/IncentivesAtWorkBand";
 import { PromoIntelligenceCard } from "@/components/refill/PromoIntelligenceCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
@@ -299,6 +300,15 @@ function RecognitionInventoryPage() {
           <div className="rounded-xl border border-rose/30 bg-rose-soft px-4 py-3 text-sm text-rose">
             {loadError}
           </div>
+        )}
+
+        {/* Cross-source incentive-ROI scoreboard — recall + cross-sell verified
+            $ recovered + allocation send activity, one honest band. */}
+        {accessToken && (
+          <IncentivesAtWorkBand
+            accessToken={accessToken}
+            viewAsUserId={viewAsUserId}
+          />
         )}
 
         {/* Cross-link to the margin lens (same incentives, different view). */}
