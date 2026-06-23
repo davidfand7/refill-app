@@ -21,6 +21,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { admin } from "./admin-client";
 import { getTenantIdForUser, resolveEffectiveUserId } from "@/server/auth-helpers";
+import { resolveRewardIngestToken } from "@/server/manufacturer-reward-ingest.functions";
 import { fetchAllRows } from "@/server/paginate";
 import type { Json } from "@/integrations/supabase/types";
 import type { PortalImportProposal } from "./portal-import-core";
@@ -405,3 +406,89 @@ export const dismissPortalImportBatchFn = createServerFn({ method: "POST" })
     if (error) throw new Error(`Couldn't dismiss that import: ${error.message}`);
     return { ok: true };
   });
+
+// ─── Bookmarklet text lane (createPortalImportFromTextFn) ───────────────────
+// Called same-origin by the /import bridge page (no CORS). Token-authed (the
+// bookmarklet carries the spa token in the URL fragment); reads the portal
+// page's pasted innerText → Claude text-extract → match → review inbox. The
+// bookmarklet is the zero-install front door (drag once, click on any page).
+
+/** Conservative manufacturer hint from the page URL/title. */
+function hintFromUrl(url?: string, title?: string): string | null {
+  const s = `${url ?? ""} ${title ?? ""}`.toLowerCase();
+  if (s.includes("allergan") || s.includes("abbvie") || s.includes("juvederm") || s.includes("botox") || s.includes("voluma"))
+    return "abbvie";
+  if (s.includes("galderma") || s.includes("aspire") || s.includes("restylane") || s.includes("sculptra"))
+    return "galderma";
+  if (s.includes("evolus") || s.includes("jeuveau") || s.includes("evolysse")) return "evolus";
+  if (s.includes("merz") || s.includes("xeomin") || s.includes("radiesse")) return "merz";
+  if (s.includes("revance") || s.includes("daxxify")) return "revance";
+  return null;
+}
+
+const textInput = z.object({
+  token: z.string().min(1),
+  text: z.string().min(1).max(200_000),
+  pageUrl: z.string().optional(),
+  pageTitle: z.string().optional(),
+  captureId: z.string().optional(),
+});
+
+export const createPortalImportFromTextFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => textInput.parse(raw))
+  .handler(
+    async ({
+      data,
+    }): Promise<{
+      ok: boolean;
+      batchId?: string;
+      manufacturer?: string | null;
+      prices?: number;
+      matched?: number;
+      reason?: string;
+    }> => {
+      const sb = admin();
+      // Forgiving: accept the bare token or the full drop-address.
+      const rawToken = data.token.trim();
+      const token = rawToken.includes("@") ? rawToken.split("@")[0].trim() : rawToken;
+      const userId = await resolveRewardIngestToken(sb, token);
+      if (!userId) return { ok: false, reason: "unknown_token" };
+      let tenantId: string;
+      try {
+        tenantId = await getTenantIdForUser(sb, userId, "no_tenant_for_portal_import");
+      } catch {
+        return { ok: false, reason: "no_tenant" };
+      }
+      try {
+        // Dynamic import keeps the Anthropic SDK out of the client bundle.
+        const { ingestPortalImportText } = await import("./portal-import-core");
+        const r = await ingestPortalImportText({
+          sb,
+          tenantId,
+          source: "upload",
+          text: data.text,
+          manufacturerHint: hintFromUrl(data.pageUrl, data.pageTitle),
+          sourceMessageId: data.captureId ?? null,
+        });
+        const matched = r.proposals.filter((p) => p.matchedProductId).length;
+        console.log("[portal-text] import", {
+          tokenPrefix: token.slice(0, 6),
+          chars: data.text.length,
+          batchId: r.batchId,
+          manufacturer: r.manufacturer,
+          prices: r.proposals.length,
+          matched,
+          deduped: r.deduped ?? false,
+        });
+        return {
+          ok: true,
+          batchId: r.batchId,
+          manufacturer: r.manufacturer,
+          prices: r.proposals.length,
+          matched,
+        };
+      } catch (e) {
+        return { ok: false, reason: e instanceof Error ? e.message : "failed" };
+      }
+    },
+  );

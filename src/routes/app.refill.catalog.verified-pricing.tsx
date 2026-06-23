@@ -26,6 +26,7 @@ import {
   CheckCircle2,
   Clock,
   Copy,
+  Download,
   ImageUp,
   Loader2,
   Mail,
@@ -34,6 +35,7 @@ import {
   Sparkles,
   Trash2,
   X,
+  Zap,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -215,6 +217,9 @@ function VerifiedPricingPage() {
   // uses); surfaced here so the email option lives where portal-import lives.
   const [dropAddress, setDropAddress] = useState<string | null>(null);
   const [copiedAddr, setCopiedAddr] = useState(false);
+  // Spa token (baked into the 1-click bookmarklet importer).
+  const [spaToken, setSpaToken] = useState<string | null>(null);
+  const bookmarkletRef = useRef<HTMLAnchorElement>(null);
 
   async function withToken<T>(fn: (token: string) => Promise<T>): Promise<T> {
     const { data: sess } = await supabase.auth.getSession();
@@ -262,7 +267,10 @@ function VerifiedPricingPage() {
         const r = await withToken((token) =>
           getOrCreateRewardIngestToken({ data: { accessToken: token, viewAsUserId } }),
         );
-        if (!cancelled) setDropAddress(r.address);
+        if (!cancelled) {
+          setDropAddress(r.address);
+          setSpaToken(r.token);
+        }
       } catch {
         // non-fatal
       }
@@ -475,6 +483,19 @@ function VerifiedPricingPage() {
   const outlookHref = dropAddress
     ? `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(dropAddress)}&subject=${encodeURIComponent(COMPOSE_SUBJECT)}&body=${encodeURIComponent(COMPOSE_BODY)}`
     : "#";
+
+  // 1-click bookmarklet importer with the spa token baked in. Grabs the portal
+  // page's innerText and hands off to /import via the URL FRAGMENT (CSP-proof —
+  // navigation, not a fetch the portal's connect-src could block).
+  const bookmarkletCode = spaToken
+    ? `javascript:(function(){try{var b=document.querySelector('main')||document.body;var x=(b.innerText||'').slice(0,40000);var p={tk:${JSON.stringify(spaToken)},text:x,url:location.href,title:document.title,ts:Date.now()};var d=btoa(unescape(encodeURIComponent(JSON.stringify(p))));window.open('https://smartspa.app/import#'+d,'_blank');}catch(e){alert('SmartSpa import failed: '+((e&&e.message)||e));}})();`
+    : null;
+  useEffect(() => {
+    // Set the javascript: href via DOM (React strips javascript: hrefs).
+    if (bookmarkletRef.current && bookmarkletCode) {
+      bookmarkletRef.current.setAttribute("href", bookmarkletCode);
+    }
+  }, [bookmarkletCode]);
 
   return (
     <div>
@@ -689,6 +710,43 @@ function VerifiedPricingPage() {
             </div>
             <p className="text-[11px] text-ink-faint">
               Each opens a new message already addressed to you — attach the screenshot and send. Forwarding from any staff inbox works too; it’s tied to your spa, not the sender.
+            </p>
+          </div>
+        )}
+
+        {/* ── 1-click bookmarklet importer — zero install ─────────────────── */}
+        {spaToken && (
+          <div className="rounded-xl border border-rule bg-white px-5 py-5 space-y-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="inline-flex items-center justify-center rounded-full bg-emerald-soft p-1.5">
+                <Zap className="h-4 w-4 text-emerald" />
+              </div>
+              <h2 className="text-[15px] font-semibold text-ink">1-click importer</h2>
+              <span className="text-[12px] text-ink-soft">— no screenshot, no upload, no app to install</span>
+            </div>
+            <p className="text-[13px] text-ink-soft leading-relaxed">
+              Set it up once: drag the button below to your browser’s bookmarks bar. Then, on any
+              manufacturer-portal price page, just click it — SmartSpa reads the page and drops your
+              prices straight into the review below.
+            </p>
+            <div className="flex items-center gap-3 flex-wrap rounded-lg border border-dashed border-emerald/40 bg-emerald-soft/30 px-4 py-3">
+              <a
+                ref={bookmarkletRef}
+                href="#"
+                draggable
+                onClick={(e) => e.preventDefault()}
+                className="inline-flex items-center gap-1.5 rounded-md bg-emerald px-4 py-2 text-[14px] font-semibold text-paper shadow-sm cursor-grab active:cursor-grabbing"
+                title="Drag me to your bookmarks bar"
+              >
+                <Download className="h-4 w-4" />
+                Import to SmartSpa
+              </a>
+              <span className="text-[12px] text-ink-soft">← drag this up to your bookmarks bar</span>
+            </div>
+            <p className="text-[11px] text-ink-faint leading-snug">
+              Bookmarks bar hidden? Show it with <span className="font-mono">⌘⇧B</span>. Works in
+              Chrome, Edge, Safari &amp; Firefox. It reads the page text you’re already logged in to
+              see — no portal password ever leaves your computer.
             </p>
           </div>
         )}

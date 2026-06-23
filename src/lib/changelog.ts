@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.146.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.146.0 &mdash; The 1-click importer: drag once, click anywhere, no install.</strong> The browser-extension route works but nobody’s going to side-load an extension. So: on the <strong>Verified pricing</strong> tab there’s now a <strong>“Import to SmartSpa”</strong> button you <strong>drag to your bookmarks bar once</strong> — your spa token baked right in. After that, on <em>any</em> manufacturer-portal price page (Allergan APP, Galderma ASPIRE, Evolus, anything), just click it: SmartSpa reads the page and drops your prices into the review inbox. No screenshot, no upload, no extension, no password. The clever bits that make it actually work: it reads the page <strong>text</strong> (so no screenshot API needed) and Claude extracts the prices from it (ladders included); and it hands off through the URL <strong>fragment</strong> to a SmartSpa <code>/import</code> page rather than a direct request — so a portal’s security policy can’t block it. Reads only what you’re already logged in to see; no portal credential ever leaves your machine. <strong>Touched</strong>: <code>portal-import-core.ts</code> (<code>extractPortalPricesFromText</code> + <code>ingestPortalImportText</code>), <code>portal-import.functions.ts</code> (<code>createPortalImportFromTextFn</code>, token-authed), new <code>/import</code> bridge route, <code>verified-pricing.tsx</code> (draggable bookmarklet card), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.145.1",
     date: "June 2026",
     items: [

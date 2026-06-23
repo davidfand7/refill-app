@@ -151,6 +151,72 @@ export async function extractPortalPrices(
   }
 }
 
+// ─── Text extraction (bookmarklet lane: page innerText, no screenshot) ───────
+
+const TEXT_EXTRACTION_SYSTEM = `You read the pasted TEXT of an aesthetic-manufacturer ordering-portal page (Allergan/AbbVie APP, Galderma ASPIRE, Evolus, Merz, etc.) and extract the spa's NEGOTIATED prices. The text is a raw dump of a web page, so it may contain nav/menu/footer noise — ignore it.
+
+Return ONLY a JSON object: { "manufacturer": string|null, "rows": Row[] }.
+Row = { "name": string, "price": number, "unitBasis": "box"|"unit"|"unknown", "sku": string|null, "tiers": [{ "qty": string, "pricePerUnit": number }]|null }.
+
+Rules:
+- name: the product as printed (e.g. "Juvederm Voluma XC", "Botox Cosmetic 100 Units", "Jeuveau 100U").
+- price: the spa's price — prefer "Your Price" / negotiated / net over MSRP/list. Plain number, no "$" or commas.
+- unitBasis: "box" if per box/case/multipack; "unit" if per syringe/vial/single; "unknown" if not stated. Do NOT guess a conversion.
+- sku: item/SKU/catalog number if present, else null.
+- manufacturer: lowercase key if identifiable (abbvie, galderma, evolus, merz, revance), else null.
+- tiers: null for a normal price list. For a single-product VOLUME/QUANTITY ladder (one product, several quantity options each with a per-unit price), emit ONE row: "price" = the current/effective per-unit price (prefer an explicit "Your Price"); "unitBasis" = "unit"; "tiers" = every rung as [{ "qty": "250 vials", "pricePerUnit": 379 }, ...].
+- Skip headers, totals, shipping, taxes, nav, and any row without a real product price.
+- Output ONLY the JSON object — no markdown, no commentary.`;
+
+/** Extract prices from the pasted TEXT of a portal page (bookmarklet lane). */
+export async function extractPortalPricesFromText(
+  text: string,
+  manufacturerHint?: string | null,
+): Promise<{ manufacturer: string | null; rows: ParsedPortalRow[]; raw: string }> {
+  const client = getAnthropicClient();
+  const hint = manufacturerHint
+    ? `\n\nHint: the owner says this is from manufacturer '${manufacturerHint}'. Use that unless the text clearly says otherwise.`
+    : "";
+  try {
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 4096,
+      system: TEXT_EXTRACTION_SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: `Extract the spa's product prices from this portal page text.${hint}\n\n--- PAGE TEXT ---\n${text.slice(0, 60000)}`,
+        },
+      ],
+    });
+    const out = response.content
+      .find((b): b is Anthropic.TextBlock => b.type === "text")
+      ?.text?.trim();
+    if (!out) throw new Error("Couldn't read any prices from that page — try the page that shows your pricing.");
+    const stripped = out.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    let parsed: { manufacturer?: string | null; rows?: unknown };
+    try {
+      parsed = JSON.parse(stripped) as { manufacturer?: string | null; rows?: unknown };
+    } catch {
+      throw new Error("Couldn't read the prices from that page — open the page that lists your prices and try again.");
+    }
+    const rows = z.array(parsedRowSchema).safeParse(parsed.rows ?? []);
+    if (!rows.success || rows.data.length === 0) {
+      throw new Error("No product prices found on that page.");
+    }
+    return {
+      manufacturer: parsed.manufacturer ? String(parsed.manufacturer).toLowerCase().trim() : null,
+      rows: rows.data,
+      raw: stripped,
+    };
+  } catch (e) {
+    if (e instanceof Anthropic.RateLimitError) {
+      throw new Error("Extraction is rate-limited right now — try again in 30s.");
+    }
+    throw e instanceof Error ? e : new Error("Text extraction failed.");
+  }
+}
+
 // ─── Catalog matching ───────────────────────────────────────────────────────
 
 type ProductRow = {
@@ -361,4 +427,55 @@ async function findBatchByMessageId(
     manufacturer: data.manufacturer ?? null,
     proposals: (Array.isArray(data.rows) ? data.rows : []) as unknown as PortalImportProposal[],
   };
+}
+
+/** Text-lane ingest (bookmarklet): extract from page text → match → stage.
+ *  Mirrors ingestPortalImport but text-sourced; kept separate so the verified
+ *  image path is untouched. */
+export async function ingestPortalImportText(args: {
+  sb: ReturnType<typeof admin>;
+  tenantId: string;
+  source: "upload" | "email";
+  text: string;
+  manufacturerHint?: string | null;
+  sourceMessageId?: string | null;
+}): Promise<{
+  batchId: string;
+  manufacturer: string | null;
+  proposals: PortalImportProposal[];
+  deduped?: boolean;
+}> {
+  const { sb, tenantId, source, text, manufacturerHint, sourceMessageId } = args;
+
+  if (sourceMessageId) {
+    const existing = await findBatchByMessageId(sb, tenantId, sourceMessageId);
+    if (existing) return { ...existing, deduped: true };
+  }
+
+  const extracted = await extractPortalPricesFromText(text, manufacturerHint);
+  const manufacturer = manufacturerHint || extracted.manufacturer;
+  const products = await loadTenantProducts(sb, tenantId, manufacturer ?? undefined);
+  const proposals = matchToCatalog(products, extracted.rows);
+
+  const { data: batch, error } = await sb
+    .from("portal_import_batches")
+    .insert({
+      tenant_id: tenantId,
+      source,
+      manufacturer: manufacturer ?? null,
+      status: "pending_review",
+      rows: proposals as unknown as Json,
+      raw_extract: extracted.raw,
+      source_message_id: sourceMessageId ?? null,
+    })
+    .select("id")
+    .single();
+  if (error) {
+    if ((error as { code?: string }).code === "23505" && sourceMessageId) {
+      const existing = await findBatchByMessageId(sb, tenantId, sourceMessageId);
+      if (existing) return { ...existing, deduped: true };
+    }
+    throw new Error(`Couldn't stage the import: ${error.message}`);
+  }
+  return { batchId: batch.id, manufacturer: manufacturer ?? null, proposals };
 }
