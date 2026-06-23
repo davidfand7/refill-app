@@ -352,6 +352,39 @@ function ProgramsPage() {
                                         );
                                       })}
                                     </ul>
+                                    {(() => {
+                                      if (vl.currentPrice == null) return null;
+                                      const cur = vl.currentPrice;
+                                      const cheaper = (vl.tiers ?? [])
+                                        .filter((t) => t.price < cur)
+                                        .sort(
+                                          (a, b) =>
+                                            (a.minUnits ?? Infinity) - (b.minUnits ?? Infinity),
+                                        );
+                                      const next = cheaper[0];
+                                      if (!next) {
+                                        return (
+                                          <div className="mt-1.5 pt-1.5 border-t border-emerald/20 text-[11px] font-medium text-emerald-ink">
+                                            You’re on your best volume tier. 🎉
+                                          </div>
+                                        );
+                                      }
+                                      const save = cur - next.price;
+                                      const pct = cur > 0 ? Math.round((save / cur) * 100) : 0;
+                                      return (
+                                        <div className="mt-1.5 pt-1.5 border-t border-emerald/20 text-[11px] text-ink leading-snug">
+                                          <span className="font-semibold text-emerald-ink">
+                                            Next volume break:
+                                          </span>{" "}
+                                          buy {next.minUnits ?? "more"}+ {unit}s → ${next.price}/
+                                          {unit} ·{" "}
+                                          <span className="font-semibold">
+                                            save ${save.toFixed(2)}/{unit}
+                                          </span>{" "}
+                                          <span className="text-ink-faint">({pct}% lower)</span>
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
                                 );
                               })()}

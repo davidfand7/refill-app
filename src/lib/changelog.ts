@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.147.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.147.0 &mdash; Buy-optimization: your ladder now tells you how to save.</strong> Once you’ve imported a manufacturer’s real volume ladder (the green “Verified — your real portal ladder” on <strong>Programs &amp; tiers</strong>), SmartSpa now reads it and shows your <strong>next volume break</strong> right under it: e.g. <em>“Next volume break: buy 100+ vials → $379/vial · save $10.00/vial (3% lower).”</em> It finds the smallest quantity bump that drops your per-unit cost and spells out the saving — so a buying decision that used to mean squinting at a tier table is now a one-line nudge. If you’re already on the best rung, it says so (🎉). Uses the per-spa verified ladder you imported, so the numbers are <em>your</em> real costs, not estimates. <strong>Touched</strong>: <code>programs.tsx</code>, <code>changelog.ts</code>. No migration, no backend &mdash; pure read of the ladder you already captured.",
+    ],
+  },
+  {
     version: "v2.146.0",
     date: "June 2026",
     items: [
