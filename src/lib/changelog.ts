@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.145.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.145.0 &mdash; Your real volume ladder, wired into Programs &amp; tiers.</strong> When you confirm a portal import that carried a <strong>volume ladder</strong> (v2.144.0 reads them), SmartSpa now <em>saves your real per-rung prices</em> — and surfaces them on <strong>Programs &amp; tiers</strong>. Under each manufacturer’s volume-tier selector you’ll see a green <strong>“Verified — your real portal ladder”</strong> showing every quantity → $/unit pulled straight from your portal, with your current rung marked <em>← yours</em>. This matters because your real ladder often <strong>beats the generic estimate</strong>: e.g. Evolus showed 100 vials at <strong>$379</strong> and everything below at <strong>$389</strong>, where the built-in estimate had a steeper $399/$419/$449 curve — now you see <em>your</em> numbers, not the book’s. Stored strictly <strong>per-spa</strong> (never in the shared manufacturer program, so one spa’s pricing never leaks into another’s), and it never overwrites a portal-verified cost. Foundation for buy-optimization (“bump to 100 vials, save $10 each”). <strong>Touched</strong>: migration <code>v2_145_0_tenant_verified_ladders</code> (<code>verified_ladders</code> jsonb on <code>tenant_manufacturer_tiers</code>), <code>portal-import.functions.ts</code> (persist on apply, per-tenant merge), <code>refill-catalog-seed.ts</code> (getter returns ladders), <code>programs.tsx</code> (ladder display), Supabase types, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.144.0",
     date: "June 2026",
     items: [

@@ -305,21 +305,50 @@ export const getManufacturerProgramsFn = createServerFn({ method: "POST" })
     }));
   });
 
+/** A spa's REAL volume ladder for one brand family, read off its portal
+ *  (per-tenant verified — distinct from the shared estimate in
+ *  manufacturer_programs). Keyed by brand_family in verified_ladders. */
+export type VerifiedLadder = {
+  unitType?: string;
+  currentPrice?: number | null;
+  capturedAt?: string;
+  tiers: Array<{ qty?: string; minUnits?: number | null; price: number }>;
+};
+
 export const getTenantTierSelectionsFn = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => readInput.parse(raw))
-  .handler(async ({ data }): Promise<Array<{ manufacturer: string; selection: TierSelection }>> => {
-    const { effectiveUserId } = await resolveEffectiveUserId({
-      accessToken: data.accessToken,
-      viewAsUserId: data.viewAsUserId,
-    });
-    const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId, SEED_NO_TENANT_MSG);
-    const rows = await fetchAllRows<{ manufacturer: string; selection: Json }>((from, to) =>
-      sb
-        .from("tenant_manufacturer_tiers")
-        .select("manufacturer, selection")
-        .eq("tenant_id", tenantId)
-        .range(from, to),
-    );
-    return rows.map((r) => ({ manufacturer: r.manufacturer, selection: r.selection as TierSelection }));
-  });
+  .handler(
+    async ({
+      data,
+    }): Promise<
+      Array<{
+        manufacturer: string;
+        selection: TierSelection;
+        verifiedLadders: Record<string, VerifiedLadder>;
+      }>
+    > => {
+      const { effectiveUserId } = await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
+      const sb = admin();
+      const tenantId = await getTenantIdForUser(sb, effectiveUserId, SEED_NO_TENANT_MSG);
+      const rows = await fetchAllRows<{
+        manufacturer: string;
+        selection: Json;
+        verified_ladders: Json;
+      }>((from, to) =>
+        sb
+          .from("tenant_manufacturer_tiers")
+          .select("manufacturer, selection, verified_ladders")
+          .eq("tenant_id", tenantId)
+          .range(from, to),
+      );
+      return rows.map((r) => ({
+        manufacturer: r.manufacturer,
+        selection: r.selection as TierSelection,
+        verifiedLadders:
+          (r.verified_ladders as Record<string, VerifiedLadder> | null) ?? {},
+      }));
+    },
+  );

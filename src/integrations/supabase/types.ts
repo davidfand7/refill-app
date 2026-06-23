@@ -2718,6 +2718,7 @@ export type Database = {
           selection: Json
           tenant_id: string
           updated_at: string
+          verified_ladders: Json
         }
         Insert: {
           created_at?: string
@@ -2726,6 +2727,7 @@ export type Database = {
           selection?: Json
           tenant_id: string
           updated_at?: string
+          verified_ladders?: Json
         }
         Update: {
           created_at?: string
@@ -2734,6 +2736,7 @@ export type Database = {
           selection?: Json
           tenant_id?: string
           updated_at?: string
+          verified_ladders?: Json
         }
         Relationships: [
           {

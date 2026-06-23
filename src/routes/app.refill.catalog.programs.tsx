@@ -24,6 +24,7 @@ import {
   getTenantTierSelectionsFn,
   applyTenantTierSelectionFn,
   seedTenantCatalogFromMasterFn,
+  type VerifiedLadder,
 } from "@/server/refill-catalog-seed";
 import type { ManufacturerProgramTiers } from "@/lib/manufacturer-tier-resolver";
 import { cn } from "@/lib/utils";
@@ -76,6 +77,10 @@ function ProgramsPage() {
   const [applyingMfr, setApplyingMfr] = useState<string | null>(null);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  // manufacturer → { brand_family → verified ladder } (real portal prices).
+  const [verifiedByMfr, setVerifiedByMfr] = useState<
+    Record<string, Record<string, VerifiedLadder>>
+  >({});
 
   async function token(): Promise<string> {
     const { data: sess } = await supabase.auth.getSession();
@@ -93,6 +98,8 @@ function ProgramsPage() {
         getTenantTierSelectionsFn({ data: { accessToken: t, viewAsUserId } }),
       ]);
       const selByMfr = new Map(sels.map((s) => [s.manufacturer, s.selection]));
+      const verByMfr: Record<string, Record<string, VerifiedLadder>> = {};
+      for (const s of sels) verByMfr[s.manufacturer] = s.verifiedLadders ?? {};
       const nextDrafts: Record<string, Draft> = {};
       for (const p of progs) {
         const sel = selByMfr.get(p.manufacturer);
@@ -109,6 +116,7 @@ function ProgramsPage() {
       }
       setPrograms(progs as Program[]);
       setDrafts(nextDrafts);
+      setVerifiedByMfr(verByMfr);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't load programs.");
     } finally {
@@ -304,6 +312,49 @@ function ProgramsPage() {
                                   </option>
                                 ))}
                               </select>
+                              {(() => {
+                                const vl = verifiedByMfr[p.manufacturer]?.[family];
+                                if (!vl || !vl.tiers?.length) return null;
+                                return (
+                                  <div className="mt-2 rounded-lg border border-emerald/30 bg-emerald-soft/30 px-3 py-2">
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                      <span className="inline-flex items-center rounded-full bg-emerald/10 text-emerald-ink px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
+                                        Verified
+                                      </span>
+                                      <span className="text-[11px] text-ink-soft">
+                                        your real portal ladder
+                                      </span>
+                                    </div>
+                                    <ul className="space-y-0.5">
+                                      {vl.tiers.map((t, ti) => {
+                                        const isCurrent =
+                                          vl.currentPrice != null &&
+                                          Math.abs(t.price - vl.currentPrice) < 0.005;
+                                        return (
+                                          <li
+                                            key={ti}
+                                            className={cn(
+                                              "text-[11px] tabular-nums flex items-center justify-between gap-3",
+                                              isCurrent
+                                                ? "text-emerald-ink font-semibold"
+                                                : "text-ink-soft",
+                                            )}
+                                          >
+                                            <span>
+                                              {t.qty ??
+                                                (t.minUnits ? `${t.minUnits}+ ${unit}s` : "—")}
+                                            </span>
+                                            <span>
+                                              ${t.price}/{unit}
+                                              {isCurrent && <span className="ml-1">← yours</span>}
+                                            </span>
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           );
                         })}

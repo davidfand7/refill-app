@@ -132,6 +132,80 @@ const applyInput = z.object({
   confirmProductIds: z.array(z.string().uuid()).min(1),
 });
 
+/** First integer in a qty label ("250 vials" → 250), else null. */
+function parseQtyDigits(qty: string): number | null {
+  const m = qty.match(/(\d[\d,]*)/);
+  if (!m) return null;
+  const n = Number(m[1].replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Persist confirmed volume-tier ladders to the tenant's verified_ladders
+ * (P2) — the REAL per-rung portal prices, stored PER-TENANT (never the shared
+ * manufacturer_programs). Keyed by brand_family; merges into any existing
+ * ladders + preserves the tenant's tier selection. Non-fatal: the verified
+ * cost is already written, the ladder is a bonus for the Programs view +
+ * future buy-optimization.
+ */
+async function persistVerifiedLadders(
+  sb: ReturnType<typeof admin>,
+  tenantId: string,
+  tiered: PortalImportProposal[],
+  nowIso: string,
+): Promise<void> {
+  const ids = tiered.map((p) => p.matchedProductId).filter((x): x is string => !!x);
+  if (ids.length === 0) return;
+  const { data: prods } = await sb
+    .from("products")
+    .select("id, manufacturer, brand_family, unit_type")
+    .in("id", ids)
+    .eq("tenant_id", tenantId);
+  const meta = new Map((prods ?? []).map((r) => [r.id, r]));
+
+  // manufacturer → { brand_family → ladder }
+  const byMfr = new Map<string, Record<string, unknown>>();
+  for (const p of tiered) {
+    const m = p.matchedProductId ? meta.get(p.matchedProductId) : undefined;
+    if (!m || !m.manufacturer || !m.brand_family || !p.tiers) continue;
+    const ladder = {
+      unitType: m.unit_type ?? "unit",
+      currentPrice: p.proposedCostPerUnit,
+      capturedAt: nowIso,
+      tiers: p.tiers.map((t) => ({
+        qty: t.qty,
+        minUnits: parseQtyDigits(t.qty),
+        price: t.pricePerUnit,
+      })),
+    };
+    const fam = byMfr.get(m.manufacturer) ?? {};
+    fam[m.brand_family] = ladder;
+    byMfr.set(m.manufacturer, fam);
+  }
+
+  for (const [mfr, ladders] of byMfr) {
+    const { data: existing } = await sb
+      .from("tenant_manufacturer_tiers")
+      .select("selection, verified_ladders")
+      .eq("tenant_id", tenantId)
+      .eq("manufacturer", mfr)
+      .maybeSingle();
+    const merged = {
+      ...((existing?.verified_ladders as Record<string, unknown> | null) ?? {}),
+      ...ladders,
+    };
+    await sb.from("tenant_manufacturer_tiers").upsert(
+      {
+        tenant_id: tenantId,
+        manufacturer: mfr,
+        selection: (existing?.selection as Json) ?? ({} as unknown as Json),
+        verified_ladders: merged as unknown as Json,
+      },
+      { onConflict: "tenant_id,manufacturer" },
+    );
+  }
+}
+
 export const applyPortalImportBatchFn = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => applyInput.parse(raw))
   .handler(async ({ data }): Promise<{ updated: number }> => {
@@ -178,9 +252,21 @@ export const applyPortalImportBatchFn = createServerFn({ method: "POST" })
       if (!error) updated += 1;
     }
 
+    const nowIso = new Date().toISOString();
+
+    // P2: persist any confirmed volume-tier ladders per-tenant (verified).
+    const tieredApplied = toApply.filter((p) => p.tiers && p.tiers.length > 0);
+    if (tieredApplied.length > 0) {
+      try {
+        await persistVerifiedLadders(sb, tenantId, tieredApplied, nowIso);
+      } catch {
+        // non-fatal — the verified cost is already written.
+      }
+    }
+
     await sb
       .from("portal_import_batches")
-      .update({ status: "applied", reviewed_at: new Date().toISOString() })
+      .update({ status: "applied", reviewed_at: nowIso })
       .eq("id", data.batchId)
       .eq("tenant_id", tenantId);
 
