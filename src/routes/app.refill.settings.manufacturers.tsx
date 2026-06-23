@@ -109,11 +109,11 @@ function ManufacturersPage() {
     <div className="flex flex-col min-h-screen bg-white">
       <PageHeader
         title="Manufacturer profiles"
-        eyebrow="Promos"
+        eyebrow="Incentives"
         description="Per-manufacturer loyalty program structure. Recognition allocation reads these to know which units a spa can earn back per tier."
         breadcrumbs={[
           { label: "Refill", to: "/app/refill" },
-          { label: "Promos", to: "/app/refill/recognition/inventory" },
+          { label: "Incentives", to: "/app/refill/recognition/inventory" },
           { label: "Manufacturers" },
         ]}
         actions={

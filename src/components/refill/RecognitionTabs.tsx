@@ -82,7 +82,7 @@ const TABS: Array<{
   label: string;
   Icon: typeof Layers;
 }> = [
-  { key: "inventory", to: "/app/refill/recognition/inventory", label: "Inventory", Icon: Layers },
+  { key: "inventory", to: "/app/refill/recognition/inventory", label: "Incentives", Icon: Layers },
   { key: "rewards", to: "/app/refill/recognition/rewards", label: "Rewards", Icon: Gift },
   { key: "offers", to: "/app/refill/recognition/offers", label: "Offers", Icon: Tag },
   { key: "program", to: "/app/refill/recognition/program", label: "Program", Icon: Target },

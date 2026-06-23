@@ -309,10 +309,10 @@ function RecognitionAgentPage() {
     <div className="flex flex-col min-h-screen bg-white">
       <PageHeader
         title="Allocation"
-        eyebrow="Promos"
+        eyebrow="Incentives"
         description="Selectively allocates manufacturer rebate units to the patients who'll recognize being chosen."
         breadcrumbs={[
-          { label: "Promos", to: "/app/refill/recognition/inventory" },
+          { label: "Incentives", to: "/app/refill/recognition/inventory" },
           { label: "Allocation" },
         ]}
         actions={
@@ -377,7 +377,7 @@ function RecognitionAgentPage() {
                   to="/app/refill/recognition/inventory"
                   className="underline hover:text-emerald-ink"
                 >
-                  Inventory
+                  Incentives
                 </Link>{" "}
                 +{" "}
                 <Link

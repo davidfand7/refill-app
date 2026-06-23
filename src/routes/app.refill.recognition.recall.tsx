@@ -212,11 +212,11 @@ function RecallPage() {
     <div className="flex flex-col min-h-screen bg-white">
       <PageHeader
         title="Recall"
-        eyebrow="Promos"
+        eyebrow="Incentives"
         description="Lapsed patients and expiring rewards, surfaced as money on the table. Each name is a patient the manufacturer would otherwise send to “a provider near you” — book them into your own chair instead."
         breadcrumbs={[
           { label: "Refill", to: "/app/refill" },
-          { label: "Promos", to: "/app/refill/recognition/inventory" },
+          { label: "Incentives", to: "/app/refill/recognition/inventory" },
           { label: "Recall" },
         ]}
       />

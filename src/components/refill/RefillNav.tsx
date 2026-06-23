@@ -52,10 +52,10 @@ type RefillNavItem = {
 const ITEMS: RefillNavItem[] = [
   // ── Solutions (action workspaces) ──────────────────────────────────────
   { key: "calendar", to: "/app/refill/calendar/schedule", label: "Calendar", shortLabel: "Calendar" },
-  // "Promos" Solution (formerly Recognition): rebate inventory, rewards,
-  // recall, allocation + manufacturer "Brand Promos". Route namespace stays
-  // /recognition; the chip + Solution are labeled Promos.
-  { key: "recognition", to: "/app/refill/recognition/inventory", label: "Promos", shortLabel: "Promos" },
+  // "Incentives" Solution (formerly Recognition / Promos): rebate inventory,
+  // rewards, recall, allocation + manufacturer promos. Route namespace stays
+  // /recognition; the chip + Solution are labeled Incentives.
+  { key: "recognition", to: "/app/refill/recognition/inventory", label: "Incentives", shortLabel: "Incentives" },
   // The Refill Solution: prevent (reminders) + recover (rescue) no-shows.
   { key: "recovery", to: "/app/refill/recovery",           label: "Refill",   shortLabel: "Refill", dividerAfter: true },
   // ── Spine (ownership layer + data primitives + back-office) ────────────

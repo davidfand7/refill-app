@@ -162,11 +162,11 @@ function RewardsPage() {
     <div className="flex flex-col min-h-screen bg-white">
       <PageHeader
         title="Reward signals"
-        eyebrow="Promos"
+        eyebrow="Incentives"
         description="Upload a manufacturer's patient-insights export. Refill matches each patient to your book and surfaces who's eligible now and whose reward is expiring — the money their 0-click email never moves."
         breadcrumbs={[
           { label: "Refill", to: "/app/refill" },
-          { label: "Promos", to: "/app/refill/recognition/inventory" },
+          { label: "Incentives", to: "/app/refill/recognition/inventory" },
           { label: "Rewards" },
         ]}
       />

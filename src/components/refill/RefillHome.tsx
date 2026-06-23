@@ -88,8 +88,8 @@ const ACTIONS: QuickAction[] = [
   {
     key: "recognition",
     to: "/app/refill/recognition/inventory",
-    label: "Promos",
-    subtitle: "Rewards, recall, allocation & manufacturer brand offers",
+    label: "Incentives",
+    subtitle: "Rewards, recall, allocation & manufacturer incentives",
     icon: Award,
   },
   {

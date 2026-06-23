@@ -273,12 +273,12 @@ function RecognitionInventoryPage() {
     return (
       <div>
         <PageHeader
-          title="Recognition inventory"
+          title="Incentives"
           description="The pool of manufacturer-rebate units you can deploy to recognize specific patients."
         />
         <div className="px-6 lg:px-10 py-14 flex items-center justify-center gap-2 text-sm text-ink-soft">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading inventory…
+          Loading incentives…
         </div>
       </div>
     );
@@ -287,8 +287,8 @@ function RecognitionInventoryPage() {
   return (
     <div>
       <PageHeader
-        title="Recognition inventory"
-        description="The pool of manufacturer-rebate units you can deploy to recognize specific patients. Two kinds: documented (portal-issued) and promo/samples."
+        title="Incentives"
+        description="The pool of manufacturer-funded units you can deploy to recognize specific patients. Two kinds: documented (portal-issued) and promo/samples."
       />
 
       <RecognitionTabs active="inventory" />

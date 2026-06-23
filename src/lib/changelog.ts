@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.152.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.152.0 &mdash; Island cleanup, Tier 2 (rename): &ldquo;Promos / Inventory&rdquo; → &ldquo;Incentives.&rdquo;</strong> The section that holds your manufacturer-funded patient money was confusingly labeled three different ways &mdash; the top-nav chip said <em>Promos</em>, the first tab said <em>Inventory</em>, and breadcrumbs said <em>Promos</em>. It&rsquo;s all one idea now: <strong>Incentives</strong> &mdash; the manufacturer-funded units (portal-issued rebates + promo/samples) you deploy toward specific patients. Renamed everywhere it shows: the top nav chip + dashboard card, the tab, the page heading, and every breadcrumb across Rewards / Offers / Program / Recall / Allocation / Manufacturers. <em>(Same data, same routes &mdash; purely a clarity rename. Next step folds manufacturer-promo editing into this tab so there&rsquo;s one place to manage it.)</em> <strong>Touched</strong>: <code>RecognitionTabs.tsx</code>, <code>RefillNav.tsx</code>, <code>RefillHome.tsx</code>, the recognition routes + <code>settings.manufacturers.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.151.0",
     date: "June 2026",
     items: [

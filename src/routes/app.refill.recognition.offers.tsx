@@ -62,11 +62,11 @@ function OffersPage() {
     <div className="flex flex-col min-h-screen bg-white">
       <PageHeader
         title="Offers"
-        eyebrow="Promos"
+        eyebrow="Incentives"
         description="One offer, authored once — it can badge at booking, list on your Deals page, and push to patients, all from here. Tell SmartSpa what you want and watch it become real in the live preview."
         breadcrumbs={[
           { label: "Refill", to: "/app/refill" },
-          { label: "Promos", to: "/app/refill/recognition/inventory" },
+          { label: "Incentives", to: "/app/refill/recognition/inventory" },
           { label: "Offers" },
         ]}
       />
