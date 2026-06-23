@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.156.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.156.0 &mdash; Island cleanup: one home for manufacturer-promo delivery.</strong> After last change moved promo management to <strong>Incentives</strong>, a manufacturer promo&rsquo;s delivery (who/when/cap, on-Deals) could still <em>also</em> be edited from a &ldquo;Deliver a manufacturer promo&rdquo; tab inside the Offers composer &mdash; two places editing the same thing. Retired that composer tab so there&rsquo;s one edit home: <strong>Incentives</strong>. The <strong>Offers</strong> composer now stays focused on what only it does &mdash; <em>authoring</em> your own offers and the head-to-head <strong>Arena</strong> (the impartial A/B, untouched). Note: A/B creation was already unified into this one composer (back in v2.100), so &ldquo;Your offers / Your tests&rdquo; are just result lists &mdash; nothing duplicated there. <strong>Touched</strong>: <code>OfferComposer.tsx</code> (one tab removed; mfr-mode code kept but unreachable since the Arena still uses the promo data), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.155.0",
     date: "June 2026",
     items: [

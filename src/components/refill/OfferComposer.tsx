@@ -489,7 +489,10 @@ export function OfferComposer({
       {mfrOffers.length > 0 && (
         <div className="flex gap-1 border-b border-rule bg-paper/50 p-1.5">
           <ModeTab on={mode === "spa"} onClick={() => switchMode("spa")}>Author an offer</ModeTab>
-          <ModeTab on={mode === "mfr"} onClick={() => switchMode("mfr")}>Deliver a manufacturer promo</ModeTab>
+          {/* "Deliver a manufacturer promo" tab retired (v2.156) — promo delivery
+              is managed in one home now: the Incentives tab. mode='mfr' code is
+              kept (unreachable) since it shares derived-term/preview helpers, and
+              the Arena still loads mfrOffers for head-to-head arms. */}
           <ModeTab on={mode === "arena"} onClick={() => switchMode("arena")}>Test head-to-head</ModeTab>
         </div>
       )}
