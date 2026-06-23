@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.145.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.145.1 &mdash; Verified ladder saves even when a product is loosely tagged.</strong> The v2.145.0 ladder persistence keyed strictly off a product’s <code>brand_family</code>, so a loosely-categorized or inline-added product (no family tag) would silently not save its ladder. Now it derives the family from the manufacturer’s program ladder names (matches the family inside the product name, e.g. “Jeuveau® 100U” → “Jeuveau”), so the verified ladder persists on real-world data and lands under the right tier selector. <strong>Touched</strong>: <code>portal-import.functions.ts</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.145.0",
     date: "June 2026",
     items: [

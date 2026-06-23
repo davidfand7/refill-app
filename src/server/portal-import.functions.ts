@@ -158,16 +158,42 @@ async function persistVerifiedLadders(
   if (ids.length === 0) return;
   const { data: prods } = await sb
     .from("products")
-    .select("id, manufacturer, brand_family, unit_type")
+    .select("id, manufacturer, brand, brand_family, unit_type")
     .in("id", ids)
     .eq("tenant_id", tenantId);
   const meta = new Map((prods ?? []).map((r) => [r.id, r]));
+
+  // Load the program's ladder family names per manufacturer so we can (a) use
+  // the canonical key the Programs display expects, and (b) derive a family
+  // when the product's brand_family is null (e.g. an inline-added product).
+  const mfrs = [...new Set((prods ?? []).map((r) => r.manufacturer).filter((x): x is string => !!x))];
+  const ladderKeysByMfr = new Map<string, string[]>();
+  for (const mfr of mfrs) {
+    const { data: prog } = await sb
+      .from("manufacturer_programs")
+      .select("tiers")
+      .eq("manufacturer", mfr)
+      .maybeSingle();
+    const t = (prog?.tiers ?? {}) as { productLadders?: Record<string, unknown> };
+    ladderKeysByMfr.set(mfr, Object.keys(t.productLadders ?? {}));
+  }
+  function deriveFamily(
+    brand: string | null,
+    brandFamily: string | null,
+    keys: string[],
+  ): string | null {
+    if (brandFamily && keys.includes(brandFamily)) return brandFamily;
+    const b = (brand ?? "").toLowerCase();
+    return keys.find((k) => b.includes(k.toLowerCase())) ?? brandFamily ?? null;
+  }
 
   // manufacturer → { brand_family → ladder }
   const byMfr = new Map<string, Record<string, unknown>>();
   for (const p of tiered) {
     const m = p.matchedProductId ? meta.get(p.matchedProductId) : undefined;
-    if (!m || !m.manufacturer || !m.brand_family || !p.tiers) continue;
+    if (!m || !m.manufacturer || !p.tiers) continue;
+    const family = deriveFamily(m.brand, m.brand_family, ladderKeysByMfr.get(m.manufacturer) ?? []);
+    if (!family) continue;
     const ladder = {
       unitType: m.unit_type ?? "unit",
       currentPrice: p.proposedCostPerUnit,
@@ -179,7 +205,7 @@ async function persistVerifiedLadders(
       })),
     };
     const fam = byMfr.get(m.manufacturer) ?? {};
-    fam[m.brand_family] = ladder;
+    fam[family] = ladder;
     byMfr.set(m.manufacturer, fam);
   }
 
