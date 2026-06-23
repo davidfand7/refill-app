@@ -45,6 +45,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
 import { RepPromosCard } from "@/components/refill/RepPromosCard";
 import { PromoIntelligenceCard } from "@/components/refill/PromoIntelligenceCard";
+import { RecallPanel } from "./app.refill.recognition.recall";
 import { getRepLoopEnabled } from "@/server/refill-promos";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
@@ -151,9 +152,9 @@ function RewardsPage() {
   return (
     <div className="flex flex-col min-h-screen bg-white">
       <PageHeader
-        title="Reward signals"
+        title="Rewards"
         eyebrow="Incentives"
-        description="Upload a manufacturer's patient-insights export. Refill matches each patient to your book and surfaces who's eligible now and whose reward is expiring — the money their 0-click email never moves."
+        description="Who to recall and the money on the table — expiring rewards, eligible-but-idle, becoming-eligible and lapsed patients — plus the manufacturer exports that feed them."
         breadcrumbs={[
           { label: "Refill", to: "/app/refill" },
           { label: "Incentives", to: "/app/refill/recognition/inventory" },
@@ -163,7 +164,16 @@ function RewardsPage() {
 
       <RecognitionTabs active="rewards" />
 
-      <div className="flex-1 px-4 py-6 lg:px-10 max-w-[960px] w-full mx-auto space-y-5">
+      {/* Action-first: the recall triggers + book/draft (merged from Recall). */}
+      <RecallPanel />
+
+      <div className="flex-1 px-4 pb-10 lg:px-10 max-w-[960px] w-full mx-auto space-y-5">
+        <div className="border-t border-rule pt-6">
+          <h2 className="text-[15px] font-semibold text-ink">Imports &amp; sources</h2>
+          <p className="text-[12px] text-ink-faint mt-0.5">
+            The manufacturer exports that feed your reward signals above.
+          </p>
+        </div>
         {loadError ? (
           <div className="rounded-2xl border border-rose/30 bg-rose-soft p-5 text-sm">
             <div className="font-semibold text-rose">Couldn't load</div>

@@ -865,7 +865,7 @@ export async function sendRecallDigestForUser(
   if (!resendKey) return { status: "error", error: "RESEND_API_KEY missing on the worker." };
 
   const spaName = await getSpaName(userId);
-  const ctaUrl = `${publicOrigin.replace(/\/$/, "")}/app/refill/recognition/recall`;
+  const ctaUrl = `${publicOrigin.replace(/\/$/, "")}/app/refill/recognition/rewards`;
   const { subject, text, html } = composeRecallDigestEmail({ spaName, view, ctaUrl });
 
   try {

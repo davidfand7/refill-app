@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.154.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.154.0 &mdash; Island cleanup, Tier 3: Rewards + Recall are one surface now.</strong> They were always the same data (your manufacturer reward signals) shown two ways &mdash; <strong>Rewards</strong> as a data explorer, <strong>Recall</strong> as the place to act &mdash; so you had to bounce between tabs. Merged into a single <strong>Rewards</strong> tab, <strong>action-first</strong>: open it and you land straight on who to recall and the money on the table (Expiring · Eligible &amp; idle · Becoming eligible · Lapsed), with <strong>Draft outreach</strong> and <strong>Book</strong> right there. Below that, an <strong>&ldquo;Imports &amp; sources&rdquo;</strong> section holds the plumbing &mdash; the manufacturer CSV uploads, attribution review, and raw signal list that feed it. The standalone <strong>Recall</strong> tab is gone (Recognition is now 5 tabs: Incentives · Rewards · Offers · Program · Allocation); old <code>/recall</code> links + the weekly-digest email now point straight at Rewards. The reward-expiry badge moved onto the Rewards tab. <strong>Touched</strong>: <code>recognition.recall.tsx</code> (now exports <code>RecallPanel</code> + redirects), <code>recognition.rewards.tsx</code> (renders the panel action-first), <code>RecognitionTabs.tsx</code>, <code>skill-catalog.ts</code>, <code>refill-recall.functions.ts</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.153.0",
     date: "June 2026",
     items: [

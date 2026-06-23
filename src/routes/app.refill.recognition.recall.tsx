@@ -17,7 +17,7 @@
  * the win to.
  */
 
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -31,8 +31,6 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { PageHeader } from "@/components/PageHeader";
-import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
 import { BookDialog } from "@/components/refill/schedule/dialogs";
 import { todayIso, type ServiceLite } from "@/components/refill/schedule/shared";
 import { supabase } from "@/integrations/supabase/client";
@@ -51,7 +49,12 @@ import {
 } from "@/server/refill-recall.functions";
 
 export const Route = createFileRoute("/app/refill/recognition/recall")({
-  component: RecallPage,
+  // Merged into Rewards (v2.154.0) — Rewards is now the action-first reward
+  // surface and renders RecallPanel at the top. Redirect old links so nothing
+  // dead-ends; the Recall tab was removed from RecognitionTabs.
+  beforeLoad: () => {
+    throw redirect({ to: "/app/refill/recognition/rewards", replace: true });
+  },
 });
 
 const TRIGGER_META: Record<
@@ -84,7 +87,7 @@ type BookingContext = {
   timezone: string;
 };
 
-function RecallPage() {
+export function RecallPanel() {
   const membership = useTenantMembership();
   const viewAsUserId =
     membership.status === "tenant" ? membership.viewAsUserId : undefined;
@@ -209,21 +212,8 @@ function RecallPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-white">
-      <PageHeader
-        title="Recall"
-        eyebrow="Incentives"
-        description="Lapsed patients and expiring rewards, surfaced as money on the table. Each name is a patient the manufacturer would otherwise send to “a provider near you” — book them into your own chair instead."
-        breadcrumbs={[
-          { label: "Refill", to: "/app/refill" },
-          { label: "Incentives", to: "/app/refill/recognition/inventory" },
-          { label: "Recall" },
-        ]}
-      />
-
-      <RecognitionTabs active="recall" />
-
-      <div className="flex-1 px-4 py-6 lg:px-10 max-w-[960px] w-full mx-auto space-y-5">
+    <>
+      <div className="px-4 py-6 lg:px-10 max-w-[960px] w-full mx-auto space-y-5">
         {loadError ? (
           <div className="rounded-2xl border border-rose/30 bg-rose-soft p-5 text-sm">
             <div className="font-semibold text-rose">Couldn't load</div>
@@ -354,7 +344,7 @@ function RecallPage() {
           }}
         />
       )}
-    </div>
+    </>
   );
 }
 

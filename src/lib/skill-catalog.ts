@@ -87,7 +87,7 @@ export const SKILL_CATALOG: SkillTemplate[] = [
     adoptCopy:
       "Turns on a weekly digest of who's due back and the dollars on the table — then opens Recall. You always do the sending.",
     liftHint: "Catches lapsed patients and expiring rewards before they drift.",
-    manageTo: "/app/refill/recognition/recall",
+    manageTo: "/app/refill/recognition/rewards",
   },
   {
     key: "waitlist_auto_fill",
@@ -126,7 +126,7 @@ export const SKILL_CATALOG: SkillTemplate[] = [
     adoptCopy:
       "Pins a live “expiring soon” badge on your Recall tab so the at-risk reward dollars are always one glance away.",
     liftHint: "Keeps evaporating reward money in view, all week.",
-    manageTo: "/app/refill/recognition/recall",
+    manageTo: "/app/refill/recognition/rewards",
   },
   {
     key: "reschedule_reminders",

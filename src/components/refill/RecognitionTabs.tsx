@@ -9,7 +9,7 @@
 
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Gift, Layers, PhoneOutgoing, Wand2, Target, Tag } from "lucide-react";
+import { Gift, Layers, Wand2, Target, Tag } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
@@ -86,7 +86,6 @@ const TABS: Array<{
   { key: "rewards", to: "/app/refill/recognition/rewards", label: "Rewards", Icon: Gift },
   { key: "offers", to: "/app/refill/recognition/offers", label: "Offers", Icon: Tag },
   { key: "program", to: "/app/refill/recognition/program", label: "Program", Icon: Target },
-  { key: "recall", to: "/app/refill/recognition/recall", label: "Recall", Icon: PhoneOutgoing },
   { key: "allocation", to: "/app/refill/recognition/allocation", label: "Allocation", Icon: Wand2 },
 ];
 
@@ -106,7 +105,7 @@ export function RecognitionTabs({ active }: { active: RecognitionTab }) {
           >
             <Icon className="h-3.5 w-3.5" />
             {label}
-            {key === "recall" && <RecallExpiryBadge />}
+            {key === "rewards" && <RecallExpiryBadge />}
           </Link>
         ))}
       </div>
