@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.148.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.148.0 &mdash; The Rep Deal-Maker (slice 1): time the ask, ghostwrite it in your voice.</strong> The published volume ladder isn&rsquo;t the real floor &mdash; the deepest savings live in the off-the-record deals reps cut near a deadline. SmartSpa now institutionalizes the timing half of that game. On <strong>Programs &amp; tiers</strong>, every manufacturer now shows a <strong>Leverage window</strong>: how close the rep&rsquo;s quarter (and, at year-end, their fiscal year) is to closing &mdash; e.g. <em>&ldquo;Q2 closes in 7 days &mdash; your rep is chasing their number right now. Strongest ask window.&rdquo;</em> The badge heats up (open &rarr; warming &rarr; hot &rarr; closing) as the deadline nears. Tap <strong>&ldquo;Draft my Rep ask&rdquo;</strong> and the <strong>Ghostwriter</strong> composes a short, warm, discreet message <em>from you to your rep</em> &mdash; armed with your timing and your own volume commitment (pre-filled from your verified ladder&rsquo;s next break) &mdash; that you review, tweak, and send yourself. <strong>The guardrail is the whole point</strong>: it only ever asks <em>what&rsquo;s possible if you commit</em>, on <em>your</em> leverage &mdash; it never references what any other practice pays, so the confidentiality you promise every rep stays intact. Nothing is saved: SmartSpa is the strategist and the clock, never a party of record &mdash; the deal stays human and off the books (it resurfaces later only as a deeper verified cost when you import your new price). <strong>Touched</strong>: new <code>manufacturer-fiscal-calendar.ts</code> (pure leverage-window engine), new <code>rep-proposal-core.ts</code> (server-only Ghostwriter) + <code>rep-dealmaker.functions.ts</code>, <code>programs.tsx</code> (Leverage window card + draft dialog), <code>changelog.ts</code>. No migration, no new data stored.",
+    ],
+  },
+  {
     version: "v2.147.0",
     date: "June 2026",
     items: [

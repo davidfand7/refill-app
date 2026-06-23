@@ -12,11 +12,19 @@
  */
 
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, PackagePlus, Sparkles } from "lucide-react";
+import { CalendarClock, Copy, Loader2, Mail, PackagePlus, PenLine, Sparkles } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -26,7 +34,9 @@ import {
   seedTenantCatalogFromMasterFn,
   type VerifiedLadder,
 } from "@/server/refill-catalog-seed";
+import { composeRepProposalFn } from "@/server/rep-dealmaker.functions";
 import type { ManufacturerProgramTiers } from "@/lib/manufacturer-tier-resolver";
+import { computeLeverageWindow } from "@/lib/manufacturer-fiscal-calendar";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/refill/catalog/programs")({
@@ -67,6 +77,315 @@ function orderedFamilies(families: Record<string, number[]>): Array<[string, num
   );
 }
 
+// ─── Rep Deal-Maker (slice 1) ───────────────────────────────────────────────
+// The hidden buy-side margin: pair the timing leverage (quarter/year-end close,
+// from manufacturer-fiscal-calendar) with the owner's own volume-commitment, and
+// ghostwrite the off-record ask in the owner's voice. The owner SENDS it himself.
+// See project_rep_dealmaker.
+
+type VolumeHint = {
+  productName: string;
+  currentUnitPrice: number;
+  targetQty: number | null;
+  targetUnitPrice: number;
+  unitLabel: string;
+};
+
+/** First family with a cheaper rung above its current price → a real volume
+ *  "ask" to arm the proposal with. Mirrors the buy-optimization next-break. */
+function nextBreakForMfr(
+  byFamily: Record<string, VerifiedLadder> | undefined,
+): VolumeHint | null {
+  if (!byFamily) return null;
+  for (const [family, vl] of Object.entries(byFamily)) {
+    if (vl?.currentPrice == null || !vl.tiers?.length) continue;
+    const cur = vl.currentPrice;
+    const cheaper = vl.tiers
+      .filter((t) => t.price < cur)
+      .sort((a, b) => (a.minUnits ?? Infinity) - (b.minUnits ?? Infinity));
+    const next = cheaper[0];
+    if (!next) continue;
+    return {
+      productName: family,
+      currentUnitPrice: cur,
+      targetQty: next.minUnits ?? null,
+      targetUnitPrice: next.price,
+      unitLabel: vl.unitType ?? "unit",
+    };
+  }
+  return null;
+}
+
+const dealInputCls =
+  "w-full rounded-md border border-rule bg-white px-3 py-2 text-[14px] text-ink outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-400/30";
+
+function RepDealMakerDialog(props: {
+  manufacturerKey: string | null;
+  manufacturerLabel: string;
+  hint: VolumeHint | null;
+  getToken: () => Promise<string>;
+  viewAsUserId?: string;
+  onClose: () => void;
+}) {
+  const { manufacturerKey, manufacturerLabel, hint, getToken, viewAsUserId, onClose } = props;
+  const open = manufacturerKey != null;
+  const win = useMemo(
+    () => (manufacturerKey ? computeLeverageWindow(manufacturerKey) : null),
+    [manufacturerKey],
+  );
+
+  const [repName, setRepName] = useState("");
+  const [tone, setTone] = useState<"warm" | "direct" | "brief">("warm");
+  const [channel, setChannel] = useState<"email" | "text">("email");
+  const [productName, setProductName] = useState("");
+  const [targetQty, setTargetQty] = useState("");
+  const [typicalQty, setTypicalQty] = useState("");
+  const [relationshipNote, setRelationshipNote] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [subject, setSubject] = useState("");
+  const [body, setBody] = useState("");
+  const [hasDraft, setHasDraft] = useState(false);
+
+  // Reset the form whenever a different manufacturer opens the dialog.
+  useEffect(() => {
+    if (!manufacturerKey) return;
+    setRepName("");
+    setTone("warm");
+    setChannel("email");
+    setProductName(hint?.productName ?? "");
+    setTargetQty(hint?.targetQty != null ? String(hint.targetQty) : "");
+    setTypicalQty("");
+    setRelationshipNote("");
+    setSubject("");
+    setBody("");
+    setHasDraft(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manufacturerKey]);
+
+  async function onDraft() {
+    if (!win || generating) return;
+    setGenerating(true);
+    try {
+      const accessToken = await getToken();
+      const out = await composeRepProposalFn({
+        data: {
+          accessToken,
+          viewAsUserId,
+          manufacturerLabel,
+          repName: repName.trim() || undefined,
+          windowHeadline: win.headline,
+          isYearEnd: win.isYearEnd,
+          daysUntil: win.daysUntil,
+          quarterLabel: win.quarterLabel,
+          productName: productName.trim() || undefined,
+          currentUnitPrice: hint?.currentUnitPrice ?? undefined,
+          targetQty: targetQty.trim() ? Number(targetQty) : undefined,
+          targetUnitPrice: hint?.targetUnitPrice ?? undefined,
+          unitLabel: hint?.unitLabel ?? undefined,
+          typicalQtyPerQuarter: typicalQty.trim() ? Number(typicalQty) : undefined,
+          relationshipNote: relationshipNote.trim() || undefined,
+          tone,
+          channel,
+        },
+      });
+      setSubject(out.subject ?? "");
+      setBody(out.body);
+      setHasDraft(true);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't draft the message.");
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function copyAll() {
+    const text = channel === "email" && subject.trim() ? `Subject: ${subject}\n\n${body}` : body;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Copied — paste it to your rep.");
+    } catch {
+      toast.error("Couldn't copy — select the text and copy manually.");
+    }
+  }
+
+  function mailtoHref(): string {
+    const params = new URLSearchParams();
+    if (subject.trim()) params.set("subject", subject);
+    if (body.trim()) params.set("body", body);
+    return `mailto:?${params.toString()}`;
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o && !generating) onClose(); }}>
+      <DialogContent className="max-w-lg max-h-[88vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <PenLine className="h-4 w-4 text-amber-600" />
+            Draft your {manufacturerLabel} rep ask
+          </DialogTitle>
+          <DialogDescription>
+            SmartSpa drafts it in your voice and times it to the window — you review,
+            tweak, and send it yourself. The leverage is <em>your</em> timing and
+            <em> your</em> volume; we never reference what other practices pay.
+          </DialogDescription>
+        </DialogHeader>
+
+        {win && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-900 leading-snug">
+            {win.headline}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                Rep's name <span className="text-ink-faint/70 normal-case">(optional)</span>
+              </label>
+              <input
+                className={dealInputCls}
+                value={repName}
+                onChange={(e) => setRepName(e.target.value)}
+                placeholder="e.g. Jordan"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                Send as
+              </label>
+              <select className={dealInputCls} value={channel} onChange={(e) => setChannel(e.target.value as "email" | "text")}>
+                <option value="email">Email</option>
+                <option value="text">Text</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                Product in focus <span className="text-ink-faint/70 normal-case">(optional)</span>
+              </label>
+              <input
+                className={dealInputCls}
+                value={productName}
+                onChange={(e) => setProductName(e.target.value)}
+                placeholder="e.g. Jeuveau"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                Commit to ~ <span className="text-ink-faint/70 normal-case">(units, optional)</span>
+              </label>
+              <input
+                type="number"
+                min={1}
+                className={dealInputCls}
+                value={targetQty}
+                onChange={(e) => setTargetQty(e.target.value)}
+                placeholder={hint?.targetQty != null ? String(hint.targetQty) : "e.g. 100"}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                Your usual / quarter <span className="text-ink-faint/70 normal-case">(optional)</span>
+              </label>
+              <input
+                type="number"
+                min={1}
+                className={dealInputCls}
+                value={typicalQty}
+                onChange={(e) => setTypicalQty(e.target.value)}
+                placeholder="makes the ask credible"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                Tone
+              </label>
+              <select className={dealInputCls} value={tone} onChange={(e) => setTone(e.target.value as "warm" | "direct" | "brief")}>
+                <option value="warm">Warm</option>
+                <option value="direct">Direct</option>
+                <option value="brief">Brief</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+              Relationship note <span className="text-ink-faint/70 normal-case">(optional — woven in)</span>
+            </label>
+            <input
+              className={dealInputCls}
+              value={relationshipNote}
+              onChange={(e) => setRelationshipNote(e.target.value)}
+              placeholder="e.g. we've worked together 6 years"
+            />
+          </div>
+
+          {hasDraft && (
+            <div className="rounded-lg border border-rule bg-rule-soft/40 p-3 space-y-2">
+              {channel === "email" && (
+                <div>
+                  <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                    Subject
+                  </label>
+                  <input className={dealInputCls} value={subject} onChange={(e) => setSubject(e.target.value)} />
+                </div>
+              )}
+              <div>
+                <label className="text-[11px] uppercase tracking-wider font-semibold text-ink-faint mb-1 block">
+                  Your message <span className="text-ink-faint/70 normal-case">(edit freely before sending)</span>
+                </label>
+                <textarea
+                  className={cn(dealInputCls, "min-h-[160px] leading-relaxed resize-y")}
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={copyAll}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-1.5 text-[13px] font-medium text-ink hover:bg-rule-soft/60 transition"
+                >
+                  <Copy className="h-3.5 w-3.5" /> Copy
+                </button>
+                {channel === "email" && (
+                  <a
+                    href={mailtoHref()}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-1.5 text-[13px] font-medium text-ink hover:bg-rule-soft/60 transition"
+                  >
+                    <Mail className="h-3.5 w-3.5" /> Open in email
+                  </a>
+                )}
+                <span className="text-[11px] text-ink-faint">Off the record — nothing is saved.</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <button
+            type="button"
+            onClick={onDraft}
+            disabled={generating}
+            className={cn(
+              "inline-flex items-center justify-center gap-1.5 rounded-md bg-amber-600 px-4 py-2 text-[14px] font-semibold text-white shadow-sm transition",
+              generating ? "opacity-60 cursor-wait" : "hover:bg-amber-500",
+            )}
+          >
+            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <PenLine className="h-4 w-4" />}
+            {generating ? "Drafting…" : hasDraft ? "Redraft" : "Draft it"}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function ProgramsPage() {
   const membership = useTenantMembership();
   const viewAsUserId =
@@ -81,6 +400,8 @@ function ProgramsPage() {
   const [verifiedByMfr, setVerifiedByMfr] = useState<
     Record<string, Record<string, VerifiedLadder>>
   >({});
+  // Rep Deal-Maker: which manufacturer's ghostwriter dialog is open (null = closed).
+  const [dealMfr, setDealMfr] = useState<string | null>(null);
 
   async function token(): Promise<string> {
     const { data: sess } = await supabase.auth.getSession();
@@ -438,6 +759,53 @@ function ProgramsPage() {
                       </div>
                     )}
 
+                    {(() => {
+                      const win = computeLeverageWindow(p.manufacturer);
+                      const badge =
+                        win.intensity === "closing"
+                          ? "bg-amber-600 text-white"
+                          : win.intensity === "hot"
+                            ? "bg-amber-500 text-white"
+                            : win.intensity === "warming"
+                              ? "bg-amber-200 text-amber-900"
+                              : "bg-amber-100 text-amber-800";
+                      return (
+                        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-1.5">
+                              <CalendarClock className="h-4 w-4 text-amber-700" />
+                              <span className="text-[10px] uppercase tracking-wider font-bold text-amber-800">
+                                Leverage window
+                              </span>
+                            </div>
+                            <span
+                              className={cn(
+                                "shrink-0 inline-flex items-center rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider tabular-nums",
+                                badge,
+                              )}
+                            >
+                              {win.quarterLabel} · {win.daysUntil === 0 ? "today" : `${win.daysUntil}d`}
+                            </span>
+                          </div>
+                          <p className="mt-1.5 text-[13px] text-amber-900 leading-snug">{win.headline}</p>
+                          <div className="mt-2.5 flex items-center justify-between gap-3 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => setDealMfr(p.manufacturer)}
+                              className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3.5 py-1.5 text-[13px] font-semibold text-white shadow-sm hover:bg-amber-500 transition"
+                            >
+                              <PenLine className="h-3.5 w-3.5" /> Draft my Rep ask
+                            </button>
+                            <span className="text-[11px] text-amber-700/90 leading-snug max-w-[260px]">
+                              {win.confidence === "assumed"
+                                ? win.note
+                                : "You send it — SmartSpa just drafts it in your voice and times it."}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     <div className="flex items-center justify-between pt-1">
                       <p className="text-[12px] text-ink-faint leading-snug max-w-[420px]">
                         {isVolume
@@ -488,6 +856,15 @@ function ProgramsPage() {
           </>
         )}
       </div>
+
+      <RepDealMakerDialog
+        manufacturerKey={dealMfr}
+        manufacturerLabel={dealMfr ? mfrLabel(dealMfr) : ""}
+        hint={dealMfr ? nextBreakForMfr(verifiedByMfr[dealMfr]) : null}
+        getToken={token}
+        viewAsUserId={viewAsUserId}
+        onClose={() => setDealMfr(null)}
+      />
     </div>
   );
 }
