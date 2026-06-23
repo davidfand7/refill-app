@@ -287,6 +287,35 @@ export const listProductsFn = createServerFn({ method: "POST" })
     return rows.map((r) => rowToProduct(r as ProductRow));
   });
 
+// ─── getCatalogStatusFn (v2.151.0) ────────────────────────────────────────
+// Lightweight "is the catalog loaded?" signal — head-only counts (no row
+// fetch). Shared infra for de-islanding stale "Load starter catalog" CTAs:
+// any surface can ask whether products/services already exist.
+
+export const getCatalogStatusFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => readInput.parse(raw))
+  .handler(async ({ data }): Promise<{ products: number; services: number }> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, CATALOG_NO_TENANT_MSG);
+    const [prod, svc] = await Promise.all([
+      sb
+        .from("products")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .is("hidden_at", null),
+      sb
+        .from("services")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", tenantId)
+        .is("hidden_at", null),
+    ]);
+    return { products: prod.count ?? 0, services: svc.count ?? 0 };
+  });
+
 // ─── setProductHiddenFn (v1.34.9.1) ───────────────────────────────────────
 
 export const setProductHiddenFn = createServerFn({ method: "POST" })

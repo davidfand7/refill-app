@@ -38,10 +38,12 @@ import {
   Trash2,
   Upload,
   Wand2,
+  Wrench,
   X,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -806,65 +808,91 @@ function ServicesPage() {
         actions={
           !adding && (
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onRecategorize}
-                disabled={recategorizing || services.length === 0}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold transition",
-                  recategorizing || services.length === 0
-                    ? "text-ink-faint cursor-not-allowed"
-                    : "text-ink-soft hover:text-ink hover:border-emerald/40",
-                )}
-                title="Sweep all services through the canonical brand registry and update categories where matched"
-              >
-                {recategorizing ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Wand2 className="h-3.5 w-3.5" />
-                )}
-                Re-categorize
-              </button>
-              <button
-                type="button"
-                onClick={onPreviewReconcile}
-                disabled={reconcileBusy || services.length === 0}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold transition",
-                  reconcileBusy || services.length === 0
-                    ? "text-ink-faint cursor-not-allowed"
-                    : "text-ink-soft hover:text-ink hover:border-emerald/40",
-                )}
-                title="Match services to products by brand and link them so COGS derives automatically — auto-creates a product where one's missing. Preview-first."
-              >
-                {reconcileBusy ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Link2 className="h-3.5 w-3.5" />
-                )}
-                Link products
-              </button>
-              <button
-                type="button"
-                onClick={onPreviewDedupe}
-                disabled={dedupeBusy || services.length === 0}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold transition",
-                  dedupeBusy || services.length === 0
-                    ? "text-ink-faint cursor-not-allowed"
-                    : "text-ink-soft hover:text-ink hover:border-emerald/40",
-                )}
-                title="Find duplicate services + products (same name/brand) and collapse each to one, re-pointing links. Preview-first."
-              >
-                {dedupeBusy ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" />
-                )}
-                Clean up duplicates
-              </button>
+              {/* Data tools (v2.151.0) — the one-time maintenance actions
+                  collapsed out of the primary toolbar to de-clutter. */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    disabled={services.length === 0}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold transition",
+                      services.length === 0
+                        ? "text-ink-faint cursor-not-allowed"
+                        : "text-ink-soft hover:text-ink hover:border-emerald/40",
+                    )}
+                    title="One-time cleanup tools for your catalog"
+                  >
+                    <Wrench className="h-3.5 w-3.5" />
+                    Data tools
+                    <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-72 p-1.5">
+                  <p className="px-2 pt-1.5 pb-1 text-[11px] uppercase tracking-wider font-semibold text-ink-faint">
+                    Catalog cleanup
+                  </p>
+                  <button
+                    type="button"
+                    onClick={onRecategorize}
+                    disabled={recategorizing || services.length === 0}
+                    className="w-full flex items-start gap-2.5 rounded-md px-2 py-2 text-left hover:bg-rule-soft/60 disabled:opacity-50 transition"
+                  >
+                    {recategorizing ? (
+                      <Loader2 className="h-4 w-4 mt-0.5 animate-spin shrink-0" />
+                    ) : (
+                      <Wand2 className="h-4 w-4 mt-0.5 text-ink-soft shrink-0" />
+                    )}
+                    <span>
+                      <span className="block text-[13px] font-semibold text-ink">Auto-categorize</span>
+                      <span className="block text-[11px] text-ink-faint leading-snug">
+                        Sort services into categories from their names.
+                      </span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onPreviewReconcile}
+                    disabled={reconcileBusy || services.length === 0}
+                    className="w-full flex items-start gap-2.5 rounded-md px-2 py-2 text-left hover:bg-rule-soft/60 disabled:opacity-50 transition"
+                  >
+                    {reconcileBusy ? (
+                      <Loader2 className="h-4 w-4 mt-0.5 animate-spin shrink-0" />
+                    ) : (
+                      <Link2 className="h-4 w-4 mt-0.5 text-ink-soft shrink-0" />
+                    )}
+                    <span>
+                      <span className="block text-[13px] font-semibold text-ink">Link products</span>
+                      <span className="block text-[11px] text-ink-faint leading-snug">
+                        Match services to products so COGS derives automatically. Preview-first.
+                      </span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onPreviewDedupe}
+                    disabled={dedupeBusy || services.length === 0}
+                    className="w-full flex items-start gap-2.5 rounded-md px-2 py-2 text-left hover:bg-rule-soft/60 disabled:opacity-50 transition"
+                  >
+                    {dedupeBusy ? (
+                      <Loader2 className="h-4 w-4 mt-0.5 animate-spin shrink-0" />
+                    ) : (
+                      <Copy className="h-4 w-4 mt-0.5 text-ink-soft shrink-0" />
+                    )}
+                    <span>
+                      <span className="block text-[13px] font-semibold text-ink">
+                        Clean up duplicates
+                      </span>
+                      <span className="block text-[11px] text-ink-faint leading-snug">
+                        Collapse duplicate services + products into one. Preview-first.
+                      </span>
+                    </span>
+                  </button>
+                </PopoverContent>
+              </Popover>
               <Link
                 to="/app/refill/catalog/import"
+                title="Import services + products from one CSV (e.g. a QuickBooks export) — same importer as the Products tab. For manufacturer 'Your Price' lists, use Verified pricing instead."
                 className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-ink hover:border-emerald/40 transition"
               >
                 <Upload className="h-3.5 w-3.5" />

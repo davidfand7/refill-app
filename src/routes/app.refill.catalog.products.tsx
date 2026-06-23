@@ -519,10 +519,11 @@ function ProductsPage() {
                 ) : (
                   <Wand2 className="h-3.5 w-3.5" />
                 )}
-                Recategorize
+                Auto-categorize
               </button>
               <Link
                 to="/app/refill/catalog/import"
+                title="Import products + services from one CSV (e.g. a QuickBooks export) — same importer as the Services tab. For manufacturer 'Your Price' lists, use Verified pricing instead."
                 className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-3 py-2 text-[13px] font-semibold text-ink-soft hover:text-ink hover:border-emerald/40 transition"
               >
                 <Upload className="h-3.5 w-3.5" />
@@ -793,6 +794,19 @@ function ProductsPage() {
                 <Plus className="h-4 w-4" />
                 Add your first product
               </button>
+              <p className="mt-3 text-[12px] text-ink-faint">
+                or{" "}
+                <Link to="/app/refill/catalog/import" className="font-medium text-emerald-ink hover:underline">
+                  import from a CSV
+                </Link>{" "}
+                ·{" "}
+                <Link
+                  to="/app/refill/catalog/programs"
+                  className="font-medium text-emerald-ink hover:underline"
+                >
+                  load the starter catalog
+                </Link>
+              </p>
             </div>
           )
         ) : (

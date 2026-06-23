@@ -14,7 +14,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { CalendarClock, Copy, Loader2, Mail, PackagePlus, PenLine, Sparkles } from "lucide-react";
+import { CalendarClock, CheckCircle2, Copy, Loader2, Mail, PackagePlus, PenLine, Sparkles } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import {
@@ -35,6 +35,7 @@ import {
   type VerifiedLadder,
 } from "@/server/refill-catalog-seed";
 import { composeRepProposalFn } from "@/server/rep-dealmaker.functions";
+import { getCatalogStatusFn } from "@/server/refill-catalog";
 import {
   getManufacturerBurnRatesFn,
   type ManufacturerBurn,
@@ -500,6 +501,10 @@ function ProgramsPage() {
   const [dealMfr, setDealMfr] = useState<string | null>(null);
   // Burn-rate (slice 2): manufacturer → the spa's own buying pace.
   const [burnByMfr, setBurnByMfr] = useState<Record<string, ManufacturerBurn>>({});
+  // Catalog status (state-aware starter CTA): null until loaded.
+  const [catalogStatus, setCatalogStatus] = useState<{ products: number; services: number } | null>(
+    null,
+  );
 
   async function token(): Promise<string> {
     const { data: sess } = await supabase.auth.getSession();
@@ -512,11 +517,12 @@ function ProgramsPage() {
     setLoading(true);
     try {
       const t = await token();
-      const [progs, sels, burn] = await Promise.all([
+      const [progs, sels, burn, status] = await Promise.all([
         getManufacturerProgramsFn({ data: { accessToken: t, viewAsUserId } }),
         getTenantTierSelectionsFn({ data: { accessToken: t, viewAsUserId } }),
         // Non-critical: a burn failure must not break the programs page.
         getManufacturerBurnRatesFn({ data: { accessToken: t, viewAsUserId } }).catch(() => null),
+        getCatalogStatusFn({ data: { accessToken: t, viewAsUserId } }).catch(() => null),
       ]);
       const selByMfr = new Map(sels.map((s) => [s.manufacturer, s.selection]));
       const verByMfr: Record<string, Record<string, VerifiedLadder>> = {};
@@ -539,6 +545,7 @@ function ProgramsPage() {
       setDrafts(nextDrafts);
       setVerifiedByMfr(verByMfr);
       setBurnByMfr(burn?.byManufacturer ?? {});
+      setCatalogStatus(status);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't load programs.");
     } finally {
@@ -565,6 +572,11 @@ function ProgramsPage() {
           ? `Loaded ${res.inserted} products into your catalog.`
           : `Catalog already loaded (${res.skipped} products in place).`,
       );
+      // Refresh the state-aware status so the card reflects the new count.
+      const status = await getCatalogStatusFn({ data: { accessToken: t, viewAsUserId } }).catch(
+        () => null,
+      );
+      if (status) setCatalogStatus(status);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't load catalog.");
     } finally {
@@ -661,32 +673,64 @@ function ProgramsPage() {
       </div>
 
       <div className="px-6 lg:px-10 py-6 max-w-[960px] mx-auto space-y-6">
-        {/* Starter catalog */}
-        <div className="rounded-xl border border-rule bg-white px-5 py-4 flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <PackagePlus className="h-4 w-4 text-emerald-ink" />
-              <h3 className="text-[15px] font-semibold text-ink">Starter catalog</h3>
+        {/* Starter catalog — state-aware (v2.151.0). Don't pitch "load" when a
+            catalog already exists; only an empty spa sees the full CTA. */}
+        {catalogStatus &&
+          (catalogStatus.products > 0 ? (
+            <div className="rounded-xl border border-rule bg-white px-5 py-3 flex items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-2 text-[13px] text-ink">
+                <CheckCircle2 className="h-4 w-4 text-emerald-ink shrink-0" />
+                <span>
+                  <span className="font-semibold">Catalog loaded</span> — {catalogStatus.products}{" "}
+                  products
+                  {catalogStatus.services > 0 ? ` · ${catalogStatus.services} services` : ""}.
+                </span>
+              </div>
+              <div className="flex items-center gap-4 shrink-0">
+                <Link
+                  to="/app/refill/catalog/products"
+                  className="text-[13px] font-medium text-emerald-ink hover:underline"
+                >
+                  Manage products →
+                </Link>
+                <button
+                  type="button"
+                  onClick={onSeed}
+                  disabled={seeding}
+                  className="inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-soft hover:text-ink disabled:opacity-60 transition"
+                >
+                  {seeding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  {seeding ? "Adding…" : "Add more from the book"}
+                </button>
+              </div>
             </div>
-            <p className="mt-1 text-[13px] text-ink-soft leading-snug max-w-[560px]">
-              Boot your catalog fully loaded with the manufacturer product book — real products,
-              real list prices, packaging and treatment areas already filled in. Pick your tier
-              below and costs resolve. Safe to re-run; it never duplicates or overwrites a verified cost.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onSeed}
-            disabled={seeding}
-            className={cn(
-              "shrink-0 inline-flex items-center gap-1.5 rounded-md bg-emerald px-4 py-2 text-[14px] font-semibold text-paper shadow-sm transition",
-              seeding ? "opacity-60 cursor-wait" : "hover:opacity-95",
-            )}
-          >
-            {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
-            {seeding ? "Loading…" : "Load starter catalog"}
-          </button>
-        </div>
+          ) : (
+            <div className="rounded-xl border border-rule bg-white px-5 py-4 flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <PackagePlus className="h-4 w-4 text-emerald-ink" />
+                  <h3 className="text-[15px] font-semibold text-ink">Starter catalog</h3>
+                </div>
+                <p className="mt-1 text-[13px] text-ink-soft leading-snug max-w-[560px]">
+                  Boot your catalog fully loaded with the manufacturer product book — real products,
+                  real list prices, packaging and treatment areas already filled in. Pick your tier
+                  below and costs resolve. Safe to re-run; it never duplicates or overwrites a verified cost.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onSeed}
+                disabled={seeding}
+                className={cn(
+                  "shrink-0 inline-flex items-center gap-1.5 rounded-md bg-emerald px-4 py-2 text-[14px] font-semibold text-paper shadow-sm transition",
+                  seeding ? "opacity-60 cursor-wait" : "hover:opacity-95",
+                )}
+              >
+                {seeding ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackagePlus className="h-4 w-4" />}
+                {seeding ? "Loading…" : "Load starter catalog"}
+              </button>
+            </div>
+          ))}
 
         {loading ? (
           <div className="flex items-center gap-2 text-ink-soft text-[13px] py-8 justify-center">

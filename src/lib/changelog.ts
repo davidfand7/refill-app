@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.151.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.151.0 &mdash; Island cleanup, Tier 1: the catalog stops contradicting itself.</strong> A sweep of stale and duplicated calls-to-action across the Catalog tabs. <strong>(1) Starter catalog is now state-aware</strong> &mdash; if your catalog is already loaded (it is, for any spa past signup), the big &ldquo;Load starter catalog&rdquo; pitch on <strong>Programs &amp; tiers</strong> shrinks to a quiet &ldquo;✓ Catalog loaded — N products&rdquo; with a &ldquo;Manage products →&rdquo; link and a low-key &ldquo;add more from the book&rdquo;; only a genuinely empty spa sees the full loader. <strong>(2) The Services toolbar de-clutters</strong> &mdash; the three one-time maintenance actions (Auto-categorize, Link products, Clean up duplicates) collapse into a single <strong>&ldquo;Data tools&rdquo;</strong> menu, so the row isn&rsquo;t a wall of seven buttons. <strong>(3) &ldquo;Recategorize&rdquo; &rarr; &ldquo;Auto-categorize&rdquo;</strong> on both tabs (clearer verb; tooltips spell out that Products also matches brand + manufacturer). <strong>(4) &ldquo;Import CSV&rdquo;</strong> on Services and Products now says, on hover, that it&rsquo;s <em>one</em> importer shared by both tabs &mdash; and points you to <strong>Verified pricing</strong> for manufacturer &ldquo;Your Price&rdquo; lists instead. <strong>(5) The empty Products state</strong> now offers CSV import + starter-catalog, matching Services. New shared <code>getCatalogStatusFn</code> (head-only counts) powers the state-aware bits. <strong>Touched</strong>: <code>refill-catalog.ts</code>, <code>programs.tsx</code>, <code>services.tsx</code>, <code>products.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.150.0",
     date: "June 2026",
     items: [
