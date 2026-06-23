@@ -40,6 +40,7 @@ import {
 
 import { PageHeader } from "@/components/PageHeader";
 import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
+import { PromoIntelligenceCard } from "@/components/refill/PromoIntelligenceCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -397,6 +398,16 @@ function RecognitionInventoryPage() {
               />
             )}
           </div>
+        )}
+
+        {/* Manufacturer promos — managed here; the CSV feed lives on Rewards. */}
+        {accessToken && (
+          <PromoIntelligenceCard
+            accessToken={accessToken}
+            viewAsUserId={viewAsUserId}
+            showImport={false}
+            crossLink={{ label: "Import on Rewards", to: "/app/refill/recognition/rewards" }}
+          />
         )}
       </div>
     </div>

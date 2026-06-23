@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.153.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.153.0 &mdash; Island cleanup, Tier 2 (promos get one home).</strong> Manufacturer promos used to be managed in a card buried on the <strong>Rewards</strong> tab while everything else about them lived elsewhere &mdash; so &ldquo;where do I manage a promo?&rdquo; had two answers. Now there&rsquo;s one: the <strong>Incentives</strong> tab. The promo <em>manager</em> (the list, the on-Deals eye toggle, and the per-offer delivery editor — who it&rsquo;s for, which days, the cap) now lives on Incentives. The CSV <em>feed</em> stays on Rewards alongside your other manufacturer-export uploads, with a <strong>&ldquo;Manage in Incentives →&rdquo;</strong> link; Incentives shows an <strong>&ldquo;Import on Rewards →&rdquo;</strong> link back. Same data, same promos — just one obvious place to manage them. Under the hood the card moved into a shared <code>PromoIntelligenceCard</code> component with import/manage modes (no logic forked). <strong>Touched</strong>: new <code>components/refill/PromoIntelligenceCard.tsx</code>, <code>recognition.rewards.tsx</code> (import-only + dead-import cleanup), <code>recognition.inventory.tsx</code> (manage), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.152.0",
     date: "June 2026",
     items: [
