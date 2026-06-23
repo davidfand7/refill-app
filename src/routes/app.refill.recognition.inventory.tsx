@@ -21,7 +21,7 @@
  * parsing portal paste). v1.34.3 wires the allocation engine.
  */
 
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import {
@@ -300,6 +300,17 @@ function RecognitionInventoryPage() {
             {loadError}
           </div>
         )}
+
+        {/* Cross-link to the margin lens (same incentives, different view). */}
+        <div className="rounded-lg border border-rule bg-rule-soft/40 px-4 py-2.5 text-[12px] text-ink-soft flex items-center gap-1.5 flex-wrap">
+          <span>This is the pool you deploy to patients. To see what each incentive costs your margin,</span>
+          <Link
+            to="/app/refill/catalog/brand-economics"
+            className="font-semibold text-emerald-ink hover:underline"
+          >
+            open Brand economics →
+          </Link>
+        </div>
 
         {/* Add buttons */}
         <div className="flex flex-wrap items-center gap-3">

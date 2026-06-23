@@ -434,6 +434,17 @@ function BrandEconomicsPage() {
       </div>
 
       <div className="px-6 lg:px-10 py-6 max-w-[960px] mx-auto space-y-6">
+        {/* Cross-link to the deploy pool (same incentives, different view). */}
+        <div className="rounded-lg border border-rule bg-rule-soft/40 px-4 py-2.5 text-[12px] text-ink-soft flex items-center gap-1.5 flex-wrap">
+          <span>This is the margin lens — what incentives cost you. To deploy them to specific patients,</span>
+          <Link
+            to="/app/refill/recognition/inventory"
+            className="font-semibold text-emerald-ink hover:underline"
+          >
+            open Incentives →
+          </Link>
+        </div>
+
         {adding && (
           <form onSubmit={onSave} className="rounded-xl border border-rule bg-white p-5 space-y-4">
             <div className="flex items-center justify-between">

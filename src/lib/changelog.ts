@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.155.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.155.0 &mdash; Island cleanup: Incentives ↔ Brand economics, bridged.</strong> Two pages talk about the same rebates/samples/vouchers from different angles &mdash; <strong>Incentives</strong> is the pool you <em>deploy</em> to patients, <strong>Brand economics</strong> is the margin lens (what those incentives <em>cost</em> you and how they rank your high-margin substitute). They&rsquo;re deliberately separate tools, but nothing said so. Now each carries a one-line cross-link to the other (&ldquo;…to see what each incentive costs your margin, open Brand economics →&rdquo; / &ldquo;…to deploy them to specific patients, open Incentives →&rdquo;), so the relationship reads as one story instead of two disconnected islands. <strong>Touched</strong>: <code>recognition.inventory.tsx</code>, <code>catalog.brand-economics.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.154.0",
     date: "June 2026",
     items: [
