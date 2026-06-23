@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.150.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.150.0 &mdash; Rep Deal-Maker (slice 2.1): how far you are from your next break.</strong> Your verified ladder already shows your next volume break (&ldquo;buy 100+ vials &rarr; $379, save $10&rdquo;). Now it tells you whether that&rsquo;s actually within reach <em>at your pace</em> &mdash; e.g. <em>&ldquo;At your pace (~96/yr) you&rsquo;re ~4/yr from this break&rdquo;</em> or <em>&ldquo;...you already clear this &mdash; make sure your rep has you on the better tier.&rdquo;</em> And in the draft dialog, your &ldquo;Commit to ~&rdquo; ask shows how it sits against your pace (&ldquo;within your ~96/yr pace&rdquo;). <strong>The careful part &mdash; no fake math.</strong> Comparing &ldquo;how much you buy&rdquo; to a ladder threshold is a trap: a filler is priced per syringe (the unit you buy), but a toxin is priced per <em>dosing unit</em> (~$12), not per vial &mdash; so naively counting would silently mis-compare. SmartSpa only shows the distance when it can <em>prove</em> your unit matches the ladder&rsquo;s (your per-unit sales price lines up with the per-unit cost); for toxins priced in dosing units it stays quiet rather than guess. The distance is derived from reliable dollars (your spend &divide; your sales price), never from an ambiguous quantity field. <strong>Touched</strong>: <code>manufacturer-burn-rate.functions.ts</code> (per-product spend + catalog brand_family/sales-price match), <code>programs.tsx</code> (reachability line + same-unit gate + dialog readout), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.149.0",
     date: "June 2026",
     items: [

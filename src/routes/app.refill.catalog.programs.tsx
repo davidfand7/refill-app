@@ -129,7 +129,8 @@ function fmtSpend(n: number): string {
   return `$${Math.round(n)}`;
 }
 
-/** Best burn product matching a focus name (family ↔ product_name, either way). */
+/** Best burn product matching a focus name (matches product_name OR brand_family,
+ *  either direction). */
 function matchBurnProduct(
   burn: ManufacturerBurn | null | undefined,
   focusName: string,
@@ -139,9 +140,33 @@ function matchBurnProduct(
   return (
     burn.products.find((p) => {
       const n = p.productName.toLowerCase();
-      return n.includes(f) || f.includes(n);
+      const fam = (p.brandFamily ?? "").toLowerCase();
+      return (
+        n.includes(f) ||
+        f.includes(n) ||
+        (!!fam && (fam === f || fam.includes(f) || f.includes(fam)))
+      );
     }) ?? null
   );
+}
+
+/**
+ * Reliable units/year — ONLY when the spa prices in the ladder's own purchase
+ * unit. Gate: the catalog per-unit SALES price must be at least ~0.8× the
+ * verified per-unit COST. A filler priced per syringe clears it (sales > cost);
+ * a toxin priced per dosing-unit ($12) fails it vs a per-vial cost ($389), so we
+ * return null and refuse to fabricate a vial-distance. Derives units from
+ * reliable dollars (spend ÷ sales price), never from the ambiguous quantity.
+ */
+function reliableUnitsPerYear(
+  bp: ManufacturerBurn["products"][number] | null | undefined,
+  ladderCurrentPrice: number | null | undefined,
+): number | null {
+  if (!bp || !bp.salesPricePerUnit || bp.salesPricePerUnit <= 0) return null;
+  if (!ladderCurrentPrice || ladderCurrentPrice <= 0) return null;
+  if (bp.salesPricePerUnit < ladderCurrentPrice * 0.8) return null; // different (dosing) unit → unsafe
+  if (bp.annualSpendUsd <= 0) return null;
+  return bp.annualSpendUsd / bp.salesPricePerUnit;
 }
 
 const dealInputCls =
@@ -184,9 +209,14 @@ function RepDealMakerDialog(props: {
     const initialFocus = hint?.productName ?? "";
     setProductName(initialFocus);
     setTargetQty(hint?.targetQty != null ? String(hint.targetQty) : "");
-    // Pre-fill the owner's pace from their records (estimate — owner confirms).
+    // Pre-fill the owner's pace from their records. Prefer the reliable
+    // same-unit pace (spend ÷ sales price, vial-correct); fall back to the
+    // ambiguous estimate. Either way it's editable + owner-confirmed.
     const matched = matchBurnProduct(burn, initialFocus) ?? burn?.products[0] ?? null;
-    setTypicalQty(matched ? String(Math.round(matched.unitsPerQuarter)) : "");
+    const upy = reliableUnitsPerYear(matched, hint?.currentUnitPrice ?? null);
+    const prefillQtr =
+      upy != null ? Math.round(upy / 4) : matched ? Math.round(matched.unitsPerQuarter) : 0;
+    setTypicalQty(prefillQtr > 0 ? String(prefillQtr) : "");
     setRelationshipNote("");
     setSubject("");
     setBody("");
@@ -326,6 +356,20 @@ function RepDealMakerDialog(props: {
                 onChange={(e) => setTargetQty(e.target.value)}
                 placeholder={hint?.targetQty != null ? String(hint.targetQty) : "e.g. 100"}
               />
+              {(() => {
+                const paceQtr = Number(typicalQty);
+                const target = Number(targetQty);
+                if (!Number.isFinite(paceQtr) || paceQtr <= 0) return null;
+                if (!Number.isFinite(target) || target <= 0) return null;
+                const paceYr = Math.round(paceQtr * 4);
+                return (
+                  <p className="mt-1 text-[10px] text-ink-faint leading-snug">
+                    {target <= paceYr
+                      ? `within your ~${paceYr}/yr pace — you likely already qualify`
+                      : `~${target - paceYr}/yr above your ~${paceYr}/yr pace`}
+                  </p>
+                );
+              })()}
             </div>
           </div>
 
@@ -749,18 +793,51 @@ function ProgramsPage() {
                                       }
                                       const save = cur - next.price;
                                       const pct = cur > 0 ? Math.round((save / cur) * 100) : 0;
+                                      // Ladder-distance (slice 2.1): only when a reliable
+                                      // same-unit pace exists (gate refuses dosing-unit toxins).
+                                      const bp = matchBurnProduct(burnByMfr[p.manufacturer], family);
+                                      const upy = reliableUnitsPerYear(bp, vl.currentPrice);
+                                      const yr = upy != null ? Math.round(upy) : null;
                                       return (
-                                        <div className="mt-1.5 pt-1.5 border-t border-emerald/20 text-[11px] text-ink leading-snug">
-                                          <span className="font-semibold text-emerald-ink">
-                                            Next volume break:
-                                          </span>{" "}
-                                          buy {next.minUnits ?? "more"}+ {unit}s → ${next.price}/
-                                          {unit} ·{" "}
-                                          <span className="font-semibold">
-                                            save ${save.toFixed(2)}/{unit}
-                                          </span>{" "}
-                                          <span className="text-ink-faint">({pct}% lower)</span>
-                                        </div>
+                                        <>
+                                          <div className="mt-1.5 pt-1.5 border-t border-emerald/20 text-[11px] text-ink leading-snug">
+                                            <span className="font-semibold text-emerald-ink">
+                                              Next volume break:
+                                            </span>{" "}
+                                            buy {next.minUnits ?? "more"}+ {unit}s → ${next.price}/
+                                            {unit} ·{" "}
+                                            <span className="font-semibold">
+                                              save ${save.toFixed(2)}/{unit}
+                                            </span>{" "}
+                                            <span className="text-ink-faint">({pct}% lower)</span>
+                                          </div>
+                                          {yr != null && next.minUnits != null && (
+                                            <div className="mt-1 text-[11px] text-ink-soft leading-snug">
+                                              {yr >= next.minUnits ? (
+                                                <>
+                                                  At your pace (
+                                                  <span className="font-semibold tabular-nums">
+                                                    ~{yr} {unit}s/yr
+                                                  </span>
+                                                  ) you already clear this — make sure your rep has
+                                                  you on the better tier.
+                                                </>
+                                              ) : (
+                                                <>
+                                                  At your pace (
+                                                  <span className="font-semibold tabular-nums">
+                                                    ~{yr} {unit}s/yr
+                                                  </span>
+                                                  ) you’re{" "}
+                                                  <span className="font-semibold tabular-nums">
+                                                    ~{next.minUnits - yr} {unit}s/yr
+                                                  </span>{" "}
+                                                  from this break.
+                                                </>
+                                              )}
+                                            </div>
+                                          )}
+                                        </>
                                       );
                                     })()}
                                   </div>

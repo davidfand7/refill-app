@@ -34,6 +34,15 @@ export type ManufacturerBurnProduct = {
   unitsPerQuarter: number;
   /** True if any contributing row used amount ÷ unit_price (no explicit qty). */
   fromDollarEstimate: boolean;
+  /** Per-product trailing-365d spend (reliable). */
+  annualSpendUsd: number;
+  /** Matched catalog brand_family (links to the verified ladder), if found. */
+  brandFamily: string | null;
+  /** Matched catalog per-purchase-unit sales price. The CLIENT uses this vs the
+   *  verified ladder's per-unit COST as a same-unit gate: if sales ≥ ~0.8× cost,
+   *  the spa prices in the ladder's unit (syringe) → a reliable unit-pace can be
+   *  derived (spend ÷ sales price); if far below (toxin dosing-units) it can't. */
+  salesPricePerUnit: number | null;
 };
 
 export type ManufacturerBurn = {
@@ -79,11 +88,48 @@ type TxnRow = {
   product_kind: string | null;
 };
 
+type CatalogRow = {
+  brand: string;
+  brand_family: string | null;
+  manufacturer: string | null;
+  sales_price_per_unit: number;
+};
+
 const WINDOW_DAYS = 365;
 const MAX_PRODUCTS = 6;
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
+}
+
+function normalizeName(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/** Best catalog match for a transaction product name: exact normalized, then
+ *  bidirectional contains. Returns brand_family + per-unit sales price. */
+function matchCatalog(
+  catalog: CatalogRow[],
+  productName: string,
+): { brandFamily: string | null; salesPricePerUnit: number | null } {
+  const n = normalizeName(productName);
+  if (!n) return { brandFamily: null, salesPricePerUnit: null };
+  let exact: CatalogRow | undefined;
+  let contains: CatalogRow | undefined;
+  for (const c of catalog) {
+    const cb = normalizeName(c.brand);
+    if (!cb) continue;
+    if (cb === n) {
+      exact = c;
+      break;
+    }
+    if (!contains && (cb.includes(n) || n.includes(cb))) contains = c;
+  }
+  const m = exact ?? contains;
+  return {
+    brandFamily: m?.brand_family ?? null,
+    salesPricePerUnit: m && m.sales_price_per_unit > 0 ? m.sales_price_per_unit : null,
+  };
 }
 
 export const getManufacturerBurnRatesFn = createServerFn({ method: "POST" })
@@ -116,11 +162,24 @@ export const getManufacturerBurnRatesFn = createServerFn({ method: "POST" })
         .range(from, to),
     );
 
+    // Catalog (per-unit sales price + brand_family) for the unit-pace bridge.
+    const catalog = await fetchAllRows<CatalogRow>((from, to) =>
+      sb
+        .from("products")
+        .select("brand, brand_family, manufacturer, sales_price_per_unit")
+        .eq("tenant_id", tenantId)
+        .order("brand", { ascending: true })
+        .range(from, to),
+    );
+
     type Acc = {
       manufacturer: string;
       annualSpendUsd: number;
       txnCount: number;
-      products: Map<string, { kind: string | null; units: number; fromDollar: boolean }>;
+      products: Map<
+        string,
+        { kind: string | null; units: number; spend: number; fromDollar: boolean }
+      >;
     };
     const byMfr = new Map<string, Acc>();
 
@@ -133,42 +192,47 @@ export const getManufacturerBurnRatesFn = createServerFn({ method: "POST" })
       acc.annualSpendUsd += t.amount_usd;
       acc.txnCount += 1;
 
-      // Unit estimate: explicit quantity, else amount ÷ unit_price.
-      let units: number | null = null;
-      let fromDollar = false;
+      const name = t.product_name.trim();
+      const p =
+        acc.products.get(name) ?? { kind: t.product_kind, units: 0, spend: 0, fromDollar: false };
+      p.spend += t.amount_usd;
+      if (!p.kind && t.product_kind) p.kind = t.product_kind;
+
+      // Unit estimate: explicit quantity, else amount ÷ unit_price (flagged).
       if (t.quantity != null && Number.isFinite(t.quantity) && t.quantity > 0) {
-        units = t.quantity;
+        p.units += t.quantity;
       } else if (
         t.unit_price_usd != null &&
         Number.isFinite(t.unit_price_usd) &&
         t.unit_price_usd > 0
       ) {
-        units = t.amount_usd / t.unit_price_usd;
-        fromDollar = true;
+        p.units += t.amount_usd / t.unit_price_usd;
+        p.fromDollar = true;
       }
-      if (units != null) {
-        const name = t.product_name.trim();
-        const p =
-          acc.products.get(name) ?? { kind: t.product_kind, units: 0, fromDollar: false };
-        p.units += units;
-        if (fromDollar) p.fromDollar = true;
-        if (!p.kind && t.product_kind) p.kind = t.product_kind;
-        acc.products.set(name, p);
-      }
+      acc.products.set(name, p);
       byMfr.set(mfr, acc);
     }
 
     const byManufacturer: Record<string, ManufacturerBurn> = {};
     for (const [mfr, acc] of byMfr) {
+      const mfrCatalog = catalog.filter(
+        (c) => (c.manufacturer ?? "").toLowerCase() === mfr || !c.manufacturer,
+      );
       const products: ManufacturerBurnProduct[] = [...acc.products.entries()]
-        .map(([productName, p]) => ({
-          productName,
-          productKind: p.kind,
-          unitsPerQuarter: round1(p.units / 4),
-          fromDollarEstimate: p.fromDollar,
-        }))
-        .filter((p) => p.unitsPerQuarter > 0)
-        .sort((a, b) => b.unitsPerQuarter - a.unitsPerQuarter)
+        .map(([productName, p]) => {
+          const cat = matchCatalog(mfrCatalog, productName);
+          return {
+            productName,
+            productKind: p.kind,
+            unitsPerQuarter: round1(p.units / 4),
+            fromDollarEstimate: p.fromDollar,
+            annualSpendUsd: Math.round(p.spend),
+            brandFamily: cat.brandFamily,
+            salesPricePerUnit: cat.salesPricePerUnit,
+          };
+        })
+        .filter((p) => p.annualSpendUsd > 0)
+        .sort((a, b) => b.annualSpendUsd - a.annualSpendUsd)
         .slice(0, MAX_PRODUCTS);
       byManufacturer[mfr] = {
         manufacturer: mfr,
