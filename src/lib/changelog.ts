@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.144.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.144.0 &mdash; Vision now reads volume-tier ladders.</strong> Some portal pages aren’t a price <em>list</em> — they’re a single product’s <strong>quantity ladder</strong> (e.g. Evolus Jeuveau: 250 / 150 / 100 / 50 / 20 / 1 vials, each at its own per-unit price). Until now vision read those as six unmatchable rows. Now it recognizes a ladder, collapses it to <strong>one matched product</strong> at the spa’s real current per-unit price (the “Your Price” rung), and <strong>captures every rung</strong>. In the review table, a matched ladder shows an expandable <strong>“Volume ladder · N tiers”</strong> with each quantity → $/unit and your current rung marked <em>← yours</em> — so you can see at a glance what the next volume break would save. Confirm applies your current price as a Verified cost, same as any import; the full ladder is captured with the batch for upcoming buy-optimization (writing it into the volume-tier program model is the next step). Normal multi-product price lists are unchanged (one row per product). <strong>Touched</strong>: <code>portal-import-core.ts</code> (extractor + <code>tiers</code> on parsed row/proposal), <code>verified-pricing.tsx</code> (ladder display), <code>changelog.ts</code>. No migration — ladder rides the batch jsonb.",
+    ],
+  },
+  {
     version: "v2.143.1",
     date: "June 2026",
     items: [

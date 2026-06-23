@@ -916,6 +916,35 @@ function ReviewTable({
                         read as “{p.parsedName}”
                       </div>
                     )}
+                    {p.tiers && p.tiers.length > 0 && (
+                      <details className="mt-1.5">
+                        <summary className="cursor-pointer text-[11px] font-medium text-emerald-ink">
+                          Volume ladder · {p.tiers.length} tiers
+                        </summary>
+                        <ul className="mt-1 space-y-0.5 border-l-2 border-emerald/20 pl-2.5">
+                          {p.tiers.map((t, ti) => {
+                            const isCurrent =
+                              p.proposedCostPerUnit != null &&
+                              Math.abs(t.pricePerUnit - p.proposedCostPerUnit) < 0.005;
+                            return (
+                              <li
+                                key={ti}
+                                className={cn(
+                                  "text-[11px] tabular-nums flex items-center justify-between gap-3",
+                                  isCurrent ? "text-emerald-ink font-semibold" : "text-ink-faint",
+                                )}
+                              >
+                                <span>{t.qty}</span>
+                                <span>
+                                  {fmtUsd(t.pricePerUnit)}/unit
+                                  {isCurrent && <span className="ml-1">← yours</span>}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </details>
+                    )}
                   </td>
                   <td className="py-3 pr-3 text-right align-top tabular-nums">
                     {fmtUsd(p.parsedPrice)}

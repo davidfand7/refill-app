@@ -41,19 +41,27 @@ export type ParsedPortalRow = {
   /** What the portal's price is denominated in, as labeled on screen. */
   unitBasis: "box" | "unit" | "unknown";
   sku: string | null;
+  /** Volume-tier ladder rungs when the page is a single-product quantity ladder. */
+  tiers?: Array<{ qty: string; pricePerUnit: number }> | null;
 };
+
+const tierSchema = z.object({
+  qty: z.string(),
+  pricePerUnit: z.number().nonnegative(),
+});
 
 const parsedRowSchema = z.object({
   name: z.string().min(1),
   price: z.number().nonnegative(),
   unitBasis: z.enum(["box", "unit", "unknown"]).default("unknown"),
   sku: z.string().nullable().default(null),
+  tiers: z.array(tierSchema).nullable().default(null),
 });
 
 const EXTRACTION_SYSTEM = `You read aesthetic-manufacturer ordering-portal screenshots (Allergan/AbbVie APP, Galderma ASPIRE, Evolus, Merz, etc.) and extract the spa's NEGOTIATED prices.
 
 Return ONLY a JSON object: { "manufacturer": string|null, "rows": Row[] }.
-Row = { "name": string, "price": number, "unitBasis": "box"|"unit"|"unknown", "sku": string|null }.
+Row = { "name": string, "price": number, "unitBasis": "box"|"unit"|"unknown", "sku": string|null, "tiers": [{ "qty": string, "pricePerUnit": number }]|null }.
 
 Rules:
 - name: the product as printed (e.g. "Juvederm Voluma XC", "Botox Cosmetic 100 Units", "Jeuveau 100U"). Keep the strength/size if shown.
@@ -61,7 +69,16 @@ Rules:
 - unitBasis: "box" if the price is per box/case/multipack; "unit" if per syringe/vial/single; "unknown" if not stated. Do NOT guess a conversion — just report what's labeled.
 - sku: the item/SKU/catalog number if visible, else null.
 - manufacturer: lowercase key if identifiable (abbvie, galderma, evolus, merz, revance), else null.
+- tiers: null for a normal price list. ONLY populated for a volume ladder (next rule).
 - Skip headers, totals, shipping, taxes, and any row without a real product price.
+
+VOLUME / QUANTITY LADDERS: Some pages show ONE product with several quantity options (e.g. 250 / 150 / 100 / 50 / 20 / 1 vials), each with its own per-UNIT price, often with a highlighted "Your Price". For such a page:
+- Emit a SINGLE row for that product (NOT one row per quantity).
+- "price" = the spa's CURRENT effective per-unit price: prefer an explicit "Your Price" / "Your Cost" figure; else the rung the spa is currently on (typically the lowest-quantity / entry rung).
+- "unitBasis" = "unit".
+- "tiers" = every quantity rung shown, as [{ "qty": "250 vials", "pricePerUnit": 379 }, ...] (ascending or as printed).
+- Do this ONLY for a single-product quantity ladder; a normal multi-PRODUCT price list stays one row per product with "tiers": null.
+
 - Output ONLY the JSON object — no markdown, no commentary.`;
 
 /** Run Claude vision over one or more portal screenshots → parsed rows. */
@@ -161,6 +178,8 @@ export type PortalImportProposal = {
   unitsPerBox: number | null;
   /** Per-unit cost we'd write (box price ÷ units_per_box when basis=box). */
   proposedCostPerUnit: number | null;
+  /** Volume-tier ladder rungs (single-product quantity ladder), else null. */
+  tiers: Array<{ qty: string; pricePerUnit: number }> | null;
 };
 
 function normalize(s: string): string {
@@ -247,6 +266,7 @@ export function matchToCatalog(
       currentCostSource: match?.cost_source ?? null,
       unitsPerBox: match?.units_per_box ?? null,
       proposedCostPerUnit: proposed,
+      tiers: r.tiers ?? null,
     };
   });
 }
