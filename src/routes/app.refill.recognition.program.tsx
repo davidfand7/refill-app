@@ -30,6 +30,7 @@ import {
   type RebateProgram,
   type ProgramSnapshot,
 } from "@/lib/program-intel";
+import { computeVerdict, formatAge, tierLabel } from "@/lib/connection-health";
 
 export const Route = createFileRoute("/app/refill/recognition/program")({
   component: ProgramPage,
@@ -67,7 +68,7 @@ function ProgramPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Recognition"
+        eyebrow="Incentives"
         title="Program Intelligence"
         description="Your manufacturer's rewards program — tiers, rebates, and the exact moves to unlock them. The dashboard nobody reads, read for you."
       />
@@ -107,24 +108,45 @@ function ProgramView({ intel }: { intel: ProgramIntel }) {
 }
 
 function FreshnessBanner({ intel }: { intel: ProgramIntel }) {
-  const date = new Date(intel.capturedOn + "T00:00:00").toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
   const live = intel.source === "portal_pull";
+  // Honest freshness via the Connection Health spine: a program snapshot is the
+  // "snapshot" tier — it ages into "stale" after ~2 weeks but never hard-breaks
+  // on silence. This stops an old capture from quietly reading as current.
+  const capturedMs = new Date(intel.capturedOn + "T00:00:00").getTime();
+  const { severity, ageMs } = computeVerdict({
+    tier: "snapshot",
+    connected: true,
+    lastEventAtMs: Number.isFinite(capturedMs) ? capturedMs : null,
+    nowMs: Date.now(),
+  });
+  const stale = severity === "warn"; // snapshot tier never returns "error"
+  const tone = stale
+    ? { box: "border-amber/40 bg-amber-soft/40", icon: "text-amber", pill: "bg-amber-soft text-amber" }
+    : { box: "border-rule bg-paper/40", icon: "text-ink-faint", pill: "bg-emerald-soft text-emerald-ink" };
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-rule bg-paper/40 px-4 py-2.5 text-[12px] text-ink-soft">
-      <Clock className="h-3.5 w-3.5 text-ink-faint" />
-      <span className="font-semibold capitalize text-ink">{intel.snapshot.manufacturer}</span>
-      <span className="text-ink-faint">·</span>
-      <span>
-        {live ? "Pulled" : "Snapshot captured"} {date}
-      </span>
-      {!live && (
-        <span className="ml-auto rounded-full bg-amber-soft px-2 py-0.5 text-[10.5px] font-semibold text-amber">
-          manual capture · auto-pull coming
+    <div>
+      <div
+        className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border ${tone.box} px-4 py-2.5 text-[12px] text-ink-soft`}
+      >
+        <Clock className={`h-3.5 w-3.5 ${tone.icon}`} />
+        <span className="font-semibold capitalize text-ink">{intel.snapshot.manufacturer}</span>
+        <span className="text-ink-faint">·</span>
+        <span>
+          {live ? "Pulled" : "Captured"} {formatAge(ageMs)}
         </span>
+        <span className="text-ink-faint hidden sm:inline">·</span>
+        <span className="text-ink-faint hidden sm:inline">{tierLabel("snapshot")}</span>
+        <span className={`ml-auto rounded-full ${tone.pill} px-2 py-0.5 text-[10.5px] font-semibold`}>
+          {stale ? "May be out of date" : live ? "Fresh" : "Manual capture"}
+          {!live && !stale ? " · auto-pull coming" : ""}
+        </span>
+      </div>
+      {stale && (
+        <p className="mt-1.5 px-1 text-[11px] leading-snug text-amber">
+          This snapshot is {formatAge(ageMs)} old — your manufacturer may have moved a tier,
+          threshold, or price since. Treat these as your last known numbers until it refreshes
+          {live ? "" : " (auto-pull is coming)"}.
+        </p>
       )}
     </div>
   );

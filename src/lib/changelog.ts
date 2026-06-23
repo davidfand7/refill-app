@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.157.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.157.0 &mdash; Program Intelligence stops pretending it&rsquo;s live.</strong> The <strong>Program</strong> tab (your manufacturer&rsquo;s tiers/rebates/moves) is built on a <em>snapshot</em> — but the freshness line just showed a date, so a months-old capture read the same as a fresh one. That&rsquo;s the silent-stale trap. Now it runs through SmartSpa&rsquo;s <strong>Connection Health</strong> spine (snapshot tier): it shows the real <strong>age</strong> (&ldquo;captured 2 months ago&rdquo;) + an honest tier label (&ldquo;Snapshot · refreshed on import&rdquo;), and once a capture passes ~2 weeks it flips <strong>amber — &ldquo;May be out of date&rdquo;</strong> with a plain-English caution that your manufacturer may have moved a tier/threshold/price since, so you treat the numbers as last-known rather than current. Never hard-breaks (a snapshot aging isn&rsquo;t a failure), never implies live. Also fixed a stray &ldquo;Recognition&rdquo; eyebrow → &ldquo;Incentives&rdquo;. <strong>Touched</strong>: <code>recognition.program.tsx</code> (reuses <code>computeVerdict</code>/<code>formatAge</code>/<code>tierLabel</code>), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.156.0",
     date: "June 2026",
     items: [
