@@ -67,7 +67,11 @@ export const Route = createFileRoute("/api/ingest/portal-capture")({
         }
 
         const sb = admin();
-        const userId = await resolveRewardIngestToken(sb, body.token);
+        // Forgiving: accept the bare token OR the full drop-address
+        // (<token>@rewards.smartspa.app) — strip any @domain + whitespace.
+        const rawToken = body.token.trim();
+        const token = rawToken.includes("@") ? rawToken.split("@")[0].trim() : rawToken;
+        const userId = await resolveRewardIngestToken(sb, token);
         if (!userId) return resp(401, { ok: false, error: "unknown_token" });
 
         let tenantId: string;

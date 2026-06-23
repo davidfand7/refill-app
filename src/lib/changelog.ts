@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.143.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.143.1 &mdash; Capture extension accepts your token <em>or</em> your drop-address.</strong> The capture endpoint now normalizes the pasted token — strips whitespace and any <code>@rewards.smartspa.app</code> suffix — so whether you paste the bare token (Option B) or the full email drop-address (Option A) out of habit, it just works instead of erroring <code>unknown_token</code>. <strong>Touched</strong>: <code>api.ingest.portal-capture.ts</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.143.0",
     date: "June 2026",
     items: [
