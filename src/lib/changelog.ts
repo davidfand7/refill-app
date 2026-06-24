@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.164.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.164.0 &mdash; Program Intelligence can now read a REAL per-tenant snapshot (Slice 1 of the capture &rarr; intelligence loop).</strong> The Incentives &rarr; Program surface (your manufacturer&rsquo;s tiers, rebates, and the moves to unlock them) was served entirely by a hardcoded constant &mdash; one captured Rejuv/Galderma snapshot, the same for everyone. This ship lands the <strong>persistence layer</strong>: a new <code>program_snapshots</code> table (per-tenant, per-manufacturer, append-only per pull) and a DB-first <code>loadSnapshot</code> that reads your <em>latest</em> snapshot plus the <em>prior</em> one of the same manufacturer (so the &ldquo;what changed&rdquo; diff lights up the moment you have history). <strong>Safe by construction</strong>: the read is wrapped defensively &mdash; until a real snapshot is captured (Slice 2: vision/AI parses your rewards-dashboard screenshot into a snapshot and writes a row here), it falls back to the seed constant, so nothing changes yet and the surface never breaks. The fallback is the only thing still serving hardcoded data; it retires automatically when captures land. No UI, type, derive, or diff logic moved &mdash; just the swap-point, exactly as designed. <strong>New</strong>: migration <code>program_snapshots</code> (RLS, service-role only). <strong>Touched</strong>: <code>program-intel.functions.ts</code> (async DB-first loadSnapshot, tenant-resolved), <code>types.ts</code>, <code>changelog.ts</code>. <em>Slices 2&ndash;3 (capture path + Account/Manufacturers as the front door) are the next arc.</em>",
+    ],
+  },
+  {
     version: "v2.163.0",
     date: "June 2026",
     items: [

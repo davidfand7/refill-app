@@ -2710,6 +2710,44 @@ export type Database = {
           },
         ]
       }
+      program_snapshots: {
+        Row: {
+          created_at: string
+          id: string
+          manufacturer: string
+          pulled_at: string
+          snapshot: Json
+          source: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          manufacturer: string
+          pulled_at?: string
+          snapshot: Json
+          source?: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          manufacturer?: string
+          pulled_at?: string
+          snapshot?: Json
+          source?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "program_snapshots_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenant_manufacturer_tiers: {
         Row: {
           created_at: string

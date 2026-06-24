@@ -13,7 +13,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import { admin, type SbClient } from "@/server/admin-client";
+import {
+  getTenantIdForUser,
+  resolveEffectiveUserId,
+} from "@/server/auth-helpers";
 import {
   deriveRebateMoves,
   diffSnapshots,
@@ -93,15 +97,55 @@ export type ProgramIntel = {
 };
 
 /**
- * Load the latest snapshot for a tenant (+ the prior one, for the diff). Today
- * this is the captured Rejuv constant; the swap-in point for the DB read once
- * the portal pull persists snapshots. Returns null prev until we have history.
+ * Load the latest snapshot for a tenant (+ the prior one of the SAME
+ * manufacturer, for the "what changed" diff).
+ *
+ * v2.164.0 (Slice 1): DB-first. When a real per-tenant snapshot has been
+ * captured (program_snapshots), it wins. Until then — and for any tenant with
+ * no capture yet — we fall back to the seed constant so the surface never
+ * breaks. The fallback is the ONLY thing still serving the hardcoded Rejuv
+ * data; it retires the moment real captures land (Slice 2). The read is wrapped
+ * defensively so a missing table (pre-migration) or any error degrades to the
+ * seed rather than failing the page.
  */
-function loadSnapshot(_tenantId: string | null): {
+async function loadSnapshot(
+  sb: SbClient,
+  tenantId: string | null,
+): Promise<{
   latest: ProgramSnapshot;
   prev: ProgramSnapshot | null;
   source: SnapshotSource;
-} {
+}> {
+  if (tenantId) {
+    try {
+      const { data: latestRow } = await sb
+        .from("program_snapshots")
+        .select("manufacturer, snapshot, pulled_at, source")
+        .eq("tenant_id", tenantId)
+        .order("pulled_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latestRow) {
+        const { data: priorRow } = await sb
+          .from("program_snapshots")
+          .select("snapshot")
+          .eq("tenant_id", tenantId)
+          .eq("manufacturer", latestRow.manufacturer)
+          .lt("pulled_at", latestRow.pulled_at)
+          .order("pulled_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return {
+          latest: latestRow.snapshot as unknown as ProgramSnapshot,
+          prev: (priorRow?.snapshot as unknown as ProgramSnapshot) ?? null,
+          source:
+            latestRow.source === "portal_pull" ? "portal_pull" : "manual_capture",
+        };
+      }
+    } catch {
+      // Table missing (pre-migration) or read error → seed fallback below.
+    }
+  }
   return { latest: REJUV_ASPIRE_SNAPSHOT, prev: null, source: "manual_capture" };
 }
 
@@ -113,14 +157,21 @@ const input = z.object({
 export const getProgramIntelFn = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => input.parse(raw))
   .handler(async ({ data }): Promise<ProgramIntel> => {
-    // Resolve auth so this is wired tenant-correctly for when the DB read lands;
-    // the captured snapshot is returned regardless for now.
-    await resolveEffectiveUserId({
+    const { effectiveUserId } = await resolveEffectiveUserId({
       accessToken: data.accessToken,
       viewAsUserId: data.viewAsUserId,
     });
+    const sb = admin();
+    // Resolve tenant defensively — a user without a tenant (or any lookup
+    // error) just gets the seed fallback rather than a hard failure.
+    let tenantId: string | null = null;
+    try {
+      tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    } catch {
+      tenantId = null;
+    }
 
-    const { latest, prev, source } = loadSnapshot(null);
+    const { latest, prev, source } = await loadSnapshot(sb, tenantId);
     const moves = deriveRebateMoves(latest);
     const changes = prev ? diffSnapshots(prev, latest) : [];
     return {
