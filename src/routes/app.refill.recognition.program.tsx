@@ -19,6 +19,7 @@ import {
   ArrowRight,
   Camera,
   Gift,
+  Tag,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -102,7 +103,54 @@ function ProgramView({ intel }: { intel: ProgramIntel }) {
           <RebateCard key={r.key} r={r} />
         ))}
       </div>
+      <PricingCard snapshot={snapshot} />
       <ChangesCard changes={changes} />
+    </div>
+  );
+}
+
+const fmtUsd = (n: number): string =>
+  n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
+
+/**
+ * The signature prices read off the dashboard. Reference-grade (what the
+ * manufacturer says you pay) — distinct from the catalog's verified cost, which
+ * is what actually drives margin. Cross-links to the verified-pricing lane where
+ * a "Your Price" screenshot becomes the real per-unit cost (with the ÷box GIGO
+ * check). Hidden when the capture had no pricing panel.
+ */
+function PricingCard({ snapshot }: { snapshot: ProgramSnapshot }) {
+  if (snapshot.pricing.length === 0) return null;
+  return (
+    <div className="rounded-2xl border border-rule bg-white p-5">
+      <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+        <Tag className="h-4 w-4 text-ink-faint" />
+        Signature pricing
+        <span className="rounded-full bg-paper px-2 py-0.5 text-[10.5px] font-semibold text-ink-soft">
+          {snapshot.pricing.length}
+        </span>
+      </div>
+      <p className="mt-1 text-[11.5px] leading-relaxed text-ink-faint">
+        What your rewards dashboard lists you pay. To turn these into the verified per-unit cost that
+        drives your margin, set them in catalog pricing.
+      </p>
+      <div className="mt-3 divide-y divide-rule/70">
+        {snapshot.pricing.map((p, i) => (
+          <div key={`${p.product}-${i}`} className="flex items-center justify-between gap-3 py-1.5">
+            <span className="text-[13px] text-ink-soft">{p.label}</span>
+            <span className="text-[13px] font-semibold tabular-nums text-ink">
+              {fmtUsd(p.unitPriceUsd)}
+            </span>
+          </div>
+        ))}
+      </div>
+      <Link
+        to="/app/refill/catalog/verified-pricing"
+        className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-emerald-ink hover:underline"
+      >
+        Set these as your catalog cost
+        <ArrowRight className="h-3.5 w-3.5" />
+      </Link>
     </div>
   );
 }
@@ -168,8 +216,40 @@ function NextMoveCallout({ intel, moves }: { intel: ProgramIntel; moves: Program
     );
   }
 
-  // ② Captured rebates, but none actionable (all secured / blocked) — genuinely
-  // maxed for now; point them to deploying the units they've earned.
+  // ②c A rebate IS in progress but emits no buy-N-units move — e.g. a
+  // points-maintenance threshold ("maintain 20 pts") rather than a purchase
+  // requirement. Don't call that "maxed" (it's live); show its honest status.
+  const inProgress = intel.snapshot.rebates.filter((r) => r.status === "in_progress");
+  if (inProgress.length > 0) {
+    return (
+      <div className="rounded-2xl border border-rule bg-paper/40 p-5">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+          <Clock className="h-3.5 w-3.5 text-ink-soft" />
+          On track — nothing to buy toward it right now
+        </div>
+        <p className="mt-2 text-[14px] leading-snug text-ink-soft">
+          {inProgress.length === 1 ? "Your " : "Your "}
+          {inProgress.map((r) => r.label).join(" and ")}{" "}
+          {inProgress.length === 1 ? "is" : "are"} in progress.
+          {inProgress.find((r) => r.note) && (
+            <> {inProgress.find((r) => r.note)?.note}</>
+          )}{" "}
+          There&apos;s no unit to buy toward it yet — keep doing what you&apos;re doing, and the
+          moment a purchase move would help, it shows up here with the exact units.
+        </p>
+        <Link
+          to="/app/refill/recognition/inventory"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-emerald/40 bg-white px-4 py-2 text-[13px] font-semibold text-emerald-ink shadow-sm hover:bg-emerald-soft/40 transition"
+        >
+          <ArrowRight className="h-3.5 w-3.5" />
+          Put your earned units to work
+        </Link>
+      </div>
+    );
+  }
+
+  // ② Captured rebates, all secured / blocked — genuinely maxed for now; point
+  // them to deploying the units they've earned.
   return (
     <div className="rounded-2xl border border-rule bg-paper/40 p-5">
       <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">

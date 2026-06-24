@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.167.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.167.0 &mdash; Program tab now shows the pricing it captured, and stops calling an in-progress rebate &ldquo;maxed.&rdquo;</strong> Two readout-honesty fixes on the captured snapshot. <strong>(1) Signature pricing surfaced.</strong> Vision reads the &ldquo;signature pricing&rdquo; panel off a rewards dashboard (your Galderma capture pulled 10 prices) &mdash; but the Program tab only showed a <em>count</em> in the capture modal and then dropped them. New <strong>Signature pricing card</strong> lists each product + price, framed honestly as <em>reference</em> (what the dashboard says you pay) vs the catalog&rsquo;s <em>verified cost</em> (what drives margin), with a cross-link to set them in the verified-pricing lane (the &divide;box GIGO check lives there). Hidden when a capture had no pricing panel. <strong>(2) &ldquo;Maxed&rdquo; no longer fires on a live rebate.</strong> A rebate that&rsquo;s genuinely <em>in-progress</em> but emits no buy-N-units move &mdash; e.g. a <em>points-maintenance</em> threshold like Allergan&rsquo;s &ldquo;maintain 20 pts&rdquo; &mdash; was reading the &ldquo;you&rsquo;re maxed, secured what&rsquo;s in reach&rdquo; state, which is false (it&rsquo;s live, not secured). Split out an <strong>&ldquo;On track &mdash; nothing to buy toward it right now&rdquo;</strong> state that shows the rebate&rsquo;s real in-progress status + note; only an all-secured/blocked program shows &ldquo;maxed.&rdquo; <strong>Touched</strong>: <code>app.refill.recognition.program.tsx</code> (PricingCard + in-progress callout branch), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.166.1",
     date: "June 2026",
     items: [
