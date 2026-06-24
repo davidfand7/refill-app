@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.172.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.172.1 &mdash; Backfill now shows you WHAT didn&rsquo;t resolve, even when there&rsquo;s nothing to fill.</strong> v2.172.0 computed the top unmatched product names as a coverage diagnostic but only surfaced them when it filled rows &mdash; so a &ldquo;nothing to fill&rdquo; result (manufacturer data already maxed for the current map) swallowed the one signal that matters: <em>which</em> visit-names don&rsquo;t resolve. The toast now always surfaces a sample (e.g. <em>&ldquo;top: &lsquo;Filler 1 syringe&rsquo; ×42, &lsquo;Jeuveau 5u&rsquo; ×18…&rdquo;</em>) so we can tell whether the remaining gaps are fixable real injectables (→ worth expanding the product map) or generic/un-branded line items (→ the source data simply doesn&rsquo;t name a brand). <strong>Touched</strong>: <code>app.refill.patients.index.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.172.0",
     date: "June 2026",
     items: [

@@ -372,6 +372,11 @@ function PatientsPage() {
       ]);
       setRows(fresh);
       setOverdueIndex(new Map(overdue.map((o) => [o.patientId, o])));
+      const unmatchedSample = res.topUnresolved
+        .slice(0, 6)
+        .map((u) => `"${u.name}" ×${u.count}`)
+        .join(", ");
+      const unmatchedTail = res.topUnresolved.length > 6 ? "…" : "";
       if (res.filled > 0) {
         const brands = Object.entries(res.byManufacturer)
           .sort((a, b) => b[1] - a[1])
@@ -379,13 +384,18 @@ function PatientsPage() {
           .join(" · ");
         toast.success(
           `Filled ${res.filled.toLocaleString()} brand${res.filled === 1 ? "" : "s"} from product names${brands ? ` — ${brands}` : ""}.` +
-            (res.topUnresolved.length >= 20
-              ? ` (${res.topUnresolved.length}+ product names still unmatched.)`
-              : ""),
-          { duration: 9000 },
+            (unmatchedSample ? ` Still unmatched: ${unmatchedSample}${unmatchedTail}` : ""),
+          { duration: 13000 },
+        );
+      } else if (res.topUnresolved.length > 0) {
+        // Already maxed for the current map — the unmatched names ARE the signal
+        // for whether a map expansion is worth it (real injectables vs generics).
+        toast(
+          `Brands already maxed for the current catalog map. ${res.topUnresolved.length}${unmatchedTail ? "+" : ""} product name${res.topUnresolved.length === 1 ? "" : "s"} don't resolve — top: ${unmatchedSample}${unmatchedTail}. These are what an expanded map would catch.`,
+          { duration: 16000 },
         );
       } else {
-        toast.success("Brands already up to date — nothing to fill.");
+        toast.success("Brands fully up to date — every product name resolves.");
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't backfill brands.");
