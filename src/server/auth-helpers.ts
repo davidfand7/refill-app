@@ -18,6 +18,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import type { Database } from "@/integrations/supabase/types";
 import { admin, type SbClient } from "./admin-client";
+import { fetchAllRows } from "./paginate";
 
 /**
  * Minimum input shape for any authed server fn. Compose into your fn's full
@@ -117,6 +118,30 @@ export async function getTenantIdForUser(
   if (error) throw new Error(`Tenant lookup failed: ${error.message}`);
   if (!data) throw new Error(notFoundMsg);
   return data.tenant_id;
+}
+
+/**
+ * Every user_id belonging to a tenant. Tables that predate the tenant model
+ * (notably recovery_events) ride user_id, so any tenant-grade aggregation must
+ * fan out across ALL members — not just the calling user. Shared by billing's
+ * aggregateMetricsForTenant and the Recovery dashboard's getRecoveryStats so
+ * the headline can never drift from the invoice (v2.161.0).
+ */
+export async function getTenantUserIds(
+  sb: SbClient,
+  tenantId: string,
+): Promise<string[]> {
+  // Paginated — a bulk .select must never silently truncate (doctrine), even
+  // though a tenant realistically never has >1,000 members.
+  const rows = await fetchAllRows<{ user_id: string }>((from, to) =>
+    sb
+      .from("tenant_memberships")
+      .select("user_id")
+      .eq("tenant_id", tenantId)
+      .order("user_id", { ascending: true })
+      .range(from, to),
+  );
+  return rows.map((m) => m.user_id);
 }
 
 /**

@@ -37,7 +37,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { admin } from "./admin-client";
 import { z } from "zod";
 
-import { resolveEffectiveUserId } from "@/server/auth-helpers";
+import {
+  getTenantIdForUser,
+  getTenantUserIds,
+  resolveEffectiveUserId,
+} from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
 import { loadAttributionSettings } from "@/server/refill-attribution-agent.functions";
 
@@ -556,6 +560,20 @@ export const getRecoveryStats = createServerFn({ method: "POST" })
     });
     const sb = admin();
 
+    // Tenant-scope every read so the dashboard headline matches the invoice
+    // preview (and billing): recovery_events rides user_id and a tenant can
+    // have multiple members, so fan out across the WHOLE tenant — not just the
+    // calling user — via the SAME resolver billing uses. Before v2.161.0 these
+    // cards were user-scoped (.eq user_id) while the invoice was tenant-scoped
+    // (.in user_ids), so a multi-user spa saw a headline smaller than its own
+    // invoice on the same screen. (v2.161.0)
+    const tenantId = await getTenantIdForUser(
+      sb,
+      effectiveUserId,
+      "No Refill tenant — finish onboarding first.",
+    );
+    const userIds = await getTenantUserIds(sb, tenantId);
+
     const now = new Date();
     const monthStart = new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1),
@@ -575,7 +593,7 @@ export const getRecoveryStats = createServerFn({ method: "POST" })
             sb
               .from("recovery_events")
               .select("attributed_revenue_usd, appointment_id")
-              .eq("user_id", effectiveUserId)
+              .in("user_id", userIds)
               .gte("verified_at", monthStart.toISOString())
               .not("verified_at", "is", null)
               .order("id", { ascending: true })
@@ -586,7 +604,7 @@ export const getRecoveryStats = createServerFn({ method: "POST" })
           sb
             .from("recovery_events")
             .select("attributed_revenue_usd")
-            .eq("user_id", effectiveUserId)
+            .in("user_id", userIds)
             .gte("verified_at", priorMonthStart.toISOString())
             .lt("verified_at", monthStart.toISOString())
             .not("verified_at", "is", null)
@@ -600,7 +618,7 @@ export const getRecoveryStats = createServerFn({ method: "POST" })
           sb
             .from("recovery_events")
             .select("attributed_revenue_usd")
-            .eq("user_id", effectiveUserId)
+            .in("user_id", userIds)
             .not("verified_at", "is", null)
             .order("id", { ascending: true })
             .range(from, to),
@@ -608,7 +626,7 @@ export const getRecoveryStats = createServerFn({ method: "POST" })
         sb
           .from("recovery_events")
           .select("id", { count: "exact", head: true })
-          .eq("user_id", effectiveUserId)
+          .in("user_id", userIds)
           .is("verified_at", null)
           .gte("created_at", monthStart.toISOString()),
       ]);

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.161.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.161.0 &mdash; The Recovery headline now agrees with your invoice (tenant-scoped, like billing).</strong> Right after crowning <strong>Recovery &rarr; Overview</strong> as THE recovered-$ home (v2.160.0), an audit of the screen itself found a divided house: its <strong>headline cards</strong> (This month / Lifetime verified $) were computed <em>user-scoped</em> (<code>.eq user_id</code>) while the <strong>invoice preview</strong> sitting inches below &mdash; and actual billing &mdash; are <em>tenant-scoped</em> (<code>.in</code> across every member via <code>tenant_memberships</code>). So a spa with more than one login saw a headline <em>smaller</em> than its own invoice on the same screen, and billing settled on the bigger number. Now <code>getRecoveryStats</code> fans out across the whole tenant through the <em>same</em> resolver billing uses &mdash; one shared <code>getTenantUserIds</code> helper feeds both paths, so they can&rsquo;t drift again by construction. Single-login spas (incl. Rejuv today) see <em>identical</em> numbers &mdash; the fix is forward-looking for multi-user tenants and impersonated/cross-tenant views. All four reads (month, prior-month, lifetime, provisional count) now tenant-scoped. <strong>Touched</strong>: <code>auth-helpers.ts</code> (new <code>getTenantUserIds</code>), <code>billing-fee-core.ts</code> (reuses it &mdash; DRY parity), <code>emma-attribution.functions.ts</code>, <code>changelog.ts</code>. No migration. Closes one of two fast-follows from the island audit; Reports funnel-source reconcile still queued.",
+    ],
+  },
+  {
     version: "v2.160.0",
     date: "June 2026",
     items: [

@@ -12,6 +12,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { Database } from "@/integrations/supabase/types";
+import { getTenantUserIds } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
 import {
   BILLABLE_METRICS,
@@ -172,11 +173,7 @@ export async function aggregateMetricsForTenant(args: {
   periodEnd: Date;
 }): Promise<Map<string, { count: number; revenueUsd: number }>> {
   const { sb, tenantId, periodStart, periodEnd } = args;
-  const { data: memberships } = await sb
-    .from("tenant_memberships")
-    .select("user_id")
-    .eq("tenant_id", tenantId);
-  const userIds = (memberships ?? []).map((m) => m.user_id);
+  const userIds = await getTenantUserIds(sb, tenantId);
   const out = new Map<string, { count: number; revenueUsd: number }>();
   if (userIds.length === 0) return out;
 
