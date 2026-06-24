@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.168.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.168.0 &mdash; The rebate move now names the real patients to recall toward it (the flywheel join).</strong> Until now &ldquo;Your next move: treat 10 more Restylane Refyne &rarr; unlock the 3% rebate&rdquo; stopped at the buy. This closes the loop the product is built on: each move now carries <strong>how many of your patients are overdue for that treatment kind</strong> &mdash; <em>&ldquo;You have 14 filler patients due to come back &mdash; recall them and those visits count toward this rebate <u>and</u> recover the patient.&rdquo;</em> One recall, two wins. The count is <strong>real, not estimated</strong>: it reuses <code>doListOverdue</code> &mdash; the exact source the recall surface reads &mdash; so the number can never drift from your recall list. The move&rsquo;s product keyword (&ldquo;restylane&rdquo;) resolves to a treatment kind (filler) via <code>resolveProduct</code>, and we scan the overdue cohort once per distinct kind (&le;3), best-effort (any hiccup just leaves the count off; the move still renders). When a cohort exists the CTA sharpens from &ldquo;Set up a recall offer&rdquo; to <strong>&ldquo;Recall these patients.&rdquo;</strong> Shown on the &ldquo;Your next move&rdquo; hero and each row in &ldquo;Your moves.&rdquo; <strong>New</strong>: <code>ProgramIntel.moves</code> is now <code>FlywheelMove[]</code> (carries <code>lapsedInCohort</code>); <code>enrichMovesWithCohort</code> in program-intel.functions.ts (dynamic-imports the recall engine, server-only). <strong>Touched</strong>: <code>program-intel.functions.ts</code>, <code>app.refill.recognition.program.tsx</code>, <code>changelog.ts</code>. No migration. <em>Note: only fires on an in-progress unit-purchase rebate &mdash; Rejuv has none live today, so verify via a seeded in-progress snapshot (SQL provided).</em>",
+    ],
+  },
+  {
     version: "v2.167.0",
     date: "June 2026",
     items: [

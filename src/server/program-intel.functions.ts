@@ -23,8 +23,10 @@ import {
   diffSnapshots,
   type ProgramSnapshot,
   type RebateMove,
+  type FlywheelMove,
   type ProgramChange,
 } from "@/lib/program-intel";
+import { resolveProduct, type ProductKind } from "@/lib/product-manufacturer-map";
 
 // Anthropic vision lives in program-snapshot-core (server-only); the SDK is
 // reached via a *dynamic* import inside the capture handler so it never lands
@@ -94,7 +96,9 @@ export type SnapshotSource = "manual_capture" | "portal_pull";
 
 export type ProgramIntel = {
   snapshot: ProgramSnapshot;
-  moves: RebateMove[];
+  /** Moves carry lapsedInCohort — the real count of overdue patients of the
+   *  move's treatment kind (the recall flywheel join), or null when uncountable. */
+  moves: FlywheelMove[];
   changes: ProgramChange[];
   source: SnapshotSource;
   /** ISO date the snapshot was captured/pulled, for the freshness stamp. */
@@ -160,6 +164,57 @@ async function loadSnapshot(
   return { latest: REJUV_ASPIRE_SNAPSHOT, prev: null, source: "manual_capture", captured: false };
 }
 
+/** Treatment kinds we can count an overdue cohort for (the recall engine keys). */
+const COUNTABLE_KINDS: ReadonlySet<ProductKind> = new Set([
+  "toxin",
+  "filler",
+  "biostimulator",
+]);
+
+/**
+ * The recall-flywheel join: for each rebate move ("buy/treat N more Restylane"),
+ * attach how many of this spa's patients are OVERDUE for that move's treatment
+ * kind — the real cohort the owner could recall to both unlock the rebate AND
+ * recover the patient. Reuses doListOverdue (the same source the recall surface
+ * reads), so the count can never drift from what the recall list shows. One
+ * cohort scan per DISTINCT kind (≤3), not per move. The whole step is best-effort
+ * — any failure leaves lapsedInCohort null and the move still renders.
+ */
+async function enrichMovesWithCohort(
+  sb: SbClient,
+  userId: string,
+  moves: RebateMove[],
+): Promise<FlywheelMove[]> {
+  if (moves.length === 0) return [];
+
+  const moveKind = new Map<RebateMove, ProductKind | null>();
+  const kindsNeeded = new Set<ProductKind>();
+  for (const m of moves) {
+    const { kind } = resolveProduct(m.product || m.productLabel);
+    const k = kind && COUNTABLE_KINDS.has(kind) ? kind : null;
+    moveKind.set(m, k);
+    if (k) kindsNeeded.add(k);
+  }
+
+  const countByKind = new Map<ProductKind, number>();
+  if (kindsNeeded.size > 0) {
+    try {
+      const { doListOverdue } = await import("./patient-ingest.functions");
+      for (const k of kindsNeeded) {
+        const overdue = await doListOverdue(sb, userId, 10000, k);
+        countByKind.set(k, overdue.length);
+      }
+    } catch {
+      // Recall engine unavailable / error → every move keeps lapsedInCohort null.
+    }
+  }
+
+  return moves.map((m) => {
+    const k = moveKind.get(m) ?? null;
+    return { ...m, lapsedInCohort: k && countByKind.has(k) ? countByKind.get(k)! : null };
+  });
+}
+
 const input = z.object({
   accessToken: z.string(),
   viewAsUserId: z.string().optional(),
@@ -183,7 +238,7 @@ export const getProgramIntelFn = createServerFn({ method: "POST" })
     }
 
     const { latest, prev, source, captured } = await loadSnapshot(sb, tenantId);
-    const moves = deriveRebateMoves(latest);
+    const moves = await enrichMovesWithCohort(sb, effectiveUserId, deriveRebateMoves(latest));
     const changes = prev ? diffSnapshots(prev, latest) : [];
     return {
       snapshot: latest,

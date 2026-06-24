@@ -34,6 +34,15 @@ import {
   type ProgramSnapshot,
 } from "@/lib/program-intel";
 import { computeVerdict, formatAge, tierLabel } from "@/lib/connection-health";
+import { resolveProduct, type ProductKind } from "@/lib/product-manufacturer-map";
+
+/** Friendly cohort word for a treatment kind. */
+function kindWord(kind: ProductKind | null): string {
+  if (kind === "toxin") return "tox";
+  if (kind === "filler") return "filler";
+  if (kind === "biostimulator") return "biostimulator";
+  return "due";
+}
 
 export const Route = createFileRoute("/app/refill/recognition/program")({
   component: ProgramPage,
@@ -164,6 +173,8 @@ function PricingCard({ snapshot }: { snapshot: ProgramSnapshot }) {
 function NextMoveCallout({ intel, moves }: { intel: ProgramIntel; moves: ProgramIntel["moves"] }) {
   if (moves.length > 0) {
     const top = moves[0];
+    const cohort = top.lapsedInCohort;
+    const word = kindWord(resolveProduct(top.product || top.productLabel).kind);
     return (
       <div className="rounded-2xl border border-emerald-ink/30 bg-emerald-soft/50 p-5">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-emerald-ink">
@@ -171,6 +182,13 @@ function NextMoveCallout({ intel, moves }: { intel: ProgramIntel; moves: Program
           Your next move
         </div>
         <p className="mt-2 text-[15px] font-semibold leading-snug text-ink">{moveHeadline(top)}</p>
+        {cohort != null && cohort > 0 && (
+          <p className="mt-1.5 text-[13px] leading-snug text-ink-soft">
+            You have <strong className="text-emerald-ink">{cohort.toLocaleString()}</strong> {word}{" "}
+            {cohort === 1 ? "patient" : "patients"} due to come back — recall them and those visits
+            count toward this rebate <em>and</em> recover the patient.
+          </p>
+        )}
         {moves.length > 1 && (
           <p className="mt-1 text-[12px] text-ink-soft">
             +{moves.length - 1} more {moves.length - 1 === 1 ? "move" : "moves"} below.
@@ -181,7 +199,7 @@ function NextMoveCallout({ intel, moves }: { intel: ProgramIntel; moves: Program
           className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald px-4 py-2 text-[13px] font-semibold text-paper shadow-sm hover:opacity-95 transition"
         >
           <Gift className="h-3.5 w-3.5" />
-          Set up a recall offer
+          {cohort != null && cohort > 0 ? "Recall these patients" : "Set up a recall offer"}
           <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </div>
@@ -407,7 +425,16 @@ function MovesCard({ intel, moves }: { intel: ProgramIntel; moves: ProgramIntel[
               className="flex items-start gap-3 rounded-xl border border-emerald-ink/20 bg-emerald-soft/40 px-3 py-2.5"
             >
               <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-emerald-ink" />
-              <div className="text-[13px] text-ink">{moveHeadline(m)}</div>
+              <div>
+                <div className="text-[13px] text-ink">{moveHeadline(m)}</div>
+                {m.lapsedInCohort != null && m.lapsedInCohort > 0 && (
+                  <div className="mt-0.5 text-[11.5px] text-ink-soft">
+                    {m.lapsedInCohort.toLocaleString()}{" "}
+                    {kindWord(resolveProduct(m.product || m.productLabel).kind)}{" "}
+                    {m.lapsedInCohort === 1 ? "patient" : "patients"} due to recall toward it.
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>
