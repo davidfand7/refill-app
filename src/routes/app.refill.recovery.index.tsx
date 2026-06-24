@@ -674,15 +674,25 @@ function RefillInvoicePreviewCard({
   stats: RecoveryStats;
   brandName: string;
 }) {
-  // Period close-out date — friendly label for "if this month closed today".
-  // periodStart / periodEnd come back as UTC midnight ISO strings; without an
-  // explicit timeZone the toLocaleDateString call shifts the date back into the
-  // previous day in any negative-offset timezone (v377.1).
-  const periodEnd = new Date(invoice.periodEnd);
+  // Period labels. periodStart / periodEnd are DATE-ONLY calendar-month
+  // boundaries built from Date.UTC(y, m, 1) — not real moments — so they MUST
+  // render in UTC. A negative-offset zone (the old "America/Denver") shifts the
+  // UTC-midnight value back a day, which pushed periodStart into the PREVIOUS
+  // month → the "May 2026 · closes Jun 30" bug. (Same exception the v1.4.6 TZ
+  // sweep carved out for Date.UTC-constructed date-only values.)
   const monthLabel = new Date(invoice.periodStart).toLocaleDateString(
     undefined,
-    { month: "long", year: "numeric", timeZone: "America/Denver" },
+    { month: "long", year: "numeric", timeZone: "UTC" },
   );
+  // Close date = last day of the period = periodEnd (exclusive next-month start)
+  // minus one day, in UTC.
+  const closeLabel = new Date(
+    new Date(invoice.periodEnd).getTime() - 86_400_000,
+  ).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 
   // v1.93.0 fee-rules model: show only metrics that actually have wins this
   // period. The headline rate comes from the slot_fill rule (the live metric).
@@ -705,7 +715,7 @@ function RefillInvoicePreviewCard({
             If this month closed today
           </span>
           <span className="text-[11px] text-ink-soft">
-            · {monthLabel} · closes {periodEnd.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "America/Denver" })}
+            · {monthLabel} · closes {closeLabel}
           </span>
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-700/10 text-emerald-800 px-2.5 py-0.5 text-[11px] font-medium">

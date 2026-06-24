@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.162.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.162.0 &mdash; Fix the &ldquo;May 2026 &middot; closes Jun 30&rdquo; month label on the Recovery invoice card.</strong> The &ldquo;If this month closed today&rdquo; card showed a month <em>one behind</em> the close date (e.g. &ldquo;May 2026 &middot; closes Jun 30&rdquo; on June 23). The invoice period is a <em>date-only</em> calendar-month boundary built from <code>Date.UTC(year, month, 1)</code> &mdash; not a real moment &mdash; but the label rendered it in a negative-offset timezone (<code>America/Denver</code>), which shifts UTC-midnight back a day and pushed the start into the <em>previous</em> month. The close date (<code>periodEnd</code> = next-month start) happened to land right only by the same accidental shift. Now both render in <strong>UTC</strong> (month from <code>periodStart</code>; close = <code>periodEnd</code> &minus; 1 day) &mdash; so it reads &ldquo;<strong>June 2026 &middot; closes Jun 30</strong>.&rdquo; This is the exact exception the v1.4.6 TZ sweep carved out: real-moment timestamps (rescue/appointment times) stay spa-local; <code>Date.UTC</code>-constructed date-only values must render UTC. <strong>Touched</strong>: <code>app.refill.recovery.index.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.161.0",
     date: "June 2026",
     items: [
