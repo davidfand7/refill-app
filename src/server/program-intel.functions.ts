@@ -26,6 +26,11 @@ import {
   type ProgramChange,
 } from "@/lib/program-intel";
 
+// Anthropic vision lives in program-snapshot-core (server-only); the SDK is
+// reached via a *dynamic* import inside the capture handler so it never lands
+// in the client bundle. The media-type enum is inlined here (not imported from
+// the core) for the same reason — importing the core's value pulls the SDK.
+
 // ── Captured real Rejuv snapshot (ASPIRE / Galderma · 2026-06-11) ───────────
 // Source: the Program Details dashboard tabs — Membership Levels, Rise Rebate
 // Tracker, Brand Adoption Rebate Tracker, Signature Pricing. This is REAL data,
@@ -181,4 +186,58 @@ export const getProgramIntelFn = createServerFn({ method: "POST" })
       source,
       capturedOn: latest.pulledAt.slice(0, 10),
     };
+  });
+
+// ── Capture lane (Slice 2): rewards-dashboard screenshots → snapshot row ──────
+
+const captureInput = z.object({
+  accessToken: z.string(),
+  viewAsUserId: z.string().optional(),
+  /** Owner's manufacturer hint (the dashboard they're capturing), optional. */
+  manufacturer: z.string().optional(),
+  images: z
+    .array(
+      z.object({
+        data: z.string().min(1),
+        mediaType: z.enum(["image/png", "image/jpeg", "image/webp", "image/gif"]),
+      }),
+    )
+    .min(1)
+    .max(8),
+});
+
+export type CaptureProgramSnapshotResult = {
+  ok: true;
+  snapshotId: string;
+  snapshot: ProgramSnapshot;
+};
+
+/**
+ * Read one or more rewards-DASHBOARD screenshots and persist the spa's standing
+ * as a program_snapshots row. Owner-initiated (manual_capture). The Anthropic
+ * SDK is reached via a dynamic import so it never reaches the client bundle.
+ */
+export const captureProgramSnapshotFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => captureInput.parse(raw))
+  .handler(async ({ data }): Promise<CaptureProgramSnapshotResult> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId);
+    if (!tenantId) {
+      throw new Error("No spa is linked to your account yet — finish setup first.");
+    }
+
+    const { captureProgramSnapshot } = await import("./program-snapshot-core");
+    const pulledAt = new Date().toISOString();
+    const { snapshotId, snapshot } = await captureProgramSnapshot({
+      sb,
+      tenantId,
+      images: data.images,
+      manufacturerHint: data.manufacturer?.trim() || null,
+      pulledAt,
+    });
+    return { ok: true, snapshotId, snapshot };
   });

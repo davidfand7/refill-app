@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.165.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.165.0 &mdash; Capture your manufacturer rewards standing with a photo (Slice 2 of the capture &rarr; intelligence loop).</strong> Slice 1 built the persistence; this lands the <strong>capture path</strong> that fills it. On <strong>Account &rarr; Manufacturers</strong> there&rsquo;s a new <strong>&ldquo;Capture rewards snapshot&rdquo;</strong> button: snap or upload your rewards-dashboard screen &mdash; the tier / points / rebate-tracker page (Galderma ASPIRE Program Details, Allē for Business, Evolus Rewards) &mdash; and Claude vision reads where you <em>stand</em> (current tier, points, progress to next level, each rebate tracker&rsquo;s status, signature pricing) into a <code>ProgramSnapshot</code> and writes a real <code>program_snapshots</code> row. The moment it lands, <code>loadSnapshot</code> serves your <em>real</em> standing instead of the seed constant &mdash; <strong>Incentives &rarr; Program auto-upgrades off live data</strong>, and your next capture diffs against this one (the &ldquo;what changed&rdquo; detector). The modal shows an immediate readout of exactly what we read, so it&rsquo;s never a black box. <strong>Honest by design</strong>: an owner-snapped screenshot is labeled <code>manual_capture</code>, never implied to be an automated live pull. These are the auth-walled, per-spa numbers no CSV or scraper can reach &mdash; only a photo from inside your own account (the vision-ingestion moat). <strong>New</strong>: <code>program-snapshot-core.ts</code> (server-only vision engine, Anthropic SDK isolated behind a dynamic import &mdash; never in the client bundle), <code>captureProgramSnapshotFn</code>. <strong>Touched</strong>: <code>app.refill.settings.manufacturers.tsx</code> (capture button + modal + snapshot readout), <code>program-intel.functions.ts</code>, <code>changelog.ts</code>. Reuses the v2.164 table &mdash; no new migration. <em>Slice 3 (Account/Manufacturers as the polished capture front-door, Incentives/Program as the live readout) is next.</em>",
+    ],
+  },
+  {
     version: "v2.164.0",
     date: "June 2026",
     items: [
