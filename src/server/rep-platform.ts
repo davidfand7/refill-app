@@ -863,16 +863,26 @@ export const getMyLiveEarnings = createServerFn({ method: "POST" })
       });
       const sb = admin();
 
-      const { data: rows, error } = await sb
-        .from("recovery_events")
-        .select(
-          "id, created_at, recovery_agent, attributed_revenue_usd, verified_at",
-        )
-        .eq("referred_by_rep_id", effectiveUserId)
-        .order("created_at", { ascending: false });
-      if (error) {
-        throw new Error(`Couldn't load your live earnings: ${error.message}`);
-      }
+      // Paginate the full per-rep recovery ledger — a high-volume rep can
+      // exceed PostgREST's 1000-row cap, and an unpaginated read would silently
+      // under-report their lifetime earnings (oldest events dropped). Ordered
+      // created_at desc so the `recent` slice stays newest-first across pages.
+      const rows = await selectAllRows<{
+        id: string;
+        created_at: string;
+        recovery_agent: string;
+        attributed_revenue_usd: number | string | null;
+        verified_at: string | null;
+      }>((from, to) =>
+        sb
+          .from("recovery_events")
+          .select(
+            "id, created_at, recovery_agent, attributed_revenue_usd, verified_at",
+          )
+          .eq("referred_by_rep_id", effectiveUserId)
+          .order("created_at", { ascending: false })
+          .range(from, to),
+      );
 
       const now = Date.now();
       const dayMs = 24 * 60 * 60 * 1000;

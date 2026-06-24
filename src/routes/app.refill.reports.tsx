@@ -173,10 +173,10 @@ function TopStats({
       sub: `${totals.booked.toLocaleString()} booked of ${totals.sent.toLocaleString()} reached`,
     },
     {
-      label: "Attributed revenue",
+      label: "Campaign-attributed",
       icon: Users,
       value: formatMoney(totals.revenueUsd),
-      sub: `${totals.won.toLocaleString()} closed-won · ${totals.showed.toLocaleString()} showed`,
+      sub: `${totals.won.toLocaleString()} closed-won · funnel, all-time`,
     },
   ];
 
@@ -194,6 +194,17 @@ function TopStats({
           <div className="text-[11px] text-ink-soft mt-1">{c.sub}</div>
         </div>
       ))}
+      {/* Distinguish this funnel-attributed number from the canonical recovered
+          $ — Reports sums outreach closed-won (all-time); Recovery is the
+          verified, invoice-grade audit. Point there so the two never read as
+          competing authorities on "what SmartSpa recovered." */}
+      <Link
+        to="/app/refill/recovery"
+        className="sm:col-span-2 lg:col-span-4 inline-flex items-center gap-1 text-[11px] text-ink-soft hover:text-foreground hover:underline"
+      >
+        Funnel-attributed from outreach. For the verified recovered $ that bills,
+        see Recovery →
+      </Link>
     </div>
   );
 }

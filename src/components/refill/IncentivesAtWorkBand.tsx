@@ -11,7 +11,8 @@
  */
 
 import { useEffect, useState } from "react";
-import { Activity, ArrowDownRight, Gift, Sparkles, TrendingUp } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Activity, ArrowDownRight, ArrowRight, Gift, Sparkles, TrendingUp } from "lucide-react";
 
 import {
   getIncentiveScoreboard,
@@ -108,7 +109,7 @@ export function IncentivesAtWorkBand({
               {usd(recoveredUsd)}
             </span>
             <span className="text-[12px] text-ink-soft">
-              recovered across{" "}
+              incentive-driven · recovered across{" "}
               <span className="font-semibold text-ink">{recoveredBookings}</span>{" "}
               {recoveredBookings === 1 ? "booking" : "bookings"}
             </span>
@@ -151,6 +152,18 @@ export function IncentivesAtWorkBand({
               />
             )}
           </div>
+
+          {/* Anchor: this band is the incentive-ROI lens — these dollars are a
+              subset of every verified $ SmartSpa recovered, which lives (with the
+              full audit trail + invoice math) in Recovery. Point there, don't
+              compete with it. */}
+          <Link
+            to="/app/refill/recovery"
+            className="mt-3 inline-flex items-center gap-1 text-[11px] font-medium text-emerald-ink hover:underline"
+          >
+            Verified $ — see the full recovery audit
+            <ArrowRight className="h-3 w-3" />
+          </Link>
         </>
       )}
     </div>

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.160.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.160.0 &mdash; One canonical home for &ldquo;what SmartSpa recovered for me.&rdquo;</strong> A platform-wide island audit found <em>recovered $</em> showing up on several screens. The good news: the <strong>numbers can&rsquo;t drift</strong> &mdash; Recovery, the invoice, and the new Incentives scoreboard all settle on the <em>same</em> verified math (<code>aggregateMetricsForTenant</code>). The fix here is about <em>clarity</em>, not correctness: pick <strong>one authority</strong> and have the rest defer to it. <strong>Recovery &rarr; Overview</strong> stays THE recovered-$ home (verified, audit-trail, invoice-grade). The <strong>&ldquo;Incentives at work&rdquo;</strong> band is now framed as the <em>incentive-ROI lens</em> (&ldquo;incentive-driven&rdquo;) &mdash; a subset of recovered $, with a link straight to the full Recovery audit. <strong>Account &rarr; Reports</strong> relabels its number to <strong>&ldquo;Campaign-attributed&rdquo;</strong> (funnel, all-time &mdash; a different source than verified recoveries) and links to Recovery for the dollars that actually bill, so the two never read as competing authorities. <strong>Also fixed</strong>: a rep&rsquo;s <strong>Live earnings</strong> read wasn&rsquo;t paginated &mdash; a high-volume rep past PostgREST&rsquo;s 1,000-row cap would silently under-report lifetime earnings; now it pages the full ledger. <strong>Touched</strong>: <code>IncentivesAtWorkBand.tsx</code>, <code>app.refill.reports.tsx</code>, <code>rep-platform.ts</code>, <code>changelog.ts</code>. No migration. <em>Scoped as fast-follows: reconciling Reports&rsquo; funnel source vs verified recoveries, and unifying Recovery&rsquo;s two internal read paths.</em>",
+    ],
+  },
+  {
     version: "v2.159.0",
     date: "June 2026",
     items: [
