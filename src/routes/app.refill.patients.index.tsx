@@ -41,6 +41,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  backfillProductManufacturerFn,
   bulkApplyPatientSoftTag,
   listCustomTagDefinitions,
   listOverduePatients,
@@ -234,6 +235,7 @@ function PatientsPage() {
   const [valueTierFilter, setValueTierFilter] = useState<"all" | ValueTier>("all");
   // v2.113.0: recompute-tiers button busy state.
   const [tiersBusy, setTiersBusy] = useState(false);
+  const [brandsBusy, setBrandsBusy] = useState(false);
   // v385.2: pending state for in-flight VIP toggles (separate from
   // waitlist's pending set so the two toggles don't interfere).
   const [pendingVipIds, setPendingVipIds] = useState<Set<string>>(new Set());
@@ -352,6 +354,43 @@ function PatientsPage() {
       toast.error(e instanceof Error ? e.message : "Couldn't recompute tiers.");
     } finally {
       setTiersBusy(false);
+    }
+  }
+
+  // v2.172.0: backfill product_manufacturer on historical transactions by
+  // re-running resolveProduct over the stored product name — fills gaps so the
+  // "Filler brand" / Primary filters and the recall-cohort brand signal get
+  // richer. Then reload rows + overdue index so the chips refresh in place.
+  async function onBackfillBrands() {
+    if (!accessToken || brandsBusy) return;
+    setBrandsBusy(true);
+    try {
+      const res = await backfillProductManufacturerFn({ data: { accessToken, viewAsUserId } });
+      const [fresh, overdue] = await Promise.all([
+        listPatients({ data: { accessToken, viewAsUserId, includeHidden: showHidden } }),
+        listOverduePatients({ data: { accessToken, limit: 5000, viewAsUserId, kind: search.kind } }),
+      ]);
+      setRows(fresh);
+      setOverdueIndex(new Map(overdue.map((o) => [o.patientId, o])));
+      if (res.filled > 0) {
+        const brands = Object.entries(res.byManufacturer)
+          .sort((a, b) => b[1] - a[1])
+          .map(([m, n]) => `${manufacturerLabel(m as ProductManufacturer)} ${n}`)
+          .join(" · ");
+        toast.success(
+          `Filled ${res.filled.toLocaleString()} brand${res.filled === 1 ? "" : "s"} from product names${brands ? ` — ${brands}` : ""}.` +
+            (res.topUnresolved.length >= 20
+              ? ` (${res.topUnresolved.length}+ product names still unmatched.)`
+              : ""),
+          { duration: 9000 },
+        );
+      } else {
+        toast.success("Brands already up to date — nothing to fill.");
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't backfill brands.");
+    } finally {
+      setBrandsBusy(false);
     }
   }
 
@@ -1046,6 +1085,19 @@ function PatientsPage() {
           >
             <Sparkles className="h-3 w-3" />
             {tiersBusy ? "Recomputing…" : "Recompute tiers"}
+          </button>
+          <button
+            type="button"
+            disabled={brandsBusy || !rows}
+            onClick={onBackfillBrands}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1 text-[11px] font-medium transition",
+              brandsBusy ? "opacity-60 cursor-wait" : "text-ink-soft hover:text-ink hover:bg-rule-soft cursor-pointer",
+            )}
+            title="Fill in missing manufacturer brands on historical visits (derived from the product name). Enriches the manufacturer / 'Filler brand' filter. Safe + re-runnable."
+          >
+            <Wand2 className="h-3 w-3" />
+            {brandsBusy ? "Backfilling…" : "Backfill brands"}
           </button>
         </div>
 

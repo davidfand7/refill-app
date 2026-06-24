@@ -64,6 +64,7 @@ import type {
   ProductManufacturer,
   ProductKind,
 } from "@/lib/product-manufacturer-map";
+import { resolveProduct } from "@/lib/product-manufacturer-map";
 import {
   computeOverdue,
   daysSince,
@@ -3074,4 +3075,99 @@ export const findSameContactDifferentName = createServerFn({ method: "POST" })
     );
 
     return { pairs };
+  });
+
+// ─── Manufacturer backfill (v2.172.0) ───────────────────────────────────────
+
+export type BackfillManufacturerResult = {
+  scanned: number;
+  filled: number;
+  /** Count of fills per resolved manufacturer. */
+  byManufacturer: Record<string, number>;
+  /** Most-frequent product_names that still don't resolve — coverage diagnostic. */
+  topUnresolved: Array<{ name: string; count: number }>;
+};
+
+const backfillManufacturerInput = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().uuid().optional(),
+});
+
+/**
+ * Backfill patient_transactions.product_manufacturer by re-running resolveProduct
+ * over the stored product_name. FILL-MISSING-ONLY: writes a manufacturer ONLY
+ * where the column is currently null and the name resolves — never overwrites or
+ * nulls-out an existing value (this is a backfill, not a re-resolve; protects any
+ * human/PMS-corrected data). Reports the most-frequent unresolved names as a
+ * coverage diagnostic. Idempotent — a second run fills 0. New ingests already
+ * populate this at CSV parse (patient-csv.ts); this lights up historical rows.
+ */
+export const backfillProductManufacturerFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => backfillManufacturerInput.parse(raw))
+  .handler(async ({ data }): Promise<BackfillManufacturerResult> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+
+    type TxnRow = {
+      id: string;
+      product_name: string;
+      product_manufacturer: string | null;
+    };
+    const rows = await fetchAllRows<TxnRow>((from, to) =>
+      sb
+        .from("patient_transactions")
+        .select("id, product_name, product_manufacturer")
+        .eq("user_id", effectiveUserId)
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
+
+    // Group the ids to fill by their resolved manufacturer; tally unresolved.
+    const idsByMfr = new Map<string, string[]>();
+    const unresolved = new Map<string, number>();
+    let filled = 0;
+    for (const r of rows) {
+      const { manufacturer } = resolveProduct(r.product_name);
+      if (manufacturer == null) {
+        // Only count toward the diagnostic if it's an actual gap (no value yet).
+        if (r.product_manufacturer == null) {
+          unresolved.set(r.product_name, (unresolved.get(r.product_name) ?? 0) + 1);
+        }
+        continue;
+      }
+      // FILL-MISSING-ONLY — never touch an existing non-null value.
+      if (r.product_manufacturer == null) {
+        const list = idsByMfr.get(manufacturer) ?? [];
+        list.push(r.id);
+        idsByMfr.set(manufacturer, list);
+        filled += 1;
+      }
+    }
+
+    // Write: one UPDATE per (manufacturer, id-chunk) — all ids in a chunk share
+    // the same manufacturer value, so this is far fewer round-trips than per-row.
+    const byManufacturer: Record<string, number> = {};
+    const CHUNK = 200;
+    for (const [mfr, ids] of idsByMfr) {
+      byManufacturer[mfr] = ids.length;
+      for (let i = 0; i < ids.length; i += CHUNK) {
+        const idChunk = ids.slice(i, i + CHUNK);
+        const { error } = await sb
+          .from("patient_transactions")
+          .update({ product_manufacturer: mfr })
+          .in("id", idChunk)
+          .eq("user_id", effectiveUserId);
+        if (error) throw new Error(`Backfill write failed: ${error.message}`);
+      }
+    }
+
+    const topUnresolved = Array.from(unresolved.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 20)
+      .map(([name, count]) => ({ name, count }));
+
+    return { scanned: rows.length, filled, byManufacturer, topUnresolved };
   });

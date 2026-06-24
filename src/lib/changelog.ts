@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.172.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.172.0 &mdash; &ldquo;Backfill brands&rdquo; fills in the manufacturer on historical visits, so the brand filters actually have data.</strong> The v2.171 &ldquo;Filler brand&rdquo; targeting filter is only as rich as <code>product_manufacturer</code> on each visit &mdash; which was <em>sparse</em> on older rows even though the product <em>name</em> (e.g. &ldquo;Restylane Lyft 1.0ML&rdquo;) was always stored. New ingests already resolve the brand at import; this lights up the back catalog. A new <strong>&ldquo;Backfill brands&rdquo;</strong> button (next to &ldquo;Recompute tiers&rdquo; on Patients) re-runs <code>resolveProduct()</code> over every visit&rsquo;s stored name and fills the brand <strong>where it&rsquo;s missing</strong>. <strong>Fill-missing-only by design</strong>: it never overwrites or erases an existing brand (protects any hand- or PMS-corrected value), and it&rsquo;s idempotent (run twice → second run fills 0). The result toast reports the yield per brand (<em>&ldquo;Filled 340 brands — Allergan 180 · Galderma 90 · Evolus 70&rdquo;</em>) and flags how many names <em>still</em> don&rsquo;t resolve &mdash; a built-in coverage check that tells us whether the product map needs expanding next. Once it runs, the recall cohort&rsquo;s &ldquo;Filler brand&rdquo; chips, the app-wide Primary filter, and the per-patient brand signal all get richer in place. <strong>New</strong>: <code>backfillProductManufacturerFn</code> (paginates the tenant&rsquo;s transactions, grouped chunked writes, reuses <code>resolveProduct</code> + <code>fetchAllRows</code>). <strong>Touched</strong>: <code>patient-ingest.functions.ts</code>, <code>app.refill.patients.index.tsx</code>, <code>changelog.ts</code>. No migration (columns already exist).",
+    ],
+  },
+  {
     version: "v2.171.0",
     date: "June 2026",
     items: [
