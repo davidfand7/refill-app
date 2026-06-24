@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.169.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.169.0 &mdash; The &ldquo;201 patients&rdquo; is now a click into the actual 201, ready to recall.</strong> The flywheel count was a claim you couldn&rsquo;t drill into &mdash; you tried to confirm it and couldn&rsquo;t find the list (exactly the right instinct: a number you can&rsquo;t open is a number you can&rsquo;t act on). Now the cohort count on the &ldquo;Your next move&rdquo; hero <em>and</em> each row of &ldquo;Your moves&rdquo; is a <strong>link straight to those patients</strong>, and the CTA reads <strong>&ldquo;See &amp; recall these patients.&rdquo;</strong> It lands on <code>/app/refill/patients</code> pre-filtered to <em>overdue + that treatment kind</em> &mdash; the same multi-select list where you draft recall outreach. The recall engine&rsquo;s server fn already accepted a <code>kind</code> filter; this wires it to the URL (new <code>kind</code> search param: toxin/filler/biostimulator) and shows a <strong>&ldquo;Filler cohort ✕&rdquo;</strong> chip on the list so you know why you&rsquo;re seeing those rows (and can clear it). The count and the list now read from the same <code>doListOverdue</code>, so what the move claims and what the list shows are the same number, by construction. <strong>Touched</strong>: <code>app.refill.patients.index.tsx</code> (kind search param + cohort chip + pass-through), <code>app.refill.recognition.program.tsx</code> (count + CTA deep-links), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.168.0",
     date: "June 2026",
     items: [

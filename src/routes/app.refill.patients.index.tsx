@@ -68,7 +68,16 @@ import { cn } from "@/lib/utils";
 
 const patientsSearchSchema = z.object({
   overdue: z.enum(["0", "1"]).optional(),
+  // v2.169.0: deep-link from the Program tab's rebate-move cohort — narrows the
+  // overdue list to one treatment kind so "201 filler patients due" lands on
+  // exactly those 201.
+  kind: z.enum(["toxin", "filler", "biostimulator"]).optional(),
 });
+
+/** Friendly label for the treatment-kind cohort chip. */
+function kindFilterLabel(k: "toxin" | "filler" | "biostimulator"): string {
+  return k === "toxin" ? "Tox" : k === "filler" ? "Filler" : "Biostimulator";
+}
 
 export const Route = createFileRoute("/app/refill/patients/")({
   component: PatientsPage,
@@ -237,10 +246,18 @@ function PatientsPage() {
   // matches if their tag keys intersect the active filter set).
   const [softTagFilter, setSoftTagFilter] = useState<Set<string>>(new Set());
   const overdueOnly = search.overdue === "1";
+  const kindFilter = search.kind ?? null;
 
   function setOverdueOnly(next: boolean) {
     void navigate({
       search: (prev) => ({ ...prev, overdue: next ? "1" : undefined }),
+      replace: true,
+    });
+  }
+
+  function clearKindFilter() {
+    void navigate({
+      search: (prev) => ({ ...prev, kind: undefined }),
       replace: true,
     });
   }
@@ -274,7 +291,7 @@ function PatientsPage() {
         const [list, overdue, waitlist, defs, profiles] = await Promise.all([
           listPatients({ data: { accessToken: token, viewAsUserId, includeHidden: showHidden } }),
           listOverduePatients({
-            data: { accessToken: token, limit: 5000, viewAsUserId },
+            data: { accessToken: token, limit: 5000, viewAsUserId, kind: search.kind },
           }),
           listWaitlist({ data: { accessToken: token, viewAsUserId } }),
           // v1.34.0: tenant-wide custom tag defs for the bulk picker
@@ -303,7 +320,7 @@ function PatientsPage() {
     return () => {
       cancelled = true;
     };
-  }, [membership.status, viewAsUserId, showHidden]);
+  }, [membership.status, viewAsUserId, showHidden, search.kind]);
 
   // v2.113.0: recompute value tiers whole-book, then reload the rows so the
   // new badges/filter counts reflect the fresh tiering. Internal-only.
@@ -804,6 +821,23 @@ function PatientsPage() {
                 {overdueTotal.toLocaleString()}
               </span>
             </button>
+          )}
+
+          {kindFilter && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-soft px-3 py-2 text-xs font-medium text-emerald-ink"
+              title={`Filtered to your overdue ${kindFilterLabel(kindFilter)} cohort (from a rebate move)`}
+            >
+              {kindFilterLabel(kindFilter)} cohort
+              <button
+                type="button"
+                onClick={clearKindFilter}
+                className="text-emerald-ink/70 hover:text-emerald-ink"
+                aria-label="Clear treatment-kind filter"
+              >
+                ✕
+              </button>
+            </span>
           )}
 
           <WindowToggle value={windowMode} onChange={setWindowMode} />

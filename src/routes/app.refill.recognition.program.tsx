@@ -20,6 +20,7 @@ import {
   Camera,
   Gift,
   Tag,
+  Users,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -42,6 +43,16 @@ function kindWord(kind: ProductKind | null): string {
   if (kind === "filler") return "filler";
   if (kind === "biostimulator") return "biostimulator";
   return "due";
+}
+
+/** The overdue-list deep-link kind — only the three countable cohorts. */
+function cohortKindOf(move: { product: string; productLabel: string }):
+  | "toxin"
+  | "filler"
+  | "biostimulator"
+  | null {
+  const k = resolveProduct(move.product || move.productLabel).kind;
+  return k === "toxin" || k === "filler" || k === "biostimulator" ? k : null;
 }
 
 export const Route = createFileRoute("/app/refill/recognition/program")({
@@ -174,7 +185,10 @@ function NextMoveCallout({ intel, moves }: { intel: ProgramIntel; moves: Program
   if (moves.length > 0) {
     const top = moves[0];
     const cohort = top.lapsedInCohort;
+    const cohortKind = cohortKindOf(top);
     const word = kindWord(resolveProduct(top.product || top.productLabel).kind);
+    const hasCohort = cohort != null && cohort > 0 && cohortKind != null;
+    const recallSearch = { overdue: "1" as const, kind: cohortKind ?? undefined };
     return (
       <div className="rounded-2xl border border-emerald-ink/30 bg-emerald-soft/50 p-5">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-emerald-ink">
@@ -182,11 +196,18 @@ function NextMoveCallout({ intel, moves }: { intel: ProgramIntel; moves: Program
           Your next move
         </div>
         <p className="mt-2 text-[15px] font-semibold leading-snug text-ink">{moveHeadline(top)}</p>
-        {cohort != null && cohort > 0 && (
+        {hasCohort && (
           <p className="mt-1.5 text-[13px] leading-snug text-ink-soft">
-            You have <strong className="text-emerald-ink">{cohort.toLocaleString()}</strong> {word}{" "}
-            {cohort === 1 ? "patient" : "patients"} due to come back — recall them and those visits
-            count toward this rebate <em>and</em> recover the patient.
+            You have{" "}
+            <Link
+              to="/app/refill/patients"
+              search={recallSearch}
+              className="font-bold text-emerald-ink underline decoration-emerald-ink/30 underline-offset-2 hover:decoration-emerald-ink"
+            >
+              {cohort!.toLocaleString()} {word} {cohort === 1 ? "patient" : "patients"}
+            </Link>{" "}
+            due to come back — recall them and those visits count toward this rebate <em>and</em>{" "}
+            recover the patient.
           </p>
         )}
         {moves.length > 1 && (
@@ -194,14 +215,26 @@ function NextMoveCallout({ intel, moves }: { intel: ProgramIntel; moves: Program
             +{moves.length - 1} more {moves.length - 1 === 1 ? "move" : "moves"} below.
           </p>
         )}
-        <Link
-          to="/app/refill/recognition/offers"
-          className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald px-4 py-2 text-[13px] font-semibold text-paper shadow-sm hover:opacity-95 transition"
-        >
-          <Gift className="h-3.5 w-3.5" />
-          {cohort != null && cohort > 0 ? "Recall these patients" : "Set up a recall offer"}
-          <ArrowRight className="h-3.5 w-3.5" />
-        </Link>
+        {hasCohort ? (
+          <Link
+            to="/app/refill/patients"
+            search={recallSearch}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald px-4 py-2 text-[13px] font-semibold text-paper shadow-sm hover:opacity-95 transition"
+          >
+            <Users className="h-3.5 w-3.5" />
+            See &amp; recall these patients
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        ) : (
+          <Link
+            to="/app/refill/recognition/offers"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald px-4 py-2 text-[13px] font-semibold text-paper shadow-sm hover:opacity-95 transition"
+          >
+            <Gift className="h-3.5 w-3.5" />
+            Set up a recall offer
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
+        )}
       </div>
     );
   }
@@ -419,24 +452,31 @@ function MovesCard({ intel, moves }: { intel: ProgramIntel; moves: ProgramIntel[
 
       {moves.length > 0 ? (
         <div className="mt-3 space-y-2">
-          {moves.map((m, i) => (
-            <div
-              key={`${m.rebateKey}-${m.product}-${i}`}
-              className="flex items-start gap-3 rounded-xl border border-emerald-ink/20 bg-emerald-soft/40 px-3 py-2.5"
-            >
-              <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-emerald-ink" />
-              <div>
-                <div className="text-[13px] text-ink">{moveHeadline(m)}</div>
-                {m.lapsedInCohort != null && m.lapsedInCohort > 0 && (
-                  <div className="mt-0.5 text-[11.5px] text-ink-soft">
-                    {m.lapsedInCohort.toLocaleString()}{" "}
-                    {kindWord(resolveProduct(m.product || m.productLabel).kind)}{" "}
-                    {m.lapsedInCohort === 1 ? "patient" : "patients"} due to recall toward it.
-                  </div>
-                )}
+          {moves.map((m, i) => {
+            const ck = cohortKindOf(m);
+            const cohort = m.lapsedInCohort;
+            return (
+              <div
+                key={`${m.rebateKey}-${m.product}-${i}`}
+                className="flex items-start gap-3 rounded-xl border border-emerald-ink/20 bg-emerald-soft/40 px-3 py-2.5"
+              >
+                <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-emerald-ink" />
+                <div>
+                  <div className="text-[13px] text-ink">{moveHeadline(m)}</div>
+                  {cohort != null && cohort > 0 && ck && (
+                    <Link
+                      to="/app/refill/patients"
+                      search={{ overdue: "1", kind: ck }}
+                      className="mt-0.5 inline-block text-[11.5px] text-emerald-ink underline decoration-emerald-ink/30 underline-offset-2 hover:decoration-emerald-ink"
+                    >
+                      {cohort.toLocaleString()} {kindWord(resolveProduct(m.product || m.productLabel).kind)}{" "}
+                      {cohort === 1 ? "patient" : "patients"} due to recall toward it →
+                    </Link>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="mt-3 rounded-xl bg-paper/50 px-4 py-3 text-[12.5px] leading-relaxed text-ink-soft">
