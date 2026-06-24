@@ -13,7 +13,7 @@
  */
 
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import {
   ArrowUpDown,
@@ -27,6 +27,7 @@ import {
   Mail,
   Phone,
   Search,
+  Send,
   Sparkles,
   Star,
   Tag,
@@ -62,6 +63,7 @@ import {
   listPreshowProfiles,
   type PreshowProfile,
 } from "@/server/refill-preshow-agent.functions";
+import { draftRecallOutreachFn } from "@/server/refill-recall.functions";
 import type { ProductManufacturer } from "@/lib/product-manufacturer-map";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { cn } from "@/lib/utils";
@@ -72,6 +74,9 @@ const patientsSearchSchema = z.object({
   // overdue list to one treatment kind so "201 filler patients due" lands on
   // exactly those 201.
   kind: z.enum(["toxin", "filler", "biostimulator"]).optional(),
+  // v2.170.0: "See & recall these patients" arrives with the overdue cohort
+  // already selected, primed for a one-click "Draft recall outreach".
+  preselect: z.enum(["overdue"]).optional(),
 });
 
 /** Friendly label for the treatment-kind cohort chip. */
@@ -486,6 +491,75 @@ function PatientsPage() {
   };
 
   const clearSelection = () => setSelectedIds(new Set());
+
+  // v2.170.0: arrive from "See & recall these patients" with the overdue cohort
+  // pre-selected (once per mount), primed for one-click draft.
+  const preselectedRef = useRef(false);
+  useEffect(() => {
+    if (preselectedRef.current) return;
+    if (search.preselect !== "overdue") return;
+    if (!overdueIndex || overdueIndex.size === 0) return;
+    preselectedRef.current = true;
+    setSelectedIds(new Set(overdueIndex.keys()));
+  }, [overdueIndex, search.preselect]);
+
+  // v2.170.0: draft recall outreach for the selected OVERDUE patients — reuses
+  // the exact recall-draft engine (draftRecallOutreachFn, trigger="lapsed") that
+  // the Rewards/Recall panel uses. Emails ready-to-send iMessage drafts to the
+  // spa's proxy inbox; the owner reviews + sends each in Messages.app. Chunks at
+  // the fn's 200-target cap.
+  const [drafting, setDrafting] = useState(false);
+  async function draftRecallForSelected() {
+    if (drafting || !accessToken || !overdueIndex) return;
+    const selectedOverdue = Array.from(selectedIds)
+      .map((id) => overdueIndex.get(id))
+      .filter((o): o is OverduePatient => !!o);
+    const reachable = selectedOverdue.filter((o) => !!o.phone);
+    const noPhone = selectedOverdue.length - reachable.length;
+    const notOverdue = selectedIds.size - selectedOverdue.length;
+    if (reachable.length === 0) {
+      toast.error(
+        "No textable overdue patients in your selection — recall outreach needs a phone number.",
+      );
+      return;
+    }
+    setDrafting(true);
+    try {
+      const targets = reachable.map((o) => ({
+        fullName: o.displayName,
+        phone: o.phone,
+        brand: o.manufacturer,
+        trigger: "lapsed" as const,
+      }));
+      let drafted = 0;
+      let sentTo: string | null = null;
+      for (let i = 0; i < targets.length; i += 200) {
+        const r = await draftRecallOutreachFn({
+          data: { accessToken, viewAsUserId, targets: targets.slice(i, i + 200) },
+        });
+        if (!r.sent) {
+          toast.error(r.error ?? "Couldn't send the recall drafts.");
+          return;
+        }
+        drafted += r.drafted;
+        sentTo = r.sentTo;
+      }
+      const extras = [
+        noPhone > 0 ? `${noPhone} skipped (no phone)` : null,
+        notOverdue > 0 ? `${notOverdue} not overdue` : null,
+      ].filter(Boolean);
+      toast.success(
+        `${drafted} recall draft${drafted === 1 ? "" : "s"} emailed to ${sentTo ?? "your inbox"} — paste into Claude Desktop to send.` +
+          (extras.length ? ` (${extras.join(" · ")}.)` : ""),
+        { duration: 9000 },
+      );
+      clearSelection();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't draft outreach.");
+    } finally {
+      setDrafting(false);
+    }
+  }
 
   // v1.34.0: bulk apply handler — server fn + toast + clear selection.
   // Reuses tenant scoping via accessToken/viewAsUserId.
@@ -1153,9 +1227,23 @@ function PatientsPage() {
           <div className="h-4 w-px bg-rule" />
           <button
             type="button"
-            onClick={() => setBulkPickerOpen(true)}
-            disabled={bulkApplying}
+            onClick={() => void draftRecallForSelected()}
+            disabled={drafting || bulkApplying}
             className="inline-flex items-center gap-1.5 rounded-full bg-emerald px-3 py-1.5 text-[12px] font-semibold text-paper shadow-sm hover:opacity-95 transition disabled:opacity-50"
+            title="Email ready-to-send iMessage recall drafts for the selected overdue patients"
+          >
+            {drafting ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Send className="h-3 w-3" />
+            )}
+            Draft recall outreach
+          </button>
+          <button
+            type="button"
+            onClick={() => setBulkPickerOpen(true)}
+            disabled={bulkApplying || drafting}
+            className="inline-flex items-center gap-1.5 rounded-full border border-rule bg-white px-3 py-1.5 text-[12px] font-semibold text-ink-soft hover:text-ink hover:bg-rule-soft transition disabled:opacity-50"
           >
             <Tag className="h-3 w-3" />
             Apply soft tag

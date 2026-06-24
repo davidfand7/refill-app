@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.170.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.170.0 &mdash; &ldquo;See &amp; recall these patients&rdquo; now lands pre-selected and one click from drafting.</strong> Closing the last gap between a rebate move and outreach going out. The Program tab&rsquo;s recall CTA now lands on the patient list with the <strong>overdue cohort already selected</strong> (the 201 checked, bulk bar primed) &mdash; and the bulk bar gains a <strong>&ldquo;Draft recall outreach&rdquo;</strong> action that reuses the <em>exact same</em> recall-draft engine the Rewards/Recall panel uses (<code>draftRecallOutreachFn</code>, trigger=lapsed): it emails ready-to-send iMessage drafts to your proxy inbox, which you paste into Claude Desktop and send per-patient from Messages.app (nothing goes to a patient without your tap). So the full arc is now: rebate move &rarr; <em>see &amp; recall these patients</em> &rarr; land on the 201, pre-checked &rarr; <em>Draft recall outreach</em> &rarr; review &amp; send. <strong>Why keep it on the patient book</strong> (not the Recall panel): the count came from <code>doListOverdue</code>; drafting from the same surface keeps the cohort, the count, and the drafts reading one source &mdash; no fork. Chunks at the engine&rsquo;s 200-target cap; skips no-phone with an honest tally; the plain <em>&ldquo;201 patients&rdquo;</em> number still links to a no-preselect &ldquo;just show me&rdquo; view. <strong>New</strong>: <code>preselect=overdue</code> search param + &ldquo;Draft recall outreach&rdquo; bulk action (Apply soft tag demoted to secondary). <strong>Touched</strong>: <code>app.refill.patients.index.tsx</code>, <code>app.refill.recognition.program.tsx</code>, <code>changelog.ts</code>. No migration. <em>Banked: optional true auto-fire-on-arrival (draft without the click) if wanted.</em>",
+    ],
+  },
+  {
     version: "v2.169.0",
     date: "June 2026",
     items: [

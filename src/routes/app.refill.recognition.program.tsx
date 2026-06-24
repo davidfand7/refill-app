@@ -188,7 +188,9 @@ function NextMoveCallout({ intel, moves }: { intel: ProgramIntel; moves: Program
     const cohortKind = cohortKindOf(top);
     const word = kindWord(resolveProduct(top.product || top.productLabel).kind);
     const hasCohort = cohort != null && cohort > 0 && cohortKind != null;
-    const recallSearch = { overdue: "1" as const, kind: cohortKind ?? undefined };
+    // Inline count = "just show me the list"; CTA = "recall" → lands pre-selected.
+    const seeSearch = { overdue: "1" as const, kind: cohortKind ?? undefined };
+    const recallSearch = { ...seeSearch, preselect: "overdue" as const };
     return (
       <div className="rounded-2xl border border-emerald-ink/30 bg-emerald-soft/50 p-5">
         <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-emerald-ink">
@@ -201,7 +203,7 @@ function NextMoveCallout({ intel, moves }: { intel: ProgramIntel; moves: Program
             You have{" "}
             <Link
               to="/app/refill/patients"
-              search={recallSearch}
+              search={seeSearch}
               className="font-bold text-emerald-ink underline decoration-emerald-ink/30 underline-offset-2 hover:decoration-emerald-ink"
             >
               {cohort!.toLocaleString()} {word} {cohort === 1 ? "patient" : "patients"}
