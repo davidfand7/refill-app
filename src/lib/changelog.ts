@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.171.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.171.0 &mdash; The recall list now says &ldquo;overdue for filler&rdquo; out loud, and lets you target by the brand that feeds the rebate.</strong> When you arrive from a rebate move, the cohort is patients overdue for a treatment <em>kind</em> (filler), not a manufacturer &mdash; so a patient can be in the list with Primary = Allergan even though the move is a Galderma rebate (you recall the filler patient and pick the brand in the chair). Two fixes to make that legible and actionable: <strong>(1) Clarity</strong> &mdash; the chip now reads <strong>&ldquo;Overdue for Filler&rdquo;</strong> and a banner spells it out: <em>&ldquo;These patients are past their filler cadence &mdash; recall them and pick the brand in the chair. Filter by filler brand below to target a specific rebate (e.g. Galderma &rarr; Restylane).&rdquo;</em> <strong>(2) Cohort-aware manufacturer filter</strong> &mdash; inside a kind cohort, the manufacturer chips (relabeled <strong>&ldquo;Filler brand&rdquo;</strong>) now filter and count by the brand of each patient&rsquo;s <em>last filler</em> (the signal that decides which rebate a recall feeds) instead of their overall primary &mdash; so &ldquo;Galderma 12&rdquo; means 12 of these overdue-filler patients last got Galderma filler, the exact ones to recall for the Galderma rebate. Outside a cohort, the filter stays &ldquo;Primary&rdquo; as before. Also relabeled <code>abbvie</code> &rarr; <strong>Allergan</strong> (the brand spa owners know) and made the &ldquo;All&rdquo; count respect the overdue filter so the chip math is coherent. <strong>Touched</strong>: <code>app.refill.patients.index.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.170.0",
     date: "June 2026",
     items: [

@@ -252,6 +252,11 @@ function PatientsPage() {
   const [softTagFilter, setSoftTagFilter] = useState<Set<string>>(new Set());
   const overdueOnly = search.overdue === "1";
   const kindFilter = search.kind ?? null;
+  // v2.171.0: in a treatment-kind cohort, "manufacturer" means the brand of
+  // their last visit OF THAT KIND (overdueIndex.manufacturer) — the signal that
+  // decides which rebate a recall feeds — NOT their overall primary. Outside a
+  // cohort, the filter stays on primaryManufacturer.
+  const cohortMfrAxis = kindFilter != null;
 
   function setOverdueOnly(next: boolean) {
     void navigate({
@@ -261,6 +266,9 @@ function PatientsPage() {
   }
 
   function clearKindFilter() {
+    // The manufacturer filter flips axis (cohort brand → primary) when the kind
+    // cohort clears, so a selection wouldn't carry meaning — reset it.
+    setManufacturerFilter(null);
     void navigate({
       search: (prev) => ({ ...prev, kind: undefined }),
       replace: true,
@@ -621,8 +629,12 @@ function PatientsPage() {
     const q = searchText.trim().toLowerCase();
     const base = rows.filter((r) => {
       if (cutoffDate && (!r.lastVisit || r.lastVisit < cutoffDate)) return false;
-      if (manufacturerFilter && r.primaryManufacturer !== manufacturerFilter)
-        return false;
+      if (manufacturerFilter) {
+        const mfr = cohortMfrAxis
+          ? (overdueIndex?.get(r.id)?.manufacturer ?? null)
+          : r.primaryManufacturer;
+        if (mfr !== manufacturerFilter) return false;
+      }
       if (overdueOnly && !overdueIndex?.has(r.id)) return false;
       if (q && !r.displayName.toLowerCase().includes(q)) return false;
       // v385.1: waitlist filter. "on" = WaitlistEntry exists with
@@ -672,6 +684,7 @@ function PatientsPage() {
     rows,
     searchText,
     manufacturerFilter,
+    cohortMfrAxis,
     cutoffDate,
     overdueOnly,
     overdueIndex,
@@ -687,17 +700,17 @@ function PatientsPage() {
     if (!rows) return [];
     const counts = new Map<ProductManufacturer, number>();
     for (const r of rows) {
-      if (r.primaryManufacturer) {
-        if (cutoffDate && (!r.lastVisit || r.lastVisit < cutoffDate)) continue;
-        if (overdueOnly && !overdueIndex?.has(r.id)) continue;
-        counts.set(
-          r.primaryManufacturer,
-          (counts.get(r.primaryManufacturer) ?? 0) + 1,
-        );
-      }
+      if (cutoffDate && (!r.lastVisit || r.lastVisit < cutoffDate)) continue;
+      if (overdueOnly && !overdueIndex?.has(r.id)) continue;
+      // In a kind cohort, count by the brand of their last visit of that kind
+      // (what a recall would feed); otherwise by overall primary.
+      const mfr = cohortMfrAxis
+        ? (overdueIndex?.get(r.id)?.manufacturer ?? null)
+        : r.primaryManufacturer;
+      if (mfr) counts.set(mfr, (counts.get(mfr) ?? 0) + 1);
     }
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
-  }, [rows, cutoffDate, overdueOnly, overdueIndex]);
+  }, [rows, cohortMfrAxis, cutoffDate, overdueOnly, overdueIndex]);
 
   // v1.34.1 (coherency pass): enumerate active soft-tag filter-keys across
   // the in-window patient set. One chip per (tagKey, value) tuple that
@@ -900,9 +913,9 @@ function PatientsPage() {
           {kindFilter && (
             <span
               className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-soft px-3 py-2 text-xs font-medium text-emerald-ink"
-              title={`Filtered to your overdue ${kindFilterLabel(kindFilter)} cohort (from a rebate move)`}
+              title={`Filtered to patients overdue for ${kindFilterLabel(kindFilter).toLowerCase()} (from a rebate move)`}
             >
-              {kindFilterLabel(kindFilter)} cohort
+              Overdue for {kindFilterLabel(kindFilter)}
               <button
                 type="button"
                 onClick={clearKindFilter}
@@ -1036,12 +1049,25 @@ function PatientsPage() {
           </button>
         </div>
 
+        {/* v2.171.0: in a kind cohort, explain what the list is + how to target a rebate */}
+        {cohortMfrAxis && (
+          <div className="rounded-xl border border-emerald/30 bg-emerald-soft/30 px-4 py-2.5 text-[12px] leading-relaxed text-ink-soft">
+            <span className="font-semibold text-emerald-ink">
+              Overdue for {kindFilterLabel(kindFilter!).toLowerCase()}.
+            </span>{" "}
+            These patients are past their {kindFilterLabel(kindFilter!).toLowerCase()} cadence — recall
+            them and pick the brand in the chair. Filter by{" "}
+            <strong>{kindFilterLabel(kindFilter!).toLowerCase()} brand</strong> below to target a
+            specific rebate (e.g. Galderma → Restylane).
+          </div>
+        )}
+
         {/* Manufacturer chip filter */}
         {manufacturerCounts.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] text-ink-soft inline-flex items-center gap-1">
               <Filter className="h-3 w-3" />
-              Primary
+              {cohortMfrAxis ? `${kindFilterLabel(kindFilter!)} brand` : "Primary"}
             </span>
             <Chip
               active={manufacturerFilter === null}
@@ -1051,6 +1077,7 @@ function PatientsPage() {
                 rows?.filter((r) => {
                   if (cutoffDate && (!r.lastVisit || r.lastVisit < cutoffDate))
                     return false;
+                  if (overdueOnly && !overdueIndex?.has(r.id)) return false;
                   return true;
                 }).length ?? 0
               }
@@ -1766,7 +1793,7 @@ function manufacturerLabel(mfr: ProductManufacturer): string {
     case "evolus":
       return "Evolus";
     case "abbvie":
-      return "AbbVie";
+      return "Allergan";
     case "merz":
       return "Merz";
     case "galderma":
