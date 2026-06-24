@@ -99,6 +99,10 @@ export type ProgramIntel = {
   source: SnapshotSource;
   /** ISO date the snapshot was captured/pulled, for the freshness stamp. */
   capturedOn: string;
+  /** true = a real per-tenant snapshot row; false = the seed placeholder (no
+   *  capture yet). The UI uses this to show a capture CTA instead of dressing
+   *  the seed as the tenant's own standing. */
+  captured: boolean;
 };
 
 /**
@@ -120,6 +124,7 @@ async function loadSnapshot(
   latest: ProgramSnapshot;
   prev: ProgramSnapshot | null;
   source: SnapshotSource;
+  captured: boolean;
 }> {
   if (tenantId) {
     try {
@@ -145,13 +150,14 @@ async function loadSnapshot(
           prev: (priorRow?.snapshot as unknown as ProgramSnapshot) ?? null,
           source:
             latestRow.source === "portal_pull" ? "portal_pull" : "manual_capture",
+          captured: true,
         };
       }
     } catch {
       // Table missing (pre-migration) or read error → seed fallback below.
     }
   }
-  return { latest: REJUV_ASPIRE_SNAPSHOT, prev: null, source: "manual_capture" };
+  return { latest: REJUV_ASPIRE_SNAPSHOT, prev: null, source: "manual_capture", captured: false };
 }
 
 const input = z.object({
@@ -176,7 +182,7 @@ export const getProgramIntelFn = createServerFn({ method: "POST" })
       tenantId = null;
     }
 
-    const { latest, prev, source } = await loadSnapshot(sb, tenantId);
+    const { latest, prev, source, captured } = await loadSnapshot(sb, tenantId);
     const moves = deriveRebateMoves(latest);
     const changes = prev ? diffSnapshots(prev, latest) : [];
     return {
@@ -185,6 +191,7 @@ export const getProgramIntelFn = createServerFn({ method: "POST" })
       changes,
       source,
       capturedOn: latest.pulledAt.slice(0, 10),
+      captured,
     };
   });
 

@@ -95,6 +95,14 @@ function ManufacturersPage() {
     void load();
   }, [membership.status, load]);
 
+  // Deep-link from the Program tab's "Capture rewards snapshot" CTA: land here
+  // with #capture and open the modal straight away (one click to the action).
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hash === "#capture") {
+      setShowCaptureModal(true);
+    }
+  }, []);
+
   async function handleDelete(p: ManufacturerProfile) {
     if (!accessToken) return;
     if (!window.confirm(`Delete '${p.displayName}' profile? This can't be undone.`)) {
@@ -1073,11 +1081,11 @@ function CaptureSnapshotModal({
           ) : (
             <>
               <Link
-                to="/app/refill/recognition/inventory"
+                to="/app/refill/recognition/program"
                 className="inline-flex items-center gap-1.5 rounded-md bg-emerald px-4 py-2 text-[13px] font-semibold text-paper shadow-sm hover:opacity-95 transition"
               >
                 <TrendingUp className="h-3.5 w-3.5" />
-                View in Incentives
+                View your standing
               </Link>
               <button
                 type="button"

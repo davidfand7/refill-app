@@ -7,7 +7,7 @@
  * the real Rejuv ASPIRE dashboard for now; the auto-pull swaps in behind it.
  */
 
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   Target,
@@ -17,6 +17,8 @@ import {
   TrendingUp,
   Sparkles,
   ArrowRight,
+  Camera,
+  Gift,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -77,11 +79,8 @@ function ProgramPage() {
       <div className="px-6 lg:px-10 py-6 max-w-[860px] mx-auto">
         {loading ? (
           <div className="text-sm text-ink-faint">Reading your program…</div>
-        ) : !intel ? (
-          <div className="rounded-2xl border border-dashed border-rule bg-paper/30 p-10 text-center text-sm text-ink-soft">
-            No program snapshot yet. Once your manufacturer portal is connected, your
-            tiers, rebates, and pricing land here automatically.
-          </div>
+        ) : !intel || !intel.captured ? (
+          <NotCapturedState />
         ) : (
           <ProgramView intel={intel} />
         )}
@@ -94,6 +93,7 @@ function ProgramView({ intel }: { intel: ProgramIntel }) {
   const { snapshot, moves, changes } = intel;
   return (
     <div className="space-y-5">
+      <NextMoveCallout intel={intel} moves={moves} />
       <FreshnessBanner intel={intel} />
       <TierCard snapshot={snapshot} />
       <MovesCard intel={intel} moves={moves} />
@@ -103,6 +103,92 @@ function ProgramView({ intel }: { intel: ProgramIntel }) {
         ))}
       </div>
       <ChangesCard changes={changes} />
+    </div>
+  );
+}
+
+/**
+ * The landing callout — always tells the owner the next step. Three states:
+ *   ① a rebate move is within reach → the dollar-on-it action + a door to act on it
+ *   ② captured, but no move to chase (achieved / blocked) → "put your earned units to work"
+ *   ③ no capture yet → handled by NotCapturedState (shown instead of ProgramView)
+ */
+function NextMoveCallout({ intel, moves }: { intel: ProgramIntel; moves: ProgramIntel["moves"] }) {
+  if (moves.length > 0) {
+    const top = moves[0];
+    return (
+      <div className="rounded-2xl border border-emerald-ink/30 bg-emerald-soft/50 p-5">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-emerald-ink">
+          <Target className="h-3.5 w-3.5" />
+          Your next move
+        </div>
+        <p className="mt-2 text-[15px] font-semibold leading-snug text-ink">{moveHeadline(top)}</p>
+        {moves.length > 1 && (
+          <p className="mt-1 text-[12px] text-ink-soft">
+            +{moves.length - 1} more {moves.length - 1 === 1 ? "move" : "moves"} below.
+          </p>
+        )}
+        <Link
+          to="/app/refill/recognition/offers"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald px-4 py-2 text-[13px] font-semibold text-paper shadow-sm hover:opacity-95 transition"
+        >
+          <Gift className="h-3.5 w-3.5" />
+          Set up a recall offer
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+    );
+  }
+
+  // ② Captured, nothing to chase — point them to deploying the units they've earned.
+  return (
+    <div className="rounded-2xl border border-rule bg-paper/40 p-5">
+      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-ink" />
+        You&apos;re maxed on this program for now
+      </div>
+      <p className="mt-2 text-[14px] leading-snug text-ink-soft">
+        No rebate to chase right now — you&apos;ve secured what&apos;s in reach. Put the units
+        you&apos;ve earned to work for specific patients, and we&apos;ll surface the next move here
+        the moment one opens up.
+      </p>
+      <Link
+        to="/app/refill/recognition/inventory"
+        className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-emerald/40 bg-white px-4 py-2 text-[13px] font-semibold text-emerald-ink shadow-sm hover:bg-emerald-soft/40 transition"
+      >
+        <ArrowRight className="h-3.5 w-3.5" />
+        Put your earned units to work
+      </Link>
+    </div>
+  );
+}
+
+/**
+ * ③ The "out" when there's no real capture for this tenant yet — instead of
+ * dressing the seed placeholder as their own standing, invite the capture that
+ * lights the whole tab up. Deep-links to the capture modal (hash=capture).
+ */
+function NotCapturedState() {
+  return (
+    <div className="rounded-2xl border border-dashed border-emerald/40 bg-emerald-soft/20 p-10 text-center">
+      <div className="mx-auto inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-soft">
+        <Sparkles className="h-6 w-6 text-emerald" />
+      </div>
+      <h2 className="mt-3 text-lg font-semibold text-ink">No program standing captured yet</h2>
+      <p className="mx-auto mt-1.5 max-w-md text-sm leading-relaxed text-ink-soft">
+        Capture your manufacturer rewards dashboard and your tier, rebate trackers, and the exact
+        moves to unlock them land here — plus a “what changed” alert every time the program shifts
+        under you. The auth-walled numbers no spreadsheet can reach, read for you.
+      </p>
+      <Link
+        to="/app/refill/settings/manufacturers"
+        hash="capture"
+        className="mt-5 inline-flex items-center gap-2 rounded-lg bg-emerald px-5 py-2.5 text-sm font-semibold text-paper shadow-sm hover:opacity-95 transition"
+      >
+        <Camera className="h-4 w-4" />
+        Capture rewards snapshot
+        <ArrowRight className="h-4 w-4" />
+      </Link>
     </div>
   );
 }

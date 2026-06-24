@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.166.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.166.0 &mdash; The Program tab now lands you on a next step, and stops dressing the seed as your own.</strong> Two fixes from capturing a real snapshot. <strong>(1) The capture landed in the wrong place.</strong> &ldquo;View your standing&rdquo; (was &ldquo;View in Incentives&rdquo;) pointed at the <em>units pool</em> &mdash; the one Incentives tab that doesn&rsquo;t show your captured standing &mdash; so the payoff was invisible. It now lands on <strong>Program</strong>, where your tier, rebates, and moves render. <strong>(2) A landing callout that always names the next step</strong>, adaptive across three states: ① a rebate is within reach &rarr; <em>&ldquo;Your next move: treat N more X &rarr; unlock the Y% rebate&rdquo;</em> with a door into Offers; ② captured but nothing to chase (all secured / blocked &mdash; Rejuv today) &rarr; <em>&ldquo;You&rsquo;re maxed for now &mdash; put your earned units to work&rdquo;</em> into the units pool; ③ <strong>no capture yet</strong> &rarr; the &ldquo;out&rdquo;: instead of silently showing the Rejuv <em>seed</em> as if it were yours (a Connection-Health honesty hole &mdash; placeholder wearing the real hat), it shows <em>&ldquo;No standing captured yet &mdash; capture your rewards dashboard to light this up,&rdquo;</em> deep-linking (<code>#capture</code>) straight into the capture modal. <strong>New</strong>: <code>ProgramIntel.captured</code> flag (real row vs seed fallback) so the UI can tell them apart. <strong>Touched</strong>: <code>program-intel.functions.ts</code> (loadSnapshot + type), <code>app.refill.recognition.program.tsx</code> (NextMoveCallout + NotCapturedState), <code>app.refill.settings.manufacturers.tsx</code> (link &rarr; Program, <code>#capture</code> auto-open), <code>changelog.ts</code>. No migration. <em>Honest fast-follow banked: the move callout shows the verified rebate move but not yet the lapsed-patient cohort count (needs the recall-engine join) &mdash; no fabricated patient numbers.</em>",
+    ],
+  },
+  {
     version: "v2.165.1",
     date: "June 2026",
     items: [
