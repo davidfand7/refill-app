@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.163.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.163.0 &mdash; Reports stops showing a dollar number it never actually had.</strong> Closing the last money-board fast-follow from the island audit: an investigation into Account &rarr; Reports&rsquo; &ldquo;attributed revenue&rdquo; found its source column (<code>patient_outreach_state.attributed_revenue_usd</code>) is <strong>never written anywhere</strong> &mdash; a reserved-but-dead field. So the headline revenue stat read a <em>structural</em> $0, and the per-campaign Revenue column was permanently &ldquo;&mdash;&rdquo;. Showing a money number that can never be real is a trust hole, so we removed both: the top stat is now <strong>&ldquo;Closed-won&rdquo;</strong> (a real funnel outcome &mdash; won, with showed/booked underneath) and the dead Revenue column is gone. Reports is now honestly the <strong>conversion-funnel lens</strong> (sent &rarr; booked &rarr; won, no dollars); the verified, invoice-grade recovered $ lives in <strong>Recovery</strong>, where the on-board link points. <strong>Confirmed</strong> there&rsquo;s no double-count: every <code>attributed_revenue_usd</code> <em>write</em> in the codebase is on <code>recovery_events</code> (the single source of truth) &mdash; the outreach copy was only ever read. <strong>Touched</strong>: <code>app.refill.reports.tsx</code>, <code>changelog.ts</code>. No migration. <em>Future enhancement (banked): wire real campaign-attributed $ by slicing recovery_events per campaign &mdash; needs an attribution model (which campaign earns a given recovery).</em>",
+    ],
+  },
+  {
     version: "v2.162.0",
     date: "June 2026",
     items: [

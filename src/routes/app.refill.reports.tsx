@@ -173,10 +173,13 @@ function TopStats({
       sub: `${totals.booked.toLocaleString()} booked of ${totals.sent.toLocaleString()} reached`,
     },
     {
-      label: "Campaign-attributed",
+      // Reports tracks campaign CONVERSION, not dollars: the per-outreach
+      // revenue column was never written (dead column), so showing it read a
+      // structural $0. The verified $ lives in Recovery — we link there below.
+      label: "Closed-won",
       icon: Users,
-      value: formatMoney(totals.revenueUsd),
-      sub: `${totals.won.toLocaleString()} closed-won · funnel, all-time`,
+      value: totals.won.toLocaleString(),
+      sub: `${totals.showed.toLocaleString()} showed · ${totals.booked.toLocaleString()} booked`,
     },
   ];
 
@@ -194,16 +197,15 @@ function TopStats({
           <div className="text-[11px] text-ink-soft mt-1">{c.sub}</div>
         </div>
       ))}
-      {/* Distinguish this funnel-attributed number from the canonical recovered
-          $ — Reports sums outreach closed-won (all-time); Recovery is the
-          verified, invoice-grade audit. Point there so the two never read as
-          competing authorities on "what SmartSpa recovered." */}
+      {/* Reports is the conversion-funnel lens (sent → booked → won); it shows
+          no dollars. The verified, invoice-grade recovered $ lives in Recovery —
+          point there so the boards never read as competing money authorities. */}
       <Link
         to="/app/refill/recovery"
         className="sm:col-span-2 lg:col-span-4 inline-flex items-center gap-1 text-[11px] text-ink-soft hover:text-foreground hover:underline"
       >
-        Funnel-attributed from outreach. For the verified recovered $ that bills,
-        see Recovery →
+        Campaign conversion, all-time. For the verified $ recovered, see Recovery
+        →
       </Link>
     </div>
   );
@@ -310,7 +312,6 @@ function CampaignTable({ campaigns }: { campaigns: CampaignFunnel[] }) {
               <th className="px-3 py-2">Booked</th>
               <th className="px-3 py-2">Showed</th>
               <th className="px-3 py-2">Won</th>
-              <th className="px-3 py-2">Revenue</th>
               <th className="px-3 py-2"></th>
             </tr>
           </thead>
@@ -363,9 +364,6 @@ function CampaignTable({ campaigns }: { campaigns: CampaignFunnel[] }) {
                   <td className="px-3 py-2.5 tabular-nums">{c.booked}</td>
                   <td className="px-3 py-2.5 tabular-nums">{c.showed}</td>
                   <td className="px-3 py-2.5 tabular-nums">{c.won}</td>
-                  <td className="px-3 py-2.5 tabular-nums font-medium text-foreground">
-                    {c.revenueUsd > 0 ? formatMoney(c.revenueUsd) : "—"}
-                  </td>
                   <td className="px-3 py-2.5">
                     <Link
                       to="/app/refill/campaigns/$campaignId"
@@ -394,9 +392,3 @@ function formatRate(r: number): string {
   return `${(r * 100).toFixed(1)}%`;
 }
 
-function formatMoney(n: number): string {
-  if (!isFinite(n) || n <= 0) return "$0";
-  if (n >= 10_000)
-    return `$${(n / 1000).toFixed(1)}k`;
-  return `$${Math.round(n).toLocaleString()}`;
-}
