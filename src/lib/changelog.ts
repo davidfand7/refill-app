@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.165.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.165.1 &mdash; Capture-snapshot button now tells you what it&rsquo;s waiting for.</strong> Quick UX polish on the v2.165.0 rewards-capture modal: before you&rsquo;ve added a screenshot, the primary action was a <em>silently greyed</em> &ldquo;Capture snapshot&rdquo; &mdash; correct (you can&rsquo;t read nothing) but it reads as <em>broken</em>. It now says <strong>&ldquo;Add a screenshot first&rdquo;</strong> while disabled, so the modal guides instead of stonewalling; it flips to &ldquo;Capture snapshot&rdquo; the moment an image is in the dropzone. <strong>Touched</strong>: <code>app.refill.settings.manufacturers.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.165.0",
     date: "June 2026",
     items: [

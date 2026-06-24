@@ -1048,6 +1048,11 @@ function CaptureSnapshotModal({
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     Reading {images.length} {images.length === 1 ? "image" : "images"}…
                   </>
+                ) : images.length === 0 ? (
+                  <>
+                    <ImageUp className="h-3.5 w-3.5" />
+                    Add a screenshot first
+                  </>
                 ) : (
                   <>
                     <Sparkles className="h-3.5 w-3.5" />
