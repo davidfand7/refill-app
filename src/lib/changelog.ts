@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.166.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.166.1 &mdash; Don&rsquo;t say &ldquo;you&rsquo;re maxed&rdquo; when the rebate page just wasn&rsquo;t in the screenshot.</strong> Honesty refinement on the v2.166.0 Program callout: a capture that has your tier + pricing but <em>no rebate trackers</em> (they live on a different portal tab) was reading the &ldquo;no moves &rarr; you&rsquo;re maxed, you&rsquo;ve secured what&rsquo;s in reach&rdquo; state &mdash; which is false; you didn&rsquo;t max them, they weren&rsquo;t captured. Absence of data &ne; nothing to do. Split it: <strong>no rebate trackers at all</strong> &rarr; <em>&ldquo;One more capture unlocks your moves &mdash; capture your rebate/tracker tab&rdquo;</em> (deep-links to the capture modal); <strong>rebates captured but none actionable</strong> (genuinely all secured / blocked) &rarr; the real &ldquo;maxed for now &mdash; put your earned units to work.&rdquo; <strong>Touched</strong>: <code>app.refill.recognition.program.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.166.0",
     date: "June 2026",
     items: [

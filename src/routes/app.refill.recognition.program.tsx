@@ -140,7 +140,36 @@ function NextMoveCallout({ intel, moves }: { intel: ProgramIntel; moves: Program
     );
   }
 
-  // ② Captured, nothing to chase — point them to deploying the units they've earned.
+  // ②b No rebate trackers in this capture at all — don't claim "maxed" (they
+  // weren't on the screenshot). Nudge to capture the rebate page so moves can
+  // surface. Honest: absence of data ≠ nothing to do.
+  if (intel.snapshot.rebates.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-emerald/40 bg-emerald-soft/20 p-5">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-emerald-ink">
+          <Target className="h-3.5 w-3.5" />
+          One more capture unlocks your moves
+        </div>
+        <p className="mt-2 text-[14px] leading-snug text-ink-soft">
+          This capture has your tier and pricing, but no <strong>rebate trackers</strong> yet —
+          they live on your portal&apos;s rebate/tracker tab. Capture that screen and we&apos;ll turn
+          it into the exact &ldquo;buy/treat N more to unlock the rebate&rdquo; moves, right here.
+        </p>
+        <Link
+          to="/app/refill/settings/manufacturers"
+          hash="capture"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald px-4 py-2 text-[13px] font-semibold text-paper shadow-sm hover:opacity-95 transition"
+        >
+          <Camera className="h-3.5 w-3.5" />
+          Capture your rebate trackers
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+    );
+  }
+
+  // ② Captured rebates, but none actionable (all secured / blocked) — genuinely
+  // maxed for now; point them to deploying the units they've earned.
   return (
     <div className="rounded-2xl border border-rule bg-paper/40 p-5">
       <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
