@@ -359,7 +359,7 @@ function NextMoveCallout({ intel, moves }: { intel: ProgramIntel; moves: Program
           On track — nothing to buy toward it right now
         </div>
         <p className="mt-2 text-[14px] leading-snug text-ink-soft">
-          {inProgress.length === 1 ? "Your " : "Your "}
+          Your{" "}
           {inProgress.map((r) => r.label).join(" and ")}{" "}
           {inProgress.length === 1 ? "is" : "are"} in progress.
           {inProgress.find((r) => r.note) && (

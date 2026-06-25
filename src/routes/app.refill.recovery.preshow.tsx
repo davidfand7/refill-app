@@ -621,8 +621,8 @@ function PerformanceCard({ metrics }: { metrics: PreshowProfileMetrics }) {
         />
       </div>
       <p className="text-[10px] text-ink-faint mt-3">
-        Sparkline + before-vs-after comparison ships in v1.34.3.x once 30
-        days of post-Agents-era data exists.
+        A before-vs-after trend appears here once you&apos;ve built up about a
+        month of reminder history.
       </p>
     </div>
   );

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.177.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.177.1 &mdash; Polish batch from the sub-tab sweep: two real copy fixes + a dead-code tidy.</strong> (1) <strong>Recovery overview</strong>: the &ldquo;This month&rdquo; card&rsquo;s sub-label had an identical-branch ternary (<code>count === 1 ? &quot;verified&quot; : &quot;verified&quot;</code>) so it never said what was verified &mdash; now reads <em>&ldquo;1 verified <strong>save</strong>&rdquo; / &ldquo;3 verified <strong>saves</strong>.&rdquo;</em> (2) <strong>Reminders</strong>: the performance card&rsquo;s footnote promised a feature &ldquo;ships in v1.34.3.x&rdquo; &mdash; shipping-language in a live product erodes confidence; reworded to the honest, version-free <em>&ldquo;a before-vs-after trend appears once you&rsquo;ve built up about a month of reminder history.&rdquo;</em> (3) <strong>Program tab</strong>: collapsed a dead ternary (<code>? &quot;Your &quot; : &quot;Your &quot;</code>) flagged as a possible empty-substitution &mdash; on inspection the branch is already guarded by <code>inProgress.length &gt; 0</code> so there was no bug, just the redundant ternary, now removed. <strong>Two other scout findings were verified as non-issues and intentionally NOT changed</strong>: the Patients VIP chip &ldquo;undefined&rdquo; flash (the <code>Chip</code> component hides the badge when count is undefined &mdash; React never renders undefined as text) and the program empty-substitution (guarded). <strong>Touched</strong>: <code>app.refill.recovery.index.tsx</code>, <code>app.refill.recovery.preshow.tsx</code>, <code>app.refill.recognition.program.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.177.0",
     date: "June 2026",
     items: [

@@ -260,7 +260,7 @@ function RecoveryDashboard() {
                 <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                   <span>
                     {stats.monthVerifiedCount}{" "}
-                    {stats.monthVerifiedCount === 1 ? "verified" : "verified"}
+                    {stats.monthVerifiedCount === 1 ? "verified save" : "verified saves"}
                   </span>
                   <MoMDelta
                     current={stats.monthVerifiedUsd}
