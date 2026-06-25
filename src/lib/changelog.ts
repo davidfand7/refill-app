@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.175.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.175.0 &mdash; Collapse to one spa (Phase 1): the demo-seed Rejuv is gone from the admin switcher, so you can never land in the empty sandbox by accident again.</strong> There were <em>two</em> identically-named &ldquo;Rejuv Skin Spa&rdquo; rows in the persona switcher: the REAL one (<code>karen.rejuv@gmail.com</code> / <code>ecf8bcee</code>, tenant <code>rejuv</code>, 1,140 patients, $935k of history) and a DEMO seed (<code>testspaowner@test.com</code>, tenant <code>rejuv-demo</code>, 1 patient, empty). Picking the wrong one silently put you in an empty sandbox &mdash; the footgun that&rsquo;s burned us repeatedly (v1.34.1.1, and again across a long debugging session where every &ldquo;why is this $0/empty&rdquo; traced back to standing in the demo while the real data sat one dropdown-row away). This is the first step of collapsing the premature multi-tenant + impersonation model down to <strong>one spa owner + one god-view admin</strong>. <code>DEMO_PERSONA_KEYS</code> drops the demo-seed <code>karen</code> entry, so the switcher now shows exactly one Rejuv &mdash; the real one. No tenant deleted (that&rsquo;s the guarded later phase); no data touched; fully reversible. After this lands, pick &ldquo;Rejuv Skin Spa&rdquo; once and you&rsquo;re home on live data for good. <strong>Touched</strong>: <code>personas.ts</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.174.2",
     date: "June 2026",
     items: [

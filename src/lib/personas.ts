@@ -54,7 +54,14 @@ export type PersonaKey = keyof typeof PERSONA_EMAILS;
  * this set, not just PERSONA_EMAILS.
  */
 export const DEMO_PERSONA_KEYS: ReadonlySet<PersonaKey> = new Set([
-  "karen",
+  // v2.175.0 (collapse-to-one-spa, Phase 1) — "karen" REMOVED. That key maps to
+  // the DEMO-seed Rejuv (testspaowner@test.com, slug rejuv-demo, 1 patient),
+  // which shares a display name with the REAL Rejuv (karen.rejuv@gmail.com,
+  // ecf8bcee, 1,140 patients, via ADMIN_VIEWABLE_REAL_EMAILS). Two identically-
+  // named "Rejuv Skin Spa" rows in the switcher = the footgun that's burned us
+  // repeatedly (v1.34.1.1, and again tonight). Dropping the demo seed leaves
+  // exactly ONE Rejuv in the dropdown — the real one. Kelly (rep demo) stays for
+  // now; the rep platform is a separate axis from the one-spa collapse.
   "kelly",
 ]);
 
