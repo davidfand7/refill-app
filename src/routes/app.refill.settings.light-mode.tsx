@@ -35,7 +35,6 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
 import { supabase } from "@/integrations/supabase/client";
 import {
   enableLightMode,
@@ -185,7 +184,6 @@ function LightModeWizardPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 pb-16">
       <PageHeader title="Lite Mode setup" subtitle="Email-forward connector" />
-      <SettingsTabStrip active="light-mode" />
 
       <button
         type="button"

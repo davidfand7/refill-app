@@ -35,7 +35,6 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
 import { WatchSourcesSection } from "@/components/refill/WatchSourcesSection";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
@@ -151,7 +150,6 @@ function ConnectionHealthPage() {
           </button>
         }
       />
-      <SettingsTabStrip active="health" />
 
       <div className="px-6 lg:px-10 py-6 max-w-3xl w-full mx-auto space-y-5">
         {loading ? (

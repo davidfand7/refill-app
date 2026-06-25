@@ -33,7 +33,6 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -156,7 +155,6 @@ function ManufacturersPage() {
         }
       />
 
-      <SettingsTabStrip active="manufacturers" />
 
       <div className="flex-1 px-4 py-6 lg:px-10 max-w-[960px] w-full mx-auto space-y-5">
         {loadError ? (

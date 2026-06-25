@@ -38,7 +38,6 @@ import {
 import { Link } from "@tanstack/react-router";
 
 import { PageHeader } from "@/components/PageHeader";
-import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
@@ -155,7 +154,6 @@ function AccountSettingsPage() {
         title="Account"
         description="Your sign-in details for Refill. Change your email (with confirmation) or password anytime."
       />
-      <SettingsTabStrip active="account" />
 
       <div className="px-6 lg:px-10 py-6 max-w-2xl w-full mx-auto space-y-6">
         {/* Email section (editable + pending state) */}

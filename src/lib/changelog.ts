@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.176.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.176.0 &mdash; The Account hub is now a left sidebar instead of a 10-tab horizontal scroll strip.</strong> The settings area (Reports · Health · Login · Sender · Spa profile · Your Brand · Lite mode · Manufacturers · Billing · Attribution) had outgrown a top tab strip &mdash; ten tabs in an <code>overflow-x-auto</code> row meant items scrolled off-screen with a fiddly horizontal scrollbar and no overview. Settings hubs want a <strong>vertical rail</strong>: every destination visible at once, grouped, and room to grow as admin items land (Grasshopper&rsquo;s call during the deep-dive sweep). The rail is grouped &mdash; <em>Overview · Spa setup · Connections · Billing · Modes</em> &mdash; so it reads as a map, not a flat list, and a future <em>Admin</em> group drops in without lengthening a column. Rendered <strong>once</strong> by the shell for any settings route (active item derived from the path), so pages no longer embed their own nav. Responsive: vertical rail on desktop, a horizontal scroll strip on mobile (a side rail would eat phone width). The action workspaces (Calendar / Incentives / Recovery) keep their top sub-tabs &mdash; that&rsquo;s the correct workspace-vs-settings distinction, not an inconsistency. <strong>New</strong>: <code>SettingsSidebar.tsx</code> (grouped rail + path-derived active + mobile strip); <code>RefillShell.tsx</code> wraps settings routes in a 2-column layout. <strong>Removed</strong>: <code>SettingsTabStrip.tsx</code> (deleted) + its 10 per-page embeds. <strong>Touched</strong>: <code>RefillShell.tsx</code>, 10 settings routes, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.175.1",
     date: "June 2026",
     items: [

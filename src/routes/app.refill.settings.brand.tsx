@@ -33,7 +33,6 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -201,7 +200,6 @@ function BrandPage() {
         title="Your Brand"
         description="Make the patient experience yours — name your assistant, then white-label every patient-facing surface with your own name, color, and logo."
       />
-      <SettingsTabStrip active="brand" />
 
       <div className="px-6 lg:px-10 py-6 max-w-5xl w-full mx-auto">
         <div className="grid gap-8 lg:grid-cols-[1fr_360px]">

@@ -28,7 +28,6 @@ import {
   Users,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
-import { SettingsTabStrip } from "@/components/refill/SettingsTabStrip";
 import { supabase } from "@/integrations/supabase/client";
 import {
   getEmmaReports,
@@ -84,7 +83,6 @@ function ReportsPage() {
           { label: "Reports" },
         ]}
       />
-      <SettingsTabStrip active="reports" />
 
       <div className="px-6 lg:px-10 py-8 max-w-[1280px] w-full mx-auto space-y-8">
         {loadError && (
