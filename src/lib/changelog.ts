@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.174.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.174.1 &mdash; Fix: the profitability calc read volume by the wrong id, so it stayed blank where it should compute.</strong> The v2.174.0 worth engine looked up the spa&rsquo;s manufacturer spend by <code>tenant_id</code> &mdash; but <code>patient_transactions.user_id</code> is keyed to the user/persona, which <em>differs</em> from <code>tenant_id</code> on impersonated/demo views (a demo with $935k of real volume under its user id returned $0 under its tenant id). The cohort join in the same handler already reads by <code>effectiveUserId</code> (via <code>doListOverdue</code>) &mdash; now <code>annualVolumeFor</code> uses that same id, so volume and cohort come from one transaction set and the calc populates wherever there&rsquo;s real spend. Caught during live verify (the number wouldn&rsquo;t show; the data was there under a different key). <strong>Touched</strong>: <code>program-intel.functions.ts</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.174.0",
     date: "June 2026",
     items: [

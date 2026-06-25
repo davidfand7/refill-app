@@ -299,16 +299,18 @@ function sumAchievedRebatePct(snapshot: ProgramSnapshot): number | null {
 }
 
 /** Trailing-365d spend for the snapshot's manufacturer (GIGO-free volume anchor
- *  for the worth calc). Best-effort — any failure leaves the calc null. */
+ *  for the worth calc). Best-effort — any failure leaves the calc null.
+ *  Reads transactions by the EFFECTIVE USER id — the same id doListOverdue uses
+ *  in this handler — NOT the tenant id (patient_transactions.user_id is keyed to
+ *  the user/persona, which differs from tenant_id for impersonated/demo views). */
 async function annualVolumeFor(
   sb: SbClient,
-  tenantId: string | null,
+  userId: string,
   manufacturer: string,
 ): Promise<number | null> {
-  if (!tenantId) return null;
   try {
     const { doManufacturerBurnRates } = await import("./manufacturer-burn-rate.functions");
-    const burn = await doManufacturerBurnRates(sb, tenantId);
+    const burn = await doManufacturerBurnRates(sb, userId);
     const m = burn.byManufacturer[manufacturer.toLowerCase().trim()];
     return m && m.annualSpendUsd > 0 ? m.annualSpendUsd : null;
   } catch {
@@ -340,7 +342,9 @@ export const getProgramIntelFn = createServerFn({ method: "POST" })
 
     const { latest, prev, source, captured } = await loadSnapshot(sb, tenantId);
     // Volume anchor for the profitability calc (best-effort, GIGO-free spend).
-    const annualVolumeUsd = await annualVolumeFor(sb, tenantId, latest.manufacturer);
+    // Use effectiveUserId — same id the cohort join reads — so volume + cohort
+    // come from the same transaction set (tenant_id ≠ txn user_id for demos).
+    const annualVolumeUsd = await annualVolumeFor(sb, effectiveUserId, latest.manufacturer);
     const priceFor = buildPriceLookup(latest);
     const moves = await enrichMovesWithCohort(
       sb,
