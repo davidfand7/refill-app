@@ -20,10 +20,12 @@ import {
 } from "@/server/auth-helpers";
 import {
   deriveRebateMoves,
+  deriveMaintenanceMove,
   diffSnapshots,
   type ProgramSnapshot,
   type RebateMove,
   type FlywheelMove,
+  type MaintenanceMove,
   type ProgramChange,
 } from "@/lib/program-intel";
 import { resolveProduct, type ProductKind } from "@/lib/product-manufacturer-map";
@@ -89,6 +91,9 @@ const REJUV_ASPIRE_SNAPSHOT: ProgramSnapshot = {
     { product: "restylane", label: "Restylane Contour 1.0ML", unitPriceUsd: 335.11 },
     { product: "sculptra", label: "Sculptra", unitPriceUsd: 780.52 },
   ],
+  // Real Rejuv ASPIRE shows no tier-maintenance requirement on the captured
+  // dashboard → null (honest). A captured dashboard that DOES show one fills it.
+  maintenance: null,
 };
 
 /** How the snapshot was obtained — drives the honest freshness label. */
@@ -99,6 +104,10 @@ export type ProgramIntel = {
   /** Moves carry lapsedInCohort — the real count of overdue patients of the
    *  move's treatment kind (the recall flywheel join), or null when uncountable. */
   moves: FlywheelMove[];
+  /** Tier-retention move (defensive flywheel), when the spa is short of its
+   *  maintenance floor; lapsedInCohort = the whole lapsed points-earning book.
+   *  null = no maintenance requirement captured, or already at/above the floor. */
+  maintenanceMove: MaintenanceMove | null;
   changes: ProgramChange[];
   source: SnapshotSource;
   /** ISO date the snapshot was captured/pulled, for the freshness stamp. */
@@ -215,6 +224,29 @@ async function enrichMovesWithCohort(
   });
 }
 
+/**
+ * The DEFENSIVE flywheel join. Maintenance points come from ANY points-earning
+ * treatment, so the cohort isn't one kind — it's the whole lapsed book. We scan
+ * overdue across all cadence kinds (kindFilter null) and count DISTINCT patients
+ * (a patient overdue for two kinds is one recall, not two). Best-effort: any
+ * failure leaves lapsedInCohort null and the move still renders.
+ */
+async function enrichMaintenanceMove(
+  sb: SbClient,
+  userId: string,
+  move: MaintenanceMove | null,
+): Promise<MaintenanceMove | null> {
+  if (!move) return null;
+  try {
+    const { doListOverdue } = await import("./patient-ingest.functions");
+    const overdue = await doListOverdue(sb, userId, 10000, null);
+    const distinct = new Set(overdue.map((o) => o.patientId)).size;
+    return { ...move, lapsedInCohort: distinct };
+  } catch {
+    return move; // lapsedInCohort stays null
+  }
+}
+
 const input = z.object({
   accessToken: z.string(),
   viewAsUserId: z.string().optional(),
@@ -239,10 +271,16 @@ export const getProgramIntelFn = createServerFn({ method: "POST" })
 
     const { latest, prev, source, captured } = await loadSnapshot(sb, tenantId);
     const moves = await enrichMovesWithCohort(sb, effectiveUserId, deriveRebateMoves(latest));
+    const maintenanceMove = await enrichMaintenanceMove(
+      sb,
+      effectiveUserId,
+      deriveMaintenanceMove(latest),
+    );
     const changes = prev ? diffSnapshots(prev, latest) : [];
     return {
       snapshot: latest,
       moves,
+      maintenanceMove,
       changes,
       source,
       capturedOn: latest.pulledAt.slice(0, 10),

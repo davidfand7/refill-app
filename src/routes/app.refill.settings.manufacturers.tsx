@@ -1190,6 +1190,25 @@ function SnapshotReadout({ snapshot }: { snapshot: ProgramSnapshot }) {
         </div>
       )}
 
+      {/* Tier-maintenance requirement (retention), when shown */}
+      {snapshot.maintenance && (
+        <div className="rounded-lg border border-amber/30 bg-amber-soft/40 px-3 py-2">
+          <div className="text-[10px] uppercase tracking-wider text-amber-ink mb-0.5">
+            Tier maintenance read
+          </div>
+          <div className="text-[12px] text-ink">
+            Keep {snapshot.maintenance.tierAtRisk ?? "your tier"}:{" "}
+            <span className="font-semibold tabular-nums">
+              {snapshot.maintenance.pointsCurrent.toLocaleString()} /{" "}
+              {snapshot.maintenance.pointsRequired.toLocaleString()} points
+            </span>
+            {snapshot.maintenance.deadlineLabel
+              ? ` · by ${snapshot.maintenance.deadlineLabel}`
+              : ""}
+          </div>
+        </div>
+      )}
+
       {/* Tiers + pricing summary */}
       <div className="grid grid-cols-2 gap-2 text-[11px]">
         <Stat label="Membership levels read" value={snapshot.tiers.length} />

@@ -60,6 +60,26 @@ export type ProgramPrice = {
   unitPriceUsd: number;
 };
 
+/**
+ * Tier RETENTION, not a rebate. A rebate is offensive ("buy N more → unlock X%");
+ * maintenance is defensive ("keep ≥ pointsRequired by the deadline or DROP a tier
+ * and lose your pricing"). Program-level, deadline-driven; the points come from
+ * ANY points-earning treatment, not one product — so its flywheel cohort is the
+ * whole lapsed points-earning book, not a single kind.
+ */
+export type PointsMaintenance = {
+  /** The floor — points needed to KEEP the tier by the deadline. */
+  pointsRequired: number;
+  /** Points earned so far in the maintenance window. */
+  pointsCurrent: number;
+  /** The tier you keep/lose, as shown ("Director"); display-only. */
+  tierAtRisk: string | null;
+  /** Deadline exactly as printed ("12/31/2026", "by Q4 end"); display-only. */
+  deadlineLabel: string | null;
+  /** What's lost if short ("drop to Specialist pricing"); display-only. */
+  consequence: string | null;
+};
+
 export type ProgramSnapshot = {
   manufacturer: string;
   /** ISO timestamp of the pull this snapshot came from (freshness). */
@@ -70,6 +90,9 @@ export type ProgramSnapshot = {
   tiers: ProgramTier[];
   rebates: RebateProgram[];
   pricing: ProgramPrice[];
+  /** Tier-retention requirement, when the dashboard shows one. null = none
+   *  captured (old snapshots predate this field — treated as no maintenance). */
+  maintenance: PointsMaintenance | null;
 };
 
 // ─── Diff (the rules-moved-under-you detector) ──────────────────────────────
@@ -97,7 +120,16 @@ export type ProgramChange =
       from: number | null;
       to: number | null;
     }
-  | { kind: "price_changed"; product: string; label: string; from: number; to: number };
+  | { kind: "price_changed"; product: string; label: string; from: number; to: number }
+  | { kind: "maintenance_added"; tier: string | null }
+  | { kind: "maintenance_removed"; tier: string | null }
+  | { kind: "maintenance_threshold_changed"; tier: string | null; from: number; to: number }
+  | {
+      kind: "maintenance_deadline_changed";
+      tier: string | null;
+      from: string | null;
+      to: string | null;
+    };
 
 const byKey = <T,>(items: T[], key: (t: T) => string): Map<string, T> => {
   const m = new Map<string, T>();
@@ -208,6 +240,33 @@ export function diffSnapshots(
     }
   }
 
+  // ── Maintenance (tier-retention RULE changes — floor moved, deadline moved) ──
+  // Like everywhere else, progress (pointsCurrent) is ignored; only the rule shifts.
+  const pm = prev.maintenance;
+  const nm = next.maintenance;
+  if (pm && !nm) {
+    changes.push({ kind: "maintenance_removed", tier: pm.tierAtRisk });
+  } else if (!pm && nm) {
+    changes.push({ kind: "maintenance_added", tier: nm.tierAtRisk });
+  } else if (pm && nm) {
+    if (pm.pointsRequired !== nm.pointsRequired) {
+      changes.push({
+        kind: "maintenance_threshold_changed",
+        tier: nm.tierAtRisk,
+        from: pm.pointsRequired,
+        to: nm.pointsRequired,
+      });
+    }
+    if (pm.deadlineLabel !== nm.deadlineLabel) {
+      changes.push({
+        kind: "maintenance_deadline_changed",
+        tier: nm.tierAtRisk,
+        from: pm.deadlineLabel,
+        to: nm.deadlineLabel,
+      });
+    }
+  }
+
   return changes;
 }
 
@@ -238,6 +297,18 @@ export function changeHeadline(c: ProgramChange): string {
       } to ${c.to ?? "—"} points.`;
     case "price_changed":
       return `${c.label} price changed from $${c.from.toFixed(2)} to $${c.to.toFixed(2)}.`;
+    case "maintenance_added":
+      return `New tier-retention requirement${c.tier ? ` for ${c.tier}` : ""}.`;
+    case "maintenance_removed":
+      return `Tier-retention requirement ended${c.tier ? ` for ${c.tier}` : ""}.`;
+    case "maintenance_threshold_changed":
+      return `${c.tier ? `${c.tier} ` : ""}maintenance floor moved from ${c.from} to ${c.to} points${
+        c.to > c.from ? " — you may now be short" : ""
+      }.`;
+    case "maintenance_deadline_changed":
+      return `${c.tier ? `${c.tier} ` : ""}maintenance deadline moved from ${
+        c.from ?? "—"
+      } to ${c.to ?? "—"}.`;
   }
 }
 
@@ -305,3 +376,48 @@ export function moveHeadline(m: RebateMove): string {
  * and hit the rebate AND recover the patients."
  */
 export type FlywheelMove = RebateMove & { lapsedInCohort: number | null };
+
+// ─── Maintenance move (defensive flywheel — keep your tier, don't lose pricing) ──
+
+/**
+ * The retention action. Unlike a rebate move there's no product to buy — the gap
+ * is points, earned by ANY points-earning treatment. lapsedInCohort is therefore
+ * the whole lapsed points-earning book (caller supplies it; this lib stays pure).
+ */
+export type MaintenanceMove = {
+  pointsShort: number;
+  pointsRequired: number;
+  pointsCurrent: number;
+  tierAtRisk: string | null;
+  deadlineLabel: string | null;
+  consequence: string | null;
+  lapsedInCohort: number | null;
+};
+
+/**
+ * Emit a move only when the practice is genuinely short of its maintenance floor
+ * (short > 0). At-or-above the floor emits nothing — no false "you're at risk"
+ * (honesty, same as achieved rebates).
+ */
+export function deriveMaintenanceMove(snapshot: ProgramSnapshot): MaintenanceMove | null {
+  const m = snapshot.maintenance;
+  if (!m) return null;
+  const short = m.pointsRequired - m.pointsCurrent;
+  if (short <= 0) return null;
+  return {
+    pointsShort: short,
+    pointsRequired: m.pointsRequired,
+    pointsCurrent: m.pointsCurrent,
+    tierAtRisk: m.tierAtRisk,
+    deadlineLabel: m.deadlineLabel,
+    consequence: m.consequence,
+    lapsedInCohort: null,
+  };
+}
+
+/** "Earn 220 more points by 12/31 → keep your Director pricing." */
+export function maintenanceHeadline(m: MaintenanceMove): string {
+  const by = m.deadlineLabel ? ` by ${m.deadlineLabel}` : "";
+  const keep = m.tierAtRisk ? `keep your ${m.tierAtRisk} status` : "keep your tier";
+  return `Earn ${m.pointsShort} more points${by} → ${keep}.`;
+}

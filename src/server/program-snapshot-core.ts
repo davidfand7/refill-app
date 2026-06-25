@@ -67,6 +67,14 @@ const priceSchema = z.object({
   unitPriceUsd: z.number().nonnegative(),
 });
 
+const maintenanceSchema = z.object({
+  pointsRequired: z.number().nonnegative(),
+  pointsCurrent: z.number().nonnegative(),
+  tierAtRisk: z.string().nullable().default(null),
+  deadlineLabel: z.string().nullable().default(null),
+  consequence: z.string().nullable().default(null),
+});
+
 /** Everything the model reads off the dashboard — `pulledAt` is stamped by us
  *  (the capture moment, honest freshness), `manufacturer` is hint-or-read. */
 const snapshotSchema = z.object({
@@ -77,6 +85,7 @@ const snapshotSchema = z.object({
   tiers: z.array(tierSchema).default([]),
   rebates: z.array(rebateSchema).default([]),
   pricing: z.array(priceSchema).default([]),
+  maintenance: maintenanceSchema.nullable().default(null),
 });
 
 const EXTRACTION_SYSTEM = `You read aesthetic-manufacturer practice-REWARDS dashboard screenshots (Galderma ASPIRE, Allergan/AbbVie Allē for Business, Evolus Rewards, Merz, etc.) and extract the spa's STANDING in the program — NOT a price list. You are reading the loyalty/rewards dashboard: membership level, points, rebate trackers, and any signature pricing shown.
@@ -89,7 +98,8 @@ Return ONLY a JSON object with this exact shape:
   "pointsToNextTier": number|null,
   "tiers": [{ "name": string, "minPoints": number, "maxPoints": number|null }],
   "rebates": [{ "key": string, "label": string, "rebatePct": number|null, "status": "achieved"|"in_progress"|"not_eligible", "note": string|null, "requirements": [{ "product": string, "label": string, "required": number, "current": number, "unit": "syringes"|"vials"|"kits"|"units"|"usd" }] }],
-  "pricing": [{ "product": string, "label": string, "unitPriceUsd": number }]
+  "pricing": [{ "product": string, "label": string, "unitPriceUsd": number }],
+  "maintenance": { "pointsRequired": number, "pointsCurrent": number, "tierAtRisk": string|null, "deadlineLabel": string|null, "consequence": string|null }|null
 }
 
 Rules:
@@ -104,6 +114,7 @@ Rules:
   - note: any caveat or status line shown verbatim-ish (e.g. "3 of 3 brands purchased", "$0 invoice in a baseline quarter → not eligible"), else null.
   - requirements: each product line in that tracker with its required vs current count. product = a normalized lowercase keyword for matching ("restylane", "dysport", "sculptra", "botox", "juvederm"); label = the product as printed ("Restylane Refyne"); required/current = the counts shown; unit = the unit shown (syringes/vials/kits/units/usd).
 - pricing: signature/your-price rows if a pricing panel is shown. product = normalized lowercase keyword; label = as printed; unitPriceUsd = the per-unit price as a plain number. If no pricing panel is visible, return [].
+- maintenance: tier RETENTION, not a rebate. ONLY if the dashboard shows a requirement to KEEP/maintain the current tier (e.g. "Maintain Director: earn 1,800 points by 12/31 or drop to Specialist", "Requalify by Q4", a "to retain your status" / "maintenance goal" tracker). pointsRequired = the points floor to hold the tier; pointsCurrent = points earned so far toward that floor; tierAtRisk = the tier being kept ("Director"), else null; deadlineLabel = the deadline exactly as printed ("12/31/2026", "by Q4 end"), else null; consequence = what's lost if short ("drop to Specialist pricing"), as printed, else null. If NO tier-maintenance/requalification requirement is shown, return null. Do NOT confuse this with points-to-NEXT-tier (that's pointsToNextTier — upgrading, not retaining).
 - Read ONLY what is on screen. Do NOT invent thresholds, tiers, or prices. If a section isn't shown, return an empty array / null for it — a partial dashboard is fine.
 - Output ONLY the JSON object — no markdown, no commentary.`;
 
@@ -165,7 +176,13 @@ export async function extractProgramSnapshot(
     }
     const s = parsed.data;
     // A capture with nothing usable on it isn't worth a row.
-    if (!s.currentTier && s.tiers.length === 0 && s.rebates.length === 0 && s.pricing.length === 0) {
+    if (
+      !s.currentTier &&
+      s.tiers.length === 0 &&
+      s.rebates.length === 0 &&
+      s.pricing.length === 0 &&
+      !s.maintenance
+    ) {
       throw new Error("No rewards data found in that screenshot — capture the program/rewards dashboard page.");
     }
 
@@ -183,6 +200,7 @@ export async function extractProgramSnapshot(
         tiers: s.tiers,
         rebates: s.rebates,
         pricing: s.pricing,
+        maintenance: s.maintenance,
       },
       raw: stripped,
     };

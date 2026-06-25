@@ -21,6 +21,8 @@ import {
   Gift,
   Tag,
   Users,
+  ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -30,9 +32,11 @@ import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { getProgramIntelFn, type ProgramIntel } from "@/server/program-intel.functions";
 import {
   moveHeadline,
+  maintenanceHeadline,
   changeHeadline,
   type RebateProgram,
   type ProgramSnapshot,
+  type MaintenanceMove,
 } from "@/lib/program-intel";
 import { computeVerdict, formatAge, tierLabel } from "@/lib/connection-health";
 import { resolveProduct, type ProductKind } from "@/lib/product-manufacturer-map";
@@ -117,6 +121,12 @@ function ProgramView({ intel }: { intel: ProgramIntel }) {
       <NextMoveCallout intel={intel} moves={moves} />
       <FreshnessBanner intel={intel} />
       <TierCard snapshot={snapshot} />
+      {snapshot.maintenance && (
+        <MaintenanceCard
+          maintenance={snapshot.maintenance}
+          move={intel.maintenanceMove}
+        />
+      )}
       <MovesCard intel={intel} moves={moves} />
       <div className="grid grid-cols-1 gap-4">
         {snapshot.rebates.map((r) => (
@@ -176,10 +186,15 @@ function PricingCard({ snapshot }: { snapshot: ProgramSnapshot }) {
 }
 
 /**
- * The landing callout — always tells the owner the next step. Three states:
+ * The landing callout — always tells the owner the next step. States, in order:
  *   ① a rebate move is within reach → the dollar-on-it action + a door to act on it
+ *   ①ᴹ no rebate move, but the spa is short of its tier-MAINTENANCE floor →
+ *      the defensive move ("earn N more points by <date> → keep your pricing")
  *   ② captured, but no move to chase (achieved / blocked) → "put your earned units to work"
  *   ③ no capture yet → handled by NotCapturedState (shown instead of ProgramView)
+ * Rebate-move-first is deliberate (the established dollar-on-it hero); maintenance
+ * is the next priority when no rebate move is live. Tunable if a deadline should
+ * ever pre-empt a rebate.
  */
 function NextMoveCallout({ intel, moves }: { intel: ProgramIntel; moves: ProgramIntel["moves"] }) {
   if (moves.length > 0) {
@@ -239,6 +254,13 @@ function NextMoveCallout({ intel, moves }: { intel: ProgramIntel; moves: Program
         )}
       </div>
     );
+  }
+
+  // ①ᴹ No rebate move to chase, but the spa is BELOW its tier-maintenance floor.
+  // This is the defensive flywheel: don't lose your tier (and its pricing) — the
+  // points come from any recall, so the cohort is the whole overdue book.
+  if (intel.maintenanceMove) {
+    return <MaintenanceCallout move={intel.maintenanceMove} />;
   }
 
   // ②b No rebate trackers in this capture at all — don't claim "maxed" (they
@@ -321,6 +343,124 @@ function NextMoveCallout({ intel, moves }: { intel: ProgramIntel; moves: Program
         <ArrowRight className="h-3.5 w-3.5" />
         Put your earned units to work
       </Link>
+    </div>
+  );
+}
+
+/**
+ * ①ᴹ The DEFENSIVE next-move callout — the spa is short of its tier-maintenance
+ * floor. Framed as retention ("keep your pricing"), not acquisition. The points
+ * come from ANY points-earning recall, so the cohort is the whole overdue book
+ * (no kind filter) and the CTA lands on the recall list pre-selected.
+ */
+function MaintenanceCallout({ move }: { move: MaintenanceMove }) {
+  const cohort = move.lapsedInCohort;
+  const hasCohort = cohort != null && cohort > 0;
+  return (
+    <div className="rounded-2xl border border-amber/40 bg-amber-soft/50 p-5">
+      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-amber">
+        <ShieldAlert className="h-3.5 w-3.5" />
+        Keep your {move.tierAtRisk ?? "tier"} — points maintenance
+      </div>
+      <p className="mt-2 text-[15px] font-semibold leading-snug text-ink">{maintenanceHeadline(move)}</p>
+      {move.consequence && (
+        <p className="mt-1 text-[12.5px] leading-snug text-ink-soft">
+          Fall short and you {move.consequence.toLowerCase().startsWith("drop") ? "" : "risk "}
+          {move.consequence}.
+        </p>
+      )}
+      {hasCohort && (
+        <p className="mt-1.5 text-[13px] leading-snug text-ink-soft">
+          You have{" "}
+          <Link
+            to="/app/refill/patients"
+            search={{ overdue: "1" }}
+            className="font-bold text-amber underline decoration-amber/30 underline-offset-2 hover:decoration-amber"
+          >
+            {cohort!.toLocaleString()} {cohort === 1 ? "patient" : "patients"}
+          </Link>{" "}
+          due to come back — every recall earns points and defends your tier.
+        </p>
+      )}
+      {hasCohort ? (
+        <Link
+          to="/app/refill/patients"
+          search={{ overdue: "1", preselect: "overdue" }}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-amber px-4 py-2 text-[13px] font-semibold text-paper shadow-sm hover:opacity-95 transition"
+        >
+          <Users className="h-3.5 w-3.5" />
+          See &amp; recall to hold your tier
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      ) : (
+        <Link
+          to="/app/refill/recognition/offers"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-amber px-4 py-2 text-[13px] font-semibold text-paper shadow-sm hover:opacity-95 transition"
+        >
+          <Gift className="h-3.5 w-3.5" />
+          Set up a recall offer
+          <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The body card for a tier-maintenance requirement — the retention equivalent of
+ * a RebateCard. Renders whenever the snapshot HAS a maintenance requirement: amber
+ * "at risk" with a points-to-floor bar when short (move present), emerald "secured"
+ * when at/above the floor (no move). Honest either way — never a false alarm.
+ */
+function MaintenanceCard({
+  maintenance,
+  move,
+}: {
+  maintenance: NonNullable<ProgramSnapshot["maintenance"]>;
+  move: MaintenanceMove | null;
+}) {
+  const atRisk = move != null;
+  const req = maintenance.pointsRequired;
+  const cur = maintenance.pointsCurrent;
+  const pct = req > 0 ? Math.min(100, Math.round((cur / req) * 100)) : 100;
+  const tone = atRisk
+    ? { border: "border-amber/30", bg: "bg-amber-soft/40", fg: "text-amber", bar: "bg-amber", Icon: ShieldAlert, label: "Action needed" }
+    : { border: "border-emerald-ink/25", bg: "bg-emerald-soft/40", fg: "text-emerald-ink", bar: "bg-emerald-ink/80", Icon: ShieldCheck, label: "Secured" };
+  const Icon = tone.Icon;
+  return (
+    <div className={`rounded-2xl border ${tone.border} ${tone.bg} p-5`}>
+      <div className="flex items-center gap-2">
+        <Icon className={`h-4 w-4 ${tone.fg}`} />
+        <div className="text-sm font-semibold text-ink">
+          Keep your {maintenance.tierAtRisk ?? "tier"}
+        </div>
+        <span className={`ml-auto rounded-full bg-white/70 px-2 py-0.5 text-[10.5px] font-semibold ${tone.fg}`}>
+          {tone.label}
+        </span>
+      </div>
+      <p className="mt-2 text-[12px] leading-relaxed text-ink-soft">
+        {atRisk ? (
+          <>
+            You&apos;re <span className="font-semibold text-ink">{move!.pointsShort.toLocaleString()} points</span> short
+            of the floor to hold this tier
+            {maintenance.deadlineLabel ? <> by <span className="font-semibold text-ink">{maintenance.deadlineLabel}</span></> : null}.
+            {maintenance.consequence ? <> Fall short → {maintenance.consequence}.</> : null}
+          </>
+        ) : (
+          <>
+            You&apos;re at or above the floor to hold this tier
+            {maintenance.deadlineLabel ? <> through <span className="font-semibold text-ink">{maintenance.deadlineLabel}</span></> : null}.
+            Nothing to do — we&apos;ll flag it here if you slip below.
+          </>
+        )}
+      </p>
+      <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-white/70">
+        <div className={`h-full rounded-full ${tone.bar} transition-all`} style={{ width: `${pct}%` }} />
+      </div>
+      <div className="mt-1.5 text-[11px] text-ink-faint tabular-nums">
+        {cur.toLocaleString()} / {req.toLocaleString()} points
+        {maintenance.deadlineLabel ? ` · by ${maintenance.deadlineLabel}` : ""}
+      </div>
     </div>
   );
 }
