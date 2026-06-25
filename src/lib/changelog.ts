@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.175.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.175.1 &mdash; Nav cleanup: the &ldquo;Refill&rdquo; chip now reads &ldquo;Recovery&rdquo; to match its page title (closing the last cosmetic island from the platform IA audit).</strong> The top-nav chip said <strong>Refill</strong> while the page it opened was titled <strong>Recovery</strong> &mdash; a chip&ne;title mismatch (same class as the old Promos&rarr;Incentives rename). Aligned the chip + shortLabel to &ldquo;Recovery&rdquo;; the route namespace and internal Solution name stay <code>refill/recovery</code> (exactly the pattern Incentives already uses &mdash; chip reads &ldquo;Incentives&rdquo; while the route stays <code>/recognition</code>). <strong>Also closed by verification (no code change): the &ldquo;Skills&rdquo; P3.</strong> Audited whether the Skills tab duplicates config that also lives in the feature pages &mdash; verdict: it&rsquo;s a thin control-plane that writes ONLY <code>enabled</code> flags + gate booleans (<code>skills.enabled</code>, <code>noshow_policies.preshow_enabled/rescue_enabled</code>, <code>offers.is_active</code>) and links out via &ldquo;Manage&rdquo;; every behavior-defining setting (cadence, tone, templates, eligible treatments, limits, offer authoring) lives in exactly one place &mdash; the feature page. Clean adopt-vs-operate seam, NOT an island. <strong>With these two, every problem area from the 2026-06-23 top-level audit is resolved or confirmed-not-a-problem.</strong> <strong>Touched</strong>: <code>RefillNav.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.175.0",
     date: "June 2026",
     items: [

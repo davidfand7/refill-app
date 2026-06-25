@@ -57,7 +57,11 @@ const ITEMS: RefillNavItem[] = [
   // /recognition; the chip + Solution are labeled Incentives.
   { key: "recognition", to: "/app/refill/recognition/inventory", label: "Incentives", shortLabel: "Incentives" },
   // The Refill Solution: prevent (reminders) + recover (rescue) no-shows.
-  { key: "recovery", to: "/app/refill/recovery",           label: "Refill",   shortLabel: "Refill", dividerAfter: true },
+  // v2.175.1: chip labeled "Recovery" to match the page title (closing the
+  // chip≠title island). Route namespace + Solution stay "refill/recovery" —
+  // same pattern as Incentives keeping /recognition while the chip reads
+  // Incentives.
+  { key: "recovery", to: "/app/refill/recovery",           label: "Recovery", shortLabel: "Recovery", dividerAfter: true },
   // ── Spine (ownership layer + data primitives + back-office) ────────────
   // "Skills" (v2.19.0): the cross-solution Ownership Flywheel surface — the
   // routines SmartSpa runs across every Solution. Earned-gated at the page
