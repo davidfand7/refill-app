@@ -828,6 +828,87 @@ export const updateAppointmentStatus = createServerFn({ method: "POST" })
     return hydrateAppointment(updated);
   });
 
+// ─── linkAppointmentToPatient (v2.177.0) ──────────────────────────────────
+// Manually attach an UNMATCHED appointment to a patient — the gap the v360
+// ingest doc promised ("the spa owner sees them … and can manually link") but
+// never shipped. Until now the only remedy for an unmatched row was re-running
+// the whole CSV through the matcher and hoping. This resolves one row inline:
+// verify the patient belongs to the tenant, set patient_node_id, recompute the
+// patient's reliability (history-derived), and return the appointment hydrated
+// with the patient's name so the row flips "Unmatched patient" → the name. Once
+// linked, the pre-show + rescue agents stop skipping it on their next sweep.
+
+const linkInput = z.object({
+  accessToken: z.string().min(1),
+  appointmentId: z.string().uuid(),
+  patientNodeId: z.string().uuid(),
+  viewAsUserId: z.string().uuid().optional(),
+});
+
+export const linkAppointmentToPatient = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => linkInput.parse(input))
+  .handler(async ({ data }): Promise<EmmaAppointment> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const userId = effectiveUserId;
+    const sb = admin();
+
+    // Ownership check on the patient (+ grab display fields for the return).
+    const { data: patient, error: pErr } = await sb
+      .from("knowledge_nodes")
+      .select("id, title, attachments")
+      .eq("id", data.patientNodeId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (pErr) throw new Error(`Couldn't load patient: ${pErr.message}`);
+    if (!patient) throw new Error("Patient not found.");
+
+    // Set the link (scoped to the tenant's own appointment).
+    const { data: updated, error: updErr } = await sb
+      .from("appointments")
+      .update({
+        patient_node_id: data.patientNodeId,
+      } as Database["public"]["Tables"]["appointments"]["Update"])
+      .eq("id", data.appointmentId)
+      .eq("user_id", userId)
+      .select("*")
+      .single();
+    if (updErr || !updated) {
+      throw new Error(
+        `Couldn't link patient: ${updErr?.message ?? "appointment not found"}`,
+      );
+    }
+
+    // Reliability is history-derived; a freshly-linked appointment can shift
+    // the patient's tier. Best-effort (same isolate-safe await pattern as
+    // updateAppointmentStatus).
+    try {
+      const { recomputeReliabilityForPatient } = await import(
+        "@/server/emma-reliability.functions"
+      );
+      await recomputeReliabilityForPatient({
+        sb,
+        userId,
+        patientNodeId: data.patientNodeId,
+      });
+    } catch (e) {
+      console.error(
+        "reliability recompute failed:",
+        e instanceof Error ? e.message : e,
+      );
+    }
+
+    const att = (patient.attachments ?? {}) as { phone?: string | null; email?: string | null };
+    return hydrateAppointment({
+      ...updated,
+      patient_name: patient.title ?? null,
+      patient_phone: att.phone ?? null,
+      patient_email: att.email ?? null,
+    });
+  });
+
 // ─── getNoShowPolicy ──────────────────────────────────────────────────────
 
 export const getNoShowPolicy = createServerFn({ method: "POST" })

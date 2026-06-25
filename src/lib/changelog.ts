@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.177.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.177.0 &mdash; Unmatched appointments are now fixable in one click, right where you see them &mdash; no more re-uploading the whole CSV and hoping.</strong> ~30% of a typical schedule shows &ldquo;Unmatched patient&rdquo; (the booking-CSV name didn&rsquo;t match a patient), and an unmatched row is invisible to the engine &mdash; it gets no pre-visit reminder and no rescue outreach. Until now the only remedy was re-running the entire CSV through the matcher (a blunt instrument). The v360 ingest doc literally promised &ldquo;the spa owner sees them &hellip; and can manually link&rdquo; &mdash; this finally ships it. <strong>Inline link:</strong> every unmatched row is now a <strong>&ldquo;Unmatched &mdash; link patient&rdquo;</strong> button &rarr; opens a search-as-you-type patient picker &rarr; click the right person &rarr; the row flips to their name instantly, the coverage ribbon updates, and the pre-show + rescue agents stop skipping it on their next sweep. <strong>Also &mdash; honest zeros:</strong> the &ldquo;Reminders sent today / this week&rdquo; cards showing <code>0 / 0</code> read as broken on a busy schedule. When the real reason is that Pre-Visit Reminders are <em>off</em>, the page now says so and links straight to the switch (connection-health doctrine: a zero with no reason is a silent failure). <strong>New</strong>: <code>linkAppointmentToPatient</code> server fn (ownership-checked on both the appointment and the patient, sets <code>patient_node_id</code>, recomputes the patient&rsquo;s reliability, returns the row hydrated with the name); inline <code>LinkPatientModal</code> reusing <code>listPatients</code> (lazy-loaded once, client-side name filter); reminders-off banner via <code>getNoShowPolicy</code>. <strong>Touched</strong>: <code>emma-appointments.functions.ts</code>, <code>app.refill.calendar.appointments.tsx</code>, <code>changelog.ts</code>. No migration (column already exists).",
+    ],
+  },
+  {
     version: "v2.176.0",
     date: "June 2026",
     items: [

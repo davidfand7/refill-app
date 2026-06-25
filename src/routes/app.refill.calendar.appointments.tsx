@@ -11,6 +11,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { Link } from "@tanstack/react-router";
 import {
   AlertTriangle,
   CalendarCheck,
@@ -18,27 +19,34 @@ import {
   CheckCircle2,
   Clock,
   FileUp,
+  Link2,
   Link2Off,
   Loader2,
   RefreshCw,
+  Search,
   Upload,
   User,
   UserCheck,
+  X,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { CalendarTabs } from "@/components/refill/CalendarTabs";
 import { supabase } from "@/integrations/supabase/client";
 import {
   getAppointmentMatchCoverage,
+  getNoShowPolicy,
   ingestAppointmentCsv,
+  linkAppointmentToPatient,
   listAppointments,
   updateAppointmentStatus,
   type AppointmentMatchCoverage,
   type AppointmentStatus,
   type EmmaAppointment,
   type IngestReceipt,
+  type NoShowPolicy,
 } from "@/server/emma-appointments.functions";
 import { listRecentReminders } from "@/server/emma-preshow.functions";
+import { listPatients, type PatientListRow } from "@/server/patient-ingest.functions";
 import { dialectLabel, SUPPORTED_PLATFORMS } from "@/lib/appointment-csv";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { cn } from "@/lib/utils";
@@ -61,6 +69,12 @@ function AppointmentsPage() {
   const [uploadBusy, setUploadBusy] = useState(false);
   const [lastReceipt, setLastReceipt] = useState<IngestReceipt | null>(null);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
+  const [policy, setPolicy] = useState<NoShowPolicy | null>(null);
+  // Inline "link to patient": the row being linked + lazy-loaded patient options.
+  const [linkingApt, setLinkingApt] = useState<EmmaAppointment | null>(null);
+  const [patients, setPatients] = useState<PatientListRow[] | null>(null);
+  const [patientsLoading, setPatientsLoading] = useState(false);
+  const [linkBusyId, setLinkBusyId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // v1.23.0 P3 sweep: plumb viewAsUserId for admin impersonation.
@@ -76,16 +90,18 @@ function AppointmentsPage() {
         setLoadError("Please sign in.");
         return;
       }
-      const [apts, stats, cov] = await Promise.all([
+      const [apts, stats, cov, pol] = await Promise.all([
         listAppointments({ data: { accessToken: token, viewAsUserId } }),
         listRecentReminders({ data: { accessToken: token, viewAsUserId } }),
         getAppointmentMatchCoverage({
           data: { accessToken: token, viewAsUserId },
         }),
+        getNoShowPolicy({ data: { accessToken: token, viewAsUserId } }),
       ]);
       setAppointments(apts);
       setReminderStats(stats);
       setCoverage(cov);
+      setPolicy(pol);
       setLoadError(null);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Couldn't load appointments.");
@@ -154,6 +170,69 @@ function AppointmentsPage() {
       toast.error(e instanceof Error ? e.message : "Couldn't update status.");
     } finally {
       setStatusBusyId(null);
+    }
+  }
+
+  // Lazy-load the patient roster once, the first time a picker opens.
+  const ensurePatients = useCallback(async () => {
+    if (patients || patientsLoading) return;
+    setPatientsLoading(true);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) return;
+      const rows = await listPatients({
+        data: { accessToken: token, viewAsUserId, limit: 5000 },
+      });
+      setPatients(rows);
+    } catch {
+      // leave null — the modal shows an empty/error state
+    } finally {
+      setPatientsLoading(false);
+    }
+  }, [patients, patientsLoading, viewAsUserId]);
+
+  function handleStartLink(apt: EmmaAppointment) {
+    setLinkingApt(apt);
+    void ensurePatients();
+  }
+
+  async function handleLink(apt: EmmaAppointment, patient: PatientListRow) {
+    setLinkBusyId(apt.id);
+    try {
+      const { data: sess } = await supabase.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) {
+        toast.error("Please sign in.");
+        return;
+      }
+      const updated = await linkAppointmentToPatient({
+        data: {
+          accessToken: token,
+          appointmentId: apt.id,
+          patientNodeId: patient.id,
+          viewAsUserId,
+        },
+      });
+      setAppointments((prev) =>
+        prev?.map((a) => (a.id === apt.id ? updated : a)) ?? null,
+      );
+      setLinkingApt(null);
+      toast.success(`Linked to ${patient.displayName}.`);
+      // The coverage ribbon ("N of M unmatched") shifts when a row resolves —
+      // refresh just that, not the whole page (no list flicker).
+      try {
+        const cov = await getAppointmentMatchCoverage({
+          data: { accessToken: token, viewAsUserId },
+        });
+        setCoverage(cov);
+      } catch {
+        /* non-critical */
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't link patient.");
+    } finally {
+      setLinkBusyId(null);
     }
   }
 
@@ -229,6 +308,29 @@ function AppointmentsPage() {
             />
           </div>
         )}
+
+        {/* v2.177.0 — honest "why 0": a zero with no reason reads as broken
+            (connection-health doctrine). When pre-visit reminders are off, say
+            so + link to the switch, instead of three silent zeros. */}
+        {policy &&
+          !policy.preshowEnabled &&
+          reminderStats &&
+          reminderStats.sentToday === 0 &&
+          reminderStats.sentThisWeek === 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-[12.5px] text-amber-800">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                Those zeros are because <strong>Pre-Visit Reminders are off</strong> — turn
+                them on and SmartSpa starts sending automatically.
+              </span>
+              <Link
+                to="/app/refill/skills"
+                className="ml-auto inline-flex items-center gap-1 font-semibold text-amber-900 underline decoration-amber-400 underline-offset-2 hover:decoration-amber-700"
+              >
+                Open Skills →
+              </Link>
+            </div>
+          )}
 
         {/* Patient-match coverage ribbon (v378). Shows future-appointment
             link rate. When there are unmatched future appointments, prompts
@@ -402,6 +504,8 @@ function AppointmentsPage() {
             appointments={grouped.today}
             onFlip={flipStatus}
             statusBusyId={statusBusyId}
+            onStartLink={handleStartLink}
+            linkBusyId={linkBusyId}
           />
         )}
         {grouped && grouped.upcoming.length > 0 && (
@@ -410,6 +514,8 @@ function AppointmentsPage() {
             appointments={grouped.upcoming}
             onFlip={flipStatus}
             statusBusyId={statusBusyId}
+            onStartLink={handleStartLink}
+            linkBusyId={linkBusyId}
           />
         )}
         {grouped && grouped.past.length > 0 && (
@@ -418,15 +524,153 @@ function AppointmentsPage() {
             appointments={grouped.past}
             onFlip={flipStatus}
             statusBusyId={statusBusyId}
+            onStartLink={handleStartLink}
+            linkBusyId={linkBusyId}
             muted
           />
         )}
       </div>
+
+      {linkingApt && (
+        <LinkPatientModal
+          apt={linkingApt}
+          patients={patients}
+          loading={patientsLoading}
+          busy={linkBusyId === linkingApt.id}
+          onClose={() => setLinkingApt(null)}
+          onPick={(p) => void handleLink(linkingApt, p)}
+        />
+      )}
     </div>
   );
 }
 
 // ─── Subcomponents ────────────────────────────────────────────────────────
+
+/**
+ * Inline patient picker for an unmatched appointment (v2.177.0). Search the
+ * roster by name, click to link — resolves the row without re-uploading the
+ * whole CSV. Patient options are lazy-loaded once by the parent.
+ */
+function LinkPatientModal({
+  apt,
+  patients,
+  loading,
+  busy,
+  onClose,
+  onPick,
+}: {
+  apt: EmmaAppointment;
+  patients: PatientListRow[] | null;
+  loading: boolean;
+  busy: boolean;
+  onClose: () => void;
+  onPick: (p: PatientListRow) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const when = new Date(apt.scheduledAt);
+  const results = useMemo(() => {
+    const list = patients ?? [];
+    const q = query.trim().toLowerCase();
+    const filtered = q
+      ? list.filter((p) => p.displayName.toLowerCase().includes(q))
+      : list;
+    return filtered.slice(0, 12);
+  }, [patients, query]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 px-4 py-[10vh]"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl border border-border bg-card shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-3">
+          <div>
+            <div className="text-sm font-semibold text-foreground">Link to a patient</div>
+            <div className="mt-0.5 text-xs text-ink-soft">
+              {when.toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                timeZone: "America/Denver",
+              })}
+              {" · "}
+              {when.toLocaleTimeString(undefined, {
+                hour: "numeric",
+                minute: "2-digit",
+                timeZone: "America/Denver",
+              })}
+              {apt.treatmentType ? ` · ${apt.treatmentType}` : ""}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-ink-soft hover:text-foreground"
+            title="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="px-5 py-3">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-soft" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search patients by name…"
+              className="w-full rounded-lg border border-border bg-background py-2 pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-emerald/40"
+            />
+          </div>
+        </div>
+        <div className="max-h-[40vh] overflow-y-auto px-2 pb-3">
+          {loading ? (
+            <div className="flex items-center gap-2 px-3 py-6 text-sm text-ink-soft">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading patients…
+            </div>
+          ) : results.length === 0 ? (
+            <div className="px-3 py-6 text-sm text-ink-soft">
+              {query.trim() ? "No patients match that name." : "No patients yet."}
+            </div>
+          ) : (
+            <ul className="space-y-0.5">
+              {results.map((p) => (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onPick(p)}
+                    className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-emerald-soft/40 disabled:opacity-50"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-foreground">
+                        {p.displayName}
+                      </span>
+                      <span className="block truncate text-[11px] text-ink-soft">
+                        {p.phone ?? p.email ?? "—"}
+                        {p.lastVisit
+                          ? ` · last visit ${new Date(p.lastVisit).toLocaleDateString(undefined, { month: "short", year: "numeric" })}`
+                          : ""}
+                      </span>
+                    </span>
+                    {busy ? (
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-ink-soft" />
+                    ) : (
+                      <Link2 className="h-4 w-4 shrink-0 text-emerald-ink" />
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function PatientMatchCoverageRibbon({
   coverage,
@@ -533,12 +777,16 @@ function AppointmentSection({
   appointments,
   onFlip,
   statusBusyId,
+  onStartLink,
+  linkBusyId,
   muted,
 }: {
   title: string;
   appointments: EmmaAppointment[];
   onFlip: (apt: EmmaAppointment, next: AppointmentStatus) => void;
   statusBusyId: string | null;
+  onStartLink: (apt: EmmaAppointment) => void;
+  linkBusyId: string | null;
   muted?: boolean;
 }) {
   return (
@@ -555,6 +803,8 @@ function AppointmentSection({
             apt={a}
             busy={statusBusyId === a.id}
             onFlip={onFlip}
+            onStartLink={onStartLink}
+            linking={linkBusyId === a.id}
           />
         ))}
       </ul>
@@ -566,10 +816,14 @@ function AppointmentRow({
   apt,
   busy,
   onFlip,
+  onStartLink,
+  linking,
 }: {
   apt: EmmaAppointment;
   busy: boolean;
   onFlip: (apt: EmmaAppointment, next: AppointmentStatus) => void;
+  onStartLink: (apt: EmmaAppointment) => void;
+  linking: boolean;
 }) {
   const when = new Date(apt.scheduledAt);
   return (
@@ -594,7 +848,22 @@ function AppointmentRow({
               {apt.patientName}
             </>
           ) : (
-            <span className="text-amber-700 italic">Unmatched patient</span>
+            // v2.177.0: unmatched rows are now resolvable inline — no more
+            // re-upload-the-whole-CSV roulette. One click → pick the patient.
+            <button
+              type="button"
+              onClick={() => onStartLink(apt)}
+              disabled={linking}
+              className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[12px] font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-50 transition"
+              title="Link this appointment to a patient"
+            >
+              {linking ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Link2 className="h-3.5 w-3.5" />
+              )}
+              Unmatched — link patient
+            </button>
           )}
         </div>
         <div className="text-xs text-ink-soft mt-0.5">
