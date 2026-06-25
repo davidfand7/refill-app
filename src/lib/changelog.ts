@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.174.2",
+    date: "June 2026",
+    items: [
+      "<strong>v2.174.2 &mdash; Profitability calc now anchors on TENANT volume (fans out across all the tenant&rsquo;s user ids), so it actually finds the spend.</strong> v2.174.1 swapped the volume lookup to <code>effectiveUserId</code>, but <code>patient_transactions</code> is keyed by a <code>user_id</code> that can be neither the tenant id nor the caller&rsquo;s &mdash; a tenant has many users and the purchase history can sit under any of them (verified: a tenant&rsquo;s entire history lived under one user id that matched no obvious caller). The calc now resolves the tenant&rsquo;s full user set via <code>getTenantUserIds</code> &mdash; the exact fan-out billing&rsquo;s <code>aggregateMetricsForTenant</code> and the Recovery dashboard already use (v2.161.0) &mdash; and sums trailing-365d spend across all of them, bucketed by the same manufacturer-canonicalization the burn-rate uses. Tenant-grade volume, can&rsquo;t miss data hiding under a sibling user id. <strong>Touched</strong>: <code>program-intel.functions.ts</code> (<code>annualVolumeFor</code> rewritten tenant-scoped + <code>canonTxnManufacturer</code>), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.174.1",
     date: "June 2026",
     items: [

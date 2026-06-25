@@ -16,8 +16,10 @@ import { z } from "zod";
 import { admin, type SbClient } from "@/server/admin-client";
 import {
   getTenantIdForUser,
+  getTenantUserIds,
   resolveEffectiveUserId,
 } from "@/server/auth-helpers";
+import { fetchAllRows } from "@/server/paginate";
 import {
   deriveRebateMoves,
   deriveMaintenanceMove,
@@ -31,8 +33,6 @@ import {
   type ProgramChange,
 } from "@/lib/program-intel";
 import { resolveProduct, type ProductKind } from "@/lib/product-manufacturer-map";
-// doManufacturerBurnRates is server-only — dynamic-imported in annualVolumeFor
-// (same isolation pattern as doListOverdue below) to keep it off the client.
 
 // Anthropic vision lives in program-snapshot-core (server-only); the SDK is
 // reached via a *dynamic* import inside the capture handler so it never lands
@@ -298,21 +298,56 @@ function sumAchievedRebatePct(snapshot: ProgramSnapshot): number | null {
   return any ? sum : null;
 }
 
-/** Trailing-365d spend for the snapshot's manufacturer (GIGO-free volume anchor
- *  for the worth calc). Best-effort — any failure leaves the calc null.
- *  Reads transactions by the EFFECTIVE USER id — the same id doListOverdue uses
- *  in this handler — NOT the tenant id (patient_transactions.user_id is keyed to
- *  the user/persona, which differs from tenant_id for impersonated/demo views). */
+/** Canonical manufacturer key for a transaction (mirrors burn-rate's logic):
+ *  trust the stored value (allergan→abbvie), else resolve from the product name. */
+function canonTxnManufacturer(stored: string | null, productName: string): string | null {
+  let m = (stored ?? "").toLowerCase().trim();
+  if (m === "allergan" || m === "alle" || m === "allē") m = "abbvie";
+  if (m) return m;
+  return resolveProduct(productName).manufacturer;
+}
+
+/**
+ * Trailing-365d spend for the snapshot's manufacturer — the GIGO-free volume
+ * anchor for the worth calc. Summed across ALL of the tenant's user_ids:
+ * patient_transactions is user_id-keyed and one tenant has many users (the
+ * data can sit under a user id that's neither the tenant id nor the caller's),
+ * so a single-id filter misses it. getTenantUserIds is the same fan-out billing
+ * and the recovery dashboard use (v2.161.0). Best-effort → null on any failure
+ * or no spend (the calc then renders nothing rather than a fake number).
+ */
 async function annualVolumeFor(
   sb: SbClient,
-  userId: string,
+  tenantId: string | null,
   manufacturer: string,
 ): Promise<number | null> {
+  if (!tenantId) return null;
   try {
-    const { doManufacturerBurnRates } = await import("./manufacturer-burn-rate.functions");
-    const burn = await doManufacturerBurnRates(sb, userId);
-    const m = burn.byManufacturer[manufacturer.toLowerCase().trim()];
-    return m && m.annualSpendUsd > 0 ? m.annualSpendUsd : null;
+    const userIds = await getTenantUserIds(sb, tenantId);
+    if (userIds.length === 0) return null;
+    const cutoff = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
+    const rows = await fetchAllRows<{
+      amount_usd: number;
+      product_manufacturer: string | null;
+      product_name: string;
+    }>((from, to) =>
+      sb
+        .from("patient_transactions")
+        .select("amount_usd, product_manufacturer, product_name")
+        .in("user_id", userIds)
+        .gt("amount_usd", 0)
+        .gte("transaction_date", cutoff)
+        .order("id", { ascending: true })
+        .range(from, to),
+    );
+    const target = manufacturer.toLowerCase().trim();
+    let sum = 0;
+    for (const r of rows) {
+      if (canonTxnManufacturer(r.product_manufacturer, r.product_name) === target) {
+        sum += r.amount_usd;
+      }
+    }
+    return sum > 0 ? Math.round(sum) : null;
   } catch {
     return null;
   }
@@ -342,9 +377,9 @@ export const getProgramIntelFn = createServerFn({ method: "POST" })
 
     const { latest, prev, source, captured } = await loadSnapshot(sb, tenantId);
     // Volume anchor for the profitability calc (best-effort, GIGO-free spend).
-    // Use effectiveUserId — same id the cohort join reads — so volume + cohort
-    // come from the same transaction set (tenant_id ≠ txn user_id for demos).
-    const annualVolumeUsd = await annualVolumeFor(sb, effectiveUserId, latest.manufacturer);
+    // Tenant-scoped (fans out across all the tenant's user_ids) — txn data can
+    // sit under a user id that's neither the tenant id nor the caller's.
+    const annualVolumeUsd = await annualVolumeFor(sb, tenantId, latest.manufacturer);
     const priceFor = buildPriceLookup(latest);
     const moves = await enrichMovesWithCohort(
       sb,
