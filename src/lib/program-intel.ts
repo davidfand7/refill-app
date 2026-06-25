@@ -375,7 +375,11 @@ export function moveHeadline(m: RebateMove): string {
  * "You're 10 Refyne short; you have 14 lapsed filler patients due — recall 10
  * and hit the rebate AND recover the patients."
  */
-export type FlywheelMove = RebateMove & { lapsedInCohort: number | null };
+export type FlywheelMove = RebateMove & {
+  lapsedInCohort: number | null;
+  /** Profitability of acting on this move — $ to gain. Server-filled. */
+  worth: MoveWorth | null;
+};
 
 // ─── Maintenance move (defensive flywheel — keep your tier, don't lose pricing) ──
 
@@ -392,6 +396,8 @@ export type MaintenanceMove = {
   deadlineLabel: string | null;
   consequence: string | null;
   lapsedInCohort: number | null;
+  /** Profitability of holding the tier — $ at risk if you drop. Server-filled. */
+  worth: MoveWorth | null;
 };
 
 /**
@@ -412,6 +418,7 @@ export function deriveMaintenanceMove(snapshot: ProgramSnapshot): MaintenanceMov
     deadlineLabel: m.deadlineLabel,
     consequence: m.consequence,
     lapsedInCohort: null,
+    worth: null,
   };
 }
 
@@ -420,4 +427,81 @@ export function maintenanceHeadline(m: MaintenanceMove): string {
   const by = m.deadlineLabel ? ` by ${m.deadlineLabel}` : "";
   const keep = m.tierAtRisk ? `keep your ${m.tierAtRisk} status` : "keep your tier";
   return `Earn ${m.pointsShort} more points${by} → ${keep}.`;
+}
+
+// ─── Profitability worth (the "what's this worth to my bottom line" calc) ─────
+
+/**
+ * The dollars-on-it for a move, computed from the spa's REAL trailing-365d
+ * manufacturer spend (GIGO-free — the burn-rate doctrine: spend is safe to
+ * display, only unit estimates aren't). Offensive (rebate) = $ to GAIN;
+ * defensive (maintenance) = $ AT RISK. Both ride on rebatePct × annualVolume,
+ * the one arithmetic neither side can fake. `null` when we can't compute
+ * honestly (no volume, or no rebate %).
+ */
+export type MoveWorth = {
+  /** true = $ AT RISK (defensive/maintenance); false = $ to GAIN (rebate). */
+  defensive: boolean;
+  /** Trailing-365d manufacturer spend the value is computed on (GIGO-free). */
+  annualVolumeUsd: number;
+  /** The rebate % the recurring value rides on. */
+  rebatePct: number;
+  /** rebatePct% × annualVolumeUsd — recurring annual $ unlocked or at risk. */
+  rebateValueUsd: number;
+  /** One-time $ to buy the units that close a rebate gap (rebate moves only). */
+  costToReachUsd: number | null;
+  /** What's deliberately NOT counted yet (honest), or null. */
+  caveat: string | null;
+};
+
+/** Worth of an offensive rebate move — unlock rebatePct on the annual book. */
+export function rebateMoveWorth(args: {
+  rebatePct: number | null;
+  annualVolumeUsd: number | null;
+  unitsShort: number;
+  unitPriceUsd: number | null;
+}): MoveWorth | null {
+  if (args.rebatePct == null || args.rebatePct <= 0) return null;
+  if (args.annualVolumeUsd == null || args.annualVolumeUsd <= 0) return null;
+  const rebateValueUsd = Math.round(args.annualVolumeUsd * (args.rebatePct / 100));
+  const costToReachUsd =
+    args.unitPriceUsd != null && args.unitPriceUsd > 0
+      ? Math.round(args.unitsShort * args.unitPriceUsd)
+      : null;
+  return {
+    defensive: false,
+    annualVolumeUsd: args.annualVolumeUsd,
+    rebatePct: args.rebatePct,
+    rebateValueUsd,
+    costToReachUsd,
+    caveat: null,
+  };
+}
+
+/** Worth of a defensive maintenance move — the rebate $ that rides on the tier. */
+export function maintenanceMoveWorth(args: {
+  atRiskRebatePct: number | null;
+  annualVolumeUsd: number | null;
+}): MoveWorth | null {
+  if (args.atRiskRebatePct == null || args.atRiskRebatePct <= 0) return null;
+  if (args.annualVolumeUsd == null || args.annualVolumeUsd <= 0) return null;
+  const rebateValueUsd = Math.round(args.annualVolumeUsd * (args.atRiskRebatePct / 100));
+  return {
+    defensive: true,
+    annualVolumeUsd: args.annualVolumeUsd,
+    rebatePct: args.atRiskRebatePct,
+    rebateValueUsd,
+    costToReachUsd: null,
+    caveat:
+      "Plus higher per-unit pricing if you drop a tier — capture your lower-tier price to add that.",
+  };
+}
+
+/** One-liner for the worth reveal. */
+export function worthHeadline(w: MoveWorth): string {
+  const v = `$${w.rebateValueUsd.toLocaleString()}`;
+  const vol = `$${w.annualVolumeUsd.toLocaleString()}/yr`;
+  return w.defensive
+    ? `~${v}/yr at risk — your ${w.rebatePct}% rebate rides on ~${vol} of volume.`
+    : `~${v}/yr — ${w.rebatePct}% back on ~${vol} of volume at your current pace.`;
 }

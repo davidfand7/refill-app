@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.174.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.174.0 &mdash; &ldquo;What&rsquo;s it worth?&rdquo;: every program move now shows the dollars on your bottom line.</strong> The moat told you <em>what</em> to do (&ldquo;unlock the 3% rebate,&rdquo; &ldquo;keep your Director tier&rdquo;) &mdash; now a <strong>calculation button</strong> on each move tells you what it&rsquo;s <em>worth</em>, in real dollars, from <em>your</em> numbers. One shared engine, two framings: <strong>offensive</strong> (a rebate move) shows the $ to GAIN; <strong>defensive</strong> (a maintenance move) shows the $ AT RISK. Both ride on the same arithmetic &mdash; <code>rebate % &times; your trailing-365d manufacturer spend</code> &mdash; computed from the spa&rsquo;s OWN purchase history (the burn-rate <em>spend</em> figure, which is GIGO-free; we never lean on the ambiguous unit estimate). Example reveals: a rebate move &rarr; <em>&ldquo;~$1,440/yr &mdash; 3% back on ~$48,000/yr of volume at your current pace&rdquo;</em> + the one-time cost to buy the units you&rsquo;re short (priced from your captured signature pricing, &ldquo;product you&rsquo;ll use anyway&rdquo;); the maintenance move &rarr; <em>&ldquo;~$1,440/yr at risk &mdash; your 3% rebate rides on ~$48,000/yr of volume&rdquo;</em> with an honest caveat that a tier <em>price</em> bump isn&rsquo;t counted yet (that needs your lower-tier price &mdash; a future capture). The button shows up on the hero callout, every &ldquo;Your moves&rdquo; row, and both maintenance surfaces; it renders nothing when it can&rsquo;t compute honestly (no captured volume or no rebate %), never a fake number. <strong>New</strong>: <code>MoveWorth</code> type + <code>rebateMoveWorth</code> / <code>maintenanceMoveWorth</code> / <code>worthHeadline</code> (pure, in <code>program-intel.ts</code>); <code>worth</code> on <code>FlywheelMove</code> &amp; <code>MaintenanceMove</code>; reusable <code>doManufacturerBurnRates</code> core extracted from the burn-rate fn (server-side, mirrors <code>doListOverdue</code> &mdash; the calc and the Rep Deal-Maker now ride the same volume math, can&rsquo;t drift); <code>buildPriceLookup</code> / <code>sumAchievedRebatePct</code> / <code>annualVolumeFor</code> wired into <code>getProgramIntelFn</code> (burn-rate dynamic-imported for SDK/server isolation); <code>WorthReveal</code> expander (<code>app.refill.recognition.program.tsx</code>). Verified by a 17/17 pure-logic harness. Gates tsc 164 / truncation 187. No migration.",
+    ],
+  },
+  {
     version: "v2.173.0",
     date: "June 2026",
     items: [

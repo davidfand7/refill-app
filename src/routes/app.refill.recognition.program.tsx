@@ -23,6 +23,7 @@ import {
   Users,
   ShieldAlert,
   ShieldCheck,
+  Calculator,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -37,6 +38,7 @@ import {
   type RebateProgram,
   type ProgramSnapshot,
   type MaintenanceMove,
+  type MoveWorth,
 } from "@/lib/program-intel";
 import { computeVerdict, formatAge, tierLabel } from "@/lib/connection-health";
 import { resolveProduct, type ProductKind } from "@/lib/product-manufacturer-map";
@@ -186,6 +188,59 @@ function PricingCard({ snapshot }: { snapshot: ProgramSnapshot }) {
 }
 
 /**
+ * The "What's it worth?" reveal — a calculation button that turns a move into a
+ * dollar figure on the bottom line. Offensive (rebate) = $ to gain; defensive
+ * (maintenance) = $ at risk. Both ride on the spa's REAL trailing-365d spend ×
+ * the rebate %, so the number is grounded, not modeled. Renders nothing when the
+ * worth can't be computed honestly (no captured volume / no rebate %).
+ */
+function WorthReveal({ worth }: { worth: MoveWorth | null }) {
+  const [open, setOpen] = useState(false);
+  if (!worth) return null;
+  const amber = worth.defensive;
+  const accent = amber ? "text-amber" : "text-emerald-ink";
+  const ring = amber ? "border-amber/30 bg-amber-soft/30" : "border-emerald-ink/20 bg-emerald-soft/30";
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[12px] font-semibold ${ring} ${accent} hover:opacity-90 transition`}
+      >
+        <Calculator className="h-3.5 w-3.5" />
+        {open ? "Hide the math" : "What's it worth?"}
+      </button>
+      {open && (
+        <div className={`mt-2 rounded-xl border ${ring} p-3`}>
+          <div className={`text-[16px] font-bold ${accent}`}>
+            ~${worth.rebateValueUsd.toLocaleString()}/yr {amber ? "at risk" : "back"}
+          </div>
+          <div className="mt-0.5 text-[12px] leading-snug text-ink-soft">
+            {worth.rebatePct}% {amber ? "rebate rides on" : "back on"} your{" "}
+            <span className="font-semibold text-ink">
+              ${worth.annualVolumeUsd.toLocaleString()}/yr
+            </span>{" "}
+            of volume{amber ? "" : " at your current pace"}.
+          </div>
+          {worth.costToReachUsd != null && (
+            <div className="mt-1 text-[12px] leading-snug text-ink-soft">
+              One-time to close the gap: ~
+              <span className="font-semibold text-ink">
+                ${worth.costToReachUsd.toLocaleString()}
+              </span>{" "}
+              in product you&apos;ll use anyway.
+            </div>
+          )}
+          {worth.caveat && (
+            <div className="mt-1.5 text-[11px] leading-snug text-ink-faint">{worth.caveat}</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * The landing callout — always tells the owner the next step. States, in order:
  *   ① a rebate move is within reach → the dollar-on-it action + a door to act on it
  *   ①ᴹ no rebate move, but the spa is short of its tier-MAINTENANCE floor →
@@ -232,6 +287,7 @@ function NextMoveCallout({ intel, moves }: { intel: ProgramIntel; moves: Program
             +{moves.length - 1} more {moves.length - 1 === 1 ? "move" : "moves"} below.
           </p>
         )}
+        <WorthReveal worth={top.worth} />
         {hasCohort ? (
           <Link
             to="/app/refill/patients"
@@ -382,6 +438,7 @@ function MaintenanceCallout({ move }: { move: MaintenanceMove }) {
           due to come back — every recall earns points and defends your tier.
         </p>
       )}
+      <WorthReveal worth={move.worth} />
       {hasCohort ? (
         <Link
           to="/app/refill/patients"
@@ -461,6 +518,7 @@ function MaintenanceCard({
         {cur.toLocaleString()} / {req.toLocaleString()} points
         {maintenance.deadlineLabel ? ` · by ${maintenance.deadlineLabel}` : ""}
       </div>
+      <WorthReveal worth={move?.worth ?? null} />
     </div>
   );
 }
@@ -615,6 +673,7 @@ function MovesCard({ intel, moves }: { intel: ProgramIntel; moves: ProgramIntel[
                       {cohort === 1 ? "patient" : "patients"} due to recall toward it →
                     </Link>
                   )}
+                  <WorthReveal worth={m.worth} />
                 </div>
               </div>
             );

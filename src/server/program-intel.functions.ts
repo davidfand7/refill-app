@@ -22,6 +22,8 @@ import {
   deriveRebateMoves,
   deriveMaintenanceMove,
   diffSnapshots,
+  rebateMoveWorth,
+  maintenanceMoveWorth,
   type ProgramSnapshot,
   type RebateMove,
   type FlywheelMove,
@@ -29,6 +31,8 @@ import {
   type ProgramChange,
 } from "@/lib/program-intel";
 import { resolveProduct, type ProductKind } from "@/lib/product-manufacturer-map";
+// doManufacturerBurnRates is server-only — dynamic-imported in annualVolumeFor
+// (same isolation pattern as doListOverdue below) to keep it off the client.
 
 // Anthropic vision lives in program-snapshot-core (server-only); the SDK is
 // reached via a *dynamic* import inside the capture handler so it never lands
@@ -193,6 +197,8 @@ async function enrichMovesWithCohort(
   sb: SbClient,
   userId: string,
   moves: RebateMove[],
+  annualVolumeUsd: number | null,
+  priceFor: (m: RebateMove) => number | null,
 ): Promise<FlywheelMove[]> {
   if (moves.length === 0) return [];
 
@@ -220,7 +226,16 @@ async function enrichMovesWithCohort(
 
   return moves.map((m) => {
     const k = moveKind.get(m) ?? null;
-    return { ...m, lapsedInCohort: k && countByKind.has(k) ? countByKind.get(k)! : null };
+    return {
+      ...m,
+      lapsedInCohort: k && countByKind.has(k) ? countByKind.get(k)! : null,
+      worth: rebateMoveWorth({
+        rebatePct: m.rebatePct,
+        annualVolumeUsd,
+        unitsShort: m.unitsShort,
+        unitPriceUsd: priceFor(m),
+      }),
+    };
   });
 }
 
@@ -247,6 +262,60 @@ async function enrichMaintenanceMove(
   }
 }
 
+function normalizeLabel(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/**
+ * Best per-unit price for a rebate move from the captured signature pricing
+ * (what the spa actually pays): exact label match first, else the same product
+ * keyword. null when that product wasn't on the captured pricing panel — the
+ * worth calc then drops the one-time cost-to-reach but keeps the rebate value.
+ */
+function buildPriceLookup(snapshot: ProgramSnapshot): (m: RebateMove) => number | null {
+  const byLabel = new Map<string, number>();
+  const byProduct = new Map<string, number>();
+  for (const p of snapshot.pricing) {
+    if (p.unitPriceUsd > 0) {
+      byLabel.set(normalizeLabel(p.label), p.unitPriceUsd);
+      if (!byProduct.has(p.product)) byProduct.set(p.product, p.unitPriceUsd);
+    }
+  }
+  return (m) => byLabel.get(normalizeLabel(m.productLabel)) ?? byProduct.get(m.product) ?? null;
+}
+
+/** Sum of rebate % the spa currently HOLDS (achieved) — what rides on the tier
+ *  and is therefore at risk if the maintenance floor is missed. */
+function sumAchievedRebatePct(snapshot: ProgramSnapshot): number | null {
+  let sum = 0;
+  let any = false;
+  for (const r of snapshot.rebates) {
+    if (r.status === "achieved" && r.rebatePct != null && r.rebatePct > 0) {
+      sum += r.rebatePct;
+      any = true;
+    }
+  }
+  return any ? sum : null;
+}
+
+/** Trailing-365d spend for the snapshot's manufacturer (GIGO-free volume anchor
+ *  for the worth calc). Best-effort — any failure leaves the calc null. */
+async function annualVolumeFor(
+  sb: SbClient,
+  tenantId: string | null,
+  manufacturer: string,
+): Promise<number | null> {
+  if (!tenantId) return null;
+  try {
+    const { doManufacturerBurnRates } = await import("./manufacturer-burn-rate.functions");
+    const burn = await doManufacturerBurnRates(sb, tenantId);
+    const m = burn.byManufacturer[manufacturer.toLowerCase().trim()];
+    return m && m.annualSpendUsd > 0 ? m.annualSpendUsd : null;
+  } catch {
+    return null;
+  }
+}
+
 const input = z.object({
   accessToken: z.string(),
   viewAsUserId: z.string().optional(),
@@ -270,12 +339,30 @@ export const getProgramIntelFn = createServerFn({ method: "POST" })
     }
 
     const { latest, prev, source, captured } = await loadSnapshot(sb, tenantId);
-    const moves = await enrichMovesWithCohort(sb, effectiveUserId, deriveRebateMoves(latest));
-    const maintenanceMove = await enrichMaintenanceMove(
+    // Volume anchor for the profitability calc (best-effort, GIGO-free spend).
+    const annualVolumeUsd = await annualVolumeFor(sb, tenantId, latest.manufacturer);
+    const priceFor = buildPriceLookup(latest);
+    const moves = await enrichMovesWithCohort(
+      sb,
+      effectiveUserId,
+      deriveRebateMoves(latest),
+      annualVolumeUsd,
+      priceFor,
+    );
+    const baseMaintenance = await enrichMaintenanceMove(
       sb,
       effectiveUserId,
       deriveMaintenanceMove(latest),
     );
+    const maintenanceMove = baseMaintenance
+      ? {
+          ...baseMaintenance,
+          worth: maintenanceMoveWorth({
+            atRiskRebatePct: sumAchievedRebatePct(latest),
+            annualVolumeUsd,
+          }),
+        }
+      : null;
     const changes = prev ? diffSnapshots(prev, latest) : [];
     return {
       snapshot: latest,

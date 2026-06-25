@@ -19,7 +19,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { admin } from "./admin-client";
+import { admin, type SbClient } from "./admin-client";
 import { getTenantIdForUser, resolveEffectiveUserId } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
 import { MFR_LAST_TXN_SOURCE } from "@/lib/manufacturer-transaction-csv";
@@ -132,17 +132,18 @@ function matchCatalog(
   };
 }
 
-export const getManufacturerBurnRatesFn = createServerFn({ method: "POST" })
-  .inputValidator((raw: unknown) => burnInput.parse(raw))
-  .handler(async ({ data }): Promise<BurnRateResult> => {
-    const { effectiveUserId } = await resolveEffectiveUserId({
-      accessToken: data.accessToken,
-      viewAsUserId: data.viewAsUserId,
-    });
-    const sb = admin();
-    const tenantId = await getTenantIdForUser(sb, effectiveUserId, NO_TENANT_MSG);
-
-    const cutoff = new Date(Date.now() - WINDOW_DAYS * 86_400_000)
+/**
+ * Core burn-rate aggregation, reusable server-side (mirrors the doListOverdue
+ * pattern). The createServerFn wraps this; program-intel calls it directly to
+ * power the profitability calc — both ride the same math so the numbers can't
+ * drift. Filters patient_transactions to real purchases (amount > 0) in the
+ * trailing window.
+ */
+export async function doManufacturerBurnRates(
+  sb: SbClient,
+  tenantId: string,
+): Promise<BurnRateResult> {
+  const cutoff = new Date(Date.now() - WINDOW_DAYS * 86_400_000)
       .toISOString()
       .slice(0, 10);
 
@@ -243,5 +244,17 @@ export const getManufacturerBurnRatesFn = createServerFn({ method: "POST" })
       };
     }
 
-    return { windowDays: WINDOW_DAYS, byManufacturer };
+  return { windowDays: WINDOW_DAYS, byManufacturer };
+}
+
+export const getManufacturerBurnRatesFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => burnInput.parse(raw))
+  .handler(async ({ data }): Promise<BurnRateResult> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const tenantId = await getTenantIdForUser(sb, effectiveUserId, NO_TENANT_MSG);
+    return doManufacturerBurnRates(sb, tenantId);
   });
