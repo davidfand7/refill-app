@@ -8,7 +8,7 @@
  * use — hiding daily-use surfaces behind deep links makes them work harder.
  *
  * v1.29.2 added Catalog as the second chip (after Patients, before
- * Recovery). Reason: Patients (WHO) and Catalog (WHAT) are the two data
+ * Recapture). Reason: Patients (WHO) and Catalog (WHAT) are the two data
  * primitives every downstream engine reads from; surfacing both at the
  * top makes the mental model match the data model. Earlier nav guidance
  * was over-applied; the public landing pages stay narrow but the in-app
@@ -57,11 +57,11 @@ const ITEMS: RefillNavItem[] = [
   // /recognition; the chip + Solution are labeled Incentives.
   { key: "recognition", to: "/app/refill/recognition/inventory", label: "Incentives", shortLabel: "Incentives" },
   // The Refill Solution: prevent (reminders) + recover (rescue) no-shows.
-  // v2.175.1: chip labeled "Recovery" to match the page title (closing the
+  // v2.175.1: chip labeled "Recapture" to match the page title (closing the
   // chip≠title island). Route namespace + Solution stay "refill/recovery" —
   // same pattern as Incentives keeping /recognition while the chip reads
   // Incentives.
-  { key: "recovery", to: "/app/refill/recovery",           label: "Recovery", shortLabel: "Recovery", dividerAfter: true },
+  { key: "recovery", to: "/app/refill/recovery",           label: "Recapture", shortLabel: "Recapture", dividerAfter: true },
   // ── Spine (ownership layer + data primitives + back-office) ────────────
   // "Skills" (v2.19.0): the cross-solution Ownership Flywheel surface — the
   // routines SmartSpa runs across every Solution. Earned-gated at the page

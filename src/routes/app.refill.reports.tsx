@@ -173,7 +173,7 @@ function TopStats({
     {
       // Reports tracks campaign CONVERSION, not dollars: the per-outreach
       // revenue column was never written (dead column), so showing it read a
-      // structural $0. The verified $ lives in Recovery — we link there below.
+      // structural $0. The verified $ lives in Recapture — we link there below.
       label: "Closed-won",
       icon: Users,
       value: totals.won.toLocaleString(),
@@ -196,13 +196,13 @@ function TopStats({
         </div>
       ))}
       {/* Reports is the conversion-funnel lens (sent → booked → won); it shows
-          no dollars. The verified, invoice-grade recovered $ lives in Recovery —
+          no dollars. The verified, invoice-grade recovered $ lives in Recapture —
           point there so the boards never read as competing money authorities. */}
       <Link
         to="/app/refill/recovery"
         className="sm:col-span-2 lg:col-span-4 inline-flex items-center gap-1 text-[11px] text-ink-soft hover:text-foreground hover:underline"
       >
-        Campaign conversion, all-time. For the verified $ recovered, see Recovery
+        Campaign conversion, all-time. For the verified $ recovered, see Recapture
         →
       </Link>
     </div>

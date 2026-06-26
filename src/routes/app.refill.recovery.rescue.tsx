@@ -1,8 +1,8 @@
 /**
- * /app/refill/agents/rescue — the Rescue agent operator surface (v1.34.6).
+ * /app/refill/agents/rescue — the Renew agent operator surface (v1.34.6).
  *
  * Mirrors /app/refill/agents/preshow's operator-transparency framing but
- * Rescue stays single-policy per spa (no Rescue PROFILES). Karen controls:
+ * Renew stays single-policy per spa (no Renew PROFILES). Karen controls:
  *   - Master enable/disable
  *   - Eligible treatment-types (which appointments trigger rescue offers)
  *   - Max concurrent offers per spa
@@ -85,10 +85,10 @@ function RescueAgentPage() {
       });
       if (res.ok) {
         toast.success(
-          `Rescue fired on a ${res.slotDurationMin}-min slot — ${res.offersSent} offer${res.offersSent === 1 ? "" : "s"} sent to the proxy inbox. (test slot ${res.testAppointmentId.slice(0, 8)})`,
+          `Renew fired on a ${res.slotDurationMin}-min slot — ${res.offersSent} offer${res.offersSent === 1 ? "" : "s"} sent to the proxy inbox. (test slot ${res.testAppointmentId.slice(0, 8)})`,
         );
       } else {
-        toast.warning(`Rescue didn't send: ${res.reason ?? "unknown"}`);
+        toast.warning(`Renew didn't send: ${res.reason ?? "unknown"}`);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't simulate a rescue.");
@@ -153,7 +153,7 @@ function RescueAgentPage() {
       viewAsUserId,
     });
     if (updated) {
-      toast.success(next ? "Rescue agent enabled." : "Rescue agent paused.");
+      toast.success(next ? "Renew agent enabled." : "Renew agent paused.");
     }
   }
 
@@ -232,12 +232,12 @@ function RescueAgentPage() {
   return (
     <div className="flex flex-col min-h-screen bg-white">
       <PageHeader
-        title="Rescue"
+        title="Renew"
         eyebrow="Refill"
         description="Fills cancelled slots from your waitlist before they go dark."
         breadcrumbs={[
           { label: "Refill", to: "/app/refill/recovery" },
-          { label: "Rescue" },
+          { label: "Renew" },
         ]}
         actions={
           isAdminView ? (
@@ -263,7 +263,7 @@ function RescueAgentPage() {
       <div className="flex-1 px-4 py-6 lg:px-10 max-w-[960px] w-full mx-auto space-y-5">
         {loadError ? (
           <div className="rounded-2xl border border-rose/30 bg-rose-soft p-5 text-sm">
-            <div className="font-semibold text-rose">Couldn't load Rescue settings</div>
+            <div className="font-semibold text-rose">Couldn't load Renew settings</div>
             <p className="text-xs text-ink-soft mt-1">{loadError}</p>
           </div>
         ) : !policy ? (
@@ -292,12 +292,12 @@ function RescueAgentPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold text-ink">
-                  {policy.enabled ? "Rescue is on" : "Rescue is paused"}
+                  {policy.enabled ? "Renew is on" : "Renew is paused"}
                 </div>
                 <p className="text-xs text-ink-soft mt-0.5">
                   {policy.enabled
                     ? "When an appointment cancels, Refill texts your waitlist with a tap-to-claim offer for the open slot."
-                    : "Cancellations won't be re-offered until you turn Rescue back on."}
+                    : "Cancellations won't be re-offered until you turn Renew back on."}
                 </p>
               </div>
               <label className="inline-flex items-center cursor-pointer">
@@ -362,7 +362,7 @@ function RescueAgentPage() {
                 <div className="flex flex-wrap gap-2">
                   {policy.eligibleTreatments.length === 0 && (
                     <span className="text-[11px] text-ink-faint italic">
-                      No restrictions — Rescue fires for every cancelled
+                      No restrictions — Renew fires for every cancelled
                       appointment. Add treatments only to limit it to specific
                       ones.
                     </span>
@@ -537,7 +537,7 @@ function RescueAgentPage() {
             <section className="rounded-xl border border-dashed border-rule bg-paper/50 px-5 py-4 text-[12px] text-ink-soft flex gap-3">
               <AlertTriangle className="h-4 w-4 text-amber shrink-0 mt-0.5" />
               <div>
-                <strong className="text-ink">How Rescue works</strong> — when an
+                <strong className="text-ink">How Renew works</strong> — when an
                 appointment in an Eligible-treatment category gets cancelled or
                 marked no-show, Refill drafts a rescue offer and texts your
                 waitlist with a one-tap claim link. First tap wins; everyone

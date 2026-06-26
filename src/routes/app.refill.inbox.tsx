@@ -49,13 +49,13 @@ function InboxPage() {
   // On emma.agentiport.com (shell=karen): SmartSpa brand + Karen agent name +
   // Campaigns is a real surface to back-link to. On app.getrefill.app
   // (shell=refill): Refill brand + Refill (no separate agent persona) +
-  // Campaigns doesn't exist in the 4-chip nav so we back-link to Recovery.
+  // Campaigns doesn't exist in the 4-chip nav so we back-link to Recapture.
   const shell = useShell();
   const isRefill = shell === "refill";
   const brandHeader = isRefill ? "Refill" : "SmartSpa";
   const agentName = isRefill ? "Refill" : "Karen";
   const backRoute = isRefill ? "/app/refill/recovery" : "/app/refill/campaigns";
-  const backLabel = isRefill ? "Back to Recovery" : "Back to Campaigns";
+  const backLabel = isRefill ? "Back to Recapture" : "Back to Campaigns";
 
   const [rows, setRows] = useState<InboxRow[]>([]);
   const [loading, setLoading] = useState(true);

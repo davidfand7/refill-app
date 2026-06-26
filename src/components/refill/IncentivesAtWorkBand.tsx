@@ -155,7 +155,7 @@ export function IncentivesAtWorkBand({
 
           {/* Anchor: this band is the incentive-ROI lens — these dollars are a
               subset of every verified $ SmartSpa recovered, which lives (with the
-              full audit trail + invoice math) in Recovery. Point there, don't
+              full audit trail + invoice math) in Recapture. Point there, don't
               compete with it. */}
           <Link
             to="/app/refill/recovery"

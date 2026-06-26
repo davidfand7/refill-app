@@ -197,7 +197,7 @@ export function RefillRepHome() {
           <div className="mt-6 flex flex-wrap gap-x-8 gap-y-3">
             <Stat label="Sub-reps" value={subRepCount != null ? String(subRepCount) : "—"} />
             <Stat
-              label="Recovery events"
+              label="Recapture events"
               value={lifetimeEvents != null ? String(lifetimeEvents) : "—"}
             />
             <Stat

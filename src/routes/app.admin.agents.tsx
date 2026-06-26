@@ -171,7 +171,7 @@ function AdminAgentsPage() {
       <PageHeader
         eyebrow="Admin"
         title="Agents & overrides"
-        description="Refill's agents (Preshow, Rescue, Attribution, Recognition Allocation) and the global defaults that govern them. Defaults apply to every spa; add an override when a tenant, rep, or user needs the exception. Every toggle is audit-logged."
+        description="Refill's agents (Preshow, Renew, Attribution, Recognition Allocation) and the global defaults that govern them. Defaults apply to every spa; add an override when a tenant, rep, or user needs the exception. Every toggle is audit-logged."
         breadcrumbs={[
           { label: "Admin", to: "/app/admin" },
           { label: "Agents & overrides" },

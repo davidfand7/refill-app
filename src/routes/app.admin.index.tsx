@@ -62,7 +62,7 @@ const ADMIN_SURFACES: AdminSurface[] = [
     path: "/app/admin/agents",
     label: "Agents & overrides",
     description:
-      "Refill's agents (Preshow / Rescue / Attribution / Recognition Allocation) + global defaults + per-tenant overrides. Toggle behaviors without a code ship.",
+      "Refill's agents (Preshow / Renew / Attribution / Recognition Allocation) + global defaults + per-tenant overrides. Toggle behaviors without a code ship.",
     icon: ToggleLeft,
   },
   {

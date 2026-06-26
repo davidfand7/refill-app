@@ -641,7 +641,7 @@ function WaitlistBulkPage() {
               />
               <div className="text-xs text-muted-foreground mt-1.5">
                 Each selected patient will be opted in for these treatments.
-                Rescue dispatcher only fires when a cancellation matches one
+                Renew dispatcher only fires when a cancellation matches one
                 of them (exact-string match, case-insensitive).
               </div>
             </div>

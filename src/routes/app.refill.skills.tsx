@@ -351,7 +351,7 @@ function SendingControl({
               All sending is paused
             </div>
             <p className="mt-0.5 text-xs leading-relaxed text-amber-800">
-              Rescue texts, appointment reminders, and the weekly recall digest
+              Renew texts, appointment reminders, and the weekly recall digest
               are all held — nothing goes out to anyone until you resume.
             </p>
           </div>

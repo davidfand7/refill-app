@@ -1,10 +1,10 @@
 /**
- * Refill Rescue Agent — settings + performance metrics (v1.34.6).
+ * Refill Renew Agent — settings + performance metrics (v1.34.6).
  *
- * Mirrors the refill-preshow-agent.functions.ts pattern, but Rescue
- * stays single-policy per spa (no Rescue PROFILES like Preshow has —
+ * Mirrors the refill-preshow-agent.functions.ts pattern, but Renew
+ * stays single-policy per spa (no Renew PROFILES like Preshow has —
  * the rescue domain doesn't benefit from per-cohort cadence routing
- * the same way Preshow does). Rescue settings live on the existing
+ * the same way Preshow does). Renew settings live on the existing
  * noshow_policies row (rescue_enabled, rescue_eligible_treatments,
  * rescue_max_concurrent, rescue_outreach_window_min, rescue_proxy_*).
  *

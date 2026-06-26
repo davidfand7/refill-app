@@ -1103,7 +1103,7 @@ function DoneStage({ session }: { session: SpaClaimSessionRow }) {
         </h1>
         <p className="text-sm leading-relaxed" style={{ color: "#5a6068" }}>
           Your services, hours, and policies are loaded into your Refill
-          tenant. Recovery starts the moment you wire your scheduler and
+          tenant. Recapture starts the moment you wire your scheduler and
           waitlist &mdash; the next two steps are right inside the dashboard.
         </p>
       </div>

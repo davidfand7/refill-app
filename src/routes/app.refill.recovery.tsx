@@ -7,7 +7,7 @@
  *   - recovery.rescue  → no-show waitlist rescue (was /agents/rescue)
  *
  * "Refill" is the no-show-recovery Solution under the SmartSpa umbrella:
- * prevent (Reminders) + recover (Rescue), with the dashboard as Overview.
+ * prevent (Reminders) + recover (Renew), with the dashboard as Overview.
  */
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 

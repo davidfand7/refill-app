@@ -93,12 +93,12 @@ export const SKILL_CATALOG: SkillTemplate[] = [
     key: "waitlist_auto_fill",
     label: "Waitlist Auto-Fill",
     description:
-      "When an appointment cancels, offer the freed slot to the best-fit waitlist patient — low-confidence fits are held for your one-tap OK. Adopting this turns on your Rescue routine; fine-tune the eligible treatments and limits in Rescue.",
+      "When an appointment cancels, offer the freed slot to the best-fit waitlist patient — low-confidence fits are held for your one-tap OK. Adopting this turns on your Renew routine; fine-tune the eligible treatments and limits in Renew.",
     solution: "refill",
     materializer: "routine",
     status: "live",
     adoptCopy:
-      "Turns on rescue so canceled slots get filled from your waitlist — then opens Rescue so you can set the rules.",
+      "Turns on rescue so canceled slots get filled from your waitlist — then opens Renew so you can set the rules.",
     liftHint: "Turns a cancellation into a kept slot.",
     manageTo: "/app/refill/recovery/rescue",
   },
@@ -156,7 +156,7 @@ export const SKILL_CATALOG: SkillTemplate[] = [
   },
   {
     key: "autonomous_rescue",
-    label: "Autonomous Rescue",
+    label: "Autonomous Renew",
     description:
       "Let SmartSpa text confident waitlist matches the moment a slot frees — on its own, no tap from you. Uncertain matches still wait for your OK.",
     solution: "refill",

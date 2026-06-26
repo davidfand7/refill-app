@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.183.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.183.0 &mdash; Naming refresh: the recovery section is now <em>Recapture</em>, and the <em>Rescue</em> tab is now <em>Renew</em>.</strong> Two label changes that make the bring-back story read cleaner and warmer. The section that recovers lost revenue is now <strong>Recapture</strong> (was Recovery); the tab that brings back lapsed &amp; overdue patients is now <strong>Renew</strong> (was Rescue). <em>Renew</em> beats <em>Rescue</em> on voice &mdash; Rescue implies emergency, Renew implies continuing a relationship, which is the spa-owner&rsquo;s actual register &mdash; and it keeps the tab family a tight &ldquo;Re-&rdquo; set: Reminders &middot; Renew &middot; Reschedule. The umbrella brand <strong>Refill</strong> stays on top (we deliberately did <em>not</em> rename the tab to &ldquo;Refill&rdquo; &mdash; that would have stacked three Refills on one screen). <strong>Scope</strong>: this is a <em>labels-only</em> change &mdash; every visible string (tabs, titles, breadcrumbs, feature-flag labels, skill copy, email subjects, toasts) across 33 files now reads Recapture/Renew, while routes (<code>/recovery/rescue</code>), database keys (<code>recovery_agent</code>, <code>recovery_events</code>), function names, and data-layer code comments stay on the original names &mdash; so there&rsquo;s <strong>no migration</strong> and no broken deep-links. Kept intentionally: <em>password</em>-recovery copy (different meaning) and the pre-login scan-funnel wording (a separate marketing surface). <strong>Touched</strong>: 33 files, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.182.1",
     date: "June 2026",
     items: [

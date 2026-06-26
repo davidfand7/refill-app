@@ -373,7 +373,7 @@ async function handleInstallCallback(request: Request): Promise<Response> {
   //          priority since it blocks writeback; webhook/backfill warnings
   //          are reads-only degradations.
   const lastError = !writeable
-    ? `tier_gate: Boulevard ${business.tier ?? "Free/Starter"} tier detected. Sync + Rescue work; claim writeback will fail until you upgrade to Premier or Enterprise.`
+    ? `tier_gate: Boulevard ${business.tier ?? "Free/Starter"} tier detected. Sync + Renew work; claim writeback will fail until you upgrade to Premier or Enterprise.`
     : backfillWarning ?? webhookWarning ?? null;
 
   await sbAny

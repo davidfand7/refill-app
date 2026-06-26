@@ -142,8 +142,8 @@ function AdminReportsPage() {
                   <th className="text-left px-4 py-2.5">Plan</th>
                   <th className="text-left px-4 py-2.5">Owner</th>
                   <th className="text-right px-4 py-2.5">Patients</th>
-                  <th className="text-right px-4 py-2.5">Recovery events</th>
-                  <th className="text-right px-4 py-2.5">Recovery $</th>
+                  <th className="text-right px-4 py-2.5">Recapture events</th>
+                  <th className="text-right px-4 py-2.5">Recapture $</th>
                   <th className="text-right px-4 py-2.5">Action</th>
                 </tr>
               </thead>

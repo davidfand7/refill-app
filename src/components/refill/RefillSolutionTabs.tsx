@@ -2,8 +2,8 @@
  * Shared sub-nav for the Refill Solution — no-show recovery (v2.1.0 IA reorg).
  *
  * "Refill" is now a Solution under the SmartSpa umbrella: it both PREVENTS
- * no-shows (Reminders, the old Preshow agent) and RECOVERS them (Rescue, the
- * old Rescue agent), with the recovery dashboard as the Overview. Dissolves
+ * no-shows (Reminders, the old Preshow agent) and RECOVERS them (Renew, the
+ * old Renew agent), with the recovery dashboard as the Overview. Dissolves
  * the old standalone "Agents" section into the Solution it configures.
  */
 
@@ -25,7 +25,7 @@ const TABS: Array<{
 }> = [
   { key: "overview", to: "/app/refill/recovery", label: "Overview", Icon: LayoutDashboard },
   { key: "reminders", to: "/app/refill/recovery/preshow", label: "Reminders", Icon: BellRing },
-  { key: "rescue", to: "/app/refill/recovery/rescue", label: "Rescue", Icon: LifeBuoy },
+  { key: "rescue", to: "/app/refill/recovery/rescue", label: "Renew", Icon: LifeBuoy },
   { key: "reschedule", to: "/app/refill/recovery/reschedule", label: "Reschedule", Icon: CalendarClock },
   { key: "inbox", to: "/app/refill/inbox", label: "Inbox", Icon: Inbox },
 ];

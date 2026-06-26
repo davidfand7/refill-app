@@ -12,7 +12,7 @@
  *
  * Three regions:
  *   1. Hero — "Hey {firstName}." + short tagline
- *   2. Quick actions grid — 5 cards: Patients / Recovery / Inbox / Settings /
+ *   2. Quick actions grid — 5 cards: Patients / Recapture / Inbox / Settings /
  *      Billing. Patients leads (the underlying data anchor), followed by the
  *      4 chip-nav surfaces. v1.20.1 added the Patients card — chip nav
  *      stays 4-locked per trojan-horse thesis; the grid is the soft
@@ -102,7 +102,7 @@ const ACTIONS: QuickAction[] = [
   {
     key: "recovery",
     to: "/app/refill/recovery",
-    label: "Recovery",
+    label: "Recapture",
     subtitle: "See what Refill recovered for you",
     icon: DollarSign,
   },

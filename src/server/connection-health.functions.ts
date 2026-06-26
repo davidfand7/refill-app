@@ -281,11 +281,11 @@ function presenceDetail(
   }
   switch (verdict) {
     case "healthy":
-      return `Online and standing by — last checked in ${ageLabel}. Rescue texts can relay through this Mac.`;
+      return `Online and standing by — last checked in ${ageLabel}. Renew texts can relay through this Mac.`;
     case "stale":
-      return `${name} hasn't checked in for a bit (last ${ageLabel}) — the Mac may be asleep or Claude Desktop closed. Rescue texts won't relay until it's back. ${BOUNDARY}`;
+      return `${name} hasn't checked in for a bit (last ${ageLabel}) — the Mac may be asleep or Claude Desktop closed. Renew texts won't relay until it's back. ${BOUNDARY}`;
     case "broken":
-      return `${name} has gone silent (last check-in ${ageLabel}) — the Mac is offline or the relay agent stopped. Rescue texts can't go out until it reconnects. ${BOUNDARY}`;
+      return `${name} has gone silent (last check-in ${ageLabel}) — the Mac is offline or the relay agent stopped. Renew texts can't go out until it reconnects. ${BOUNDARY}`;
     case "setup":
       return `${name} is set up — waiting for its first check-in.`;
     case "unconfigured":

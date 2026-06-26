@@ -43,11 +43,11 @@ export const FLAG_CATALOG: FeatureFlagDefinition[] = [
       "Sends T-48h, T-24h, T-3h reminders before each appointment to prevent cancellations. The first of Refill's three agents (prevention → recovery → attribution).",
     defaultEnabled: true,
     onMeaning: "Preshow reminders fire automatically for upcoming appointments.",
-    offMeaning: "No preshow reminders. Rescue still runs when cancellations happen.",
+    offMeaning: "No preshow reminders. Renew still runs when cancellations happen.",
   },
   {
     key: "rescue_enabled",
-    label: "Rescue agent",
+    label: "Renew agent",
     description:
       "When an appointment cancels or no-shows, fan-out an offer to the highest-probability waitlist patient. First tap wins.",
     defaultEnabled: true,
@@ -56,7 +56,7 @@ export const FLAG_CATALOG: FeatureFlagDefinition[] = [
   },
   {
     key: "attribution_enabled",
-    label: "Recovery attribution",
+    label: "Recapture attribution",
     description:
       "When a waitlist patient claims a freed slot, log the [VERIFIED] recovered-revenue row that drives the % pricing math.",
     defaultEnabled: true,

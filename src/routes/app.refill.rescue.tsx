@@ -251,11 +251,11 @@ function RescuePage() {
     <div className="min-h-screen bg-background">
       <PageHeader
         eyebrow="SmartSpa"
-        title="Rescue"
+        title="Renew"
         description="When a slot frees up, SmartSpa offers it to your waitlist. First tap wins. Track every attempt + who's on the list."
         breadcrumbs={[
           { label: "SmartSpa", to: "/app/refill" },
-          { label: "Rescue" },
+          { label: "Renew" },
         ]}
         actions={
           <button

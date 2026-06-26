@@ -511,7 +511,7 @@ export const getPreshowPerformanceMetrics = createServerFn({ method: "POST" })
       .eq("to_status", "confirmed")
       .gte("created_at", since);
 
-    // Cancellations that came AFTER a preshow reminder (the Rescue agent's
+    // Cancellations that came AFTER a preshow reminder (the Renew agent's
     // signal). Counts to_status=cancelled events within the window.
     const { count: cancelledCount } = await sb
       .from("appointment_status_events")

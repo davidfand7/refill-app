@@ -229,7 +229,7 @@ const POLICY_GATE: Record<string, PolicyGateField> = {
 
 // ─── The autonomy trust rung (Tier-2 Autonomous · Slice 4) ────────────────────
 //
-// Autonomous Rescue is EARNED, not default: the owner unlocks it after approving
+// Autonomous Renew is EARNED, not default: the owner unlocks it after approving
 // N held rescue offers — each approval (the one-tap OK in the review queue) is
 // logged in the immutable ledger as rescue·held_offer_approved. The held queue
 // is the training ground; once she's signed off on the agent's judgment N times,
@@ -374,7 +374,7 @@ export const adoptSkill = createServerFn({ method: "POST" })
         if (!earned) {
           const have = await countHeldOfferApprovals(sb, effectiveUserId);
           throw new Error(
-            `Autonomous Rescue unlocks after you've approved ${AUTONOMY_RUNG_APPROVALS} held offers — you've approved ${have} so far. Keep reviewing the queue and it'll open up.`,
+            `Autonomous Renew unlocks after you've approved ${AUTONOMY_RUNG_APPROVALS} held offers — you've approved ${have} so far. Keep reviewing the queue and it'll open up.`,
           );
         }
       }
@@ -948,7 +948,7 @@ export const setSendingPaused = createServerFn({ method: "POST" })
 
 // ─── Autonomy rung progress (Tier-2 Autonomous · Slice 4) ─────────────────────
 //
-// Feeds the "Autonomous Rescue" catalog card: how many held offers the owner has
+// Feeds the "Autonomous Renew" catalog card: how many held offers the owner has
 // approved vs. the N she needs to unlock the Skill. An operator viewing-as is
 // always treated as earned (operator context is never gated).
 
