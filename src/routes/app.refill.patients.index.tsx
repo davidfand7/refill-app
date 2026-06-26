@@ -20,6 +20,7 @@ import {
   Ban,
   CalendarClock,
   Check,
+  ChevronDown,
   Eye,
   EyeOff,
   Filter,
@@ -34,10 +35,12 @@ import {
   Upload,
   Users,
   Wand2,
+  Wrench,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { EmptyState } from "@/components/EmptyState";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -1088,32 +1091,79 @@ function PatientsPage() {
             label="New"
             count={rows ? rows.filter((r) => r.valueTier === "emerging").length : undefined}
           />
-          <button
-            type="button"
-            disabled={tiersBusy || !rows}
-            onClick={onRecomputeTiers}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1 text-[11px] font-medium transition",
-              tiersBusy ? "opacity-60 cursor-wait" : "text-ink-soft hover:text-ink hover:bg-rule-soft cursor-pointer",
-            )}
-            title="Recompute value tiers across your whole book (percentile-ranked within your patients). Internal only."
-          >
-            <Sparkles className="h-3 w-3" />
-            {tiersBusy ? "Recomputing…" : "Recompute tiers"}
-          </button>
-          <button
-            type="button"
-            disabled={brandsBusy || !rows}
-            onClick={onBackfillBrands}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1 text-[11px] font-medium transition",
-              brandsBusy ? "opacity-60 cursor-wait" : "text-ink-soft hover:text-ink hover:bg-rule-soft cursor-pointer",
-            )}
-            title="Fill in missing manufacturer brands on historical visits (derived from the product name). Enriches the manufacturer / 'Filler brand' filter. Safe + re-runnable."
-          >
-            <Wand2 className="h-3 w-3" />
-            {brandsBusy ? "Backfilling…" : "Backfill brands"}
-          </button>
+          {/* v2.181.0 — the two maintenance actions moved out of the filter
+              row into a "Data tools" popover (matching Catalog's pattern +
+              the banked "data-tools out of the hero toolbar" principle), so
+              the Value strip reads as filters, not a maintenance console. */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                disabled={!rows}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border border-rule px-3 py-1 text-[11px] font-medium transition",
+                  !rows
+                    ? "text-ink-faint cursor-not-allowed"
+                    : "text-ink-soft hover:text-ink hover:bg-rule-soft cursor-pointer",
+                )}
+                title="One-time maintenance tools for your patient book"
+              >
+                {tiersBusy || brandsBusy ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Wrench className="h-3 w-3" />
+                )}
+                Data tools
+                <ChevronDown className="h-3 w-3 opacity-60" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 p-1.5">
+              <p className="px-2 pt-1.5 pb-1 text-[11px] uppercase tracking-wider font-semibold text-ink-faint">
+                Book maintenance
+              </p>
+              <button
+                type="button"
+                onClick={onRecomputeTiers}
+                disabled={tiersBusy || !rows}
+                className="w-full flex items-start gap-2.5 rounded-md px-2 py-2 text-left hover:bg-rule-soft/60 disabled:opacity-50 transition"
+              >
+                {tiersBusy ? (
+                  <Loader2 className="h-4 w-4 mt-0.5 animate-spin shrink-0" />
+                ) : (
+                  <Sparkles className="h-4 w-4 mt-0.5 text-ink-soft shrink-0" />
+                )}
+                <span>
+                  <span className="block text-[13px] font-semibold text-ink">
+                    {tiersBusy ? "Recomputing…" : "Recompute value tiers"}
+                  </span>
+                  <span className="block text-[11px] text-ink-faint leading-snug">
+                    Re-rank every patient&apos;s value tier (percentile within your book).
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={onBackfillBrands}
+                disabled={brandsBusy || !rows}
+                className="w-full flex items-start gap-2.5 rounded-md px-2 py-2 text-left hover:bg-rule-soft/60 disabled:opacity-50 transition"
+              >
+                {brandsBusy ? (
+                  <Loader2 className="h-4 w-4 mt-0.5 animate-spin shrink-0" />
+                ) : (
+                  <Wand2 className="h-4 w-4 mt-0.5 text-ink-soft shrink-0" />
+                )}
+                <span>
+                  <span className="block text-[13px] font-semibold text-ink">
+                    {brandsBusy ? "Backfilling…" : "Backfill brands"}
+                  </span>
+                  <span className="block text-[11px] text-ink-faint leading-snug">
+                    Fill missing manufacturer on historical visits (from the product
+                    name) &mdash; enriches the Filler-brand filter. Safe + re-runnable.
+                  </span>
+                </span>
+              </button>
+            </PopoverContent>
+          </Popover>
         </div>
 
         {/* v2.171.0: in a kind cohort, explain what the list is + how to target a rebate */}

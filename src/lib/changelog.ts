@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.181.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.181.0 &mdash; Patients book: the two maintenance buttons moved out of the filter row into a &ldquo;Data tools&rdquo; popover.</strong> <em>Recompute tiers</em> and <em>Backfill brands</em> sat inline in the Value-tier filter strip &mdash; power-user maintenance actions cluttering a row that should read as <em>filters</em>. They&rsquo;re now collapsed behind a single <strong>Data tools</strong> button (wrench + chevron) that opens a labeled popover with both actions and a one-line description of each. This matches the exact pattern Catalog already uses for its cleanup tools, and applies the banked <em>&ldquo;data-tools out of the hero toolbar&rdquo;</em> principle from the island-cleanup work &mdash; so the move is consistency, not a new invention. Same handlers, same behavior, busy/spinner states preserved (the trigger spins while either runs); just relocated and de-cluttered. <strong>Touched</strong>: <code>app.refill.patients.index.tsx</code> (reuses <code>@/components/ui/popover</code>), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.180.0",
     date: "June 2026",
     items: [
