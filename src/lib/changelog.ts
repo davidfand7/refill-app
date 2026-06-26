@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.182.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.182.1 &mdash; Patients book: &ldquo;Data tools&rdquo; now lives on the always-visible Filters bar (right side), not inside the collapsed panel.</strong> Quick follow-up to v2.182.0 &mdash; the <em>Recompute value tiers</em> / <em>Backfill brands</em> popover had ridden inside the Value strip, so collapsing Filters hid it one click away. It now docks at the right end of the always-visible Filters bar (<code>ml-auto</code> keeps it visually separate from the filter affordances on the left), so these one-time maintenance actions are reachable without opening the panel. Same handlers, same popover, busy/spinner states preserved. <strong>Touched</strong>: <code>app.refill.patients.index.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.182.0",
     date: "June 2026",
     items: [
