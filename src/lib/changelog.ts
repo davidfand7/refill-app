@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.182.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.182.0 &mdash; Patients book: the filter chip strips now collapse behind a single &ldquo;Filters&rdquo; toggle, so the patient table sits near the top of your most-used page.</strong> The book had grown five stacked chip rows (Waitlist, A-list, Value tier, Filler brand, Tags) plus Show-hidden &mdash; pushing the actual list far down the screen. They&rsquo;re now tucked behind one <strong>Filters</strong> button with a live <em>&ldquo;N active&rdquo;</em> count badge, so you always know how many filters are narrowing your book even while the strips are hidden. <strong>Smart defaults</strong>: the panel starts <em>collapsed</em> for a clean table-first view, but <strong>auto-expands</strong> when you arrive with a filter already on &mdash; especially a deep-linked rebate move (e.g. clicking &ldquo;201 filler patients due&rdquo;) that needs the brand strip visible so you can target the rebate. When collapsed with hidden filters active, their labels surface inline (e.g. <em>Galderma &middot; Top 20%</em>) so it&rsquo;s never a silent narrowing, and a <strong>Clear all</strong> link resets every strip in one click. Search, Sort, the time-window toggle, and the Overdue button stay in the always-visible top row (they aren&rsquo;t hidden). <strong>Touched</strong>: <code>app.refill.patients.index.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.181.0",
     date: "June 2026",
     items: [

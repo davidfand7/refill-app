@@ -255,6 +255,16 @@ function PatientsPage() {
   // a filter-key from patientTagFilterKeys() — union semantics (patient
   // matches if their tag keys intersect the active filter set).
   const [softTagFilter, setSoftTagFilter] = useState<Set<string>>(new Set());
+  // v2.182.0: the chip strips (waitlist · A-list · value · brand · tags ·
+  // show-hidden) collapse behind a "Filters · N active" toggle so the table
+  // sits near the top of the most-used page. Default collapsed, but
+  // AUTO-EXPAND when arriving with a filter already on — esp. a deep-linked
+  // rebate move (overdue=1 & kind) that needs the brand strip visible so the
+  // owner can target the rebate. URL params are sync, so the initializer
+  // catches the deep-link on first paint without a flash of collapsed state.
+  const [filtersOpen, setFiltersOpen] = useState(
+    () => search.overdue === "1" || search.kind != null,
+  );
   const overdueOnly = search.overdue === "1";
   const kindFilter = search.kind ?? null;
   // v2.171.0: in a treatment-kind cohort, "manufacturer" means the brand of
@@ -789,6 +799,67 @@ function PatientsPage() {
 
   const overdueTotal = overdueIndex?.size ?? 0;
 
+  // v2.182.0: how many filters are narrowing the book right now. Drives the
+  // "Filters · N active" toggle badge so the count is honest even while the
+  // strips are collapsed. Mirrors EXACTLY the predicates in `filtered` above
+  // (search + show-hidden are excluded: search has its own always-visible box,
+  // show-hidden is a reveal not a narrowing). overdue/kind also live in the
+  // always-visible top row but still count — N is the whole-book active total.
+  const activeFilterCount =
+    (overdueOnly ? 1 : 0) +
+    (kindFilter != null ? 1 : 0) +
+    (manufacturerFilter != null ? 1 : 0) +
+    (waitlistFilter !== "all" ? 1 : 0) +
+    (vipFilter !== "all" ? 1 : 0) +
+    (valueTierFilter !== "all" ? 1 : 0) +
+    (softTagFilter.size > 0 ? 1 : 0);
+
+  // v2.182.0: short labels for the filters that get HIDDEN when the panel is
+  // collapsed (overdue/kind stay in the always-visible top row, so echoing
+  // them here would just duplicate). Surfaced inline next to the toggle so a
+  // collapsed-but-active state is never a mystery ("what's narrowing my book?").
+  const hiddenFilterLabels: string[] = [];
+  if (manufacturerFilter != null)
+    hiddenFilterLabels.push(manufacturerLabel(manufacturerFilter));
+  if (waitlistFilter !== "all")
+    hiddenFilterLabels.push(waitlistFilter === "on" ? "On waitlist" : "Off waitlist");
+  if (vipFilter !== "all") hiddenFilterLabels.push(vipFilter === "on" ? "VIP" : "Not VIP");
+  if (valueTierFilter !== "all")
+    hiddenFilterLabels.push(
+      valueTierFilter === "top" ? "Top 20%" : valueTierFilter === "core" ? "Core" : "New",
+    );
+  if (softTagFilter.size > 0)
+    hiddenFilterLabels.push(`${softTagFilter.size} tag${softTagFilter.size > 1 ? "s" : ""}`);
+
+  // v2.182.0: one-click reset of every collapsible-panel filter. Leaves the
+  // search box and window/sort view-controls untouched (they aren't filters).
+  // overdue/kind both live in the URL — clear them in a SINGLE navigate so the
+  // two functional updaters don't clobber each other (two sync navigate calls
+  // can each see the pre-navigation search). manufacturer resets here too,
+  // matching clearKindFilter's axis-reset reasoning.
+  function clearAllFilters() {
+    setManufacturerFilter(null);
+    setWaitlistFilter("all");
+    setVipFilter("all");
+    setValueTierFilter("all");
+    setSoftTagFilter(new Set());
+    if (overdueOnly || kindFilter != null) {
+      void navigate({
+        search: (prev) => ({ ...prev, overdue: undefined, kind: undefined }),
+        replace: true,
+      });
+    }
+  }
+
+  // v2.182.0: a rebate-move deep link (kind cohort) needs the brand strip,
+  // which lives in the collapsible panel — open it whenever a kind cohort
+  // becomes active, including in-page navigation that doesn't remount (the
+  // filtersOpen initializer only catches a fresh mount). Keyed on kindFilter
+  // alone so toggling the always-visible Overdue button never force-opens.
+  useEffect(() => {
+    if (kindFilter != null) setFiltersOpen(true);
+  }, [kindFilter]);
+
   // v1.34.0: selection helpers derived from current filter — only "visible"
   // patients participate in select-all + count badges.
   const visibleIds = useMemo(
@@ -1002,6 +1073,59 @@ function PatientsPage() {
           </label>
         </div>
 
+        {/* v2.182.0: Filters toggle. Collapses the chip strips below so the
+            table sits near the top of the book (the most-used page). The count
+            badge keeps the active total honest while collapsed; when collapsed
+            with hidden filters active, their labels surface inline so it's
+            never a silent narrowing. "Clear all" resets every strip at once. */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setFiltersOpen((v) => !v)}
+            aria-expanded={filtersOpen}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition",
+              activeFilterCount > 0
+                ? "border-emerald/40 bg-emerald-soft text-emerald-ink hover:bg-emerald-soft/80"
+                : "border-rule bg-white text-ink-soft hover:bg-rule-soft hover:text-ink",
+            )}
+          >
+            <Filter className="h-3.5 w-3.5" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[1.125rem] rounded-full bg-emerald px-1.5 py-0.5 text-[10px] font-semibold text-paper tabular-nums leading-none">
+                {activeFilterCount}
+              </span>
+            )}
+            <ChevronDown
+              className={cn(
+                "h-3.5 w-3.5 opacity-60 transition-transform",
+                filtersOpen && "rotate-180",
+              )}
+            />
+          </button>
+          {activeFilterCount > 0 && (
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="text-[11px] text-ink-soft underline hover:text-ink"
+            >
+              Clear all
+            </button>
+          )}
+          {!filtersOpen && hiddenFilterLabels.length > 0 && (
+            <span className="text-[11px] text-ink-faint truncate max-w-[480px]">
+              {hiddenFilterLabels.join(" · ")}
+            </span>
+          )}
+        </div>
+
+        {/* v2.182.0: collapsible filter panel. Auto-expanded on a deep-linked
+            rebate move (overdue=1 & kind) via the filtersOpen initializer, so
+            the brand strip the owner needs is already visible. A fragment, so
+            the parent's space-y-5 still spaces each strip. */}
+        {filtersOpen && (
+          <>
         {/* v385.1: waitlist filter chip strip. Same Chip primitive as the
             manufacturer filter strip; lives directly under the top
             control row so the two filter affordances cluster visually.
@@ -1281,6 +1405,8 @@ function PatientsPage() {
             {showHidden ? "Showing hidden" : "Show hidden"}
           </button>
         </div>
+          </>
+        )}
 
         {/* Result table */}
         {filtered && filtered.length === 0 ? (
