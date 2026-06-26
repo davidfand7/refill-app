@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.178.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.178.0 &mdash; Booking Settings stops promising &ldquo;turn on patient self-booking&rdquo; to spas whose calendar lives in Acuity.</strong> If you run on a connected scheduler (Acuity, etc.), SmartSpa never hands out its own booking link &mdash; patients keep booking where they always have, and SmartSpa watches that calendar to recover cancellations. But the Booking Settings page still <em>read</em> as if native self-booking were the goal: the header said <em>&ldquo;Turn on patient self-booking&hellip;&rdquo;</em> and the enable toggle said <em>&ldquo;patients can self-book on your public page&rdquo;</em> &mdash; confusing for an external-PMS spa that can&rsquo;t (and shouldn&rsquo;t) do that here. Now the page is <strong>external-PMS-aware</strong>: the header reads <em>&ldquo;Patients book through your connected scheduler (Acuity). The settings below only apply if you also publish SmartSpa&rsquo;s own booking page,&rdquo;</em> and a note by the toggle clarifies <em>&ldquo;you&rsquo;re connected to Acuity, so patients already book there &mdash; this switch only controls SmartSpa&rsquo;s own page, which most connected-scheduler spas leave off.&rdquo;</em> Clarify-don&rsquo;t-hide: the controls stay available (a spa <em>could</em> run both), but the copy no longer misleads. Reuses the existing <code>draft.externalPms</code> flag (same one the v2.74.0 booking-link note rides). <strong>Touched</strong>: <code>app.refill.calendar.booking.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.177.1",
     date: "June 2026",
     items: [

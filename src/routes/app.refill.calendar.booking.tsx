@@ -83,11 +83,17 @@ function BookingSettingsPage() {
     );
   }
 
+  const isExternalPms = !!draft?.externalPms;
+
   return (
     <div>
       <PageHeader
         title="Booking Settings"
-        description="Turn on patient self-booking, set your hours, and choose which services are bookable online."
+        description={
+          isExternalPms
+            ? "Patients book through your connected scheduler (Acuity). The settings below only apply if you also publish SmartSpa's own booking page."
+            : "Turn on patient self-booking, set your hours, and choose which services are bookable online."
+        }
       />
       <CalendarTabs active="booking" />
 
@@ -215,6 +221,13 @@ function BookingSettingsPage() {
                   />
                 </div>
               </div>
+              {isExternalPms && (
+                <p className="mt-2 text-[12px] leading-relaxed text-ink-faint">
+                  You&apos;re connected to Acuity, so patients already book there. This switch
+                  only controls SmartSpa&apos;s <em>own</em> booking page &mdash; most
+                  connected-scheduler spas leave it off.
+                </p>
+              )}
               {master.open && (
                 <div className="mt-3 space-y-4">
                   <p className="text-[12px] text-ink-soft leading-relaxed">
