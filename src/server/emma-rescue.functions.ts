@@ -846,7 +846,7 @@ export async function dispatchRescueAttempt(args: {
       ok: false,
       attemptId: null,
       offersSent: 0,
-      reason: "Renew agent disabled for this spa.",
+      reason: "Refill agent disabled for this spa.",
     };
   }
   // Tier-2 kill switch (Slice 3): the master pause sits above every per-engine
@@ -1286,7 +1286,7 @@ export async function dispatchRescueAttempt(args: {
     // happened) and surface in the rescue-page review queue.
     //
     // Tier-2 autonomy gate (Slice 4): confident matches only AUTO-send once the
-    // owner has turned on Autonomous Renew (earned + adopted). Until then even
+    // owner has turned on Autonomous Refill (earned + adopted). Until then even
     // confident offers are HELD for her one-tap OK — the review queue is the
     // training ground that earns autonomy. Blind matches are held regardless.
     const autonomousEnabled =
@@ -1297,7 +1297,7 @@ export async function dispatchRescueAttempt(args: {
         c.matchTier === "blind"
           ? "This opening has no treatment set, so SmartSpa couldn't tell this patient what they'd be coming in for — your OK before we text."
           : !autonomousEnabled
-            ? "SmartSpa found a confident match — approve it to text them. (Turn on Autonomous Renew to let SmartSpa send these the moment a slot frees.)"
+            ? "SmartSpa found a confident match — approve it to text them. (Turn on Autonomous Refill to let SmartSpa send these the moment a slot frees.)"
             : null;
       if (holdReason) {
         try {
@@ -1927,7 +1927,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
         // find-or-create the rescuee customer → createBooking with the
         // original location + appointment segments at the same start
         // time. Tier-blocked sellers (Square Free) fail-degrade with a
-        // dedicated note value the Renew dashboard renders as an
+        // dedicated note value the Refill dashboard renders as an
         // upgrade prompt.
         const sbAny = sb as unknown as {
           from: (t: string) => {
@@ -2043,7 +2043,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
             const msg = e instanceof Error ? e.message : String(e);
             // Square returns 403 + a permission-denied error code when
             // the seller is on Free tier (no Bookings write access).
-            // Surface this distinctly so the Renew dashboard can show
+            // Surface this distinctly so the Refill dashboard can show
             // an upgrade prompt instead of a generic write-back failure.
             const tierBlocked =
               msg.includes("403") &&
@@ -2605,7 +2605,7 @@ export const claimRescueSlot = createServerFn({ method: "POST" })
         // is app-level (BLVD_API_KEY + BLVD_API_SECRET from env) +
         // businessId URN scopes each mutation. No per-spa access token
         // to refresh. Tier-blocked sellers (Free/Starter) fail-degrade
-        // with a dedicated note value the Renew dashboard renders as
+        // with a dedicated note value the Refill dashboard renders as
         // an upgrade prompt.
         const sbAny = sb as unknown as {
           from: (t: string) => {
@@ -3095,7 +3095,7 @@ export const sendHeldRescueOffer = createServerFn({ method: "POST" })
         .eq("id", offer.rescue_attempt_id);
     }
     // Tier-2 trust rung (Slice 4): the owner just approved a held offer with a
-    // tap. This is the earn signal for Autonomous Renew — N of these unlock the
+    // tap. This is the earn signal for Autonomous Refill — N of these unlock the
     // Skill (reachedAutonomyRung reads exactly these rows). Best-effort.
     await recordAgentAction(sb, effectiveUserId, {
       agent: "rescue",

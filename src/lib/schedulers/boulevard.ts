@@ -40,7 +40,7 @@
  *     than Boulevard marketing's "Enterprise only" framing — verified
  *     during the Jun 2 spec scout). The createAppointment mutation
  *     will return a clear errors[] entry on Free/Starter tier sellers;
- *     caller fail-degrades with a banner on the Renew dashboard
+ *     caller fail-degrades with a banner on the Refill dashboard
  *     (same UX pattern as Square Free tier).
  *
  * Pinned: API version (in boulevard-admin-client). GraphQL operation

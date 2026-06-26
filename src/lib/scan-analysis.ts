@@ -167,7 +167,7 @@ export function analyzeScannedAppointments(
       "Your CSV doesn't include past appointment outcomes (no_show / cancelled / showed). Re-export with at least 90 days of history to see your actual no-show rate.";
   } else if (monthsCovered < 0.3) {
     insufficientDataReason =
-      "Less than 10 days of data in this export. Recovery estimate uses a wider window for accuracy.";
+      "Less than 10 days of data in this export. Recapture estimate uses a wider window for accuracy.";
   }
 
   // v370: SLOT-LEVEL analysis. Index every "showed" appointment by

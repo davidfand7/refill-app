@@ -256,7 +256,7 @@ function formatUsd(n: number): string {
 }
 
 function formatAgent(a: TenantRecoveryEvent["recoveryAgent"]): string {
-  if (a === "rescue") return "Renew";
+  if (a === "rescue") return "Refill";
   if (a === "post_recovery") return "Post-recovery";
   return "Pre-show";
 }

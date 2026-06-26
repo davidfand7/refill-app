@@ -301,7 +301,7 @@ export const Route = createFileRoute("/api/integrations/square/oauth-callback")(
         //          degradations.
         const lastError =
           tier === "read_only"
-            ? "tier_gate: Square Appointments Free tier detected. Sync + Renew work; claim writeback will fail until you upgrade to Appointments Plus or Premium."
+            ? "tier_gate: Square Appointments Free tier detected. Sync + Refill work; claim writeback will fail until you upgrade to Appointments Plus or Premium."
             : backfillWarning ?? webhookWarning ?? null;
         await sbAny
           .from("scheduler_connections")

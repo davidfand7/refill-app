@@ -402,7 +402,7 @@ function RecoveryDashboard() {
                 className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted/30 transition"
               >
                 <ArrowLeft className="h-3.5 w-3.5" />
-                Renew activity
+                Refill activity
               </Link>
             </div>
           )}
@@ -584,7 +584,7 @@ function VerifiedRow({
 
 function AgentPill({ agent }: { agent: string }) {
   const cfg: Record<string, { bg: string; fg: string; label: string }> = {
-    rescue: { bg: "bg-emerald/10", fg: "text-emerald", label: "Renew" },
+    rescue: { bg: "bg-emerald/10", fg: "text-emerald", label: "Refill" },
     post_recovery: { bg: "bg-amber-500/10", fg: "text-amber-700", label: "Post-show" },
     preshow: { bg: "bg-emerald-500/10", fg: "text-emerald-700", label: "Pre-show" },
   };

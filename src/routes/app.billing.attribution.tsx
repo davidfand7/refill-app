@@ -2,14 +2,14 @@
  * /app/refill/agents/attribution — the Attribution agent operator surface
  * (v1.34.7).
  *
- * Mirrors the v1.34.6 Renew surface pattern. Karen controls:
+ * Mirrors the v1.34.6 Refill surface pattern. Karen controls:
  *   - Master enable/disable
  *   - Attribution window (hours) — bookings within N hours of outreach get
  *     credit
  *   - Auto-confirm threshold ($) — recoveries under this amount auto-confirm;
  *     above goes to manual review
  *   - Agent tie-break weights — when multiple agents could claim the same
- *     booking (Renew + Preshow overlap), weights decide who gets credit
+ *     booking (Refill + Preshow overlap), weights decide who gets credit
  *
  * Performance card shows 7-day rolling: recoveries attributed, attributed
  * revenue $, manual confirms, unconfirmed.
@@ -396,7 +396,7 @@ function AttributionAgentPage() {
               <div className="px-5 py-4 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <WeightField
-                    label="Renew"
+                    label="Refill"
                     value={draftRescue}
                     onChange={setDraftRescue}
                   />
@@ -425,7 +425,7 @@ function AttributionAgentPage() {
                   Save weights
                 </button>
                 <p className="text-[10px] text-ink-faint">
-                  Higher weight wins a tie. Default: Renew 1.0 (direct
+                  Higher weight wins a tie. Default: Refill 1.0 (direct
                   cancellation → fill is highest-signal), Post-recovery 0.8,
                   Preshow 0.5 (reminders are more diffuse). Set a weight to 0
                   to never give that agent credit.
@@ -438,7 +438,7 @@ function AttributionAgentPage() {
               <AlertTriangle className="h-4 w-4 text-amber shrink-0 mt-0.5" />
               <div>
                 <strong className="text-ink">How Attribution works</strong> —
-                when an outreach goes out (Renew offer, Preshow reminder,
+                when an outreach goes out (Refill offer, Preshow reminder,
                 Post-recovery follow-up) and the patient books within the
                 attribution window, Refill records a <code>recovery_event</code>
                 with the agent type + revenue. If multiple agents are eligible,

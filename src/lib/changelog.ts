@@ -14,6 +14,20 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.183.2",
+    date: "June 2026",
+    items: [
+      "<strong>v2.183.2 &mdash; Word/meaning congruency: the cancelled-slot agent is now <em>Refill</em>, matching what it actually does.</strong> The tab briefly named <em>Renew</em> describes <strong>filling a just-cancelled slot from your waitlist</strong> &mdash; which is literally <em>refilling</em> your calendar, the brand&rsquo;s namesake action. So the tab + its copy now read <strong>Refill</strong> (tab strip: Overview &middot; Reminders &middot; <strong>Refill</strong> &middot; Reschedule &middot; Inbox; titles, the &ldquo;How Refill works&rdquo; explainer, the agent on/off label, toasts, and claim emails all aligned). Earlier we&rsquo;d worried &ldquo;Refill&rdquo; on a tab would collide with the Refill brand &mdash; but on its <em>namesake action</em> the word belongs, so it&rsquo;s congruency, not collision. To avoid a literal &ldquo;Refill &rsaquo; Refill&rdquo; breadcrumb, the section level now reads <strong>Recapture</strong> (so the page is <em>Recapture &rsaquo; Refill</em>). The word <em>Renew</em> steps off-stage for now &mdash; it&rsquo;ll return on the lapsed/overdue <em>recall</em> surface (where &ldquo;bring them back&rdquo; actually lives) in a planned terms-and-meanings sweep. Labels-only; routes + DB keys (<code>recovery_agent</code>) unchanged, no migration. <strong>Touched</strong>: ~25 files incl. <code>RefillSolutionTabs.tsx</code>, <code>app.refill.recovery.rescue.tsx</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
+    version: "v2.183.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.183.1 &mdash; Naming refresh, part 2: the pre-login scan funnel now says <em>Recapture</em> too.</strong> Follow-up to v2.183.0 &mdash; the &ldquo;snap your CSV, see your leak&rdquo; funnel still described its revenue projection as a &ldquo;Recovery estimate.&rdquo; Swept those to <strong>Recapture</strong> (on-page result + the follow-up email) so a prospect meets the same vocabulary they&rsquo;ll see inside the app. <em>Password</em>-recovery copy stays as-is (different meaning). <strong>Touched</strong>: <code>scan.tsx</code>, <code>scan-analysis.ts</code>, <code>scan-followup.ts</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.183.0",
     date: "June 2026",
     items: [

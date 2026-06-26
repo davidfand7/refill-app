@@ -967,7 +967,7 @@ function ScanPage() {
       )}
 
       <footer className="max-w-5xl mx-auto px-6 pb-10 text-center text-xs text-slate-500">
-        Numbers above are code-computed from your uploaded CSV. Recovery
+        Numbers above are code-computed from your uploaded CSV. Recapture
         estimates use {Math.round(RECOVERY_FLOOR_PCT * 100)}–
         {Math.round(RECOVERY_CEILING_PCT * 100)}% of lost revenue at $
         {AVG_TICKET_USD} average ticket. Adjust to your actual ARV for your

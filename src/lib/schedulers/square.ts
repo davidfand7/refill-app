@@ -28,7 +28,7 @@
  *     Premium subscription tier. Free-tier sellers can authorize OAuth
  *     + receive read webhooks, but the writeback POST fails with
  *     UNAUTHORIZED / forbidden. We surface this as a fail-degraded
- *     state on the spa's Renew dashboard, not a hard disconnect.
+ *     state on the spa's Refill dashboard, not a hard disconnect.
  *
  * Docs:
  *   https://developer.squareup.com/docs/bookings-api/what-it-is

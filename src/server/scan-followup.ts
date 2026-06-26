@@ -632,7 +632,7 @@ function buildScanReportHtml(
       .join("");
   };
 
-  // Recovery projection — simple 12-month forward extrapolation. Real
+  // Recapture projection — simple 12-month forward extrapolation. Real
   // model would use spa-specific seasonality once we have it.
   const projectionMonths = Array.from({ length: 12 }, (_, i) => i + 1);
   const projectionRows = projectionMonths
@@ -811,7 +811,7 @@ function buildScanReportHtml(
   </section>
 
   <footer style="color:#64748b;font-size:11px;border-top:1px solid #e2e8f0;padding-top:16px;line-height:1.5;">
-    Numbers above are code-computed from your uploaded CSV. Recovery estimates use 45–55% of empty-slot leak at $${AVG_TICKET} average ticket — substitute your actual ARV for your own math. Want to scan another date range or another location? Drop another CSV at <a href="${scanUrl}" style="color:#0f766e;">${esc(scanUrl.replace(/^https?:\/\//, ""))}</a>.
+    Numbers above are code-computed from your uploaded CSV. Recapture estimates use 45–55% of empty-slot leak at $${AVG_TICKET} average ticket — substitute your actual ARV for your own math. Want to scan another date range or another location? Drop another CSV at <a href="${scanUrl}" style="color:#0f766e;">${esc(scanUrl.replace(/^https?:\/\//, ""))}</a>.
   </footer>
 </div>
 </body>

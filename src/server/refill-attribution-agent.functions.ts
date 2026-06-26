@@ -1,7 +1,7 @@
 /**
  * Refill Attribution Agent — settings + performance metrics (v1.34.7).
  *
- * Mirrors the v1.34.6 Renew surface but for Attribution. Settings live
+ * Mirrors the v1.34.6 Refill surface but for Attribution. Settings live
  * as a knowledge_nodes row with node_type='attribution_settings' (no
  * migration; the same pattern v1.31.5 used for custom_tag_definitions).
  *

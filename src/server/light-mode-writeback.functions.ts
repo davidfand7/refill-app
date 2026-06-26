@@ -241,7 +241,7 @@ export async function dispatchLightModeWriteback(
     }
   })();
 
-  const subject = `\u{1F389} Renew claimed — book ${patientDisplay} into ${slotDisplay}`;
+  const subject = `\u{1F389} Refill claimed — book ${patientDisplay} into ${slotDisplay}`;
   const text = [
     `A waitlist patient just claimed your open slot.`,
     ``,
