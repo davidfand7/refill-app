@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.180.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.180.0 &mdash; Patients book: the Waitlist filter row hides itself when no one is on a waitlist.</strong> The patient book&rsquo;s filter area stacks several chip strips (Waitlist · A-list · Value tier · Filler brand · Tags), which pushes the table down on a laptop screen. The Waitlist strip was always rendered even for spas with zero waitlist adoption &mdash; a dead affordance with an &ldquo;On waitlist 0&rdquo; chip that just adds a row and invites a confused click. Now it only renders when at least one patient is actually on a waitlist (or a waitlist filter is already active, so it never vanishes mid-use), reclaiming a row on the densest page. A first, safe declutter; the broader filter-strip layout (a collapsible &ldquo;Filters&rdquo; panel, moving the Recompute/Backfill maintenance buttons out of the filter row) is a deliberate design call left for owner review. <strong>Touched</strong>: <code>app.refill.patients.index.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.179.0",
     date: "June 2026",
     items: [

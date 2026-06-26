@@ -1001,7 +1001,11 @@ function PatientsPage() {
 
         {/* v385.1: waitlist filter chip strip. Same Chip primitive as the
             manufacturer filter strip; lives directly under the top
-            control row so the two filter affordances cluster visually. */}
+            control row so the two filter affordances cluster visually.
+            v2.180.0: hidden when no one is on a waitlist (a dead affordance
+            otherwise) — reclaims a filter row on the dense book. Still shows
+            if a waitlist filter is somehow active, so it never vanishes mid-use. */}
+        {((waitlistIndex?.size ?? 0) > 0 || waitlistFilter !== "all") && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] text-ink-soft inline-flex items-center gap-1">
             <Filter className="h-3 w-3" />
@@ -1030,6 +1034,7 @@ function PatientsPage() {
             label="Off waitlist"
           />
         </div>
+        )}
 
         {/* v385.2: A-list / VIP filter chip strip. Same shape as waitlist
             filter. Count badge on the "VIP" chip surfaces how many
