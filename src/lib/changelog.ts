@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.179.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.179.0 &mdash; Connections: the &ldquo;start today, no approval needed&rdquo; path is now a real button on platforms that are still pending vendor approval.</strong> Five schedulers (Boulevard, Mindbody, Jane, Booker, Zenoti) ship architecture-complete but with their Connect button disabled + an &ldquo;approval pending&rdquo; badge while the vendor clears our app. The catch: <strong>Lite Mode</strong> (forward your platform&rsquo;s notification emails &mdash; works <em>today</em>, no vendor approval) was buried as 11px fine-print under each card&rsquo;s description, so a spa wanting to start now had to scan five disabled cards to find it. Now, on any <strong>gated</strong> platform, Lite Mode is promoted from a fine-print link to a prominent secondary button: <em>&ldquo;⚡ Start today with Lite Mode &mdash; no approval needed.&rdquo;</em> The moment a platform&rsquo;s real connector goes live (its <code>_ENABLED</code> flag flips), the button automatically reverts to the quiet link, since the full connector is then the better path. New <code>gated</code> prop on <code>PlatformExtrasRow</code>, wired to each gated card&rsquo;s enabled-flag. <strong>Touched</strong>: <code>app.refill.calendar.connections.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.178.0",
     date: "June 2026",
     items: [

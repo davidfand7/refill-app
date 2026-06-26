@@ -834,6 +834,7 @@ function AvailablePlatforms({
           </div>
           <PlatformExtrasRow
             platform="boulevard"
+            gated={!BOULEVARD_ENABLED}
             extras={schedulerExtras}
             onLightMode={onConnectLightMode}
             onPlaid={onConnectPlaid}
@@ -888,6 +889,7 @@ function AvailablePlatforms({
           </div>
           <PlatformExtrasRow
             platform="mindbody"
+            gated={!MINDBODY_ENABLED}
             extras={schedulerExtras}
             onLightMode={onConnectLightMode}
             onPlaid={onConnectPlaid}
@@ -939,6 +941,7 @@ function AvailablePlatforms({
           </div>
           <PlatformExtrasRow
             platform="zenoti"
+            gated={!ZENOTI_ENABLED}
             extras={schedulerExtras}
             onLightMode={onConnectLightMode}
             onPlaid={onConnectPlaid}
@@ -980,6 +983,7 @@ function AvailablePlatforms({
           </div>
           <PlatformExtrasRow
             platform="jane"
+            gated={!JANE_ENABLED}
             extras={schedulerExtras}
             onLightMode={onConnectLightMode}
             onPlaid={onConnectPlaid}
@@ -1021,6 +1025,7 @@ function AvailablePlatforms({
           </div>
           <PlatformExtrasRow
             platform="booker"
+            gated={!BOOKER_ENABLED}
             extras={schedulerExtras}
             onLightMode={onConnectLightMode}
             onPlaid={onConnectPlaid}
@@ -1096,13 +1101,44 @@ function PlatformExtrasRow({
   extras,
   onLightMode,
   onPlaid,
+  gated = false,
 }: {
   platform: LightModePlatform;
   extras: { lightMode: boolean; plaidMode: boolean };
   onLightMode: (p: LightModePlatform) => void;
   onPlaid: (p: LightModePlatform) => void;
+  /** v2.179.0 — when the platform's real connector is still pending vendor
+   *  approval, Lite Mode is the ONLY path that works TODAY. Promote it from a
+   *  fine-print link to a prominent secondary button so spas don't wait. */
+  gated?: boolean;
 }) {
   if (!extras.lightMode && !extras.plaidMode) return null;
+
+  if (gated && extras.lightMode) {
+    return (
+      <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <button
+          type="button"
+          onClick={() => onLightMode(platform)}
+          className="inline-flex items-center gap-1.5 rounded-md border border-emerald/50 bg-emerald-soft/40 px-3 py-1.5 text-[12px] font-semibold text-emerald-ink hover:bg-emerald-soft transition"
+          title="Forward your platform notification emails — start today without vendor approval."
+        >
+          ⚡ Start today with Lite Mode — no approval needed →
+        </button>
+        {extras.plaidMode && (
+          <button
+            type="button"
+            onClick={() => onPlaid(platform)}
+            className="text-[11px] text-fuchsia-700 hover:underline"
+            title="Pro option — credential-mediated connector with explicit consent. Concierge setup."
+          >
+            🔐 Plaid Connect (Pro) →
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-ink-soft">
       {extras.lightMode && (
