@@ -60,6 +60,14 @@ export const Route = createFileRoute("/api/agent/queue/claim")({
           auto_send: boolean | null;
         };
 
+        // Send gate, single source of truth: with auto_send OFF we hand out
+        // NOTHING — the helper can't send a text it was never given. (Staging for
+        // a human tap stays the email-draft lane, delivery_mode='email'.) This is
+        // why the queue can sit dormant safely until a spa flips auto_send on.
+        if (autoSend !== true) {
+          return jsonResp(200, { items: [], claimToken: null, autoSend: false });
+        }
+
         // Optional limit (the RPC also clamps to [0,50]).
         let limit = 10;
         try {

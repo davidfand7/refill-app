@@ -2,10 +2,11 @@
 #
 # SmartSpa local delivery agent — installer.
 #
-# Sets up a tiny heartbeat on the Mac that relays rescue texts over iMessage, so
-# SmartSpa's Connection Health page can tell, live, whether that relay is online.
-# Installs a launchd job that POSTs a check-in every 5 minutes and runs at login
-# (survives restarts). Idempotent: re-running re-installs cleanly.
+# Sets up TWO tiny jobs on the spa's Mac, both keyed by the same per-spa secret:
+#   1. a HEARTBEAT (every 5 min) so Connection Health knows the relay is online; and
+#   2. an outbound iMessage SENDER (every 60s) that claims any texts SmartSpa has
+#      queued and sends them via Messages.app — the zero-setup sender (Build 2, B).
+# Both run at login (survive restarts). Idempotent: re-running re-installs cleanly.
 #
 # This is the committed source of truth for the one-paste installer the app's
 # Connection Health page generates (with the secret embedded). To run it from a
@@ -14,18 +15,22 @@
 #   bash scripts/local-agent/install.sh <AGENT_SECRET> [ENDPOINT]
 #
 # AGENT_SECRET — the per-spa secret from Settings → Connection health.
-# ENDPOINT     — override the heartbeat URL (default: https://getrefill.app/api/agent/heartbeat).
+# ENDPOINT     — override the heartbeat URL (default: https://smartspa.app/api/agent/heartbeat).
 
 set -euo pipefail
 
 SECRET="${1:-}"
-ENDPOINT="${2:-https://getrefill.app/api/agent/heartbeat}"
+ENDPOINT="${2:-https://smartspa.app/api/agent/heartbeat}"
+# The API origin both jobs talk to — derived from ENDPOINT by stripping the
+# heartbeat path (so a custom ENDPOINT carries the sender to the same host).
+BASE="${ENDPOINT%/api/agent/heartbeat}"
 
 if [ -z "$SECRET" ]; then
   echo "Usage: bash install.sh <AGENT_SECRET> [ENDPOINT]" >&2
   exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "$HOME/.smartspa"
 
 # The pinger: reports liveness + whether Messages.app is running (so a Mac that's
@@ -62,4 +67,28 @@ launchctl load "$PLIST"
 
 # Fire one immediate check-in so the page goes Live right away.
 bash "$HOME/.smartspa/pinger.sh"
-echo "SmartSpa local agent installed and checked in. Connection Health → Local delivery agent should read Live within a few minutes."
+
+# ── The outbound iMessage sender (queue consumer) ──
+# Fill the sibling sender.sh template's placeholders and install it + a launchd job
+# that runs it every 60s. sed with | delimiter avoids clashing with the URL's /.
+sed "s|__BASE__|$BASE|g; s|__SECRET__|$SECRET|g" "$SCRIPT_DIR/sender.sh" \
+  > "$HOME/.smartspa/sender.sh"
+chmod +x "$HOME/.smartspa/sender.sh"
+
+SENDER_PLIST="$HOME/Library/LaunchAgents/com.smartspa.sender.plist"
+cat > "$SENDER_PLIST" <<PLISTEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.smartspa.sender</string>
+  <key>ProgramArguments</key><array><string>/bin/bash</string><string>$HOME/.smartspa/sender.sh</string></array>
+  <key>StartInterval</key><integer>60</integer>
+  <key>RunAtLoad</key><true/>
+</dict></plist>
+PLISTEOF
+
+launchctl unload "$SENDER_PLIST" 2>/dev/null || true
+launchctl load "$SENDER_PLIST"
+
+echo "SmartSpa local agent installed: heartbeat + outbound iMessage sender are live."
+echo "Note: the first queued text triggers a macOS Automation prompt — allow Messages so sends can go out."

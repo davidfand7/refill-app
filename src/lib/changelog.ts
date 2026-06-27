@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.189.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.189.0 &mdash; Build 2 (Path B) the helper: the zero-setup sender's final leg.</strong> v2.188.0 laid the queue spine; this is the consumer that drains it. The SAME one-paste installer a spa already runs for the heartbeat now <em>also</em> drops a tiny <code>sender.sh</code> on the spa's Mac (a second launchd job, every 60&nbsp;s) that claims any queued texts (<code>/api/agent/queue/claim</code>), sends each via <strong>Messages.app from the spa's own number</strong>, and acks the outcome (<code>/api/agent/queue/ack</code>) &mdash; <strong>no Gmail, no Claude Desktop routine, no MCP.</strong> The consumer is dependency-free (bash + <code>curl</code> + <code>osascript</code>, all stock macOS): JXA parses the claim JSON, a proven AppleScript drives the iMessage send, and the body round-trips losslessly (tabs&rarr;spaces, newlines escaped, restored with <code>printf %b</code>) &mdash; <em>verified locally on macOS</em> across multi-item, autoSend-gating, and newline cases, plus a clean exit against the live endpoint on a bad secret. The backslash/quote-heavy script is shipped base64-encoded inside the installer so it survives the one-paste with zero escaping (regen: <code>base64 -i scripts/local-agent/sender.sh</code>). <strong>Send gate is server-side AND client-side:</strong> the claim endpoint now hands out NOTHING when the spa's <code>auto_send</code> is off (single source of truth), and <code>sender.sh</code> re-checks <code>autoSend</code> too &mdash; so the queue sits safely dormant until a spa explicitly flips auto-send on. First send triggers the macOS Automation prompt for Messages (documented; sends fail-and-ack-visibly until granted). <strong>Still DORMANT</strong> end-to-end: nothing enqueues yet (next slice wires enqueue behind <code>delivery_mode='queue'</code>). <strong>Touched</strong>: new <code>scripts/local-agent/sender.sh</code>, <code>install.sh</code> + <code>uninstall.sh</code> + <code>README.md</code> (sender job + Automation note + modernized <code>getrefill.app</code>&rarr;<code>smartspa.app</code> default), <code>connection-health.functions.ts</code> (<code>buildInstallCommand</code> now installs both jobs), <code>api.agent.queue.claim.ts</code> (auto_send gate), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.188.0",
     date: "June 2026",
     items: [

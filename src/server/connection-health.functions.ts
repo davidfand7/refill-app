@@ -1207,12 +1207,23 @@ function genAgentSecret(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** The self-contained installer the owner runs ON THE RELAY MAC. Writes a tiny
- *  pinger + a launchd job that runs it every 5 minutes, then starts it. Secret
- *  is embedded so it's a single copy-paste with nothing else to fill in. Mirrors
- *  scripts/local-agent/install.sh (the committed source of truth). */
+/** The outbound iMessage sender (queue consumer), base64-encoded. Source of truth:
+ *  scripts/local-agent/sender.sh (with __BASE__/__SECRET__ placeholders). Embedded
+ *  as base64 so this backslash/quote-heavy script survives being dropped into the
+ *  one-paste shell command with zero escaping. Regenerate after editing sender.sh:
+ *    base64 -i scripts/local-agent/sender.sh | tr -d '\n'
+ *  Decoded on the Mac, then `sed` fills the two placeholders. */
+const LOCAL_SENDER_B64 =
+  "IyEvYmluL2Jhc2gKIwojIFNtYXJ0U3BhIGxvY2FsIGRlbGl2ZXJ5IGFnZW50IOKAlCBPVVRCT1VORCBpTWVzc2FnZSBzZW5kZXIgKHF1ZXVlIGNvbnN1bWVyKS4KIwojIFRoZSB6ZXJvLXNldHVwIHNlbmRlciAoQnVpbGQgMiwgUGF0aCBCKS4gUnVucyBvbiB0aGUgc3BhJ3Mgb3duIE1hYyBhbG9uZ3NpZGUgdGhlCiMgaGVhcnRiZWF0IHBpbmdlci4gRXZlcnkgfjYwcyBpdCBjbGFpbXMgYW55IHRleHRzIFNtYXJ0U3BhIGhhcyBxdWV1ZWQgZm9yIHRoaXMgc3BhCiMgYW5kIHNlbmRzIGVhY2ggdmlhIE1lc3NhZ2VzLmFwcCDigJQgZnJvbSB0aGUgc3BhJ3Mgb3duIG51bWJlciwgbm8gR21haWwsIG5vIENsYXVkZQojIERlc2t0b3Agcm91dGluZSwgbm8gTUNQLiBTbWFydFNwYSBxdWV1ZXM7IHRoaXMgc2VuZHM7IHRoaXMgYWNrcyB0aGUgb3V0Y29tZS4KIwojIEF1dGggKyBpZGVudGl0eTogdGhlIFNBTUUgcGVyLXNwYSBzZWNyZXQgdGhlIGhlYXJ0YmVhdCB1c2VzICh4LWFnZW50LXNlY3JldCkuCiMgU2VuZCBnYXRlOiBTbWFydFNwYSBvbmx5IGhhbmRzIG91dCBpdGVtcyB3aGVuIHRoZSBzcGEncyBhdXRvX3NlbmQgaXMgT04sIGFuZCB0aGlzCiMgc2NyaXB0IGRvdWJsZS1jaGVja3MgYGF1dG9TZW5kYCBiZWZvcmUgc2VuZGluZyAoYmVsdC1hbmQtc3VzcGVuZGVycyDigJQgbm90aGluZwojIGdvZXMgb3V0IHVubGVzcyBhdXRvLXNlbmQgaXMgZXhwbGljaXRseSBlbmFibGVkKS4KIwojIFBlcm1pc3Npb24gbm90ZTogdGhlIEZJUlNUIHNlbmQgdHJpZ2dlcnMgYSBtYWNPUyBBdXRvbWF0aW9uIHByb21wdAojIChTeXN0ZW0gU2V0dGluZ3Mg4oaSIFByaXZhY3kgJiBTZWN1cml0eSDihpIgQXV0b21hdGlvbiDihpIgYWxsb3cgY29udHJvbGxpbmcgTWVzc2FnZXMpLgojIFVudGlsIGdyYW50ZWQsIHNlbmRzIGZhaWwgYW5kIGFyZSBhY2tlZCBhcyBmYWlsZWQgd2l0aCB0aGF0IHJlYXNvbi4KIwojIF9fQkFTRV9fIGFuZCBfX1NFQ1JFVF9fIGFyZSBmaWxsZWQgaW4gYnkgdGhlIGluc3RhbGxlciAoaW5zdGFsbC5zaCAvCiMgdGhlIGFwcCdzIG9uZS1wYXN0ZSBjb21tYW5kKS4gRG9uJ3QgcnVuIHRoaXMgdGVtcGxhdGUgZGlyZWN0bHkuCgpCQVNFPSJfX0JBU0VfXyIKU0VDUkVUPSJfX1NFQ1JFVF9fIgoKIyAxKSBDbGFpbSB1cCB0byA1IHF1ZXVlZCB0ZXh0cyBmb3IgdGhpcyBzcGEuIC1mc1M6IHF1aWV0LCBidXQgZmFpbCBvbiBIVFRQIGVycm9yLgpSRVNQPSQoY3VybCAtZnNTIC1tIDIwIC1YIFBPU1QgIiRCQVNFL2FwaS9hZ2VudC9xdWV1ZS9jbGFpbSIgXAogIC1IICJ4LWFnZW50LXNlY3JldDogJFNFQ1JFVCIgLUggIkNvbnRlbnQtVHlwZTogYXBwbGljYXRpb24vanNvbiIgXAogIC1kICd7ImxpbWl0Ijo1fScgMj4vZGV2L251bGwpIHx8IGV4aXQgMApbIC16ICIkUkVTUCIgXSAmJiBleGl0IDAKCiMgMikgRmxhdHRlbiB0aGUgY2xhaW1lZCBpdGVtcyB0byBUU1YgdmlhIEpYQSAob3Nhc2NyaXB0IHNoaXBzIG9uIGV2ZXJ5IE1hYywgcGFyc2VzCiMgICAgSlNPTiBuYXRpdmVseSkuIEVtaXRzIE5PVEhJTkcgdW5sZXNzIGF1dG9TZW5kPT09dHJ1ZS4gRWFjaCBsaW5lOgojICAgIGlkIDxUQUI+IHJlY2lwaWVudCA8VEFCPiBjbGFpbVRva2VuIDxUQUI+IGJvZHkgKHRhYnPihpJzcGFjZXMsIG5ld2xpbmVz4oaSXG4sCiMgICAgYmFja3NsYXNoZXMgZXNjYXBlZCkg4oCUIHNvIG9uZSBpdGVtIGlzIGV4YWN0bHkgb25lIHNhZmUgbGluZS4KTElORVM9JCgvdXNyL2Jpbi9vc2FzY3JpcHQgLWwgSmF2YVNjcmlwdCAtZSAnZnVuY3Rpb24gcnVuKGEpe3ZhciBkO3RyeXtkPUpTT04ucGFyc2UoYVswXSl9Y2F0Y2goZSl7cmV0dXJuICIifWlmKGQuYXV0b1NlbmQhPT10cnVlKXJldHVybiAiIjtyZXR1cm4gKGQuaXRlbXN8fFtdKS5tYXAoZnVuY3Rpb24oaXQpe3ZhciBiPVN0cmluZyhpdC5ib2R5KS5yZXBsYWNlKC9cXC9nLCJcXFxcIikucmVwbGFjZSgvXHQvZywiICIpLnJlcGxhY2UoL1xyP1xuL2csIlxcbiIpO3JldHVybiBbaXQuaWQsaXQucmVjaXBpZW50LGQuY2xhaW1Ub2tlbixiXS5qb2luKCJcdCIpfSkuam9pbigiXG4iKX0nICIkUkVTUCIgMj4vZGV2L251bGwpIHx8IGV4aXQgMApbIC16ICIkTElORVMiIF0gJiYgZXhpdCAwCgojIDMpIFNlbmQgZWFjaCB2aWEgTWVzc2FnZXMuYXBwLCB0aGVuIGFjayB0aGUgb3V0Y29tZS4KT0xESUZTPSIkSUZTIgpJRlM9JCdcbicKZm9yIGxpbmUgaW4gJExJTkVTOyBkbwogIElEPSQocHJpbnRmICclcycgIiRsaW5lIiB8IGN1dCAtZjEpCiAgUEhPTkU9JChwcmludGYgJyVzJyAiJGxpbmUiIHwgY3V0IC1mMikKICBUT0tFTj0kKHByaW50ZiAnJXMnICIkbGluZSIgfCBjdXQgLWYzKQogIEJPRFk9JChwcmludGYgJyViJyAiJChwcmludGYgJyVzJyAiJGxpbmUiIHwgY3V0IC1mNC0pIikgICMgJWIgdW4tZXNjYXBlcyBcbiBhbmQgXFwKCiAgU1RBVFVTPSJzZW50IgogIEVSUj0iIgogIGlmIC91c3IvYmluL29zYXNjcmlwdCAtICIkUEhPTkUiICIkQk9EWSIgPi9kZXYvbnVsbCAyPiYxIDw8J0FQUExFU0NSSVBUJwpvbiBydW4gYXJndgogIHNldCB0YXJnZXRQaG9uZSB0byBpdGVtIDEgb2YgYXJndgogIHNldCB0YXJnZXRNZXNzYWdlIHRvIGl0ZW0gMiBvZiBhcmd2CiAgdGVsbCBhcHBsaWNhdGlvbiAiTWVzc2FnZXMiCiAgICBzZXQgdGFyZ2V0U2VydmljZSB0byAxc3QgYWNjb3VudCB3aG9zZSBzZXJ2aWNlIHR5cGUgPSBpTWVzc2FnZQogICAgc2V0IHRhcmdldFBhcnRpY2lwYW50IHRvIHBhcnRpY2lwYW50IHRhcmdldFBob25lIG9mIHRhcmdldFNlcnZpY2UKICAgIHNlbmQgdGFyZ2V0TWVzc2FnZSB0byB0YXJnZXRQYXJ0aWNpcGFudAogIGVuZCB0ZWxsCmVuZCBydW4KQVBQTEVTQ1JJUFQKICB0aGVuCiAgICBTVEFUVVM9InNlbnQiCiAgZWxzZQogICAgU1RBVFVTPSJmYWlsZWQiCiAgICBFUlI9Ik1lc3NhZ2VzIHNlbmQgZmFpbGVkIChncmFudCBBdXRvbWF0aW9uIHBlcm1pc3Npb24gZm9yIE1lc3NhZ2VzLCBvciBjaGVjayB0aGUgbnVtYmVyKSIKICBmaQoKICAjIEFjayDigJQgdGhlIGNsYWltVG9rZW4gcHJvdmVzIHRoaXMgbGVhc2UgaXMgb3VyczsgU21hcnRTcGEgNDA5cyBhIHN0YWxlL2ZvcmVpZ24KICAjIGFjay4gaWQvdG9rZW4gYXJlIFVVSURzIGFuZCBFUlIgaXMgYSBmaXhlZCBzdHJpbmcsIHNvIHRoaXMgSlNPTiBpcyBhbHdheXMgc2FmZS4KICBjdXJsIC1mc1MgLW0gMjAgLVggUE9TVCAiJEJBU0UvYXBpL2FnZW50L3F1ZXVlL2FjayIgXAogICAgLUggIngtYWdlbnQtc2VjcmV0OiAkU0VDUkVUIiAtSCAiQ29udGVudC1UeXBlOiBhcHBsaWNhdGlvbi9qc29uIiBcCiAgICAtZCAie1wiaWRcIjpcIiRJRFwiLFwiY2xhaW1Ub2tlblwiOlwiJFRPS0VOXCIsXCJzdGF0dXNcIjpcIiRTVEFUVVNcIixcImVycm9yXCI6XCIkRVJSXCJ9IiBcCiAgICA+L2Rldi9udWxsIDI+JjEgfHwgdHJ1ZQpkb25lCklGUz0iJE9MRElGUyIK";
+
+/** The self-contained installer the owner runs ON THE RELAY MAC. Writes the tiny
+ *  heartbeat pinger (every 5 min) AND the outbound iMessage sender (every 60s) +
+ *  their launchd jobs, then starts them. Secret is embedded so it's a single
+ *  copy-paste with nothing else to fill in. Mirrors scripts/local-agent/install.sh
+ *  (the committed source of truth). */
 function buildInstallCommand(secret: string): string {
   const endpoint = `${PUBLIC_ORIGIN}/api/agent/heartbeat`;
+  const base = PUBLIC_ORIGIN;
   return `mkdir -p ~/.smartspa && cat > ~/.smartspa/pinger.sh <<'PINGER'
 #!/bin/bash
 # SmartSpa local delivery agent — heartbeat pinger
@@ -1233,7 +1244,17 @@ chmod +x ~/.smartspa/pinger.sh && cat > ~/Library/LaunchAgents/com.smartspa.loca
   <key>RunAtLoad</key><true/>
 </dict></plist>
 PLIST
-launchctl unload ~/Library/LaunchAgents/com.smartspa.localagent.plist 2>/dev/null; launchctl load ~/Library/LaunchAgents/com.smartspa.localagent.plist && bash ~/.smartspa/pinger.sh && echo "SmartSpa local agent installed and checked in."`;
+launchctl unload ~/Library/LaunchAgents/com.smartspa.localagent.plist 2>/dev/null; launchctl load ~/Library/LaunchAgents/com.smartspa.localagent.plist && bash ~/.smartspa/pinger.sh && echo "${LOCAL_SENDER_B64}" | base64 -d > ~/.smartspa/sender.sh && sed -i '' "s|__BASE__|${base}|g; s|__SECRET__|${secret}|g" ~/.smartspa/sender.sh && chmod +x ~/.smartspa/sender.sh && cat > ~/Library/LaunchAgents/com.smartspa.sender.plist <<PLIST2
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.smartspa.sender</string>
+  <key>ProgramArguments</key><array><string>/bin/bash</string><string>$HOME/.smartspa/sender.sh</string></array>
+  <key>StartInterval</key><integer>60</integer>
+  <key>RunAtLoad</key><true/>
+</dict></plist>
+PLIST2
+launchctl unload ~/Library/LaunchAgents/com.smartspa.sender.plist 2>/dev/null; launchctl load ~/Library/LaunchAgents/com.smartspa.sender.plist && echo "SmartSpa local agent installed: heartbeat + outbound iMessage sender are live."`;
 }
 
 export interface LocalAgentInfo {
