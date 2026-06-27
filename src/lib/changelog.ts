@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.186.1",
+    date: "June 2026",
+    items: [
+      "<strong>v2.186.1 &mdash; At-booking proxy email now byte-compatible with the spa's existing iMessage-staging routine.</strong> The v2.186.0 at-booking draft email used a <em>singular</em> <code>═══ READY-TO-SEND DRAFT ═══</code> section header, but the spa's Claude Desktop routine (which auto-stages these drafts into Messages.app via the iMessage MCP) greps for the <em>plural</em> <code>═══ READY-TO-SEND DRAFTS ═══</code> &mdash; the exact form rescue's <code>composeProxyEmail</code> emits. So the routine walked right past at-booking emails. Pluralized the markers (<code>READY-TO-SEND DRAFTS</code> / <code>END DRAFTS</code>) so an at-booking email parses identically to a rescue email and rides the <em>existing</em> automation &mdash; no new queue required to close the loop. (Separately: the routine's <code>from:hello@getrefill.app</code> Gmail filter is stale &mdash; live emails now send from <code>smartspa.app</code>; that's a one-line query update on the routine side.) <strong>Touched</strong>: <code>emma-rescue.functions.ts</code> (<code>composeAtBookingProxyEmail</code> markers), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.186.0",
     date: "June 2026",
     items: [

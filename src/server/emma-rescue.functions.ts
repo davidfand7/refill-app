@@ -1065,14 +1065,18 @@ function composeAtBookingProxyEmail(args: {
     "",
     `${args.firstName} just booked — offer them first dibs on earlier openings.`,
     "",
-    "═══ READY-TO-SEND DRAFT ═══",
+    // NOTE: markers are intentionally the PLURAL "DRAFTS" form so this email is
+    // byte-compatible with rescue's composeProxyEmail — the spa's Claude Desktop
+    // iMessage-staging routine greps for "═══ READY-TO-SEND DRAFTS ═══" and
+    // would skip a singular header. One patient = one block here.
+    "═══ READY-TO-SEND DRAFTS ═══",
     "",
     "────────────────",
     `To: ${args.phone} (${args.fullName})`,
     "",
     args.draft,
     "",
-    "═══ END DRAFT ═══",
+    "═══ END DRAFTS ═══",
     "",
     "Prefer manual? Just text the link above to them yourself.",
   ].join("\n");
