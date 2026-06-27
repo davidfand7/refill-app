@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.195.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.195.0 &mdash; Hotfix: starring a patient as A-list now actually sticks (admin viewing-as).</strong> Tapping the A-list star on the Patients page did nothing &mdash; the star would briefly fill, then silently revert. Root cause: the per-row <code>setPatientVip</code> server fn never got the &ldquo;admin viewing-as&rdquo; treatment its siblings have. It used raw <code>verifyAuth</code> (the admin&rsquo;s own user_id) and scoped the read/write with <code>.eq(\"user_id\", admin)</code> &mdash; but real-tenant patients live under the <em>owner&rsquo;s</em> user_id (Karen&rsquo;s). So the lookup hit &ldquo;Patient not found,&rdquo; threw, and the optimistic star reverted &mdash; reading as &ldquo;nothing happens on click.&rdquo; A long-standing gap: a v1.25.5 changelog note flagged it during the v1.25.1 plan and it was never closed. Fix mirrors <code>setPatientHidden</code> / <code>setPatientSoftTag</code>: <code>setVipInput</code> now accepts <code>viewAsUserId</code>, the handler resolves via <code>resolveEffectiveUserId</code> and scopes both queries by <code>effectiveUserId</code>; the Patients-page <code>toggleVip</code> passes <code>viewAsUserId</code> and now surfaces a <strong>toast on failure</strong> instead of a console-only log. Unblocks verifying the v2.194.0 A-list gate. <strong>Touched</strong>: <code>patient-ingest.functions.ts</code> (setPatientVip impersonation fix), <code>app.refill.patients.index.tsx</code> (pass viewAsUserId + error toast), <code>changelog.ts</code>. <strong>No migration.</strong>",
+    ],
+  },
+  {
     version: "v2.194.0",
     date: "June 2026",
     items: [

@@ -26,7 +26,7 @@ import { admin } from "./admin-client";
 import { z } from "zod";
 
 import type { Database, Json } from "@/integrations/supabase/types";
-import { resolveEffectiveUserId, verifyAuth } from "@/server/auth-helpers";
+import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
 import {
   normalizeCustomTag,
@@ -668,6 +668,12 @@ async function refreshPatientSummary(
 
 const setVipInput = z.object({
   accessToken: z.string().min(1),
+  // v2.195.0: thread viewAsUserId so admin viewing-as Karen writes to
+  // Karen's rows (patients live under the tenant owner's user_id, not the
+  // admin's). Without this the per-row star scoped to the admin's user_id,
+  // hit "Patient not found", threw, and the optimistic star reverted —
+  // reading to the owner as "nothing happens on click".
+  viewAsUserId: z.string().uuid().optional(),
   patientNodeId: z.string().uuid(),
   vip: z.boolean(),
 });
@@ -675,9 +681,9 @@ const setVipInput = z.object({
 // v1.25.1: bulk variant for the A-list automation dashboard. Apply passes
 // addIds; Clear passes removeIds. Backed by the refill_bulk_set_vip Postgres
 // RPC (migration 20260528000000) which does both updates in a single round
-// trip via jsonb_set, preserving all other PatientSummary fields. Unlike
-// the per-row setPatientVip above, this fn DOES go through
-// resolveEffectiveUserId so admin viewing-as Karen writes to Karen's rows.
+// trip via jsonb_set, preserving all other PatientSummary fields. Both this
+// and the per-row setPatientVip above go through resolveEffectiveUserId so
+// admin viewing-as Karen writes to Karen's rows (per-row fixed v2.195.0).
 const setVipBulkInput = z.object({
   accessToken: z.string().min(1),
   viewAsUserId: z.string().uuid().optional(),
@@ -701,13 +707,16 @@ const setVipBulkInput = z.object({
 export const setPatientVip = createServerFn({ method: "POST" })
   .inputValidator((raw: unknown) => setVipInput.parse(raw))
   .handler(async ({ data }): Promise<{ ok: true }> => {
-    const userId = await verifyAuth(data.accessToken);
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
     const sb = admin();
     const { data: existing, error: readErr } = await sb
       .from("knowledge_nodes")
       .select("attachments")
       .eq("id", data.patientNodeId)
-      .eq("user_id", userId)
+      .eq("user_id", effectiveUserId)
       .eq("node_type", "patient")
       .maybeSingle();
     if (readErr) throw new Error(`Couldn't read patient: ${readErr.message}`);
@@ -737,7 +746,7 @@ export const setPatientVip = createServerFn({ method: "POST" })
         updated_at: new Date().toISOString(),
       })
       .eq("id", data.patientNodeId)
-      .eq("user_id", userId);
+      .eq("user_id", effectiveUserId);
     if (updErr) throw new Error(`Couldn't update VIP: ${updErr.message}`);
     return { ok: true };
   });

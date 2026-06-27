@@ -500,8 +500,10 @@ function PatientsPage() {
         : prev,
     );
     try {
+      // v2.195.0: pass viewAsUserId so admin viewing-as Karen writes to
+      // Karen's rows (was silently failing + reverting before this).
       await setPatientVip({
-        data: { accessToken, patientNodeId, vip: !currentlyVip },
+        data: { accessToken, viewAsUserId, patientNodeId, vip: !currentlyVip },
       });
     } catch (e) {
       // Revert on failure.
@@ -512,6 +514,7 @@ function PatientsPage() {
             )
           : prev,
       );
+      toast.error(e instanceof Error ? e.message : "Couldn't update A-list.");
       console.error("VIP toggle failed:", e instanceof Error ? e.message : e);
     } finally {
       setPendingVipIds((prev) => {
