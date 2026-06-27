@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.193.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.193.0 &mdash; Delivery settings in the app: no more SQL to arm or test the autonomous sender.</strong> The <code>delivery_mode</code> / <code>auto_send</code> / <code>test_recipients</code> controls that were SQL-only now live on <strong>Settings &rarr; Connection health &rarr; Local delivery agent.</strong> A two-button choice &mdash; <strong>&ldquo;Email me drafts&rdquo;</strong> (you review &amp; send each) vs <strong>&ldquo;Send automatically&rdquo;</strong> (your Mac sends each text on its own, = queue + auto-send) &mdash; plus, in autonomous mode, a <strong>test-mode allowlist</strong>: add your own number(s) as chips and only those get an automatic text (everyone else falls back to a draft you review), so you can exercise the live loop with zero risk to a real client. Numbers are normalized to E.164 on save (type <code>3035551234</code>, stored <code>+13035551234</code>) and deduped. New <code>updateLocalAgentSettingsFn</code> (owner-scoped, writes only the provided fields) + <code>getLocalAgentFn</code> now returns the delivery config. <strong>Touched</strong>: <code>connection-health.functions.ts</code> (LocalAgentInfo + getLocalAgentFn + updateLocalAgentSettingsFn), <code>app.refill.settings.health.tsx</code> (DeliverySettings control), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.192.0",
     date: "June 2026",
     items: [

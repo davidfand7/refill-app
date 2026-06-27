@@ -29,9 +29,13 @@ import {
   Gift,
   Laptop,
   Loader2,
+  Mail,
   MessageSquare,
+  Plus,
   PlugZap,
   RefreshCw,
+  X,
+  Zap,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
@@ -43,6 +47,7 @@ import {
   getLocalAgentFn,
   provisionLocalAgentFn,
   rotateLocalAgentSecretFn,
+  updateLocalAgentSettingsFn,
   type ConnectionHealthReport,
   type ConnectionHealthItem,
   type LocalAgentInfo,
@@ -351,6 +356,12 @@ function LocalAgentSection({
             </button>
           ) : (
             <div className="mt-3 space-y-3">
+              <DeliverySettings
+                info={info}
+                accessToken={accessToken}
+                viewAsUserId={viewAsUserId}
+                onSaved={(updated) => setInfo(updated)}
+              />
               <div>
                 <div className="text-[11px] font-semibold text-ink-soft mb-1">
                   Run this once on the relay Mac
@@ -430,6 +441,188 @@ function LocalAgentSection({
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * Delivery settings (v2.193.0) — the in-app controls that replace hand-editing
+ * local_agents in SQL. Pick how rescue/booking texts go out (email draft vs the
+ * autonomous queue from the spa's own Mac), and — for safe internal testing —
+ * an allowlist that limits autonomous sends to specific numbers.
+ */
+function DeliverySettings({
+  info,
+  accessToken,
+  viewAsUserId,
+  onSaved,
+}: {
+  info: LocalAgentInfo | null;
+  accessToken: string | null;
+  viewAsUserId: string | undefined;
+  onSaved: (updated: LocalAgentInfo) => void;
+}) {
+  const mode: "email" | "queue" = info?.deliveryMode ?? "email";
+  const recipients = info?.testRecipients ?? [];
+  const [busy, setBusy] = useState(false);
+  const [newNum, setNewNum] = useState("");
+
+  const save = useCallback(
+    async (patch: {
+      deliveryMode?: "email" | "queue";
+      autoSend?: boolean;
+      testRecipients?: string[];
+    }) => {
+      if (!accessToken) return;
+      setBusy(true);
+      try {
+        const updated = await updateLocalAgentSettingsFn({
+          data: { accessToken, viewAsUserId, ...patch },
+        });
+        onSaved(updated);
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "Couldn't save delivery settings.",
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [accessToken, viewAsUserId, onSaved],
+  );
+
+  // Autonomous = queue lane + auto_send on (the helper sends). Email = owner draft.
+  const setMode = (m: "email" | "queue") => {
+    if (m === mode) return;
+    void save({ deliveryMode: m, autoSend: m === "queue" });
+  };
+  const addRecipient = () => {
+    const v = newNum.trim();
+    if (!v) return;
+    setNewNum("");
+    void save({ testRecipients: [...recipients, v] });
+  };
+  const removeRecipient = (n: string) =>
+    void save({ testRecipients: recipients.filter((r) => r !== n) });
+
+  return (
+    <div className="rounded-lg border border-rule p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <div className="text-[12px] font-semibold text-ink">
+          How rescue &amp; booking texts go out
+        </div>
+        {busy && <Loader2 className="h-3 w-3 animate-spin text-ink-faint" />}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={() => setMode("email")}
+          disabled={busy || !accessToken}
+          className={cn(
+            "flex items-start gap-2 rounded-md border p-2.5 text-left transition disabled:opacity-60",
+            mode === "email"
+              ? "border-emerald bg-emerald-soft"
+              : "border-rule hover:border-ink-faint",
+          )}
+        >
+          <Mail
+            className="h-4 w-4 mt-0.5 shrink-0"
+            style={{ color: mode === "email" ? "#056048" : "#8a9098" }}
+          />
+          <span>
+            <span className="block text-[12px] font-semibold text-ink">
+              Email me drafts
+            </span>
+            <span className="block text-[11px] text-ink-faint leading-snug">
+              You review &amp; send each text yourself.
+            </span>
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("queue")}
+          disabled={busy || !accessToken}
+          className={cn(
+            "flex items-start gap-2 rounded-md border p-2.5 text-left transition disabled:opacity-60",
+            mode === "queue"
+              ? "border-emerald bg-emerald-soft"
+              : "border-rule hover:border-ink-faint",
+          )}
+        >
+          <Zap
+            className="h-4 w-4 mt-0.5 shrink-0"
+            style={{ color: mode === "queue" ? "#056048" : "#8a9098" }}
+          />
+          <span>
+            <span className="block text-[12px] font-semibold text-ink">
+              Send automatically
+            </span>
+            <span className="block text-[11px] text-ink-faint leading-snug">
+              Your Mac sends each text on its own.
+            </span>
+          </span>
+        </button>
+      </div>
+
+      {mode === "queue" && (
+        <div className="rounded-md bg-[#f8f7f3] p-2.5 space-y-2">
+          <div className="text-[11px] font-semibold text-ink-soft">
+            Test mode — only auto-send to these numbers
+          </div>
+          <p className="text-[11px] text-ink-faint leading-snug">
+            Leave empty to send to <span className="font-semibold">every</span>{" "}
+            patient (full live). Add your own number(s) to test safely — anyone not
+            listed falls back to a draft you review, so a real client can&apos;t get
+            an automatic text.
+          </p>
+          {recipients.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {recipients.map((n) => (
+                <span
+                  key={n}
+                  className="inline-flex items-center gap-1 rounded-full bg-white border border-rule px-2 py-0.5 text-[11px] text-ink-soft"
+                >
+                  {n}
+                  <button
+                    type="button"
+                    onClick={() => removeRecipient(n)}
+                    disabled={busy}
+                    className="text-ink-faint hover:text-red-600 disabled:opacity-60"
+                    aria-label={`Remove ${n}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <input
+              type="tel"
+              value={newNum}
+              onChange={(e) => setNewNum(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addRecipient();
+                }
+              }}
+              placeholder="Add a number, e.g. 3035551234"
+              className="flex-1 rounded-md border border-rule px-2 py-1 text-[12px] text-ink placeholder:text-ink-faint focus:outline-none focus:border-emerald"
+            />
+            <button
+              type="button"
+              onClick={addRecipient}
+              disabled={busy || !newNum.trim()}
+              className="inline-flex items-center gap-1 rounded-md bg-ink px-2.5 py-1 text-[11px] font-semibold text-paper hover:opacity-90 transition disabled:opacity-50"
+            >
+              <Plus className="h-3 w-3" />
+              Add
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

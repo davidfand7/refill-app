@@ -26,6 +26,7 @@ import { z } from "zod";
 import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
 import { MANUFACTURER_MAPPERS } from "@/lib/manufacturer-reward-csv";
+import { normalizePhoneE164 } from "@/lib/client-list-csv";
 import {
   computeVerdict,
   formatAge,
@@ -1264,6 +1265,12 @@ export interface LocalAgentInfo {
   lastSeenAtMs: number | null;
   endpoint: string;
   installCommand: string | null;
+  // Delivery config (v2.193.0 — the in-app toggles). Optional: only the readers
+  // that select them populate these; provision/rotate omit them (the UI re-reads
+  // via getLocalAgentFn). 'email' = owner-draft lane; 'queue' = autonomous send.
+  deliveryMode?: "email" | "queue";
+  autoSend?: boolean;
+  testRecipients?: string[];
 }
 
 const localAgentSchema = z.object({
@@ -1283,7 +1290,7 @@ export const getLocalAgentFn = createServerFn({ method: "POST" })
     const sb = admin();
     const endpoint = `${PUBLIC_ORIGIN}/api/agent/heartbeat`;
     const { data: row, error } = await localAgentTbl(sb)
-      .select("secret, label, last_seen_at")
+      .select("secret, label, last_seen_at, delivery_mode, auto_send, test_recipients")
       .eq("user_id", effectiveUserId)
       .maybeSingle();
     if (error) throw new Error(error.message);
@@ -1295,9 +1302,19 @@ export const getLocalAgentFn = createServerFn({ method: "POST" })
         lastSeenAtMs: null,
         endpoint,
         installCommand: null,
+        deliveryMode: "email",
+        autoSend: false,
+        testRecipients: [],
       };
     }
-    const r = row as { secret: string; label: string | null; last_seen_at: string | null };
+    const r = row as {
+      secret: string;
+      label: string | null;
+      last_seen_at: string | null;
+      delivery_mode: string | null;
+      auto_send: boolean | null;
+      test_recipients: unknown;
+    };
     return {
       provisioned: true,
       secret: r.secret,
@@ -1305,8 +1322,16 @@ export const getLocalAgentFn = createServerFn({ method: "POST" })
       lastSeenAtMs: parseTs(r.last_seen_at),
       endpoint,
       installCommand: buildInstallCommand(r.secret),
+      deliveryMode: r.delivery_mode === "queue" ? "queue" : "email",
+      autoSend: r.auto_send === true,
+      testRecipients: coerceTestRecipients(r.test_recipients),
     };
   });
+
+/** Coerce a jsonb/text[] test_recipients value to a clean string[]. */
+function coerceTestRecipients(v: unknown): string[] {
+  return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+}
 
 const provisionLocalAgentSchema = z.object({
   accessToken: z.string().min(1),
@@ -1404,5 +1429,74 @@ export const rotateLocalAgentSecretFn = createServerFn({ method: "POST" })
       lastSeenAtMs: parseTs(r.last_seen_at),
       endpoint,
       installCommand: buildInstallCommand(r.secret),
+    };
+  });
+
+const updateLocalAgentSettingsSchema = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().optional(),
+  deliveryMode: z.enum(["email", "queue"]).optional(),
+  autoSend: z.boolean().optional(),
+  testRecipients: z.array(z.string()).max(50).optional(),
+});
+
+/** UI: update the spa's delivery settings (v2.193.0) — the in-app controls that
+ *  replace hand-editing local_agents in SQL. deliveryMode picks the lane (email
+ *  draft vs autonomous queue); autoSend is the queue's send/stage interlock;
+ *  testRecipients is the safe-testing allowlist (normalized to E.164, deduped).
+ *  Only the provided fields are written; returns the fresh full agent info. */
+export const updateLocalAgentSettingsFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => updateLocalAgentSettingsSchema.parse(raw))
+  .handler(async ({ data }): Promise<LocalAgentInfo> => {
+    const { effectiveUserId } = await resolveEffectiveUserId({
+      accessToken: data.accessToken,
+      viewAsUserId: data.viewAsUserId,
+    });
+    const sb = admin();
+    const endpoint = `${PUBLIC_ORIGIN}/api/agent/heartbeat`;
+
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    if (data.deliveryMode) patch.delivery_mode = data.deliveryMode;
+    if (typeof data.autoSend === "boolean") patch.auto_send = data.autoSend;
+    if (data.testRecipients) {
+      // Normalize each to E.164 (so the owner can type "3037046530") and dedupe;
+      // drop anything that isn't a usable number rather than store junk.
+      const seen = new Set<string>();
+      const cleaned: string[] = [];
+      for (const raw of data.testRecipients) {
+        const e164 = normalizePhoneE164(raw);
+        if (e164 && !seen.has(e164)) {
+          seen.add(e164);
+          cleaned.push(e164);
+        }
+      }
+      patch.test_recipients = cleaned;
+    }
+
+    const { data: row, error } = await localAgentTbl(sb)
+      .update(patch)
+      .eq("user_id", effectiveUserId)
+      .select("secret, label, last_seen_at, delivery_mode, auto_send, test_recipients")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!row) throw new Error("No local agent to update — set one up first.");
+    const r = row as {
+      secret: string;
+      label: string | null;
+      last_seen_at: string | null;
+      delivery_mode: string | null;
+      auto_send: boolean | null;
+      test_recipients: unknown;
+    };
+    return {
+      provisioned: true,
+      secret: r.secret,
+      label: r.label,
+      lastSeenAtMs: parseTs(r.last_seen_at),
+      endpoint,
+      installCommand: buildInstallCommand(r.secret),
+      deliveryMode: r.delivery_mode === "queue" ? "queue" : "email",
+      autoSend: r.auto_send === true,
+      testRecipients: coerceTestRecipients(r.test_recipients),
     };
   });
