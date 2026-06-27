@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.187.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.187.0 &mdash; Claude health, Build 1: the Desktop drafting leg is no longer blind.</strong> The heartbeat (v2.58.0) proves the relay Mac is <em>alive</em>; it can't see <em>inside</em> Claude Desktop &mdash; whether the daily &ldquo;Refill rescue drafter&rdquo; routine actually staged its iMessage drafts, or died on a disconnected Gmail connector / stale filter (the exact dark link the 9-hour loop-close lived in). This adds the <strong>callback that turns inferred health into observed</strong>: a new <code>POST /api/agent/run-report</code> &mdash; authed by the SAME per-spa <code>local_agents.secret</code> as the heartbeat &mdash; lets the routine POST its run summary (<code>found / drafted / skipped / errors[] / diagnosis</code>) after each run. We stamp the latest run onto the spa's <code>local_agents</code> row (new <code>last_run_*</code> columns, snapshot not history) and Connection Health gains a second presence card, <strong>&ldquo;Drafting in Messages&rdquo;</strong>, that ages it into a verdict and shows the routine's <em>own verbatim diagnosis</em> (&ldquo;Gmail connector not connected&rdquo;) right on the card. Broken = the routine <em>reported</em> a failure (errors, or found-owed-but-staged-none); Quiet/Stale = it went silent for 6h+; Setting up = checking in but the report step was never added (an adoption nudge). One glance names the dark link &mdash; what took 9 hours becomes 9 seconds. (CTA points to the trust page, not a fabricated Claude-Desktop deep-link &mdash; that lands once the real URL is verified.) <strong>Touched</strong>: new <code>api.agent.run-report.ts</code>, <code>connection-health.functions.ts</code> (drafting card + <code>draftingDetail</code>), <code>app.refill.settings.health.tsx</code> (&ldquo;Last run&rdquo; label), <code>changelog.ts</code>. <strong>Migration</strong>: <code>20260830000000_v2_187_0_agent_run_report.sql</code> (<code>last_run_*</code> on <code>local_agents</code>). Build 2 (zero-setup sender) is the next keystone; this callback is its on-ramp.",
+    ],
+  },
+  {
     version: "v2.186.2",
     date: "June 2026",
     items: [

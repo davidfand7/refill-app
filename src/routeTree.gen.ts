@@ -92,6 +92,7 @@ import { Route as ApiCronEmmaPreshowSweepRouteImport } from './routes/api.cron.e
 import { Route as ApiCronEmmaInvoiceRouteImport } from './routes/api.cron.emma-invoice'
 import { Route as ApiCronAcuityReconcileRouteImport } from './routes/api.cron.acuity-reconcile'
 import { Route as ApiCronAcuityProviderRelinkRouteImport } from './routes/api.cron.acuity-provider-relink'
+import { Route as ApiAgentRunReportRouteImport } from './routes/api.agent.run-report'
 import { Route as ApiAgentHeartbeatRouteImport } from './routes/api.agent.heartbeat'
 import { Route as AppRefillRecoveryIndexRouteImport } from './routes/app.refill.recovery.index'
 import { Route as AppRefillPatientsIndexRouteImport } from './routes/app.refill.patients.index'
@@ -591,6 +592,11 @@ const ApiCronAcuityProviderRelinkRoute =
     path: '/api/cron/acuity-provider-relink',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiAgentRunReportRoute = ApiAgentRunReportRouteImport.update({
+  id: '/api/agent/run-report',
+  path: '/api/agent/run-report',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAgentHeartbeatRoute = ApiAgentHeartbeatRouteImport.update({
   id: '/api/agent/heartbeat',
   path: '/api/agent/heartbeat',
@@ -1071,6 +1077,7 @@ export interface FileRoutesByFullPath {
   '/report/$token': typeof ReportTokenRoute
   '/s/$slug': typeof SSlugRoute
   '/api/agent/heartbeat': typeof ApiAgentHeartbeatRoute
+  '/api/agent/run-report': typeof ApiAgentRunReportRoute
   '/api/cron/acuity-provider-relink': typeof ApiCronAcuityProviderRelinkRoute
   '/api/cron/acuity-reconcile': typeof ApiCronAcuityReconcileRoute
   '/api/cron/emma-invoice': typeof ApiCronEmmaInvoiceRoute
@@ -1232,6 +1239,7 @@ export interface FileRoutesByTo {
   '/report/$token': typeof ReportTokenRoute
   '/s/$slug': typeof SSlugRoute
   '/api/agent/heartbeat': typeof ApiAgentHeartbeatRoute
+  '/api/agent/run-report': typeof ApiAgentRunReportRoute
   '/api/cron/acuity-provider-relink': typeof ApiCronAcuityProviderRelinkRoute
   '/api/cron/acuity-reconcile': typeof ApiCronAcuityReconcileRoute
   '/api/cron/emma-invoice': typeof ApiCronEmmaInvoiceRoute
@@ -1392,6 +1400,7 @@ export interface FileRoutesById {
   '/report/$token': typeof ReportTokenRoute
   '/s/$slug': typeof SSlugRoute
   '/api/agent/heartbeat': typeof ApiAgentHeartbeatRoute
+  '/api/agent/run-report': typeof ApiAgentRunReportRoute
   '/api/cron/acuity-provider-relink': typeof ApiCronAcuityProviderRelinkRoute
   '/api/cron/acuity-reconcile': typeof ApiCronAcuityReconcileRoute
   '/api/cron/emma-invoice': typeof ApiCronEmmaInvoiceRoute
@@ -1558,6 +1567,7 @@ export interface FileRouteTypes {
     | '/report/$token'
     | '/s/$slug'
     | '/api/agent/heartbeat'
+    | '/api/agent/run-report'
     | '/api/cron/acuity-provider-relink'
     | '/api/cron/acuity-reconcile'
     | '/api/cron/emma-invoice'
@@ -1719,6 +1729,7 @@ export interface FileRouteTypes {
     | '/report/$token'
     | '/s/$slug'
     | '/api/agent/heartbeat'
+    | '/api/agent/run-report'
     | '/api/cron/acuity-provider-relink'
     | '/api/cron/acuity-reconcile'
     | '/api/cron/emma-invoice'
@@ -1878,6 +1889,7 @@ export interface FileRouteTypes {
     | '/report/$token'
     | '/s/$slug'
     | '/api/agent/heartbeat'
+    | '/api/agent/run-report'
     | '/api/cron/acuity-provider-relink'
     | '/api/cron/acuity-reconcile'
     | '/api/cron/emma-invoice'
@@ -2040,6 +2052,7 @@ export interface RootRouteChildren {
   ReportTokenRoute: typeof ReportTokenRoute
   SSlugRoute: typeof SSlugRoute
   ApiAgentHeartbeatRoute: typeof ApiAgentHeartbeatRoute
+  ApiAgentRunReportRoute: typeof ApiAgentRunReportRoute
   ApiCronAcuityProviderRelinkRoute: typeof ApiCronAcuityProviderRelinkRoute
   ApiCronAcuityReconcileRoute: typeof ApiCronAcuityReconcileRoute
   ApiCronEmmaInvoiceRoute: typeof ApiCronEmmaInvoiceRoute
@@ -2666,6 +2679,13 @@ declare module '@tanstack/react-router' {
       path: '/api/cron/acuity-provider-relink'
       fullPath: '/api/cron/acuity-provider-relink'
       preLoaderRoute: typeof ApiCronAcuityProviderRelinkRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/agent/run-report': {
+      id: '/api/agent/run-report'
+      path: '/api/agent/run-report'
+      fullPath: '/api/agent/run-report'
+      preLoaderRoute: typeof ApiAgentRunReportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/agent/heartbeat': {
@@ -3533,6 +3553,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportTokenRoute: ReportTokenRoute,
   SSlugRoute: SSlugRoute,
   ApiAgentHeartbeatRoute: ApiAgentHeartbeatRoute,
+  ApiAgentRunReportRoute: ApiAgentRunReportRoute,
   ApiCronAcuityProviderRelinkRoute: ApiCronAcuityProviderRelinkRoute,
   ApiCronAcuityReconcileRoute: ApiCronAcuityReconcileRoute,
   ApiCronEmmaInvoiceRoute: ApiCronEmmaInvoiceRoute,

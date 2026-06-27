@@ -472,7 +472,12 @@ function HealthCard({ item }: { item: ConnectionHealthItem }) {
           ? Laptop
           : Gift;
   const needsAction = item.severity === "error" || item.severity === "warn";
-  const lastLabel = item.kind === "presence" ? "Last check-in" : "Last activity";
+  const lastLabel =
+    item.key === "presence:drafting"
+      ? "Last run"
+      : item.kind === "presence"
+        ? "Last check-in"
+        : "Last activity";
   return (
     <section className="rounded-xl border border-rule bg-white px-5 py-4">
       <div className="flex items-start gap-3">

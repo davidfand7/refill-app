@@ -293,6 +293,56 @@ function presenceDetail(
   }
 }
 
+/**
+ * Drafting routine (the "Drafting in Messages" presence row, v2.187.0). The
+ * heartbeat proves the Mac is alive; THIS proves the Claude Desktop drafting
+ * routine actually turns owed texts into staged iMessage drafts — the leg that
+ * was blind until the run-report callback. The keystone of the copy is the
+ * routine's OWN verbatim diagnosis (e.g. "Gmail connector not connected"): one
+ * glance names the dark link instead of a 9-hour debug.
+ */
+function draftingDetail(
+  verdict: HealthVerdict,
+  ageLabel: string,
+  ctx: {
+    found: number | null;
+    drafted: number | null;
+    diagnosis: string | null;
+    errors: string[];
+  },
+): string {
+  const { found, drafted, diagnosis, errors } = ctx;
+  switch (verdict) {
+    case "setup":
+      return `Your relay is checking in, but the drafting routine hasn't reported a run yet. Add the one-line report step to the routine (below) so this page can confirm rescue texts are actually being staged in Messages — not silently stuck.`;
+    case "broken": {
+      // The routine's self-diagnosis is the gold; fall back to the first error,
+      // then to the found-vs-staged gap. Always the boundary clause.
+      const said =
+        (diagnosis && diagnosis.trim()) ||
+        (errors.length > 0 ? errors[0] : "") ||
+        "";
+      const gapClause =
+        found != null && found > 0 && (drafted ?? 0) === 0
+          ? ` It found ${found} patient${found === 1 ? "" : "s"} owed a text but staged ${drafted ?? 0} drafts.`
+          : "";
+      if (said) {
+        return `The last drafting run reported: “${said}”.${gapClause} Rescue texts won't reach patients until that's fixed in Claude Desktop. ${BOUNDARY}`;
+      }
+      return `The last drafting run couldn't stage its drafts.${gapClause} Rescue texts won't reach patients until the routine completes in Claude Desktop. ${BOUNDARY}`;
+    }
+    case "stale":
+      return `The drafting routine hasn't reported a run in ${ageLabel} — it may be turned off or erroring in Claude Desktop. New rescue texts won't be staged until it runs again. ${BOUNDARY}`;
+    case "healthy":
+      if (found != null && found === 0) {
+        return `Last run ${ageLabel}: nothing was owed a text, so there was nothing to stage. Drafting is working.`;
+      }
+      return `Last run ${ageLabel}: staged ${drafted ?? 0} of ${found ?? drafted ?? 0} draft${(found ?? drafted ?? 0) === 1 ? "" : "s"} into Messages. Drafting is working.`;
+    default:
+      return `Drafting routine status unknown (last run ${ageLabel}).`;
+  }
+}
+
 // ─── Row types ─────────────────────────────────────────────────────────────
 
 type SchedulerRow = {
@@ -851,6 +901,110 @@ export const getConnectionHealthFn = createServerFn({ method: "POST" })
             to: HEALTH_ROUTE,
           },
         });
+
+        // ── Drafting in Messages (the second presence row, v2.187.0) ──
+        // The heartbeat above proves the Mac is alive; this proves the Claude
+        // Desktop drafting routine actually turns owed texts into staged drafts.
+        // Only emitted once the agent has checked in at least once (!neverSeen) —
+        // a brand-new agent's setup story belongs to the heartbeat card alone, no
+        // duplicate "set up" row. Verdict: broken = the routine REPORTED a failure
+        // (errors, or found-but-staged-none); stale = it went quiet (age only);
+        // setup = checking in but the report step was never added (adoption nudge).
+        //
+        // The run-report columns are read in their OWN guarded query so a not-yet-
+        // applied migration only drops THIS card — the heartbeat card above (which
+        // doesn't touch last_run_*) stays load-bearing regardless of deploy order.
+        type RunRow = {
+          last_run_at: string | null;
+          last_run_found: number | null;
+          last_run_drafted: number | null;
+          last_run_errors: unknown;
+          last_run_diagnosis: string | null;
+        };
+        let runRow: RunRow | null = null;
+        try {
+          const { data: rData, error: rErr } = await (
+            sb as unknown as { from(t: string): any }
+          )
+            .from("local_agents")
+            .select(
+              "last_run_at, last_run_found, last_run_drafted, last_run_errors, last_run_diagnosis",
+            )
+            .eq("user_id", effectiveUserId)
+            .maybeSingle();
+          if (rErr) throw new Error(rErr.message);
+          runRow = rData as RunRow | null;
+        } catch (runErr) {
+          // Migration not applied yet (columns absent) → skip the drafting card.
+          console.error(
+            "[connection-health] run-report read failed (skipping drafting card):",
+            runErr,
+          );
+        }
+
+        if (!neverSeen && runRow) {
+          const lastRunAtMs = parseTs(runRow.last_run_at);
+          const runFound = runRow.last_run_found;
+          const runDrafted = runRow.last_run_drafted;
+          const runErrors = Array.isArray(runRow.last_run_errors)
+            ? (runRow.last_run_errors as unknown[])
+                .filter((e): e is string => typeof e === "string")
+            : [];
+          const runDiagnosis = runRow.last_run_diagnosis;
+
+          let dVerdict: HealthVerdict;
+          let dSeverity: HealthSeverity;
+          if (lastRunAtMs == null) {
+            // Heartbeating, but the run-report callback was never wired in.
+            dVerdict = "setup";
+            dSeverity = "neutral";
+          } else {
+            const hasErrors = runErrors.length > 0;
+            const gap = (runFound ?? 0) > 0 && (runDrafted ?? 0) === 0;
+            const runAgeH = Math.max(0, nowMs - lastRunAtMs) / 3_600_000;
+            // 6h of silence from a routine that runs ~hourly → it stopped. We
+            // never escalate stale→broken on age alone; the heartbeat card owns
+            // "the Mac is offline." Broken here means the routine TOLD us it failed.
+            const STALE_RUN_H = 6;
+            if (hasErrors || gap) {
+              dVerdict = "broken";
+              dSeverity = "error";
+            } else if (runAgeH > STALE_RUN_H) {
+              dVerdict = "stale";
+              dSeverity = "warn";
+            } else {
+              dVerdict = "healthy";
+              dSeverity = "ok";
+            }
+          }
+
+          const runAgeLabel = formatAge(
+            lastRunAtMs == null ? null : Math.max(0, nowMs - lastRunAtMs),
+          );
+          const dNeedsAction = dSeverity === "error" || dSeverity === "warn";
+          presenceItems.push({
+            key: "presence:drafting",
+            kind: "presence",
+            displayName: "Drafting in Messages",
+            subLabel: "rescue draft routine",
+            tier: "presence",
+            // Custom tier label — the routine reports per-run, not "every few
+            // minutes" like the heartbeat, so don't borrow the presence copy.
+            tierLabel: "Drafting routine · reports after each run",
+            verdict: dVerdict,
+            severity: dSeverity,
+            statusLabel: verdictLabel(dVerdict),
+            detail: draftingDetail(dVerdict, runAgeLabel, {
+              found: runFound,
+              drafted: runDrafted,
+              diagnosis: runDiagnosis,
+              errors: runErrors,
+            }),
+            lastEventAtMs: lastRunAtMs,
+            lastEventLabel: runAgeLabel,
+            cta: { label: dNeedsAction ? "How to fix" : "Manage", to: HEALTH_ROUTE },
+          });
+        }
       }
     } catch (err) {
       console.error(
