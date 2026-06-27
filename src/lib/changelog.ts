@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.186.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.186.0 &mdash; Slice 1.1: the AT-BOOKING ask now rides the iMessage proxy lane, so it works with no Twilio.</strong> Slice 1 (v2.185.0) marched through every gate on real Rejuv data but died at the send &mdash; Rejuv has no Twilio number, so the direct-SMS path silently no-ops. This reroutes <code>dispatchAtBookingAsk</code> to <strong>mirror rescue's transport pick</strong>: when the spa has <code>rescue_proxy_email</code>/<code>rescue_proxy_phone</code> set, it emails the owner a ready-to-send iMessage draft (the same &ldquo;paste into Claude Desktop with the iMessage MCP&rdquo; AUTO-SEND format rescue uses) instead of a Twilio text; only spas with a real from-number take the direct lane. The proxy draft is warm and STOP-less (it goes out as the spa's own personal iMessage, not an A2P SMS), still carries the tappable opt-in link, and seed-then-send still rolls the waitlist seed back if <em>no</em> lane delivers. <strong>Scope</strong>: at-booking now has the same proxy parity rescue already had &mdash; the patient gets the VIP early-access text from a number they recognize, at $0. The fully-autonomous version (a real outbound-iMessage queue the local agent consumes, no owner paste) is the next keystone, Slice B. <strong>Touched</strong>: <code>emma-rescue.functions.ts</code> (proxy/direct transport branch in <code>dispatchAtBookingAsk</code> + <code>composeAtBookingProxyDraft</code> + <code>composeAtBookingProxyEmail</code>), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.185.0",
     date: "June 2026",
     items: [

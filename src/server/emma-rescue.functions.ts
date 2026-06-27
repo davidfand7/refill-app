@@ -853,13 +853,14 @@ export async function dispatchAtBookingAsk(args: {
   const apt = aptRes.data;
   const policy = policyRes.data;
   if (!apt) return { ok: false, reason: "Appointment not found." };
+  if (!policy) return { ok: false, reason: "No no-show policy for this spa." };
 
   // 2) Gates — per-spa opt-in (default off; column not in generated types yet,
   //    so loose-cast read mirroring sendingPausedFromRow) + the master pause
   //    that sits above every per-engine enable.
   const askEnabled =
-    (policy as { at_booking_ask_enabled?: boolean } | null)
-      ?.at_booking_ask_enabled === true;
+    (policy as { at_booking_ask_enabled?: boolean })
+      .at_booking_ask_enabled === true;
   if (!askEnabled)
     return { ok: false, reason: "At-booking ask disabled for this spa." };
   if (sendingPausedFromRow(policy))
@@ -888,9 +889,18 @@ export async function dispatchAtBookingAsk(args: {
   if (existing)
     return { ok: false, reason: `Already on waitlist (${existing.status}).` };
 
-  // 5) From-number — skip silently if the spa hasn't provisioned SMS.
+  // 5) Transport. Rejuv (and any spa without Twilio) runs the iMessage PROXY
+  //    lane: a ready-to-send draft is emailed to the owner → pasted into Claude
+  //    Desktop (iMessage MCP) → sent from the spa's own number. Mirror rescue's
+  //    mode pick — proxy when rescue_proxy_email/phone is set; direct otherwise.
+  const proxyEmail = policy.rescue_proxy_email;
+  const proxyPhone = policy.rescue_proxy_phone;
+  const isProxyMode = !!(proxyEmail || proxyPhone);
   const fromNumber = await resolveSpaFromNumber(sb, userId);
-  if (!fromNumber) return { ok: false, reason: "No spa from-number." };
+  // Need at least one viable lane: proxy-email needs no number; proxy-SMS to the
+  // owner and a direct patient text both need a fromNumber.
+  if (!proxyEmail && !fromNumber)
+    return { ok: false, reason: "No transport — no SMS number and no proxy email." };
 
   // 6) Pre-seed the paused waitlist row carrying the "earlier-than" ceiling.
   //    intent_type='earlier_appointment' + scheduled_appointment_id=this booking
@@ -920,22 +930,85 @@ export async function dispatchAtBookingAsk(args: {
     return { ok: false, reason: `Seed skipped: ${seedErr?.message ?? "unknown"}` };
   }
 
-  // 7) Mint token, compose, send. STOP footer is the composer's job.
+  // 7) Mint token, compose, send via the chosen lane. Seed-then-send means an
+  //    instant tap still finds the ceiling; if NOTHING goes out we roll the seed
+  //    back so a future booking can re-ask (else the dedup treats a
+  //    never-delivered row as "already asked" forever).
   const token = await getOrMintWaitlistToken(sb, userId, apt.patient_node_id);
   const optInUrl = buildWaitlistOptInUrl(token);
   const spaName = await resolveSpaName(sb, userId);
-  const firstName = extractFirstName(apt.booking_name ?? null) ?? "there";
-  const body = composeAtBookingAskSms({ spaName, patientFirstName: firstName, optInUrl });
-  try {
-    await sendSms({ from: fromNumber, to: phone, body });
-  } catch (e) {
-    // Roll back the seed so a future booking can re-ask (the dedup would
-    // otherwise treat this never-delivered row as "already asked" forever).
+  const fullName = apt.booking_name ?? "Patient";
+  const firstName = extractFirstName(fullName) ?? "there";
+
+  let sent = false;
+  if (isProxyMode) {
+    // Proxy lane: hand the owner a ready-to-send iMessage draft. No STOP footer
+    // — it goes out as the spa's own personal iMessage, not an A2P SMS.
+    const draft = composeAtBookingProxyDraft({ spaName, firstName, optInUrl });
+    if (proxyEmail) {
+      const resendKey = process.env.RESEND_API_KEY;
+      if (!resendKey) {
+        console.error("[at-booking proxy] RESEND_API_KEY missing — skipping email.");
+      } else {
+        try {
+          const fromEmail = await resolveSpaFromEmail(userId);
+          const email = composeAtBookingProxyEmail({
+            spaName,
+            firstName,
+            fullName,
+            phone,
+            draft,
+          });
+          const res = await postResendEmail({
+            apiKey: resendKey,
+            from: fromEmail,
+            to: [proxyEmail],
+            subject: email.subject,
+            text: email.text,
+            html: email.html,
+            tags: [{ name: "type", value: "at-booking-ask-proxy" }],
+            signal: AbortSignal.timeout(15_000),
+          });
+          if (res.ok) sent = true;
+          else
+            console.error(
+              `[at-booking proxy] email failed: ${res.status} ${res.body.slice(0, 160)}`,
+            );
+        } catch (e) {
+          console.error("[at-booking proxy] email failed:", e);
+        }
+      }
+    }
+    if (proxyPhone && fromNumber) {
+      try {
+        await sendSms({
+          from: fromNumber,
+          to: proxyPhone,
+          body: `Text ${firstName} (${phone}):\n${draft}`,
+        });
+        sent = true;
+      } catch (e) {
+        console.error("[at-booking proxy] owner SMS failed:", e);
+      }
+    }
+  } else if (fromNumber) {
+    // Direct lane: text the patient via Twilio. STOP footer (A2P compliance).
+    const body = composeAtBookingAskSms({
+      spaName,
+      patientFirstName: firstName,
+      optInUrl,
+    });
+    try {
+      await sendSms({ from: fromNumber, to: phone, body });
+      sent = true;
+    } catch (e) {
+      console.error("[at-booking direct] SMS failed:", e);
+    }
+  }
+
+  if (!sent) {
     await sb.from("waitlist").delete().eq("id", seeded.id);
-    return {
-      ok: false,
-      reason: `SMS failed: ${e instanceof Error ? e.message : "unknown"}`,
-    };
+    return { ok: false, reason: "Send failed on all available lanes." };
   }
   return { ok: true };
 }
@@ -955,6 +1028,70 @@ function composeAtBookingAskSms(args: {
     `${args.spaName}: you're booked, ${args.patientFirstName} 🎉 Want first dibs if an earlier spot opens up? Tap for VIP early-access alerts: ${args.optInUrl}`,
     `Reply STOP to opt out.`,
   ].join("\n");
+}
+
+/**
+ * The patient-facing iMessage body for the PROXY lane — warm and STOP-less,
+ * since it goes out as the spa's own personal iMessage (not an A2P SMS).
+ * Mirrors the courtesy tone of rescue's proxy drafts.
+ */
+function composeAtBookingProxyDraft(args: {
+  spaName: string;
+  firstName: string;
+  optInUrl: string;
+}): string {
+  return `Hi ${args.firstName}! You're booked at ${args.spaName} 🎉 Want first dibs if an earlier spot opens up? Tap here and we'll text you the moment one does: ${args.optInUrl}`;
+}
+
+/**
+ * Owner-facing "paste into Claude Desktop" email carrying a single ready-to-send
+ * iMessage draft. Same AUTO-SEND format as rescue's composeProxyEmail, scoped to
+ * the one patient who just booked.
+ */
+function composeAtBookingProxyEmail(args: {
+  spaName: string;
+  firstName: string;
+  fullName: string;
+  phone: string;
+  draft: string;
+}): { subject: string; text: string; html: string } {
+  const subject = `${args.spaName} — VIP early-access text for ${args.firstName}`;
+  const text = [
+    "═══ AUTO-SEND ═══",
+    "Paste this whole email into Claude Desktop with the iMessage MCP installed.",
+    "Claude will call draft_imessage(recipient_phone, body) for the patient below —",
+    "review it and tap Send.",
+    "═════════════════",
+    "",
+    `${args.firstName} just booked — offer them first dibs on earlier openings.`,
+    "",
+    "═══ READY-TO-SEND DRAFT ═══",
+    "",
+    "────────────────",
+    `To: ${args.phone} (${args.fullName})`,
+    "",
+    args.draft,
+    "",
+    "═══ END DRAFT ═══",
+    "",
+    "Prefer manual? Just text the link above to them yourself.",
+  ].join("\n");
+  const html = `<!doctype html><html><body style="margin:0;padding:32px;background:#fafaf7;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Inter,sans-serif;color:#1a1a1a;">
+  <div style="max-width:640px;margin:0 auto;">
+    <div style="margin-bottom:20px;padding:14px 16px;background:#ecfdf5;border-left:3px solid #047857;border-radius:6px;font-size:13px;color:#064e3b;line-height:1.55;">
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#047857;margin-bottom:6px;">Auto-send</div>
+      Paste this whole email into Claude Desktop with the iMessage MCP installed. Claude will call <code style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:#d1fae5;padding:1px 5px;border-radius:3px;">draft_imessage(recipient_phone, body)</code> for the patient below &mdash; review it and tap Send.
+    </div>
+    <div style="font-size:14px;color:#374151;line-height:1.55;margin-bottom:18px;"><strong>${args.firstName}</strong> just booked &mdash; offer them first dibs on earlier openings.</div>
+    <div style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#047857;margin:24px 0 8px;">Ready-to-send draft</div>
+    <div style="margin:18px 0;padding:14px 16px;background:#f7f6f3;border-left:3px solid #047857;border-radius:6px;">
+      <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:#222;margin-bottom:8px;"><strong>To:</strong> ${args.phone} <span style="color:#666;">(${args.fullName})</span></div>
+      <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:#222;white-space:pre-wrap;">${args.draft}</div>
+    </div>
+    <div style="font-size:12px;color:#6b7280;line-height:1.55;margin-top:20px;border-top:1px solid #e5e7eb;padding-top:14px;">Prefer manual? Just text the link above to them yourself.</div>
+  </div>
+</body></html>`;
+  return { subject, text, html };
 }
 
 // ─── dispatchRescueAttempt (internal) ─────────────────────────────────────
