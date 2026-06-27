@@ -1246,7 +1246,7 @@ function PatientsPage() {
             patients you've marked as A-list at a glance. */}
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] text-ink-soft inline-flex items-center gap-1">
-            <Star className="h-3 w-3 text-amber fill-amber" />
+            <Star className="h-3 w-3 text-[#eab308] fill-[#eab308]" />
             A-list
           </span>
           <Chip
@@ -1715,11 +1715,13 @@ function PatientRow({
           maximumFractionDigits: 0,
         })}
       </td>
-      {/* v385.2: A-list / VIP toggle cell. Star icon — filled gold/amber
-          when on (v2.196.0: VIP reads as gold, not emerald), outlined
-          ink-faint when off. Gold distinguishes it from the emerald
-          waitlist switch so the two roles read as different mental
-          models, not just two boolean knobs. */}
+      {/* v385.2: A-list / VIP toggle cell. Star icon — filled bright
+          yellow when on (v2.197.0: explicit #eab308, not the muted
+          --color-amber olive-gold), outlined ink-faint when off. The
+          yellow distinguishes it from the emerald waitlist switch so the
+          two roles read as different mental models, not two boolean
+          knobs. Inline hex so we don't shift the global amber token
+          (used app-wide). */}
       <td
         className="px-4 py-3 text-center"
         onClick={(e) => {
@@ -1735,9 +1737,9 @@ function PatientRow({
           disabled={vipPending}
           onClick={onToggleVip}
           className={cn(
-            "inline-flex items-center justify-center h-7 w-7 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber",
+            "inline-flex items-center justify-center h-7 w-7 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#eab308]",
             row.vip
-              ? "text-amber hover:bg-amber/10"
+              ? "text-[#eab308] hover:bg-[#eab308]/10"
               : "text-ink-faint hover:text-ink hover:bg-rule-soft",
             vipPending ? "opacity-60 cursor-wait" : "cursor-pointer",
           )}
@@ -1745,7 +1747,7 @@ function PatientRow({
           <Star
             className={cn(
               "h-4 w-4 transition",
-              row.vip ? "fill-amber" : "fill-none",
+              row.vip ? "fill-[#eab308]" : "fill-none",
             )}
           />
         </button>

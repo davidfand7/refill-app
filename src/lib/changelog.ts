@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.197.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.197.0 &mdash; A-list star is now bright yellow.</strong> Follow-up to v2.196.0: the &ldquo;amber&rdquo; token is a muted olive-gold (<code>#8a6d0c</code>) that didn&rsquo;t pop. The A-list / VIP star (and its filter-label icon + focus ring) now use an explicit bright yellow <code>#eab308</code> so a VIP patient stands out at a glance and stays clearly distinct from the emerald waitlist toggle. Inline hex so the app-wide <code>--color-amber</code> token (222 uses) is untouched. Color only. <strong>Touched</strong>: <code>app.refill.patients.index.tsx</code>, <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.196.0",
     date: "June 2026",
     items: [
