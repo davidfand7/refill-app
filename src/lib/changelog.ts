@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.190.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.190.0 &mdash; B-server.2a: the at-booking ask now flows through the zero-setup queue &mdash; first fully-autonomous lane.</strong> The queue spine (v2.188.0) + the local sender (v2.189.0) were proven but <em>dormant</em> &mdash; nothing enqueued. This wires the first real producer: when a spa's relay is set to the queue lane, a new booking's VIP early-access ask is <strong>enqueued</strong> (<code>dispatchAtBookingAsk</code>) and the local helper sends it from the spa's own number within ~60&nbsp;s &mdash; <strong>no owner email, no Claude Desktop paste, no manual Send.</strong> Two shared, reusable helpers: <code>resolveDeliveryMode</code> (returns <code>'queue'</code> ONLY when <code>delivery_mode='queue'</code> AND <code>auto_send=true</code> &mdash; so a half-configured spa can never queue into a lane that won't drain; degrades to <code>'email'</code> on any read failure) and <code>enqueueOutboundImessage</code> (idempotent on <code>(user_id, dedup_key)</code> &mdash; a retried dispatch can't double-text; keyed by the waitlist seed id). The queue lane also passes the transport gate on its own (it needs neither a Twilio number nor a proxy email). <strong>Default unchanged:</strong> <code>delivery_mode</code> defaults to <code>'email'</code>, so every spa stays on today's owner-draft lane until explicitly flipped &mdash; flip Rejuv (<code>delivery_mode='queue'</code>, <code>auto_send=true</code>) and a real booking texts itself end-to-end. <strong>Next (2b):</strong> the rescue flow's queue lane &mdash; deferred deliberately because direct-mode rescue carries confidence/frequency/hold gates that an autonomous queue send must reconcile (a design call, not a transport swap), and it touches the live proxy-email format. <strong>Touched</strong>: <code>emma-rescue.functions.ts</code> (<code>resolveDeliveryMode</code> + <code>enqueueOutboundImessage</code> + the at-booking queue branch), <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.189.0",
     date: "June 2026",
     items: [

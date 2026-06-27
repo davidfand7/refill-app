@@ -828,6 +828,76 @@ const AT_BOOKING_MIN_LEAD_MS = 7 * 24 * 60 * 60 * 1000;
  * the ceiling even if the patient taps instantly; an SMS failure rolls the seed
  * back so a future booking can re-ask.
  */
+/**
+ * The effective outbound mode for a spa (v2.190.0 — B-server.2). The zero-setup
+ * 'queue' lane is taken ONLY when the relay is set to it AND auto_send is on —
+ * because the helper claims nothing while auto_send is off (server gate), so
+ * queueing without it would silently never send. Anything else → 'email' (today's
+ * owner-draft lane). Degrades to 'email' on any read failure (migration not
+ * applied, no agent row) so the live send path is never broken by this lookup.
+ */
+async function resolveDeliveryMode(
+  sb: SupabaseAdmin,
+  userId: string,
+): Promise<"queue" | "email"> {
+  try {
+    const { data, error } = await (sb as unknown as { from(t: string): any })
+      .from("local_agents")
+      .select("delivery_mode, auto_send")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error || !data) return "email";
+    const row = data as { delivery_mode: string | null; auto_send: boolean | null };
+    return row.delivery_mode === "queue" && row.auto_send === true
+      ? "queue"
+      : "email";
+  } catch {
+    return "email";
+  }
+}
+
+/**
+ * Enqueue one patient text for the local helper to send (v2.190.0). Idempotent on
+ * (user_id, dedup_key): a duplicate enqueue of a still-pending text is treated as
+ * success (already queued), not a double-send. Returns true when the text is
+ * queued (new or already-present), false only on a real failure.
+ */
+async function enqueueOutboundImessage(
+  sb: SupabaseAdmin,
+  args: {
+    userId: string;
+    recipient: string;
+    body: string;
+    source: string;
+    dedupKey: string;
+    metadata?: Record<string, unknown>;
+  },
+): Promise<boolean> {
+  try {
+    const { error } = await (sb as unknown as { from(t: string): any })
+      .from("outbound_imessage_queue")
+      .insert({
+        user_id: args.userId,
+        recipient: args.recipient,
+        body: args.body,
+        source: args.source,
+        dedup_key: args.dedupKey,
+        metadata: args.metadata ?? {},
+      });
+    if (error) {
+      // 23505 = the dedup unique index fired → an identical text is already
+      // pending/claimed. That IS the desired state, so report success.
+      if ((error as { code?: string }).code === "23505") return true;
+      console.error("[queue enqueue] insert failed:", error);
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.error("[queue enqueue] failed:", e);
+    return false;
+  }
+}
+
 export async function dispatchAtBookingAsk(args: {
   sb: SupabaseAdmin;
   userId: string;
@@ -902,9 +972,14 @@ export async function dispatchAtBookingAsk(args: {
   const proxyPhone = policy.rescue_proxy_phone;
   const isProxyMode = !!(proxyEmail || proxyPhone);
   const fromNumber = await resolveSpaFromNumber(sb, userId);
-  // Need at least one viable lane: proxy-email needs no number; proxy-SMS to the
-  // owner and a direct patient text both need a fromNumber.
-  if (!proxyEmail && !fromNumber)
+  // Zero-setup queue lane (B-server.2): when active, the local helper sends the
+  // text from the spa's own number — needs neither a proxy email nor a Twilio
+  // number, so it must pass the transport gate on its own.
+  const deliveryMode = await resolveDeliveryMode(sb, userId);
+  // Need at least one viable lane: the queue lane needs none of the below;
+  // proxy-email needs no number; proxy-SMS to the owner and a direct patient text
+  // both need a fromNumber.
+  if (deliveryMode !== "queue" && !proxyEmail && !fromNumber)
     return { ok: false, reason: "No transport — no SMS number and no proxy email." };
 
   // 6) Pre-seed the paused waitlist row carrying the "earlier-than" ceiling.
@@ -946,7 +1021,20 @@ export async function dispatchAtBookingAsk(args: {
   const firstName = extractFirstName(fullName) ?? "there";
 
   let sent = false;
-  if (isProxyMode) {
+  if (deliveryMode === "queue") {
+    // Zero-setup lane (B-server.2): enqueue the patient text; the local helper
+    // claims and sends it from the spa's own number within ~60s — no owner email,
+    // no Claude Desktop paste, no manual Send. The seed.id keys the enqueue so a
+    // retried dispatch can't double-queue the same ask.
+    const draft = composeAtBookingProxyDraft({ spaName, firstName, optInUrl });
+    sent = await enqueueOutboundImessage(sb, {
+      userId,
+      recipient: phone,
+      body: draft,
+      source: "at_booking",
+      dedupKey: `at-booking:${seeded.id}`,
+    });
+  } else if (isProxyMode) {
     // Proxy lane: hand the owner a ready-to-send iMessage draft. No STOP footer
     // — it goes out as the spa's own personal iMessage, not an A2P SMS.
     const draft = composeAtBookingProxyDraft({ spaName, firstName, optInUrl });
