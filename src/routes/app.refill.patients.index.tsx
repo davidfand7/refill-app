@@ -1246,7 +1246,7 @@ function PatientsPage() {
             patients you've marked as A-list at a glance. */}
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] text-ink-soft inline-flex items-center gap-1">
-            <Star className="h-3 w-3" />
+            <Star className="h-3 w-3 text-amber fill-amber" />
             A-list
           </span>
           <Chip
@@ -1715,8 +1715,9 @@ function PatientRow({
           maximumFractionDigits: 0,
         })}
       </td>
-      {/* v385.2: A-list / VIP toggle cell. Star icon — filled emerald
-          when on, outlined ink-faint when off. Distinct visual from the
+      {/* v385.2: A-list / VIP toggle cell. Star icon — filled gold/amber
+          when on (v2.196.0: VIP reads as gold, not emerald), outlined
+          ink-faint when off. Gold distinguishes it from the emerald
           waitlist switch so the two roles read as different mental
           models, not just two boolean knobs. */}
       <td
@@ -1734,9 +1735,9 @@ function PatientRow({
           disabled={vipPending}
           onClick={onToggleVip}
           className={cn(
-            "inline-flex items-center justify-center h-7 w-7 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald",
+            "inline-flex items-center justify-center h-7 w-7 rounded-full transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber",
             row.vip
-              ? "text-emerald hover:bg-emerald/10"
+              ? "text-amber hover:bg-amber/10"
               : "text-ink-faint hover:text-ink hover:bg-rule-soft",
             vipPending ? "opacity-60 cursor-wait" : "cursor-pointer",
           )}
@@ -1744,7 +1745,7 @@ function PatientRow({
           <Star
             className={cn(
               "h-4 w-4 transition",
-              row.vip ? "fill-emerald" : "fill-none",
+              row.vip ? "fill-amber" : "fill-none",
             )}
           />
         </button>

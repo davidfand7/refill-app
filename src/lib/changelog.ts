@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.196.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.196.0 &mdash; A-list star is now gold, not emerald.</strong> Polish: the A-list / VIP star on the Patients page (and its filter-strip label) now renders in <strong>gold/amber</strong> instead of emerald. Gold reads as &ldquo;VIP / premium&rdquo; and visually separates the A-list star from the emerald <em>waitlist</em> toggle next to it &mdash; so the two controls read as different roles, not two identical boolean knobs. Color only; no behavior change. <strong>Touched</strong>: <code>app.refill.patients.index.tsx</code> (star + focus ring + filter-label icon emerald&rarr;amber), <code>changelog.ts</code>.",
+    ],
+  },
+  {
     version: "v2.195.0",
     date: "June 2026",
     items: [
