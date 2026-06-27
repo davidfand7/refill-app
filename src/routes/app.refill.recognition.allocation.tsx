@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyPanel } from "@/components/EmptyPanel";
 import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
@@ -533,11 +534,18 @@ function RecognitionAgentPage() {
                 </div>
               </header>
               {suggestions.length === 0 ? (
-                <div className="px-5 py-10 text-center text-sm text-ink-soft">
-                  No allocations yet. Tap{" "}
-                  <strong className="text-ink">Run allocation</strong> to score
-                  patients + split available rebate inventory.
-                </div>
+                <EmptyPanel
+                  bare
+                  icon={Sparkles}
+                  title="No allocations yet"
+                  description="Run allocation to score your patients and split available rebate inventory into ranked, ready-to-send suggestions."
+                  cta={{
+                    label: running ? "Allocating…" : "Run allocation",
+                    icon: Play,
+                    onClick: () => void handleRunAllocation(),
+                    disabled: running || !accessToken,
+                  }}
+                />
               ) : (
                 <ul className="divide-y divide-rule max-h-[600px] overflow-y-auto">
                   {suggestions.slice(0, 100).map((s) => (

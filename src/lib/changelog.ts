@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.184.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.184.0 &mdash; Empty states, made consistent: every &ldquo;nothing here yet&rdquo; screen now tells you <em>why</em> it&rsquo;s empty and gives you the one next step.</strong> Across <strong>Refill</strong>, <strong>Reschedule</strong>, <strong>Inbox</strong>, <strong>Allocation</strong>, and <strong>Verified&nbsp;pricing</strong>, the blank-state panels used to be five different looks &mdash; some a bordered card with a button, some a bare line of grey text with no icon and no action. They now share <strong>one pattern</strong>: a soft icon, a one-line headline, a plain-language &ldquo;why this is empty,&rdquo; and a single call-to-action that does the obvious next thing. <strong>The real upgrades</strong>: <em>Allocation</em> gained an icon and a working <strong>Run allocation</strong> button right in the empty state (was a bare sentence pointing at a button elsewhere); <em>Reschedule</em> now offers <strong>Adjust the win-back rule</strong> when there&rsquo;s nobody to win back; <em>Verified pricing</em> now has an <strong>Upload a screenshot</strong> button that opens the file picker directly. Under the hood this is a new shared <code>EmptyPanel</code> component &mdash; so the next empty state we build is consistent for free, and two bespoke local copies (Refill&rsquo;s <code>EmptyCard</code>, Inbox&rsquo;s <code>EmptyInbox</code>) collapsed into it. <strong>Touched</strong>: new <code>components/EmptyPanel.tsx</code>, <code>app.refill.rescue.tsx</code>, <code>app.refill.recovery.reschedule.tsx</code>, <code>app.refill.inbox.tsx</code>, <code>app.refill.recognition.allocation.tsx</code>, <code>app.refill.catalog.verified-pricing.tsx</code>, <code>changelog.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.183.2",
     date: "June 2026",
     items: [

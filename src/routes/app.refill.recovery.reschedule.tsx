@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyPanel } from "@/components/EmptyPanel";
 import { RefillSolutionTabs } from "@/components/refill/RefillSolutionTabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
@@ -225,14 +226,25 @@ function ReschedulePage() {
         </div>
 
         {/* Empty state — distinguishes "nobody at all" from "all caught up". */}
-        {!loading && fresh.length === 0 && (
-          <div className="rounded-xl border border-rule bg-paper/30 px-5 py-8 text-center text-sm text-ink-soft">
-            <CalendarClock className="mx-auto mb-2 h-6 w-6 text-ink-faint" />
-            {nudgedList.length > 0
-              ? "All caught up — everyone eligible has been nudged. They stay below until they rebook or the window passes."
-              : "Nobody to win back right now. Recent cancels and no-shows who haven’t already rebooked or been nudged will appear here."}
-          </div>
-        )}
+        {!loading && fresh.length === 0 &&
+          (nudgedList.length > 0 ? (
+            <EmptyPanel
+              icon={CalendarClock}
+              title="All caught up"
+              description="Everyone eligible has been nudged. They stay below until they rebook or the window passes."
+            />
+          ) : (
+            <EmptyPanel
+              icon={CalendarClock}
+              title="Nobody to win back right now"
+              description="Recent cancels and no-shows who haven’t already rebooked or been nudged will appear here. Widen the rule to catch more of them."
+              cta={{
+                label: "Adjust the win-back rule",
+                icon: Settings2,
+                to: "/app/refill/recovery/preshow",
+              }}
+            />
+          ))}
 
         {/* To win back (actionable) */}
         {fresh.length > 0 && (

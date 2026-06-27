@@ -25,6 +25,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyPanel } from "@/components/EmptyPanel";
 import { RefillSolutionTabs } from "@/components/refill/RefillSolutionTabs";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -517,36 +518,32 @@ function EmptyInbox({
   backRoute: string;
   backLabel: string;
 }) {
+  if (totalRows === 0) {
+    return (
+      <EmptyPanel
+        icon={Inbox}
+        title="No replies yet"
+        description={
+          <>
+            When patients reply to your campaigns, you'll see the conversation
+            here. {agentName} auto-responds to SMS in real time — this is your
+            transcript view.
+          </>
+        }
+        cta={{ label: backLabel, icon: ArrowLeft, to: backRoute }}
+      />
+    );
+  }
   return (
-    <div className="rounded-2xl border border-border bg-card p-10 text-center">
-      <div className="mx-auto h-12 w-12 rounded-full bg-muted/40 flex items-center justify-center mb-3">
-        <Inbox className="h-6 w-6 text-ink-soft" />
-      </div>
-      {totalRows === 0 ? (
-        <>
-          <h2 className="text-lg font-semibold text-foreground mb-1">
-            No replies yet
-          </h2>
-          <p className="text-sm text-ink-soft mb-5 max-w-md mx-auto">
-            When patients reply to your campaigns, you'll see the conversation here.
-            {" "}{agentName} auto-responds to SMS in real time — this is your transcript view.
-          </p>
-          <Link
-            to={backRoute}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-4 py-2 text-sm font-medium hover:opacity-90 transition"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            {backLabel}
-          </Link>
-        </>
-      ) : (
-        <p className="text-sm text-ink-soft">
-          {filter === "unread"
-            ? "All caught up — no unread replies."
-            : "No replies match this filter."}
-        </p>
-      )}
-    </div>
+    <EmptyPanel
+      icon={Inbox}
+      title={filter === "unread" ? "All caught up" : "No matches"}
+      description={
+        filter === "unread"
+          ? "No unread replies — every conversation has been seen."
+          : "No replies match this filter. Try a different view above."
+      }
+    />
   );
 }
 

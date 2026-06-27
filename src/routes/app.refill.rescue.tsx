@@ -12,7 +12,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
-  ArrowLeft,
   Award,
   CalendarClock,
   CheckCircle2,
@@ -21,6 +20,7 @@ import {
   Lightbulb,
   Loader2,
   RefreshCw,
+  Settings2,
   Sparkles,
   Trash2,
   TrendingDown,
@@ -28,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyPanel } from "@/components/EmptyPanel";
 import { supabase } from "@/integrations/supabase/client";
 import {
   listRescueActivity,
@@ -433,12 +434,13 @@ function ActivityTab({ activity }: { activity: RescueActivityItem[] | null }) {
   }
   if (activity.length === 0) {
     return (
-      <EmptyCard
+      <EmptyPanel
         icon={CalendarClock}
         title="No rescue activity yet"
-        body="When an appointment is cancelled with a future date, SmartSpa will fire a rescue to your waitlist. You'll see the play-by-play here."
+        description="When an appointment is cancelled with a future date, SmartSpa will fire a rescue to your waitlist. You'll see the play-by-play here."
         cta={{
           label: "Configure rescue agent",
+          icon: Settings2,
           to: "/app/refill/settings/noshow",
         }}
       />
@@ -539,12 +541,13 @@ function WaitlistTab({
   const active = waitlist.filter((w) => w.status === "active");
   if (active.length === 0) {
     return (
-      <EmptyCard
+      <EmptyPanel
         icon={Heart}
         title="No one on the list yet"
-        body="Every SmartSpa message includes an opt-in footer. Patients who tap it join your waitlist automatically. You can also opt-in patients manually from their profile."
+        description="Every SmartSpa message includes an opt-in footer. Patients who tap it join your waitlist automatically. You can also opt-in patients manually from their profile."
         cta={{
           label: "Configure opt-in footer",
+          icon: Settings2,
           to: "/app/refill/settings/noshow",
         }}
       />
@@ -741,10 +744,10 @@ function PatternsTab({
   }
   if (patterns.length === 0) {
     return (
-      <EmptyCard
+      <EmptyPanel
         icon={Sparkles}
         title="No patterns to surface yet"
-        body="SmartSpa watches every appointment status change. When a patient hits VIP, becomes chronic-no-show, or returns to good standing, you'll see it here."
+        description="SmartSpa watches every appointment status change. When a patient hits VIP, becomes chronic-no-show, or returns to good standing, you'll see it here."
       />
     );
   }
@@ -880,35 +883,3 @@ function TierBadge({ tier }: { tier: ReliabilityTier }) {
   );
 }
 
-// ─── Empty card ───────────────────────────────────────────────────────────
-
-function EmptyCard({
-  icon: Icon,
-  title,
-  body,
-  cta,
-}: {
-  icon: typeof CalendarClock;
-  title: string;
-  body: string;
-  cta?: { label: string; to: string };
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-card p-10 text-center">
-      <div className="mx-auto h-12 w-12 rounded-full bg-muted/40 flex items-center justify-center mb-3">
-        <Icon className="h-6 w-6 text-ink-soft" />
-      </div>
-      <h2 className="text-lg font-semibold text-foreground mb-1">{title}</h2>
-      <p className="text-sm text-ink-soft mb-5 max-w-md mx-auto">{body}</p>
-      {cta && (
-        <Link
-          to={cta.to}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald text-paper px-4 py-2 text-sm font-medium hover:opacity-90 transition"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          {cta.label}
-        </Link>
-      )}
-    </div>
-  );
-}

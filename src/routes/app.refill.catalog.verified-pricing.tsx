@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyPanel } from "@/components/EmptyPanel";
 import { CostSourceBadge } from "@/components/CostSourceBadge";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
@@ -799,15 +800,16 @@ function VerifiedPricingPage() {
             onCreateProductFromRow={onCreateProductFromRow}
           />
         ) : pending.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-rule bg-white px-6 py-10 text-center">
-            <div className="mx-auto inline-flex items-center justify-center rounded-full bg-emerald-soft p-3">
-              <ShieldCheck className="h-6 w-6 text-emerald" />
-            </div>
-            <h3 className="mt-3 text-[16px] font-semibold text-ink">No imports awaiting review</h3>
-            <p className="mt-1.5 text-[13px] text-ink-soft max-w-md mx-auto leading-relaxed">
-              Upload a portal screenshot above and your matched prices land here for a quick confirm. Verifying your costs makes every margin number trustworthy.
-            </p>
-          </div>
+          <EmptyPanel
+            icon={ShieldCheck}
+            title="No imports awaiting review"
+            description="Upload a portal screenshot and your matched prices land here for a quick confirm. Verifying your real costs makes every margin number trustworthy."
+            cta={{
+              label: "Upload a screenshot",
+              icon: ImageUp,
+              onClick: () => fileInputRef.current?.click(),
+            }}
+          />
         ) : null}
 
         {/* ── History ────────────────────────────────────────────────────── */}
