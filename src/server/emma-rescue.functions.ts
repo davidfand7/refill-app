@@ -62,6 +62,10 @@ import {
 } from "@/server/emma-spa-profile";
 import { loadServiceCatalogForUser } from "@/server/refill-catalog";
 import { resolveTreatmentsToServiceIds } from "@/lib/treatment-catalog-resolver";
+import {
+  getOrMintWaitlistToken,
+  buildWaitlistOptInUrl,
+} from "@/server/emma-waitlist.functions";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -795,6 +799,162 @@ function composeProxyEmail(args: {
 </body></html>`;
 
   return { subject, text, html };
+}
+
+// ─── dispatchAtBookingAsk (internal — Slice 1: the AT-BOOKING ask) ─────────
+
+/** Don't ask if the booking is sooner than this — there'd be no "earlier"
+ *  slot worth offering, and the text would read as noise. */
+const AT_BOOKING_MIN_LEAD_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * "VIP early-access" ask. Fired from the Acuity webhook the first time an
+ * appointment transitions into 'scheduled' with a future date. If the spa
+ * opted in (noshow_policies.at_booking_ask_enabled) and isn't paused, and the
+ * patient isn't already on the waitlist in ANY status, text them once:
+ * "want first dibs if an earlier spot opens?" Tapping the link joins the
+ * waitlist with intent_type='earlier_appointment' + scheduled_appointment_id
+ * pointing at THIS booking — so the freed-slot matcher (dispatchRescueAttempt)
+ * inherits their service + their "earlier-than" ceiling for free, and the
+ * opt-in landing page renders the tailored "earlier slot for your <service>
+ * on <date>?" copy with no extra work.
+ *
+ * Scope discipline: owns ONLY the earlier-opening thread. Never touches
+ * reminders — Acuity keeps sending those, so the patient is never double-texted.
+ *
+ * One-ask-ever: a waitlist row in any status (active=already in, paused=already
+ * asked, revoked=declined/opted-out) short-circuits. Seed-before-send preserves
+ * the ceiling even if the patient taps instantly; an SMS failure rolls the seed
+ * back so a future booking can re-ask.
+ */
+export async function dispatchAtBookingAsk(args: {
+  sb: SupabaseAdmin;
+  userId: string;
+  appointmentId: string;
+}): Promise<{ ok: boolean; reason?: string }> {
+  const { sb, userId, appointmentId } = args;
+
+  // 1) Load appointment + policy together.
+  const [aptRes, policyRes] = await Promise.all([
+    sb
+      .from("appointments")
+      .select("*")
+      .eq("id", appointmentId)
+      .eq("user_id", userId)
+      .maybeSingle(),
+    sb
+      .from("noshow_policies")
+      .select("*")
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
+  if (aptRes.error)
+    throw new Error(`Couldn't load appointment: ${aptRes.error.message}`);
+  const apt = aptRes.data;
+  const policy = policyRes.data;
+  if (!apt) return { ok: false, reason: "Appointment not found." };
+
+  // 2) Gates — per-spa opt-in (default off; column not in generated types yet,
+  //    so loose-cast read mirroring sendingPausedFromRow) + the master pause
+  //    that sits above every per-engine enable.
+  const askEnabled =
+    (policy as { at_booking_ask_enabled?: boolean } | null)
+      ?.at_booking_ask_enabled === true;
+  if (!askEnabled)
+    return { ok: false, reason: "At-booking ask disabled for this spa." };
+  if (sendingPausedFromRow(policy))
+    return { ok: false, reason: SENDING_PAUSED_REASON };
+
+  // 3) Eligibility — a future 'scheduled' booking, far enough out to have an
+  //    "earlier" worth offering, with a matched patient + a phone to text.
+  if (apt.status !== "scheduled")
+    return { ok: false, reason: `Status '${apt.status}' not eligible.` };
+  if (new Date(apt.scheduled_at).getTime() - Date.now() < AT_BOOKING_MIN_LEAD_MS)
+    return { ok: false, reason: "Booking too soon — no earlier slot to offer." };
+  if (!apt.patient_node_id)
+    return { ok: false, reason: "No matched patient — can't mint opt-in token." };
+  const phone = apt.booking_phone?.trim();
+  if (!phone) return { ok: false, reason: "No phone on the booking." };
+
+  // 4) Patient-level dedup — ask once per patient, ever (across all their
+  //    bookings). Any-status row = skip. Reuses the invite path's existing-row
+  //    check; the (user_id, patient_node_id) unique index makes the seed race-safe.
+  const { data: existing } = await sb
+    .from("waitlist")
+    .select("id, status")
+    .eq("user_id", userId)
+    .eq("patient_node_id", apt.patient_node_id)
+    .maybeSingle();
+  if (existing)
+    return { ok: false, reason: `Already on waitlist (${existing.status}).` };
+
+  // 5) From-number — skip silently if the spa hasn't provisioned SMS.
+  const fromNumber = await resolveSpaFromNumber(sb, userId);
+  if (!fromNumber) return { ok: false, reason: "No spa from-number." };
+
+  // 6) Pre-seed the paused waitlist row carrying the "earlier-than" ceiling.
+  //    intent_type='earlier_appointment' + scheduled_appointment_id=this booking
+  //    → the matcher inherits the service and the opt-in page self-personalizes.
+  const catalog = await loadServiceCatalogForUser(sb, userId).catch(() => []);
+  const treatmentTypes = apt.treatment_type ? [apt.treatment_type] : [];
+  const desiredServiceIds = apt.treatment_type
+    ? resolveTreatmentsToServiceIds([apt.treatment_type], catalog).serviceIds
+    : [];
+  const { data: seeded, error: seedErr } = await sb
+    .from("waitlist")
+    .insert({
+      user_id: userId,
+      patient_node_id: apt.patient_node_id,
+      status: "paused",
+      opt_in_source: "at-booking-ask",
+      intent_type: "earlier_appointment",
+      scheduled_appointment_id: apt.id,
+      treatment_types: treatmentTypes,
+      desired_service_ids: desiredServiceIds,
+    })
+    .select("id")
+    .single();
+  if (seedErr || !seeded) {
+    // A row appeared between the dedup read and here (race) — treat as
+    // already-asked, not an error.
+    return { ok: false, reason: `Seed skipped: ${seedErr?.message ?? "unknown"}` };
+  }
+
+  // 7) Mint token, compose, send. STOP footer is the composer's job.
+  const token = await getOrMintWaitlistToken(sb, userId, apt.patient_node_id);
+  const optInUrl = buildWaitlistOptInUrl(token);
+  const spaName = await resolveSpaName(sb, userId);
+  const firstName = extractFirstName(apt.booking_name ?? null) ?? "there";
+  const body = composeAtBookingAskSms({ spaName, patientFirstName: firstName, optInUrl });
+  try {
+    await sendSms({ from: fromNumber, to: phone, body });
+  } catch (e) {
+    // Roll back the seed so a future booking can re-ask (the dedup would
+    // otherwise treat this never-delivered row as "already asked" forever).
+    await sb.from("waitlist").delete().eq("id", seeded.id);
+    return {
+      ok: false,
+      reason: `SMS failed: ${e instanceof Error ? e.message : "unknown"}`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * The VIP early-access ask SMS. Deliberately positive — "first dibs," not
+ * "join a waitlist" — and deliberately generic: the tailored "earlier slot for
+ * your <service> on <date>?" lives on the opt-in landing page (pre-seeded
+ * ceiling), so this stays short and clean. Caller-owned STOP footer.
+ */
+function composeAtBookingAskSms(args: {
+  spaName: string;
+  patientFirstName: string;
+  optInUrl: string;
+}): string {
+  return [
+    `${args.spaName}: you're booked, ${args.patientFirstName} 🎉 Want first dibs if an earlier spot opens up? Tap for VIP early-access alerts: ${args.optInUrl}`,
+    `Reply STOP to opt out.`,
+  ].join("\n");
 }
 
 // ─── dispatchRescueAttempt (internal) ─────────────────────────────────────

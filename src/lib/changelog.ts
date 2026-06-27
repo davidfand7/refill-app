@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.185.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.185.0 &mdash; The AT-BOOKING ask: every new Acuity booking now invites the patient to VIP early-access on earlier openings.</strong> This is the front door for the &ldquo;fill the chair&rdquo; engine &mdash; positioning SmartSpa as a plug-in <em>on top of</em> Acuity. When a new booking lands via the live Acuity feed and the spa has opted in, SmartSpa texts the patient <strong>once</strong>: <em>&ldquo;you're booked 🎉 &mdash; want first dibs if an earlier spot opens? Tap for VIP early-access alerts.&rdquo;</em> A &ldquo;yes&rdquo; tap joins the waitlist with <code>intent_type='earlier_appointment'</code> pointing at <em>this</em> booking &mdash; so the existing cancellation&rarr;rescue&rarr;claim&rarr;writeback chain inherits their service and their &ldquo;earlier-than&rdquo; ceiling for free, and the opt-in page self-personalizes (&ldquo;earlier slot for your Tox on Jul&nbsp;18?&rdquo;). <strong>Guardrails</strong>: per-spa toggle (default OFF; <code>noshow_policies.at_booking_ask_enabled</code>), honors the master sending-pause, only fires for bookings &ge;7 days out (no &ldquo;earlier&rdquo; worth offering otherwise), and asks each patient <strong>at most once, ever</strong> (a waitlist row in any status short-circuits). Seed-before-send preserves the ceiling even on an instant tap; an SMS failure rolls the seed back so a future booking can re-ask. <strong>Scope discipline</strong>: owns <em>only</em> the earlier-opening thread &mdash; Acuity keeps sending reminders, so patients are never double-texted. Reuses the entire existing waitlist/consent/SMS stack; net-new is just the trigger + the ask copy + the gate. <strong>Touched</strong>: <code>emma-rescue.functions.ts</code> (<code>dispatchAtBookingAsk</code> + <code>composeAtBookingAskSms</code>), <code>api.webhooks.scheduler.acuity.$secret.ts</code> (new-booking branch), new migration <code>20260829000000_v2_185_0_at_booking_ask.sql</code>, <code>changelog.ts</code>. Slice 2 (clean one-tap move-up via Acuity reschedule-writeback) is the fast-follow.",
+    ],
+  },
+  {
     version: "v2.184.0",
     date: "June 2026",
     items: [

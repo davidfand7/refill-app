@@ -349,6 +349,33 @@ export const Route = createFileRoute("/api/webhooks/scheduler/acuity/$secret")({
             }
           }
 
+          // At-booking VIP early-access ask (Slice 1). The FIRST time an
+          // appointment transitions into 'scheduled' (no prior row) and it's
+          // future-dated, offer the patient first dibs on earlier openings.
+          // All real gating (per-spa opt-in, ≥7-day lead, one-ask-per-patient,
+          // phone present) lives in dispatchAtBookingAsk — kept here minimal.
+          if (
+            newStatus === "scheduled" &&
+            priorStatus === null &&
+            futureScheduled
+          ) {
+            try {
+              const { dispatchAtBookingAsk } = await import(
+                "@/server/emma-rescue.functions"
+              );
+              await dispatchAtBookingAsk({
+                sb,
+                userId: connection.user_id,
+                appointmentId: upserted.id,
+              });
+            } catch (e) {
+              console.error(
+                "at-booking ask failed (webhook):",
+                e instanceof Error ? e.message : e,
+              );
+            }
+          }
+
           // Reliability recompute on the load-bearing transitions.
           if (
             upserted.patient_node_id &&
