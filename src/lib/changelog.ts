@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.192.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.192.0 &mdash; Test-recipient allowlist: test the live autonomous queue with zero risk to real patients.</strong> Once <code>delivery_mode='queue'</code> is on, any qualifying real booking/no-show autonomously texts a real patient. This adds a per-spa safety valve so a spa can exercise the <em>live</em> loop internally without that risk: a new <code>local_agents.test_recipients</code> (E.164 array). <strong>Empty (default) = full live</strong> &mdash; the queue takes everyone, exactly as before. <strong>Non-empty = test mode</strong> &mdash; ONLY those exact numbers take the zero-setup queue lane; every other patient falls back to the safe path: the <strong>email-draft lane</strong> for the at-booking ask (owner review, no auto-text) and a <strong>held-for-review</strong> offer for rescue. So you can keep queue mode armed, set your own cell as the only test recipient, and book/cancel all you like &mdash; a real client physically cannot receive an autonomous text. <code>resolveDelivery</code> now returns <code>{ mode, testRecipients }</code> and a pure <code>queueAllows(list, recipient)</code> gate decides per-recipient in both the at-booking and rescue flows. <strong>Touched</strong>: <code>emma-rescue.functions.ts</code> (<code>resolveDelivery</code> + <code>queueAllows</code> + per-recipient gating in both lanes), <code>changelog.ts</code>. <strong>Migration</strong>: <code>20260901000000_v2_192_0_test_recipients.sql</code> (<code>test_recipients text[]</code> on <code>local_agents</code>).",
+    ],
+  },
+  {
     version: "v2.191.0",
     date: "June 2026",
     items: [

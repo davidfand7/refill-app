@@ -868,24 +868,44 @@ const AT_BOOKING_MIN_LEAD_MS = 7 * 24 * 60 * 60 * 1000;
  * owner-draft lane). Degrades to 'email' on any read failure (migration not
  * applied, no agent row) so the live send path is never broken by this lookup.
  */
-async function resolveDeliveryMode(
+async function resolveDelivery(
   sb: SupabaseAdmin,
   userId: string,
-): Promise<"queue" | "email"> {
+): Promise<{ mode: "queue" | "email"; testRecipients: string[] }> {
   try {
     const { data, error } = await (sb as unknown as { from(t: string): any })
       .from("local_agents")
-      .select("delivery_mode, auto_send")
+      .select("delivery_mode, auto_send, test_recipients")
       .eq("user_id", userId)
       .maybeSingle();
-    if (error || !data) return "email";
-    const row = data as { delivery_mode: string | null; auto_send: boolean | null };
-    return row.delivery_mode === "queue" && row.auto_send === true
-      ? "queue"
-      : "email";
+    if (error || !data) return { mode: "email", testRecipients: [] };
+    const row = data as {
+      delivery_mode: string | null;
+      auto_send: boolean | null;
+      test_recipients: unknown;
+    };
+    const mode =
+      row.delivery_mode === "queue" && row.auto_send === true ? "queue" : "email";
+    const testRecipients = Array.isArray(row.test_recipients)
+      ? (row.test_recipients as unknown[]).filter(
+          (r): r is string => typeof r === "string",
+        )
+      : [];
+    return { mode, testRecipients };
   } catch {
-    return "email";
+    return { mode: "email", testRecipients: [] };
   }
+}
+
+/**
+ * The test-recipient gate (v2.192.0). An EMPTY allowlist = full live (the queue
+ * takes everyone). A NON-EMPTY allowlist = test mode: ONLY those exact (E.164)
+ * numbers take the autonomous queue lane; every other patient falls back to the
+ * safe email-draft lane (at-booking) or is held for review (rescue) — so a real
+ * client can't get an autonomous text while the spa tests internally.
+ */
+function queueAllows(testRecipients: string[], recipient: string): boolean {
+  return testRecipients.length === 0 || testRecipients.includes(recipient);
 }
 
 /**
@@ -1100,12 +1120,16 @@ export async function dispatchAtBookingAsk(args: {
   const fromNumber = await resolveSpaFromNumber(sb, userId);
   // Zero-setup queue lane (B-server.2): when active, the local helper sends the
   // text from the spa's own number — needs neither a proxy email nor a Twilio
-  // number, so it must pass the transport gate on its own.
-  const deliveryMode = await resolveDeliveryMode(sb, userId);
-  // Need at least one viable lane: the queue lane needs none of the below;
-  // proxy-email needs no number; proxy-SMS to the owner and a direct patient text
-  // both need a fromNumber.
-  if (deliveryMode !== "queue" && !proxyEmail && !fromNumber)
+  // number, so it must pass the transport gate on its own. In test mode (non-empty
+  // allowlist), only allowlisted numbers take the queue; everyone else falls back
+  // to the email/direct lane so a real client can't get an autonomous text.
+  const { mode: deliveryMode, testRecipients } = await resolveDelivery(sb, userId);
+  const queueForThis =
+    deliveryMode === "queue" && queueAllows(testRecipients, phone);
+  // Need at least one viable lane: the queue lane (when it'll take this recipient)
+  // needs none of the below; proxy-email needs no number; proxy-SMS to the owner
+  // and a direct patient text both need a fromNumber.
+  if (!queueForThis && !proxyEmail && !fromNumber)
     return { ok: false, reason: "No transport — no SMS number and no proxy email." };
 
   // 6) Pre-seed the paused waitlist row carrying the "earlier-than" ceiling.
@@ -1147,7 +1171,7 @@ export async function dispatchAtBookingAsk(args: {
   const firstName = extractFirstName(fullName) ?? "there";
 
   let sent = false;
-  if (deliveryMode === "queue") {
+  if (queueForThis) {
     // Zero-setup lane (B-server.2): enqueue the patient text; the local helper
     // claims and sends it from the spa's own number within ~60s — no owner email,
     // no Claude Desktop paste, no manual Send. The seed.id keys the enqueue so a
@@ -1604,8 +1628,9 @@ export async function dispatchRescueAttempt(args: {
   const isProxyMode = !!(proxyPhone || proxyEmail);
   // Zero-setup queue lane (B-server.2b): when active it sends each text from the
   // spa's own number via the local helper — needs no Twilio number, and takes
-  // precedence over the proxy-digest/direct paths below.
-  const deliveryMode = await resolveDeliveryMode(sb, userId);
+  // precedence over the proxy-digest/direct paths below. testRecipients gates it
+  // per-patient in test mode (non-allowlisted offers are held for review).
+  const { mode: deliveryMode, testRecipients } = await resolveDelivery(sb, userId);
 
   // Need fromNumber when: direct mode (sends to each patient) OR proxy
   // mode with proxyPhone set (sends consolidated SMS to spa owner). Pure
@@ -1724,6 +1749,16 @@ export async function dispatchRescueAttempt(args: {
     );
 
     for (const c of collected) {
+      // Test mode: a real patient who isn't on the allowlist is held for review
+      // rather than auto-texted, so internal testing can't reach a real client.
+      if (!queueAllows(testRecipients, c.phone)) {
+        await markRescueOfferHeld(
+          sb,
+          c.offerId,
+          "Test mode: only your test number auto-sends right now — this patient is held for your review.",
+        );
+        continue;
+      }
       const gate = await evaluateRescueGate(sb, userId, c, {
         autonomousEnabled,
         holdBlindMatches: true,
