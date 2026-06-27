@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.199.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.199.0 &mdash; Rescue safeguards are now operator toggles (B-server.2b.2).</strong> The rescue engine&rsquo;s two safety gates were hard-coded on; they&rsquo;re now per-spa toggles on <strong>Refill &rarr; Recovery &rarr; Rescue</strong> under a new <strong>Safeguards</strong> card. <strong>Hold blind matches</strong> &mdash; a freed slot with no treatment set waits for your one-tap OK before any text. <strong>Frequency cap</strong> &mdash; a patient contacted recently by any agent is skipped so no one gets double-texted. The shared <code>evaluateRescueGate</code> reads both from policy, so they govern <em>both</em> lanes identically &mdash; the autonomous zero-setup queue AND the owner-draft direct lane. <strong>Both default ON</strong> (<code>hold_blind_matches</code> / <code>apply_frequency_cap</code> default true, read via <code>!== false</code> so behavior is unchanged even before the migration lands) &mdash; turning one off is a deliberate, clearly-labeled choice (amber &ldquo;Off&rdquo; chip + plain-English warning copy). <strong>Touched</strong>: <code>refill-rescue-agent.functions.ts</code> (RescuePolicy + update fn), <code>emma-rescue.functions.ts</code> (both gate call sites read policy), <code>app.refill.recovery.rescue.tsx</code> (Safeguards card), <code>changelog.ts</code>. <strong>Migration</strong>: <code>20260903000000_v2_199_0_rescue_gate_toggles.sql</code>.",
+    ],
+  },
+  {
     version: "v2.198.0",
     date: "June 2026",
     items: [

@@ -28,6 +28,7 @@ import {
   Mail,
   Phone,
   Save,
+  ShieldCheck,
   Sparkles,
   Users,
   X,
@@ -132,7 +133,9 @@ function RescueAgentPage() {
   }, [membership.status, load]);
 
   async function patch(
-    fields: Parameters<typeof updateRescuePolicy>[0]["data"],
+    fields: NonNullable<
+      NonNullable<Parameters<typeof updateRescuePolicy>[0]>["data"]
+    >,
   ) {
     if (!accessToken) return;
     try {
@@ -154,6 +157,38 @@ function RescueAgentPage() {
     });
     if (updated) {
       toast.success(next ? "Refill agent enabled." : "Refill agent paused.");
+    }
+  }
+
+  // v2.199.0: per-gate operator safeguards. Both default ON; turning one OFF
+  // removes a safety, so the toasts say so plainly.
+  async function toggleHoldBlind(next: boolean) {
+    const updated = await patch({
+      accessToken: accessToken!,
+      holdBlindMatches: next,
+      viewAsUserId,
+    });
+    if (updated) {
+      toast.success(
+        next
+          ? "Blind-match hold on — slots with no treatment set wait for your OK."
+          : "Blind-match hold OFF — Refill may auto-text matches even when the slot has no treatment set.",
+      );
+    }
+  }
+
+  async function toggleFreqCap(next: boolean) {
+    const updated = await patch({
+      accessToken: accessToken!,
+      applyFrequencyCap: next,
+      viewAsUserId,
+    });
+    if (updated) {
+      toast.success(
+        next
+          ? "Frequency cap on — a patient contacted recently won't be re-texted."
+          : "Frequency cap OFF — Refill may text a patient even if another agent just did.",
+      );
     }
   }
 
@@ -343,6 +378,38 @@ function RescueAgentPage() {
                       : "—"
                   }
                   tone="emerald"
+                />
+              </div>
+            </section>
+
+            {/* v2.199.0: Safeguards — per-gate operator toggles. Both default
+                ON (matches the engine's prior hard-coded behavior); turning one
+                off removes a safety, so the copy + toasts say so. Governs BOTH
+                the autonomous queue lane and the owner-draft direct lane. */}
+            <section className="rounded-2xl border border-rule bg-white">
+              <header className="px-5 py-3 border-b border-rule bg-rule-soft/60 flex items-center gap-2">
+                <ShieldCheck className="h-3.5 w-3.5 text-ink-soft" />
+                <div className="text-xs font-semibold uppercase tracking-wider text-ink-soft">
+                  Safeguards
+                </div>
+                <div className="ml-auto text-[10px] text-ink-faint italic">
+                  On by default — leave on unless you know why
+                </div>
+              </header>
+              <div className="divide-y divide-rule">
+                <SafeguardRow
+                  title="Hold blind matches"
+                  on={policy.holdBlindMatches}
+                  onChange={(v) => void toggleHoldBlind(v)}
+                  onCopy="A freed slot with no treatment set waits for your one-tap OK before any text goes out — so a patient never gets invited to a visit SmartSpa can't describe."
+                  offCopy="Refill may auto-text a confident match even when the open slot has no treatment set."
+                />
+                <SafeguardRow
+                  title="Frequency cap"
+                  on={policy.applyFrequencyCap}
+                  onChange={(v) => void toggleFreqCap(v)}
+                  onCopy="A patient texted recently by any SmartSpa agent is skipped, so no one gets two messages close together."
+                  offCopy="Refill may text a patient even if another agent contacted them moments ago."
                 />
               </div>
             </section>
@@ -549,6 +616,48 @@ function RescueAgentPage() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function SafeguardRow({
+  title,
+  on,
+  onChange,
+  onCopy,
+  offCopy,
+}: {
+  title: string;
+  on: boolean;
+  onChange: (next: boolean) => void;
+  onCopy: string;
+  offCopy: string;
+}) {
+  return (
+    <div className="flex items-start gap-3 px-5 py-4">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <div className="text-[13px] font-semibold text-ink">{title}</div>
+          {!on && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-soft px-2 py-0.5 text-[10px] font-semibold text-amber-ink">
+              <AlertTriangle className="h-2.5 w-2.5" />
+              Off
+            </span>
+          )}
+        </div>
+        <p className="mt-0.5 text-xs text-ink-soft leading-snug">
+          {on ? onCopy : offCopy}
+        </p>
+      </div>
+      <label className="inline-flex items-center cursor-pointer pt-0.5">
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={(e) => onChange(e.target.checked)}
+          className="sr-only peer"
+        />
+        <div className="w-11 h-6 bg-rule rounded-full peer peer-checked:bg-emerald transition relative after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition peer-checked:after:translate-x-5" />
+      </label>
     </div>
   );
 }

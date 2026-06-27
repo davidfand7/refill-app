@@ -1736,13 +1736,22 @@ export async function dispatchRescueAttempt(args: {
 
   if (deliveryMode === "queue" && collected.length > 0) {
     // Zero-setup rescue lane (B-server.2b): the autonomous, no-touch path. Same
-    // gates as direct mode (inherited; per-gate operator toggles arrive in 2b.2),
+    // gates as direct mode (shared evaluator; per-gate operator toggles wired in
+    // 2b.2 = v2.199.0 — both lanes read the same policy columns),
     // but each cleared offer is ENQUEUED as a warm STOP-less iMessage for the
     // local helper to send from the spa's own number — no Twilio, no owner email,
     // no Claude Desktop paste, no manual Send.
     const autonomousEnabled =
       (policy as { rescue_autonomous_enabled?: boolean })
         .rescue_autonomous_enabled === true;
+    // v2.199.0: per-gate operator safeguards, default ON. `!== false` keeps the
+    // engine's prior behavior when the columns are null/undefined (pre-migration).
+    const holdBlindMatches =
+      (policy as { hold_blind_matches?: boolean | null }).hold_blind_matches !==
+      false;
+    const applyFrequencyCap =
+      (policy as { apply_frequency_cap?: boolean | null })
+        .apply_frequency_cap !== false;
 
     // Hydrate names + the shared rendering bits once (mirrors composeProxyEmail so
     // the queued body is byte-identical to the digest draft).
@@ -1781,8 +1790,8 @@ export async function dispatchRescueAttempt(args: {
       }
       const gate = await evaluateRescueGate(sb, userId, c, {
         autonomousEnabled,
-        holdBlindMatches: true,
-        applyFrequencyCap: true,
+        holdBlindMatches,
+        applyFrequencyCap,
       });
       if (gate.decision === "hold") {
         await markRescueOfferHeld(sb, c.offerId, gate.reason);
@@ -1971,13 +1980,22 @@ export async function dispatchRescueAttempt(args: {
     const autonomousEnabled =
       (policy as { rescue_autonomous_enabled?: boolean })
         .rescue_autonomous_enabled === true;
+    // v2.199.0: per-gate operator safeguards, default ON. `!== false` keeps the
+    // engine's prior behavior when the columns are null/undefined (pre-migration).
+    const holdBlindMatches =
+      (policy as { hold_blind_matches?: boolean | null }).hold_blind_matches !==
+      false;
+    const applyFrequencyCap =
+      (policy as { apply_frequency_cap?: boolean | null })
+        .apply_frequency_cap !== false;
     for (const c of collected) {
-      // Same gate as the queue lane (shared evaluator) — all three checks on for
-      // direct mode, exactly as before. Tier-2 autonomy gate is autonomousEnabled.
+      // Same gate as the queue lane (shared evaluator). Tier-2 autonomy gate is
+      // autonomousEnabled; the blind-match hold + frequency cap are now per-spa
+      // policy (v2.199.0), default ON so behavior is unchanged until toggled.
       const gate = await evaluateRescueGate(sb, userId, c, {
         autonomousEnabled,
-        holdBlindMatches: true,
-        applyFrequencyCap: true,
+        holdBlindMatches,
+        applyFrequencyCap,
       });
       if (gate.decision === "hold") {
         await markRescueOfferHeld(sb, c.offerId, gate.reason);

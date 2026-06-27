@@ -28,6 +28,11 @@ export type RescuePolicy = {
   outreachWindowMin: number;
   proxyPhone: string | null;
   proxyEmail: string | null;
+  // v2.199.0: per-gate operator safeguards (default ON). holdBlindMatches =
+  // a freed slot with no treatment set waits for the owner's OK before any
+  // text. applyFrequencyCap = skip a patient contacted recently (any agent).
+  holdBlindMatches: boolean;
+  applyFrequencyCap: boolean;
   updatedAt: string;
 };
 
@@ -55,6 +60,8 @@ const updatePolicyInput = accessInput.extend({
   outreachWindowMin: z.number().int().min(1).max(43200).optional(),
   proxyPhone: z.string().max(40).nullable().optional(),
   proxyEmail: z.string().email().max(240).nullable().optional(),
+  holdBlindMatches: z.boolean().optional(),
+  applyFrequencyCap: z.boolean().optional(),
 });
 
 const metricsInput = accessInput.extend({
@@ -73,6 +80,14 @@ function hydratePolicy(row: PolicyRow): RescuePolicy {
     outreachWindowMin: row.rescue_outreach_window_min,
     proxyPhone: row.rescue_proxy_phone,
     proxyEmail: row.rescue_proxy_email,
+    // Not in generated types yet → loose-cast. `!== false` = default ON, so a
+    // null/undefined column (pre-migration) reads true and behavior is unchanged.
+    holdBlindMatches:
+      (row as { hold_blind_matches?: boolean | null }).hold_blind_matches !==
+      false,
+    applyFrequencyCap:
+      (row as { apply_frequency_cap?: boolean | null }).apply_frequency_cap !==
+      false,
     updatedAt: row.updated_at,
   };
 }
@@ -124,6 +139,13 @@ export const updateRescuePolicy = createServerFn({ method: "POST" })
       updates.rescue_proxy_phone = data.proxyPhone;
     if (data.proxyEmail !== undefined)
       updates.rescue_proxy_email = data.proxyEmail;
+    // v2.199.0 safeguards — not in generated types yet, so loose-cast the patch.
+    if (data.holdBlindMatches !== undefined)
+      (updates as Record<string, unknown>).hold_blind_matches =
+        data.holdBlindMatches;
+    if (data.applyFrequencyCap !== undefined)
+      (updates as Record<string, unknown>).apply_frequency_cap =
+        data.applyFrequencyCap;
 
     // Upsert-style: if no row yet, insert one with defaults + updates.
     const { data: existing } = await sb
