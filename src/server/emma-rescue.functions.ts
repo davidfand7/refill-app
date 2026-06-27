@@ -1098,6 +1098,26 @@ export async function dispatchAtBookingAsk(args: {
   const phone = normalizePhoneE164(apt.booking_phone);
   if (!phone) return { ok: false, reason: "No usable phone on the booking." };
 
+  // 3b) A-list gate (v2.194.0). When the spa restricts the invite to its A-list,
+  //     only hand-selected/VIP patients are invited — read straight from
+  //     knowledge_nodes.attachments.vip, the SAME flag the Patients-page star and
+  //     the "A-list rules" Apply write, so this can't drift from what the owner
+  //     sees. Default off = invite every matched patient (today's behavior).
+  const aListOnly =
+    (policy as { at_booking_a_list_only?: boolean }).at_booking_a_list_only ===
+    true;
+  if (aListOnly) {
+    const { data: pnode } = await sb
+      .from("knowledge_nodes")
+      .select("attachments")
+      .eq("id", apt.patient_node_id)
+      .maybeSingle();
+    const isVip =
+      !!(pnode?.attachments as { vip?: boolean } | null | undefined)?.vip;
+    if (!isVip)
+      return { ok: false, reason: "Patient not on the A-list — invite skipped." };
+  }
+
   // 4) Patient-level dedup — ask once per patient, ever (across all their
   //    bookings). Any-status row = skip. Reuses the invite path's existing-row
   //    check; the (user_id, patient_node_id) unique index makes the seed race-safe.

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.194.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.194.0 &mdash; The VIP invite is now actually VIP: at-booking ask can be restricted to your A-list.</strong> The &ldquo;VIP early-access&rdquo; ask invited <em>every</em> matched patient; this adds a per-spa switch so only your <strong>A-list</strong> &mdash; your hand-selected / rules-qualified best clients &mdash; get invited to join the waitlist. It reuses the A-list you already maintain: membership is the existing <code>knowledge_nodes.attachments.vip</code> flag that BOTH the Patients-page star (manual) AND the &ldquo;A-list rules&rdquo; Apply (auto: spend / recency / visits thresholds, minus banned &amp; cancellers) write &mdash; so the gate reads <em>exactly</em> what the owner sees on the Patients page, with zero drift and no new data model (your &ldquo;auto + manual override&rdquo; choice, already encoded in one field). In <code>dispatchAtBookingAsk</code>, once the booking is matched to a patient, a non-A-list patient is skipped (&ldquo;not on the A-list&rdquo;) before any waitlist seed. <strong>Default off</strong> (<code>at_booking_a_list_only=false</code>) = today's behavior, invite everyone, until a spa flips it on. <strong>Touched</strong>: <code>emma-rescue.functions.ts</code> (A-list gate in the at-booking flow), <code>changelog.ts</code>. <strong>Migration</strong>: <code>20260902000000_v2_194_0_at_booking_a_list_only.sql</code> (<code>at_booking_a_list_only</code> on <code>noshow_policies</code>).",
+    ],
+  },
+  {
     version: "v2.193.0",
     date: "June 2026",
     items: [
