@@ -165,6 +165,8 @@ import { Route as ApiIntegrationsJaneOauthCallbackRouteImport } from './routes/a
 import { Route as ApiIntegrationsBoulevardInstallCallbackRouteImport } from './routes/api.integrations.boulevard.install-callback'
 import { Route as ApiIntegrationsBookerInstallCallbackRouteImport } from './routes/api.integrations.booker.install-callback'
 import { Route as ApiIntegrationsAcuityOauthCallbackRouteImport } from './routes/api.integrations.acuity.oauth-callback'
+import { Route as ApiAgentQueueClaimRouteImport } from './routes/api.agent.queue.claim'
+import { Route as ApiAgentQueueAckRouteImport } from './routes/api.agent.queue.ack'
 import { Route as AppRefillCampaignsCampaignIdIndexRouteImport } from './routes/app.refill.campaigns.$campaignId.index'
 import { Route as AppRefillCampaignsCampaignIdBlastRouteImport } from './routes/app.refill.campaigns.$campaignId.blast'
 import { Route as ApiWebhooksSchedulerZenotiSecretRouteImport } from './routes/api.webhooks.scheduler.zenoti.$secret'
@@ -1010,6 +1012,16 @@ const ApiIntegrationsAcuityOauthCallbackRoute =
     path: '/api/integrations/acuity/oauth-callback',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiAgentQueueClaimRoute = ApiAgentQueueClaimRouteImport.update({
+  id: '/api/agent/queue/claim',
+  path: '/api/agent/queue/claim',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAgentQueueAckRoute = ApiAgentQueueAckRouteImport.update({
+  id: '/api/agent/queue/ack',
+  path: '/api/agent/queue/ack',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRefillCampaignsCampaignIdIndexRoute =
   AppRefillCampaignsCampaignIdIndexRouteImport.update({
     id: '/',
@@ -1139,6 +1151,8 @@ export interface FileRoutesByFullPath {
   '/app/billing/': typeof AppBillingIndexRoute
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
+  '/api/agent/queue/ack': typeof ApiAgentQueueAckRoute
+  '/api/agent/queue/claim': typeof ApiAgentQueueClaimRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
   '/api/integrations/booker/install-callback': typeof ApiIntegrationsBookerInstallCallbackRoute
   '/api/integrations/boulevard/install-callback': typeof ApiIntegrationsBoulevardInstallCallbackRoute
@@ -1297,6 +1311,8 @@ export interface FileRoutesByTo {
   '/app/billing': typeof AppBillingIndexRoute
   '/app/refill': typeof AppRefillIndexRoute
   '/app/rep': typeof AppRepIndexRoute
+  '/api/agent/queue/ack': typeof ApiAgentQueueAckRoute
+  '/api/agent/queue/claim': typeof ApiAgentQueueClaimRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
   '/api/integrations/booker/install-callback': typeof ApiIntegrationsBookerInstallCallbackRoute
   '/api/integrations/boulevard/install-callback': typeof ApiIntegrationsBoulevardInstallCallbackRoute
@@ -1462,6 +1478,8 @@ export interface FileRoutesById {
   '/app/billing/': typeof AppBillingIndexRoute
   '/app/refill/': typeof AppRefillIndexRoute
   '/app/rep/': typeof AppRepIndexRoute
+  '/api/agent/queue/ack': typeof ApiAgentQueueAckRoute
+  '/api/agent/queue/claim': typeof ApiAgentQueueClaimRoute
   '/api/integrations/acuity/oauth-callback': typeof ApiIntegrationsAcuityOauthCallbackRoute
   '/api/integrations/booker/install-callback': typeof ApiIntegrationsBookerInstallCallbackRoute
   '/api/integrations/boulevard/install-callback': typeof ApiIntegrationsBoulevardInstallCallbackRoute
@@ -1629,6 +1647,8 @@ export interface FileRouteTypes {
     | '/app/billing/'
     | '/app/refill/'
     | '/app/rep/'
+    | '/api/agent/queue/ack'
+    | '/api/agent/queue/claim'
     | '/api/integrations/acuity/oauth-callback'
     | '/api/integrations/booker/install-callback'
     | '/api/integrations/boulevard/install-callback'
@@ -1787,6 +1807,8 @@ export interface FileRouteTypes {
     | '/app/billing'
     | '/app/refill'
     | '/app/rep'
+    | '/api/agent/queue/ack'
+    | '/api/agent/queue/claim'
     | '/api/integrations/acuity/oauth-callback'
     | '/api/integrations/booker/install-callback'
     | '/api/integrations/boulevard/install-callback'
@@ -1951,6 +1973,8 @@ export interface FileRouteTypes {
     | '/app/billing/'
     | '/app/refill/'
     | '/app/rep/'
+    | '/api/agent/queue/ack'
+    | '/api/agent/queue/claim'
     | '/api/integrations/acuity/oauth-callback'
     | '/api/integrations/booker/install-callback'
     | '/api/integrations/boulevard/install-callback'
@@ -2077,6 +2101,8 @@ export interface RootRouteChildren {
   ApiWebhooksStripeRoute: typeof ApiWebhooksStripeRoute
   RescueClaimTokenRoute: typeof RescueClaimTokenRoute
   WaitlistOptinTokenRoute: typeof WaitlistOptinTokenRoute
+  ApiAgentQueueAckRoute: typeof ApiAgentQueueAckRoute
+  ApiAgentQueueClaimRoute: typeof ApiAgentQueueClaimRoute
   ApiIntegrationsAcuityOauthCallbackRoute: typeof ApiIntegrationsAcuityOauthCallbackRoute
   ApiIntegrationsBookerInstallCallbackRoute: typeof ApiIntegrationsBookerInstallCallbackRoute
   ApiIntegrationsBoulevardInstallCallbackRoute: typeof ApiIntegrationsBoulevardInstallCallbackRoute
@@ -3192,6 +3218,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiIntegrationsAcuityOauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/agent/queue/claim': {
+      id: '/api/agent/queue/claim'
+      path: '/api/agent/queue/claim'
+      fullPath: '/api/agent/queue/claim'
+      preLoaderRoute: typeof ApiAgentQueueClaimRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/agent/queue/ack': {
+      id: '/api/agent/queue/ack'
+      path: '/api/agent/queue/ack'
+      fullPath: '/api/agent/queue/ack'
+      preLoaderRoute: typeof ApiAgentQueueAckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/app/refill/campaigns/$campaignId/': {
       id: '/app/refill/campaigns/$campaignId/'
       path: '/'
@@ -3578,6 +3618,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiWebhooksStripeRoute: ApiWebhooksStripeRoute,
   RescueClaimTokenRoute: RescueClaimTokenRoute,
   WaitlistOptinTokenRoute: WaitlistOptinTokenRoute,
+  ApiAgentQueueAckRoute: ApiAgentQueueAckRoute,
+  ApiAgentQueueClaimRoute: ApiAgentQueueClaimRoute,
   ApiIntegrationsAcuityOauthCallbackRoute:
     ApiIntegrationsAcuityOauthCallbackRoute,
   ApiIntegrationsBookerInstallCallbackRoute:

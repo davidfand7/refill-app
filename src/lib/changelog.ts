@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.188.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.188.0 &mdash; Build 2 (Path B) server half: the outbound iMessage queue spine.</strong> The zero-setup sender's on-ramp. Today the loop reaches the patient through a 3-part Claude-Desktop chain (Gmail connector + a hand-built routine + the iMessage MCP) &mdash; every link a failure point. Path B deletes all three: SmartSpa just <em>enqueues</em> the text, and a tiny signed macOS menubar helper on the spa's <strong>own Mac</strong> polls the queue and sends it via Messages.app &mdash; from the spa's <strong>own number</strong> (the moat). This ships the SERVER half: a new <code>outbound_imessage_queue</code> table (pending&rarr;claimed&rarr;sent/failed) + an <strong>atomic claim RPC</strong> (<code>FOR UPDATE SKIP LOCKED</code> so two polls never grab the same row; reclaims a crashed helper's lease after 10&nbsp;min; caps attempts at 5) + two endpoints reusing the EXACT per-spa <code>local_agents.secret</code> spine as the heartbeat/run-report: <code>POST /api/agent/queue/claim</code> (leases up to N texts + returns the per-spa <code>auto_send</code> flag) and <code>POST /api/agent/queue/ack</code> (closes a row out only if the presented <code>claim_token</code> + spa match the lease, else 409 &mdash; a stale or foreign ack can't mark someone else's send done). Two new per-spa flags on <code>local_agents</code>: <code>delivery_mode</code> (<code>'email'</code> default = today's draft lane, unchanged; <code>'queue'</code> = the new lane) and <code>auto_send</code> (Grasshopper's call &mdash; <em>do both</em>: <code>false</code> = helper STAGES for a human tap, the deliberate safety; <code>true</code> = auto-send; per-spa). <strong>Ships DORMANT</strong> &mdash; nothing enqueues yet (live delivery stays the email-draft lane, gated by <code>delivery_mode='email'</code>); the helper consumer + the enqueue cutover are the next slices. <strong>Touched</strong>: new <code>api.agent.queue.claim.ts</code> + <code>api.agent.queue.ack.ts</code>, <code>routeTree.gen.ts</code>, <code>changelog.ts</code>. <strong>Migration</strong>: <code>20260831000000_v2_188_0_outbound_imessage_queue.sql</code>.",
+    ],
+  },
+  {
     version: "v2.187.0",
     date: "June 2026",
     items: [
