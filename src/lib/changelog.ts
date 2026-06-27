@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.191.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.191.0 &mdash; B-server.2b: the rescue flow joins the zero-setup queue &mdash; the flagship lane is now autonomous.</strong> No-show rescue offers can now flow through the local-helper queue: when a spa's relay is in queue mode, each cleared offer is enqueued as a warm iMessage and the helper sends it from the spa's own number &mdash; the flagship recovery loop with <strong>zero human hops</strong>. The autonomy gates ride along, by design (Grasshopper's call: inherit all, default-safe): a new shared <code>evaluateRescueGate</code> governs BOTH the Twilio direct lane and the queue lane identically &mdash; <strong>blind-match hold</strong> (don't text when the freed slot has no treatment set), <strong>Tier-2 autonomy gate</strong> (only auto-send once Autonomous Refill is on), and the <strong>cross-agent frequency cap</strong> (never stack a 'slot opened' text on someone just contacted). Held offers still land in the review queue; suppressions still write the immutable ledger row. The patient body comes from a new single-source <code>composeRescueProxyDraftBody</code> used by BOTH the owner-digest email and the queue, so the two can't drift (the existing proxy-email format is byte-identical &mdash; the courtesy line was extracted, not changed). Direct mode was refactored to call the same shared gate + <code>markRescueOfferHeld</code> + <code>recordRescueSuppression</code> helpers (behavior-preserving). The gates are parameterized (all-on now) so 2b.2 can expose <strong>per-gate operator toggles</strong> with no further send-path changes. Queue lane bypasses the Twilio-number transport gate (it needs none). <strong>Default unchanged</strong>: <code>delivery_mode='email'</code> &rarr; the proxy-digest lane is exactly as before until a spa flips to queue. <strong>Touched</strong>: <code>emma-rescue.functions.ts</code> (shared gate/body/hold/suppress helpers + rescue queue branch + direct-mode refactor + queue bypass of the fromNumber gate), <code>changelog.ts</code>. No migration. (Truncation baseline 187&rarr;188: one bounded name-hydration read, identical to the proxy branch's.)",
+    ],
+  },
+  {
     version: "v2.190.0",
     date: "June 2026",
     items: [

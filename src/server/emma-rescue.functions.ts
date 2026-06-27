@@ -699,6 +699,24 @@ function composeProxySms(args: {
   return `${head}\n\n${body}\n\nFirst-tap-wins.`;
 }
 
+/**
+ * The single source of truth for ONE patient's warm, STOP-less rescue draft body
+ * (v2.191.0). Used by the proxy-email digest (the draft the owner pastes) AND the
+ * zero-setup queue lane (the body the local helper sends) — so the two lanes are
+ * byte-identical and can't drift. STOP-less because it goes out as the spa's own
+ * personal iMessage, not an A2P SMS.
+ */
+function composeRescueProxyDraftBody(args: {
+  spaName: string;
+  when: string;
+  provider: string;
+  offerTreatment: string;
+  firstName: string;
+  claimUrl: string;
+}): string {
+  return `Hi ${args.firstName}! Last-minute opening at ${args.spaName} ${args.when}${args.provider} for ${args.offerTreatment}. Tap to grab if you want it: ${args.claimUrl}`;
+}
+
 function composeProxyEmail(args: {
   spaName: string;
   treatmentType: string | null;
@@ -732,7 +750,14 @@ function composeProxyEmail(args: {
           args.providerName,
           args.ownerDisplayName,
         )?.trim() || treatment;
-      const courtesy = `Hi ${o.firstName}! Last-minute opening at ${args.spaName} ${when}${provider} for ${offerTreatment}. Tap to grab if you want it: ${o.claimUrl}`;
+      const courtesy = composeRescueProxyDraftBody({
+        spaName: args.spaName,
+        when,
+        provider,
+        offerTreatment,
+        firstName: o.firstName,
+        claimUrl: o.claimUrl,
+      });
       const spendStr = o.lifetimeSpend > 0
         ? `, lifetime $${Math.round(o.lifetimeSpend).toLocaleString()}`
         : "";
@@ -775,7 +800,14 @@ function composeProxyEmail(args: {
           args.providerName,
           args.ownerDisplayName,
         )?.trim() || treatment;
-      const courtesy = `Hi ${o.firstName}! Last-minute opening at ${args.spaName} ${when}${provider} for ${offerTreatment}. Tap to grab if you want it: ${o.claimUrl}`;
+      const courtesy = composeRescueProxyDraftBody({
+        spaName: args.spaName,
+        when,
+        provider,
+        offerTreatment,
+        firstName: o.firstName,
+        claimUrl: o.claimUrl,
+      });
       const spendStr = o.lifetimeSpend > 0
         ? `, lifetime $${Math.round(o.lifetimeSpend).toLocaleString()}`
         : "";
@@ -896,6 +928,100 @@ async function enqueueOutboundImessage(
     console.error("[queue enqueue] failed:", e);
     return false;
   }
+}
+
+/**
+ * The per-offer autonomy gate, shared by direct mode (Twilio) and the zero-setup
+ * queue lane (v2.191.0) so an autonomous send is governed identically however it
+ * leaves the building. Decision:
+ *   - hold    → the offer needs the owner's one-tap OK (blind match, or Autonomous
+ *               Refill not yet turned on). Goes to the rescue review queue.
+ *   - suppress→ the cross-agent frequency cap fired (someone texted this patient
+ *               recently); skip and let a later sweep re-evaluate.
+ *   - send    → clear to go out.
+ * The three gates are PARAMETERIZED (default all-on) so 2b.2 can expose per-gate
+ * operator toggles without touching either send path.
+ */
+type RescueGateDecision =
+  | { decision: "send" }
+  | { decision: "hold"; reason: string }
+  | { decision: "suppress"; lastAgent: string | null; lastAt: string | null };
+
+async function evaluateRescueGate(
+  sb: SupabaseAdmin,
+  userId: string,
+  offer: { patientNodeId: string; matchTier: string },
+  opts: {
+    autonomousEnabled: boolean;
+    holdBlindMatches: boolean;
+    applyFrequencyCap: boolean;
+  },
+): Promise<RescueGateDecision> {
+  const holdReason =
+    opts.holdBlindMatches && offer.matchTier === "blind"
+      ? "This opening has no treatment set, so SmartSpa couldn't tell this patient what they'd be coming in for — your OK before we text."
+      : !opts.autonomousEnabled
+        ? "SmartSpa found a confident match — approve it to text them. (Turn on Autonomous Refill to let SmartSpa send these the moment a slot frees.)"
+        : null;
+  if (holdReason) return { decision: "hold", reason: holdReason };
+  if (opts.applyFrequencyCap) {
+    const recent = await checkRecentContact(sb, userId, offer.patientNodeId, "sms");
+    if (recent.recentlyContacted) {
+      return {
+        decision: "suppress",
+        lastAgent: recent.lastAgent,
+        lastAt: recent.lastAt,
+      };
+    }
+  }
+  return { decision: "send" };
+}
+
+/** Park an offer for owner review (held_at/held_reason added by v2.16.0; cast
+ *  narrowly — not in generated types). Best-effort: a failed write leaves the
+ *  offer unsent rather than blasting it. Shared by both send lanes. */
+async function markRescueOfferHeld(
+  sb: SupabaseAdmin,
+  offerId: string,
+  reason: string,
+): Promise<void> {
+  try {
+    await (sb.from("rescue_offers") as unknown as {
+      update(v: Record<string, unknown>): {
+        eq(c: string, v: string): Promise<{ error: unknown }>;
+      };
+    })
+      .update({ held_at: new Date().toISOString(), held_reason: reason })
+      .eq("id", offerId);
+  } catch (e) {
+    console.error("[rescue] hold-write failed:", e);
+  }
+}
+
+/** Record an immutable "did NOT text (frequency cap)" ledger row — the honest
+ *  audit of a suppression + the tally the cap reads next time. Shared by both
+ *  send lanes. */
+async function recordRescueSuppression(
+  sb: SupabaseAdmin,
+  userId: string,
+  offer: { patientNodeId: string; matchTier: string },
+  info: { lastAgent: string | null; lastAt: string | null },
+): Promise<void> {
+  await recordAgentAction(sb, userId, {
+    agent: "rescue",
+    action: "sms_suppressed",
+    channel: "sms",
+    patientNodeId: offer.patientNodeId,
+    count: 1,
+    confidenceTier: offer.matchTier,
+    initiatedBy: "autonomous",
+    metadata: {
+      reason: "frequency_cap",
+      window_h: FREQUENCY_CAP_WINDOW_HOURS,
+      last_agent: info.lastAgent,
+      last_at: info.lastAt,
+    },
+  });
 }
 
 export async function dispatchAtBookingAsk(args: {
@@ -1476,11 +1602,16 @@ export async function dispatchRescueAttempt(args: {
   const proxyPhone = policy.rescue_proxy_phone;
   const proxyEmail = policy.rescue_proxy_email;
   const isProxyMode = !!(proxyPhone || proxyEmail);
+  // Zero-setup queue lane (B-server.2b): when active it sends each text from the
+  // spa's own number via the local helper — needs no Twilio number, and takes
+  // precedence over the proxy-digest/direct paths below.
+  const deliveryMode = await resolveDeliveryMode(sb, userId);
 
   // Need fromNumber when: direct mode (sends to each patient) OR proxy
-  // mode with proxyPhone set (sends consolidated SMS to spa owner).
-  // Pure proxy-email-only mode doesn't need it.
-  const willNeedFromNumber = !isProxyMode || !!proxyPhone;
+  // mode with proxyPhone set (sends consolidated SMS to spa owner). Pure
+  // proxy-email-only mode and the queue lane don't need it.
+  const willNeedFromNumber =
+    deliveryMode !== "queue" && (!isProxyMode || !!proxyPhone);
   if (willNeedFromNumber && !fromNumber) {
     await sb
       .from("rescue_attempts")
@@ -1558,7 +1689,106 @@ export async function dispatchRescueAttempt(args: {
   let offersSent = 0;
   let offersSuppressed = 0;
 
-  if (isProxyMode && collected.length > 0) {
+  if (deliveryMode === "queue" && collected.length > 0) {
+    // Zero-setup rescue lane (B-server.2b): the autonomous, no-touch path. Same
+    // gates as direct mode (inherited; per-gate operator toggles arrive in 2b.2),
+    // but each cleared offer is ENQUEUED as a warm STOP-less iMessage for the
+    // local helper to send from the spa's own number — no Twilio, no owner email,
+    // no Claude Desktop paste, no manual Send.
+    const autonomousEnabled =
+      (policy as { rescue_autonomous_enabled?: boolean })
+        .rescue_autonomous_enabled === true;
+
+    // Hydrate names + the shared rendering bits once (mirrors composeProxyEmail so
+    // the queued body is byte-identical to the digest draft).
+    const patientIds = collected.map((c) => c.patientNodeId);
+    const { data: patientNodes } = await sb
+      .from("knowledge_nodes")
+      .select("id, title")
+      .in("id", patientIds);
+    const titleById = new Map(
+      (patientNodes ?? []).map((p) => [p.id, p.title as string | null]),
+    );
+    const when = formatRescueWhen(apt.scheduled_at);
+    const cleanedTreatment = stripProviderFromTreatment(
+      apt.treatment_type,
+      apt.provider_name,
+      ownerDisplayName,
+    );
+    const treatment = cleanedTreatment ?? "Appointment";
+    const provider = providerClause(
+      spaName,
+      apt.provider_name,
+      ownerDisplayName,
+      " with ",
+    );
+
+    for (const c of collected) {
+      const gate = await evaluateRescueGate(sb, userId, c, {
+        autonomousEnabled,
+        holdBlindMatches: true,
+        applyFrequencyCap: true,
+      });
+      if (gate.decision === "hold") {
+        await markRescueOfferHeld(sb, c.offerId, gate.reason);
+        continue;
+      }
+      if (gate.decision === "suppress") {
+        offersSuppressed++;
+        await recordRescueSuppression(sb, userId, c, {
+          lastAgent: gate.lastAgent,
+          lastAt: gate.lastAt,
+        });
+        continue;
+      }
+      const firstName =
+        extractFirstName(titleById.get(c.patientNodeId) ?? "Patient") ?? "there";
+      const offerTreatment =
+        stripProviderFromTreatment(
+          c.offerServiceName ?? null,
+          apt.provider_name,
+          ownerDisplayName,
+        )?.trim() || treatment;
+      const body = composeRescueProxyDraftBody({
+        spaName,
+        when,
+        provider,
+        offerTreatment,
+        firstName,
+        claimUrl: c.claimUrl,
+      });
+      const queued = await enqueueOutboundImessage(sb, {
+        userId,
+        recipient: c.phone,
+        body,
+        source: "rescue",
+        dedupKey: `rescue:${c.offerId}`,
+      });
+      if (queued) {
+        // Delivered-via-queue marker (mirrors the proxy/direct message_id shape so
+        // telemetry needs no new column) + the autonomous send ledger row.
+        await sb
+          .from("rescue_offers")
+          .update({ message_id: `queue:${c.offerId}` })
+          .eq("id", c.offerId);
+        offersSent++;
+        await recordAgentAction(sb, userId, {
+          agent: "rescue",
+          action: "sms_sent",
+          channel: "sms",
+          patientNodeId: c.patientNodeId,
+          count: 1,
+          confidenceTier: c.matchTier,
+          initiatedBy: "autonomous",
+        });
+      } else {
+        await sb
+          .from("rescue_offers")
+          .update({ send_error: "queue: enqueue failed" })
+          .eq("id", c.offerId);
+      }
+    }
+  } else if (isProxyMode && collected.length > 0) {
     // Hydrate patient names once for the aggregated bodies.
     const patientIds = collected.map((c) => c.patientNodeId);
     const { data: patientNodes } = await sb
@@ -1687,53 +1917,22 @@ export async function dispatchRescueAttempt(args: {
       (policy as { rescue_autonomous_enabled?: boolean })
         .rescue_autonomous_enabled === true;
     for (const c of collected) {
-      const holdReason =
-        c.matchTier === "blind"
-          ? "This opening has no treatment set, so SmartSpa couldn't tell this patient what they'd be coming in for — your OK before we text."
-          : !autonomousEnabled
-            ? "SmartSpa found a confident match — approve it to text them. (Turn on Autonomous Refill to let SmartSpa send these the moment a slot frees.)"
-            : null;
-      if (holdReason) {
-        try {
-          // held_at / held_reason were added by the v2.16.0 migration; cast
-          // narrowly since they're not in the generated types yet. Best-effort:
-          // if the write fails we leave the offer unsent rather than blast it.
-          await (sb.from("rescue_offers") as unknown as {
-            update(v: Record<string, unknown>): {
-              eq(c: string, v: string): Promise<{ error: unknown }>;
-            };
-          })
-            .update({ held_at: new Date().toISOString(), held_reason: holdReason })
-            .eq("id", c.offerId);
-        } catch (e) {
-          console.error("[rescue] hold-write failed:", e);
-        }
+      // Same gate as the queue lane (shared evaluator) — all three checks on for
+      // direct mode, exactly as before. Tier-2 autonomy gate is autonomousEnabled.
+      const gate = await evaluateRescueGate(sb, userId, c, {
+        autonomousEnabled,
+        holdBlindMatches: true,
+        applyFrequencyCap: true,
+      });
+      if (gate.decision === "hold") {
+        await markRescueOfferHeld(sb, c.offerId, gate.reason);
         continue;
       }
-      // Tier-2 cross-agent frequency cap (Slice 2): before this autonomous text
-      // fires, has ANY agent (this rescue run, an earlier one, or a preshow
-      // reminder) already contacted this patient by SMS in the window? If so,
-      // YIELD — don't stack a "a slot opened" blast on top of a message they
-      // just got. We record the suppression in the ledger (the honest audit of
-      // a thing the agent decided NOT to do) and leave the offer unsent; a
-      // later sweep re-evaluates once the window has passed.
-      const recent = await checkRecentContact(sb, userId, c.patientNodeId, "sms");
-      if (recent.recentlyContacted) {
+      if (gate.decision === "suppress") {
         offersSuppressed++;
-        await recordAgentAction(sb, userId, {
-          agent: "rescue",
-          action: "sms_suppressed",
-          channel: "sms",
-          patientNodeId: c.patientNodeId,
-          count: 1,
-          confidenceTier: c.matchTier,
-          initiatedBy: "autonomous",
-          metadata: {
-            reason: "frequency_cap",
-            window_h: FREQUENCY_CAP_WINDOW_HOURS,
-            last_agent: recent.lastAgent,
-            last_at: recent.lastAt,
-          },
+        await recordRescueSuppression(sb, userId, c, {
+          lastAgent: gate.lastAgent,
+          lastAt: gate.lastAt,
         });
         continue;
       }
