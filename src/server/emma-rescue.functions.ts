@@ -62,6 +62,7 @@ import {
 } from "@/server/emma-spa-profile";
 import { loadServiceCatalogForUser } from "@/server/refill-catalog";
 import { resolveTreatmentsToServiceIds } from "@/lib/treatment-catalog-resolver";
+import { normalizePhoneE164 } from "@/lib/client-list-csv";
 import {
   getOrMintWaitlistToken,
   buildWaitlistOptInUrl,
@@ -874,8 +875,12 @@ export async function dispatchAtBookingAsk(args: {
     return { ok: false, reason: "Booking too soon — no earlier slot to offer." };
   if (!apt.patient_node_id)
     return { ok: false, reason: "No matched patient — can't mint opt-in token." };
-  const phone = apt.booking_phone?.trim();
-  if (!phone) return { ok: false, reason: "No phone on the booking." };
+  // E.164 (+1…) — the iMessage-staging routine's STEP 2c extracts "the +1
+  // number (digits + leading +)", and draft_imessage needs a resolvable
+  // recipient. Raw 10-digit (Acuity's format) breaks both. Matches rescue's
+  // proxy lines, which already emit +1.
+  const phone = normalizePhoneE164(apt.booking_phone);
+  if (!phone) return { ok: false, reason: "No usable phone on the booking." };
 
   // 4) Patient-level dedup — ask once per patient, ever (across all their
   //    bookings). Any-status row = skip. Reuses the invite path's existing-row

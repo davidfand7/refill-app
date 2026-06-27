@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.186.2",
+    date: "June 2026",
+    items: [
+      "<strong>v2.186.2 &mdash; At-booking proxy draft now emits a proper +1 (E.164) phone, matching rescue.</strong> The at-booking draft's <code>To:</code> line carried Acuity's raw 10-digit number (<code>3037046530</code>), but the iMessage-staging routine's STEP 2c extracts &ldquo;the <strong>+1</strong> number (digits + leading +)&rdquo; and <code>draft_imessage</code> needs a resolvable recipient &mdash; rescue's proxy lines already emit <code>+1&hellip;</code> (e.g. <code>+13032501878</code>). Normalized the booking phone via the existing <code>normalizePhoneE164</code> helper at the source in <code>dispatchAtBookingAsk</code>, so the email <code>To:</code> line, the owner-SMS, and the direct-Twilio path all get E.164. <strong>Touched</strong>: <code>emma-rescue.functions.ts</code>. No migration.",
+    ],
+  },
+  {
     version: "v2.186.1",
     date: "June 2026",
     items: [
