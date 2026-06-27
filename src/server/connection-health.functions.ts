@@ -27,6 +27,8 @@ import { resolveEffectiveUserId } from "@/server/auth-helpers";
 import { fetchAllRows } from "@/server/paginate";
 import { MANUFACTURER_MAPPERS } from "@/lib/manufacturer-reward-csv";
 import { normalizePhoneE164 } from "@/lib/client-list-csv";
+import { normalizePhone } from "@/lib/normalize-patient";
+import { buildPatientIndex } from "@/server/emma-appointments.functions";
 import {
   computeVerdict,
   formatAge,
@@ -1500,3 +1502,101 @@ export const updateLocalAgentSettingsFn = createServerFn({ method: "POST" })
       testRecipients: coerceTestRecipients(r.test_recipients),
     };
   });
+
+const resetTestArtifactsSchema = z.object({
+  accessToken: z.string().min(1),
+  viewAsUserId: z.string().optional(),
+});
+
+/** UI dev tool (v2.198.0): clear the at-booking test artifacts for the spa's
+ *  TEST-RECIPIENT patients so the same patient can be re-tested without SQL.
+ *  The at-booking ask is one-per-patient-ever (a waitlist dedup keyed by
+ *  patient_node_id), so after a test patient gets one invite every later
+ *  booking dedup-skips. This deletes their `at-booking-ask` waitlist rows +
+ *  `at_booking` queue rows.
+ *
+ *  HARD SAFETY: scoped to `local_agents.test_recipients` ONLY. It maps those
+ *  allowlisted numbers to patient_node_ids via the SAME buildPatientIndex the
+ *  Acuity webhook matches with (byPhone keyed by normalizePhone = bare,
+ *  country-code-stripped digits) — so it physically cannot touch a
+ *  non-allowlisted (real) patient's opt-in. No allowlist set = nothing to
+ *  reset (throws rather than silently wiping anything). */
+export const resetTestArtifactsFn = createServerFn({ method: "POST" })
+  .inputValidator((raw: unknown) => resetTestArtifactsSchema.parse(raw))
+  .handler(
+    async ({
+      data,
+    }): Promise<{
+      waitlistCleared: number;
+      queueCleared: number;
+      recipients: string[];
+      matchedPatients: number;
+    }> => {
+      const { effectiveUserId } = await resolveEffectiveUserId({
+        accessToken: data.accessToken,
+        viewAsUserId: data.viewAsUserId,
+      });
+      const sb = admin();
+
+      // The allowlist defines "test patients". Empty = refuse (never wipe real data).
+      const { data: la } = await localAgentTbl(sb)
+        .select("test_recipients")
+        .eq("user_id", effectiveUserId)
+        .maybeSingle();
+      const recipients = coerceTestRecipients(la?.test_recipients);
+      if (recipients.length === 0) {
+        throw new Error(
+          "No test recipients set. Add at least one number to the allowlist first — reset only ever clears allowlisted test numbers, never real patients.",
+        );
+      }
+
+      // Map allowlisted phones → patient_node_ids using the SAME index the
+      // Acuity webhook matches with (byPhone keyed by normalizePhone = bare,
+      // country-code-stripped digits). No drift from real matching.
+      const index = await buildPatientIndex(sb, effectiveUserId);
+      const patientIds: string[] = [];
+      for (const recip of recipients) {
+        const key = normalizePhone(recip);
+        const id = key ? index.byPhone.get(key) : undefined;
+        if (id && !patientIds.includes(id)) patientIds.push(id);
+      }
+
+      // Clear at-booking-ask waitlist rows for those test patients (the dedup
+      // that blocks a re-test). Scoped by user + source + the test patient ids.
+      let waitlistCleared = 0;
+      if (patientIds.length > 0) {
+        const { data: wdel, error: werr } = await sb
+          .from("waitlist")
+          .delete()
+          .eq("user_id", effectiveUserId)
+          .eq("opt_in_source", "at-booking-ask")
+          .in("patient_node_id", patientIds)
+          .select("id");
+        if (werr) throw new Error(`Couldn't clear waitlist: ${werr.message}`);
+        waitlistCleared = wdel?.length ?? 0;
+      }
+
+      // Clear at_booking queue rows for the allowlisted recipients (by phone —
+      // both the allowlist and the queue store E.164, so they match directly).
+      // outbound_imessage_queue isn't in the generated types yet, so reach it
+      // through the same untyped cast enqueueOutboundImessage uses.
+      const { data: qdel, error: qerr } = await (
+        sb as unknown as { from(t: string): any }
+      )
+        .from("outbound_imessage_queue")
+        .delete()
+        .eq("user_id", effectiveUserId)
+        .eq("source", "at_booking")
+        .in("recipient", recipients)
+        .select("id");
+      if (qerr) throw new Error(`Couldn't clear queue: ${qerr.message}`);
+      const queueCleared = (qdel as { id: string }[] | null)?.length ?? 0;
+
+      return {
+        waitlistCleared,
+        queueCleared,
+        recipients,
+        matchedPatients: patientIds.length,
+      };
+    },
+  );

@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.198.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.198.0 &mdash; &ldquo;Reset test patient&rdquo; button: re-test the at-booking ask without SQL.</strong> The at-booking invite is <em>one-per-patient-ever</em> (a waitlist dedup keyed by patient), so after a test patient gets one invite, every later booking silently dedup-skips &mdash; re-testing meant hand-running DELETE SQL each time. New <strong>Reset test patient</strong> button on <strong>Settings &rarr; Connection health &rarr; Local delivery agent</strong> (in the autonomous/test-mode box) clears the <code>at-booking-ask</code> waitlist rows + <code>at_booking</code> queue rows for your test patients in one click, then you just re-book. <strong>HARD SAFETY</strong>: scoped server-side to <code>local_agents.test_recipients</code> ONLY &mdash; it maps those allowlisted numbers to patients via the SAME <code>buildPatientIndex</code> the Acuity webhook matches with, so it physically cannot touch a non-allowlisted (real) patient&rsquo;s opt-in; empty allowlist = refuses (never wipes). Toast reports rows cleared. <strong>Touched</strong>: <code>connection-health.functions.ts</code> (new owner-scoped <code>resetTestArtifactsFn</code>), <code>app.refill.settings.health.tsx</code> (button in DeliverySettings), <code>changelog.ts</code>. <strong>No migration.</strong>",
+    ],
+  },
+  {
     version: "v2.197.0",
     date: "June 2026",
     items: [

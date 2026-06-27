@@ -48,6 +48,7 @@ import {
   provisionLocalAgentFn,
   rotateLocalAgentSecretFn,
   updateLocalAgentSettingsFn,
+  resetTestArtifactsFn,
   type ConnectionHealthReport,
   type ConnectionHealthItem,
   type LocalAgentInfo,
@@ -465,6 +466,7 @@ function DeliverySettings({
   const recipients = info?.testRecipients ?? [];
   const [busy, setBusy] = useState(false);
   const [newNum, setNewNum] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   const save = useCallback(
     async (patch: {
@@ -503,6 +505,32 @@ function DeliverySettings({
   };
   const removeRecipient = (n: string) =>
     void save({ testRecipients: recipients.filter((r) => r !== n) });
+
+  // Dev tool (v2.198.0): clear the at-booking invite history for the test
+  // numbers above so the SAME patient can be re-tested (the ask is one-per-
+  // patient-ever; without this, a re-booking silently dedup-skips). Scoped
+  // server-side to the allowlist only — it can't touch a real patient.
+  const resetTestPatient = useCallback(async () => {
+    if (!accessToken) return;
+    setResetting(true);
+    try {
+      const res = await resetTestArtifactsFn({
+        data: { accessToken, viewAsUserId },
+      });
+      const cleared = res.waitlistCleared + res.queueCleared;
+      toast.success(
+        cleared > 0
+          ? `Reset done — cleared ${res.waitlistCleared} waitlist + ${res.queueCleared} queue row${cleared === 1 ? "" : "s"} across ${res.matchedPatients} test patient${res.matchedPatients === 1 ? "" : "s"}. Book again to re-test.`
+          : "Nothing to clear — your test patients have no at-booking rows. You're clear to book.",
+      );
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Couldn't reset test patient.",
+      );
+    } finally {
+      setResetting(false);
+    }
+  }, [accessToken, viewAsUserId]);
 
   return (
     <div className="rounded-lg border border-rule p-3 space-y-3">
@@ -619,6 +647,29 @@ function DeliverySettings({
               <Plus className="h-3 w-3" />
               Add
             </button>
+          </div>
+
+          {/* v2.198.0: re-test reset. The at-booking ask is one-per-patient-
+              ever, so a test patient must have their invite history cleared
+              before a new booking will re-ask. Scoped to the numbers above. */}
+          <div className="pt-2 mt-1 border-t border-rule/60">
+            <button
+              type="button"
+              onClick={resetTestPatient}
+              disabled={resetting || busy || recipients.length === 0}
+              className="inline-flex items-center gap-1.5 rounded-md border border-rule bg-white px-2.5 py-1 text-[11px] font-medium text-ink-soft hover:border-ink-faint hover:text-ink transition disabled:opacity-50"
+            >
+              {resetting ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3 w-3" />
+              )}
+              Reset test patient
+            </button>
+            <p className="mt-1 text-[11px] text-ink-faint leading-snug">
+              Clears the at-booking invite history for the number(s) above so you
+              can re-test the same patient. Only ever touches these test numbers.
+            </p>
           </div>
         </div>
       )}
