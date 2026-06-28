@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.202.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.202.0 &mdash; Allocation folded into the Deal Desk.</strong> The standalone <strong>Allocation</strong> operator page &mdash; the per-unit “ledger” no spa actually keeps &mdash; is retired; <code>/recognition/allocation</code> now redirects to the <strong>Deal Desk</strong>, where its capability lives in two cleaner forms: <strong>Deploy</strong> (a deal's Promo corner runs the cohort allocation + sends via the zero-setup queue — the click is the confirm) and a new collapsible <strong>“Deploy settings”</strong> panel that rehomes the <strong>cohort split</strong> (Loyal Vintage / Top-Decile / At-Risk), <strong>cooldown</strong>, and the <strong>per-cohort iMessage templates</strong>. The engine + attribution (<code>runAllocation</code>, <code>dispatchAllocationBatch</code>, <code>recordAllocationWinIfBooked</code>, the units-deployed RPC) are unchanged — only the operator surface moved. (The old per-suggestion manual-review queue is gone by design — that was the over-built part; deploy is now one deliberate action.) <strong>Touched</strong>: <code>app.refill.recognition.allocation.tsx</code> (→ redirect), <code>app.refill.recognition.deal.tsx</code> (Deploy settings panel). <strong>No migration.</strong>",
+    ],
+  },
+  {
     version: "v2.201.0",
     date: "June 2026",
     items: [

@@ -22,12 +22,16 @@ import {
   Loader2,
   Send,
   CheckCircle2,
+  SlidersHorizontal,
+  Save,
+  ChevronDown,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
 import { BuyingTabs } from "@/components/refill/BuyingTabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
+import { cn } from "@/lib/utils";
 import {
   listDeals,
   createDeal,
@@ -41,6 +45,10 @@ import {
   listAllocationSuggestions,
   confirmAllocationSuggestion,
   dispatchAllocationBatch,
+  getAllocationSettings,
+  updateAllocationSettings,
+  type AllocationSettings,
+  type Cohort,
 } from "@/server/refill-recognition-allocation.functions";
 
 export const Route = createFileRoute("/app/refill/recognition/deal")({
@@ -225,6 +233,9 @@ function DealDeskPage() {
             ))}
           </div>
         </div>
+
+        {/* Deploy settings (rehomed from the old Allocation tab) */}
+        <DeploySettings accessToken={accessToken} viewAsUserId={viewAsUserId} />
 
         {/* Deals list */}
         {loadError ? (
@@ -491,5 +502,187 @@ function DealCard({
         </div>
       </div>
     </div>
+  );
+}
+
+const COHORT_LABELS: Record<Cohort, string> = {
+  loyal_vintage: "Loyal Vintage",
+  top_decile_current: "Top-Decile Current",
+  at_risk: "At-Risk",
+};
+
+/**
+ * Deploy settings — rehomed from the retired Allocation tab (v2.202.0). Controls
+ * HOW a promo deploy picks + messages patients: the cohort split it allocates
+ * across, the cooldown, manual-confirm, and the per-cohort iMessage templates.
+ * Collapsed by default — advanced, set-and-forget.
+ */
+function DeploySettings({
+  accessToken,
+  viewAsUserId,
+}: {
+  accessToken: string | null;
+  viewAsUserId: string | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loyal, setLoyal] = useState(40);
+  const [topDecile, setTopDecile] = useState(40);
+  const [atRisk, setAtRisk] = useState(20);
+  const [cooldown, setCooldown] = useState(6);
+  const [tpls, setTpls] = useState<AllocationSettings["templates"]>({
+    loyal_vintage: "",
+    top_decile_current: "",
+    at_risk: "",
+  });
+
+  const expand = useCallback(async () => {
+    setOpen((v) => !v);
+    if (loaded || !accessToken) return;
+    try {
+      const s = await getAllocationSettings({
+        data: { accessToken, viewAsUserId },
+      });
+      setLoyal(s.splitLoyalVintagePct);
+      setTopDecile(s.splitTopDecileCurrentPct);
+      setAtRisk(s.splitAtRiskPct);
+      setCooldown(s.cooldownMonths);
+      setTpls(s.templates);
+      setLoaded(true);
+    } catch {
+      /* defaults stand if the read fails */
+    }
+  }, [loaded, accessToken, viewAsUserId]);
+
+  const sum = loyal + topDecile + atRisk;
+
+  async function save() {
+    if (!accessToken) return;
+    if (sum !== 100) {
+      toast.error(`Cohort split must sum to 100 (currently ${sum}).`);
+      return;
+    }
+    setSaving(true);
+    try {
+      await updateAllocationSettings({
+        data: {
+          accessToken,
+          viewAsUserId,
+          splitLoyalVintagePct: loyal,
+          splitTopDecileCurrentPct: topDecile,
+          splitAtRiskPct: atRisk,
+          cooldownMonths: cooldown,
+          templates: tpls,
+        },
+      });
+      toast.success("Deploy settings saved.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't save settings.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-rule bg-white">
+      <button
+        type="button"
+        onClick={() => void expand()}
+        className="w-full flex items-center gap-2 px-5 py-3 text-left"
+      >
+        <SlidersHorizontal className="h-3.5 w-3.5 text-ink-soft" />
+        <span className="text-[12px] font-semibold text-ink">Deploy settings</span>
+        <span className="text-[11px] text-ink-faint">
+          how a promo picks &amp; messages patients
+        </span>
+        <ChevronDown
+          className={cn(
+            "ml-auto h-4 w-4 text-ink-faint transition",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open && (
+        <div className="border-t border-rule px-5 py-4 space-y-4">
+          {/* cohort split */}
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-ink-faint mb-2">
+              Cohort split + cooldown{" "}
+              <span className={sum === 100 ? "text-ink-faint" : "text-rose"}>
+                (sum {sum}/100)
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <NumField label="Loyal Vintage %" value={loyal} onChange={setLoyal} />
+              <NumField label="Top-Decile %" value={topDecile} onChange={setTopDecile} />
+              <NumField label="At-Risk %" value={atRisk} onChange={setAtRisk} />
+              <NumField label="Cooldown (mo)" value={cooldown} onChange={setCooldown} />
+            </div>
+          </div>
+          {/* templates */}
+          <div className="space-y-3">
+            {(Object.keys(COHORT_LABELS) as Cohort[]).map((c) => (
+              <div key={c}>
+                <label className="block text-[10px] font-semibold uppercase tracking-wider text-ink-soft mb-1">
+                  {COHORT_LABELS[c]} template
+                </label>
+                <textarea
+                  value={tpls[c]}
+                  onChange={(e) =>
+                    setTpls((prev) => ({ ...prev, [c]: e.target.value }))
+                  }
+                  rows={2}
+                  className="w-full rounded border border-rule bg-white px-2 py-1.5 text-xs focus:outline-none focus:border-emerald"
+                />
+              </div>
+            ))}
+            <p className="text-[10px] text-ink-faint">
+              Variables: <code>{"{{firstName}}"}</code> / <code>{"{{brand}}"}</code>{" "}
+              / <code>{"{{units}}"}</code> / <code>{"{{spaName}}"}</code> /{" "}
+              <code>{"{{manufacturer}}"}</code>.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void save()}
+            disabled={saving}
+            className="inline-flex items-center gap-1.5 rounded-md bg-emerald px-3 py-1.5 text-[12px] font-semibold text-paper hover:opacity-95 disabled:opacity-50"
+          >
+            {saving ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Save className="h-3 w-3" />
+            )}
+            Save deploy settings
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NumField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-[10px] font-semibold uppercase tracking-wider text-ink-faint mb-1">
+        {label}
+      </span>
+      <input
+        type="number"
+        min={0}
+        value={value}
+        onChange={(e) => onChange(Math.max(0, Number(e.target.value) || 0))}
+        className="w-full rounded border border-rule px-2 py-1.5 text-[12.5px] focus:outline-none focus:border-emerald"
+      />
+    </label>
   );
 }
