@@ -16,7 +16,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 
 import { PageHeader } from "@/components/PageHeader";
-import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
+import { RewardsTabs } from "@/components/refill/RewardsTabs";
 import { OfferComposer } from "@/components/refill/OfferComposer";
 import { SpaOffersCard } from "@/components/refill/SpaOffersCard";
 import { SmartAbCard } from "@/components/refill/SmartAbCard";
@@ -62,16 +62,11 @@ function OffersPage() {
     <div className="flex flex-col min-h-screen bg-white">
       <PageHeader
         title="Offers"
-        eyebrow="Incentives"
+        eyebrow="Rewards"
         description="One offer, authored once — it can badge at booking, list on your Deals page, and push to patients, all from here. Tell SmartSpa what you want and watch it become real in the live preview."
-        breadcrumbs={[
-          { label: "Refill", to: "/app/refill" },
-          { label: "Incentives", to: "/app/refill/recognition/inventory" },
-          { label: "Offers" },
-        ]}
       />
 
-      <RecognitionTabs active="offers" />
+      <RewardsTabs active="offers" />
 
       <div className="flex-1 px-4 py-6 lg:px-10 max-w-[960px] w-full mx-auto space-y-5">
         {loadError ? (

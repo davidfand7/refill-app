@@ -42,10 +42,9 @@ import {
 import { cn } from "@/lib/utils";
 
 import { PageHeader } from "@/components/PageHeader";
-import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
+import { RewardsTabs } from "@/components/refill/RewardsTabs";
 import { RepPromosCard } from "@/components/refill/RepPromosCard";
 import { PromoIntelligenceCard } from "@/components/refill/PromoIntelligenceCard";
-import { RecallPanel } from "./app.refill.recognition.recall";
 import { getRepLoopEnabled } from "@/server/refill-promos";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
@@ -153,19 +152,11 @@ function RewardsPage() {
     <div className="flex flex-col min-h-screen bg-white">
       <PageHeader
         title="Rewards"
-        eyebrow="Incentives"
-        description="Who to recall and the money on the table — expiring rewards, eligible-but-idle, becoming-eligible and lapsed patients — plus the manufacturer exports that feed them."
-        breadcrumbs={[
-          { label: "Refill", to: "/app/refill" },
-          { label: "Incentives", to: "/app/refill/recognition/inventory" },
-          { label: "Rewards" },
-        ]}
+        eyebrow="Rewards"
+        description="Manufacturer reward signals — the patient-facing loyalty programs (Allē and friends) and the exports that feed them: who's earned what, expiring soon, and the money on the table. Act on it in Renew."
       />
 
-      <RecognitionTabs active="rewards" />
-
-      {/* Action-first: the recall triggers + book/draft (merged from Recall). */}
-      <RecallPanel />
+      <RewardsTabs active="rewards" />
 
       <div className="flex-1 px-4 pb-10 lg:px-10 max-w-[960px] w-full mx-auto space-y-5">
         <div className="border-t border-rule pt-6">

@@ -17,7 +17,7 @@
  * the win to.
  */
 
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -31,6 +31,8 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import { PageHeader } from "@/components/PageHeader";
+import { RewardsTabs } from "@/components/refill/RewardsTabs";
 import { BookDialog } from "@/components/refill/schedule/dialogs";
 import { todayIso, type ServiceLite } from "@/components/refill/schedule/shared";
 import { supabase } from "@/integrations/supabase/client";
@@ -49,13 +51,25 @@ import {
 } from "@/server/refill-recall.functions";
 
 export const Route = createFileRoute("/app/refill/recognition/recall")({
-  // Merged into Rewards (v2.154.0) — Rewards is now the action-first reward
-  // surface and renders RecallPanel at the top. Redirect old links so nothing
-  // dead-ends; the Recall tab was removed from RecognitionTabs.
-  beforeLoad: () => {
-    throw redirect({ to: "/app/refill/recognition/rewards", replace: true });
-  },
+  component: RenewPage,
 });
+
+// v2.200.0: "Renew" finally gets its home (closes project_terms_meaning_sweep).
+// This route was a redirect into Rewards when recall was merged there
+// (v2.154.0); now it's the real patient-side recall surface, the Renew tab of
+// the Rewards section. Same RecallPanel, just with its own page + header.
+function RenewPage() {
+  return (
+    <div className="flex flex-col min-h-screen bg-white">
+      <PageHeader
+        title="Renew"
+        description="Bring back lapsed & overdue patients — the dollars on the table and exactly who to call: expiring rewards, eligible-but-idle, becoming-eligible, and lapsed regulars."
+      />
+      <RewardsTabs active="renew" />
+      <RecallPanel />
+    </div>
+  );
+}
 
 const TRIGGER_META: Record<
   RecallTrigger,

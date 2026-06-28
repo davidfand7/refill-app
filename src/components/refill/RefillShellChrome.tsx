@@ -36,8 +36,17 @@ function deriveActiveKey(pathname: string): RefillNavKey | undefined {
   if (pathname.startsWith("/app/refill/skills")) return "skills";
   if (pathname.startsWith("/app/refill/patients")) return "patients";
   if (pathname.startsWith("/app/refill/catalog")) return "catalog";
-  // "Promos" Solution (recognition namespace; old /promos redirects in).
-  if (pathname.startsWith("/app/refill/recognition")) return "recognition";
+  // v2.200.0: the recognition namespace splits by recipient into two chips.
+  // Buying (spa-side): samples (inventory) · tiers (program) · allocation · deal.
+  if (
+    pathname.startsWith("/app/refill/recognition/inventory") ||
+    pathname.startsWith("/app/refill/recognition/program") ||
+    pathname.startsWith("/app/refill/recognition/allocation") ||
+    pathname.startsWith("/app/refill/recognition/deal")
+  )
+    return "buying";
+  // Rewards (patient-side): rewards · offers · renew (recall) · brand-promos.
+  if (pathname.startsWith("/app/refill/recognition")) return "rewards";
   // Refill Solution = recovery + dissolved preshow/rescue agents + Inbox tab.
   if (
     pathname.startsWith("/app/refill/recovery") ||

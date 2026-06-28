@@ -1,27 +1,30 @@
 /**
- * Shared Recognition sub-nav (Patient-Profitability OS).
- *
- * One tab strip, four tabs: Inventory / Manufacturers / Rewards / Recall.
- * Previously inlined three different ways across the three route files —
- * extracted here (2026-06-07, P1 Recall) so a new tab is a one-line add
- * instead of a four-file edit that drifts.
+ * Rewards sub-nav (v2.200.0) — the patient-side of the manufacturer
+ * relationship (project_buying_rewards_taxonomy).
+ *   • Rewards = manufacturer→patient loyalty (Allē-style) + reward-signal
+ *     exports/attribution. Route stays /recognition/rewards.
+ *   • Offers  = the spa's OWN promos to patients. Route stays /recognition/offers.
+ *   • Renew   = recall of lapsed/overdue patients — the loved word finally
+ *     gets its home (closes project_terms_meaning_sweep). Route stays
+ *     /recognition/recall (was a redirect; now the real Renew page).
+ * The reward-expiry badge (rewards expiring within 60 days → recall) rides the
+ * Renew tab, where the action lives.
  */
 
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Gift, Layers, Wand2, Target, Tag } from "lucide-react";
+import { Gift, Tag, RefreshCw } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { getRewardExpiryBadge } from "@/server/refill-recall.functions";
 
 /**
- * Reward-Expiry Sweep (the 'surface' materializer): an ambient badge of rewards
- * expiring soon, pinned on the Recall tab. Self-fetching + best-effort — only
- * renders when the Skill is adopted + on AND there's expiring money. A miss
- * never breaks the tab strip.
+ * Reward-Expiry Sweep badge: ambient count of rewards expiring soon, pinned on
+ * the Renew tab. Self-fetching + best-effort — only renders when the Skill is
+ * adopted + on AND there's expiring money. A miss never breaks the tab strip.
  */
-function RecallExpiryBadge() {
+function RenewExpiryBadge() {
   const membership = useTenantMembership();
   const viewAsUserId =
     membership.status === "tenant" ? membership.viewAsUserId : undefined;
@@ -41,7 +44,9 @@ function RecallExpiryBadge() {
           data: { accessToken: token, viewAsUserId },
         });
         if (cancelled) return;
-        setBadge(r.enabled && r.count > 0 ? { count: r.count, dollars: r.dollars } : null);
+        setBadge(
+          r.enabled && r.count > 0 ? { count: r.count, dollars: r.dollars } : null,
+        );
       } catch {
         /* badge is best-effort — never break the tabs */
       }
@@ -54,7 +59,7 @@ function RecallExpiryBadge() {
   if (!badge) return null;
   return (
     <span
-      title={`$${badge.dollars.toLocaleString()} in rewards expiring within 60 days — open Recall`}
+      title={`$${badge.dollars.toLocaleString()} in rewards expiring within 60 days — open Renew`}
       className="ml-1 inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none tabular-nums"
       style={{ background: "#fef3c7", color: "#92400e" }}
     >
@@ -63,33 +68,20 @@ function RecallExpiryBadge() {
   );
 }
 
-// "brand-promos" retired v2.94 — the rep-interest loop folded into the Rewards
-// offers surface (RepPromosCard, gated by rep_loop_enabled). The standalone
-// route now redirects to Rewards. Kept in the union so a stale `active` prop
-// (and the redirecting route, if it ever renders) still type-checks.
-export type RecognitionTab =
-  | "brand-promos"
-  | "inventory"
-  | "rewards"
-  | "offers"
-  | "program"
-  | "recall"
-  | "allocation";
+export type RewardsTab = "rewards" | "offers" | "renew";
 
 const TABS: Array<{
-  key: RecognitionTab;
+  key: RewardsTab;
   to: string;
   label: string;
-  Icon: typeof Layers;
+  Icon: typeof Gift;
 }> = [
-  { key: "inventory", to: "/app/refill/recognition/inventory", label: "Incentives", Icon: Layers },
   { key: "rewards", to: "/app/refill/recognition/rewards", label: "Rewards", Icon: Gift },
   { key: "offers", to: "/app/refill/recognition/offers", label: "Offers", Icon: Tag },
-  { key: "program", to: "/app/refill/recognition/program", label: "Program", Icon: Target },
-  { key: "allocation", to: "/app/refill/recognition/allocation", label: "Allocation", Icon: Wand2 },
+  { key: "renew", to: "/app/refill/recognition/recall", label: "Renew", Icon: RefreshCw },
 ];
 
-export function RecognitionTabs({ active }: { active: RecognitionTab }) {
+export function RewardsTabs({ active }: { active: RewardsTab }) {
   return (
     <div className="border-b border-rule bg-paper/50">
       <div className="max-w-[960px] mx-auto px-4 lg:px-10 flex items-center gap-1">
@@ -105,7 +97,7 @@ export function RecognitionTabs({ active }: { active: RecognitionTab }) {
           >
             <Icon className="h-3.5 w-3.5" />
             {label}
-            {key === "rewards" && <RecallExpiryBadge />}
+            {key === "renew" && <RenewExpiryBadge />}
           </Link>
         ))}
       </div>

@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
+import { BuyingTabs } from "@/components/refill/BuyingTabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { getProgramIntelFn, type ProgramIntel } from "@/server/program-intel.functions";
@@ -97,11 +97,11 @@ function ProgramPage() {
   return (
     <div>
       <PageHeader
-        eyebrow="Incentives"
-        title="Program Intelligence"
-        description="Your manufacturer's rewards program — tiers, rebates, and the exact moves to unlock them. The dashboard nobody reads, read for you."
+        eyebrow="Buying"
+        title="Tiers"
+        description="Your manufacturer programs — tiers, levels, and portfolios, with the rebates and exact moves to unlock the next price break. The dashboard nobody reads, read for you."
       />
-      <RecognitionTabs active="program" />
+      <BuyingTabs active="tiers" />
 
       <div className="px-6 lg:px-10 py-6 max-w-[860px] mx-auto">
         {loading ? (

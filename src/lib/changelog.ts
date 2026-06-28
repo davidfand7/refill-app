@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.200.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.200.0 &mdash; “Recognition” retired: meet Buying &amp; Rewards (IA restructure, phase 1).</strong> The manufacturer-money section was a made-up word (“Recognition”) hiding two different things. It now splits by <em>who the value is for</em> &mdash; two first-class nav chips: <strong>Buying</strong> (spa-side: what you buy + the samples that sweeten it) and <strong>Rewards</strong> (patient-side: manufacturer loyalty + your offers + recall). <strong>Buying</strong> tabs = <strong>Samples</strong> (the incentive pool, formerly “Incentives”) · <strong>Tiers</strong> (the formal program ladder — tier = level = portfolio, formerly “Program Intelligence”). <strong>Rewards</strong> tabs = <strong>Rewards</strong> · <strong>Offers</strong> · <strong>Renew</strong>. The loved word <strong>“Renew” finally gets its home</strong> &mdash; the lapsed/overdue recall surface (expiring rewards, eligible-but-idle, becoming-eligible, lapsed) is now its own page + tab, no longer buried inside Rewards. <strong>Allocation</strong> is de-listed from the tabs (its engine folds into the coming Deal Desk); the route + all attribution stay intact. <strong>Zero URL changes, no behavior loss</strong> &mdash; labels + nav only, same <code>/recognition/*</code> namespace (the labels-over-namespace pattern Recapture already uses). Retired <code>RecognitionTabs</code>; added <code>BuyingTabs</code> + <code>RewardsTabs</code>. <strong>Touched</strong>: <code>RefillNav.tsx</code>, <code>RefillShellChrome.tsx</code> (deriveActiveKey split), <code>BuyingTabs.tsx</code> + <code>RewardsTabs.tsx</code> (new), <code>recognition.{inventory,program,rewards,offers,recall}.tsx</code>, <code>recognition.allocation.tsx</code>, <code>changelog.ts</code>. Phases 2–3 next: the Deal Desk (Purchase⇄Samples⇄Promo) + the promotional-pricing engine. <strong>No migration.</strong>",
+    ],
+  },
+  {
     version: "v2.199.0",
     date: "June 2026",
     items: [

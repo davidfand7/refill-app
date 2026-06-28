@@ -36,7 +36,7 @@ import {
 
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyPanel } from "@/components/EmptyPanel";
-import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
+import { BuyingTabs } from "@/components/refill/BuyingTabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import {
@@ -349,7 +349,7 @@ function RecognitionAgentPage() {
           </div>
         }
       />
-      <RecognitionTabs active="allocation" />
+      <BuyingTabs />
 
       <div className="flex-1 px-4 py-6 lg:px-10 max-w-[960px] w-full mx-auto space-y-5">
         {loadError ? (

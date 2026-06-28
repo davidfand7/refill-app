@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import { RecognitionTabs } from "@/components/refill/RecognitionTabs";
+import { BuyingTabs } from "@/components/refill/BuyingTabs";
 import { IncentivesAtWorkBand } from "@/components/refill/IncentivesAtWorkBand";
 import { PromoIntelligenceCard } from "@/components/refill/PromoIntelligenceCard";
 import { supabase } from "@/integrations/supabase/client";
@@ -275,8 +275,8 @@ function RecognitionInventoryPage() {
     return (
       <div>
         <PageHeader
-          title="Incentives"
-          description="The pool of manufacturer-rebate units you can deploy to recognize specific patients."
+          title="Samples"
+          description="Your incentive pool — the manufacturer-funded units you can deploy to recognize specific patients."
         />
         <div className="px-6 lg:px-10 py-14 flex items-center justify-center gap-2 text-sm text-ink-soft">
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -289,11 +289,11 @@ function RecognitionInventoryPage() {
   return (
     <div>
       <PageHeader
-        title="Incentives"
-        description="The pool of manufacturer-funded units you can deploy to recognize specific patients. Two kinds: documented (portal-issued) and promo/samples."
+        title="Samples"
+        description="Your incentive pool — the manufacturer-funded units you can deploy to recognize specific patients. Two kinds: documented (portal-issued) and promo/samples."
       />
 
-      <RecognitionTabs active="inventory" />
+      <BuyingTabs active="samples" />
 
       <div className="px-6 lg:px-10 py-6 space-y-6 max-w-[960px] mx-auto">
         {loadError && (

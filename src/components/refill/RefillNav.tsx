@@ -25,7 +25,8 @@ export type RefillNavKey =
   | "patients"
   | "calendar"
   | "catalog"
-  | "recognition"
+  | "buying"
+  | "rewards"
   | "recovery"
   | "skills"
   | "settings";
@@ -52,10 +53,15 @@ type RefillNavItem = {
 const ITEMS: RefillNavItem[] = [
   // ── Solutions (action workspaces) ──────────────────────────────────────
   { key: "calendar", to: "/app/refill/calendar/schedule", label: "Calendar", shortLabel: "Calendar" },
-  // "Incentives" Solution (formerly Recognition / Promos): rebate inventory,
-  // rewards, recall, allocation + manufacturer promos. Route namespace stays
-  // /recognition; the chip + Solution are labeled Incentives.
-  { key: "recognition", to: "/app/refill/recognition/inventory", label: "Incentives", shortLabel: "Incentives" },
+  // v2.200.0: the old "Incentives"/"Recognition" Solution split by RECIPIENT
+  // into two first-class chips (project_buying_rewards_taxonomy):
+  //   • Buying  = spa-side — samples (inventory) + tiers (program) [+ Deal Desk].
+  //   • Rewards = patient-side — manufacturer loyalty + offers + Renew (recall).
+  // Route namespace stays /recognition (same labels-over-namespace pattern as
+  // Recapture over /recovery); the shell's deriveActiveKey routes each sub-path
+  // to the right chip.
+  { key: "buying",  to: "/app/refill/recognition/inventory", label: "Buying",  shortLabel: "Buying" },
+  { key: "rewards", to: "/app/refill/recognition/rewards",   label: "Rewards", shortLabel: "Rewards" },
   // The Refill Solution: prevent (reminders) + recover (rescue) no-shows.
   // v2.175.1: chip labeled "Recapture" to match the page title (closing the
   // chip≠title island). Route namespace + Solution stay "refill/recovery" —
