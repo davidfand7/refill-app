@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.201.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.201.0 &mdash; The Deal Desk: capture the rep deal, deploy the promo (Buying phase 2).</strong> Every rep↔spa conversation is one triangle &mdash; <strong>Purchase ⇄ Samples ⇄ Promo</strong> &mdash; and now there's a home for it. New <strong>Deal Desk</strong> tab (first tab under Buying): start a deal from whichever corner you're in (“I'm buying” / “I've got samples” / “I'm planning a promo”), capture it loosely (no ledger), add the samples the rep threw in (lands in your Samples pool), and <strong>Deploy to patients</strong> &mdash; which runs the cohort allocation across your available sample units and dispatches through the <strong>zero-setup iMessage queue</strong> (the same lane rescue + at-booking already use; test-mode allowlist still protects real patients). A deal is a lightweight record (no migration). <strong>Under the hood</strong>: the queue helpers (<code>resolveDelivery</code>/<code>queueAllows</code>/<code>enqueueOutboundImessage</code>) were lifted into a shared <code>outbound-delivery.ts</code> so allocation dispatch can reuse them; <code>dispatchAllocationBatch</code> gained a queue lane (source=<code>allocation</code>, dedup <code>allocation:&lt;id&gt;</code>) alongside the existing proxy-email fallback. <strong>Touched</strong>: <code>refill-deal.functions.ts</code> (new deal CRUD), <code>app.refill.recognition.deal.tsx</code> (new), <code>BuyingTabs.tsx</code> (Deal Desk tab), <code>RefillNav.tsx</code> (Buying → Deal Desk), <code>outbound-delivery.ts</code> (new shared lane), <code>emma-rescue.functions.ts</code> + <code>refill-recognition-allocation.functions.ts</code> (reuse + queue lane). <strong>Next</strong>: fold the standalone Allocation route in (redirect + a Deploy-settings panel for cohort splits/templates), then the promotional-pricing $ math (phase 3). Vision “snap the rep's text” = fast-follow. <strong>No migration.</strong>",
+    ],
+  },
+  {
     version: "v2.200.0",
     date: "June 2026",
     items: [

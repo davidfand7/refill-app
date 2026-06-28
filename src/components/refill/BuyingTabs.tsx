@@ -12,9 +12,9 @@
  */
 
 import { Link } from "@tanstack/react-router";
-import { Layers, Target } from "lucide-react";
+import { Layers, Target, Handshake } from "lucide-react";
 
-export type BuyingTab = "samples" | "tiers";
+export type BuyingTab = "deal" | "samples" | "tiers";
 
 const TABS: Array<{
   key: BuyingTab;
@@ -22,6 +22,7 @@ const TABS: Array<{
   label: string;
   Icon: typeof Layers;
 }> = [
+  { key: "deal", to: "/app/refill/recognition/deal", label: "Deal Desk", Icon: Handshake },
   { key: "samples", to: "/app/refill/recognition/inventory", label: "Samples", Icon: Layers },
   { key: "tiers", to: "/app/refill/recognition/program", label: "Tiers", Icon: Target },
 ];

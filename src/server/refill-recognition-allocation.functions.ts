@@ -34,6 +34,12 @@ import { fetchAllRows } from "@/server/paginate";
 import { postResendEmail } from "@/server/resend-send";
 import { recordRecoveryEvent } from "@/server/emma-attribution.functions";
 import { resolvePatientNodeByContact } from "@/server/refill-promo-calendar.functions";
+import {
+  resolveDelivery,
+  queueAllows,
+  enqueueOutboundImessage,
+} from "@/server/outbound-delivery";
+import { normalizePhoneE164 } from "@/lib/client-list-csv";
 
 // ─── Public types ─────────────────────────────────────────────────────────
 
@@ -784,6 +790,64 @@ export const dispatchAllocationBatch = createServerFn({ method: "POST" })
           brand: a.brand,
           body,
         });
+      }
+
+      // Zero-setup queue lane (v2.201.0): when the spa runs the autonomous relay
+      // (delivery_mode='queue' + auto_send), each confirmed allocation is
+      // enqueued for the local helper to send from the spa's own iMessage — no
+      // proxy email, no Claude Desktop. The test-mode allowlist gates per
+      // recipient so a real client can't get an autonomous text mid-test;
+      // non-allowlisted patients are held (counted as skipped), not sent.
+      const delivery = await resolveDelivery(sb, effectiveUserId);
+      if (delivery.mode === "queue" && drafts.length > 0) {
+        const nowIso = new Date().toISOString();
+        let queued = 0;
+        const heldOffAllowlist: string[] = [];
+        for (const d of drafts) {
+          const e164 = normalizePhoneE164(d.phone);
+          if (!e164) {
+            skippedNoPhone.push(d.patientName);
+            continue;
+          }
+          if (!queueAllows(delivery.testRecipients, e164)) {
+            heldOffAllowlist.push(d.patientName);
+            continue;
+          }
+          const ok = await enqueueOutboundImessage(sb, {
+            userId: effectiveUserId,
+            recipient: e164,
+            body: d.body,
+            source: "allocation",
+            dedupKey: `allocation:${d.suggestionId}`,
+          });
+          if (!ok) continue;
+          queued++;
+          const { data: row } = await sb
+            .from("knowledge_nodes")
+            .select("attachments")
+            .eq("id", d.suggestionId)
+            .eq("user_id", effectiveUserId)
+            .maybeSingle();
+          if (row) {
+            const a = {
+              ...(row.attachments as SuggestionAttachments),
+              status: "dispatched" as const,
+            };
+            await sb
+              .from("knowledge_nodes")
+              .update({ attachments: a as unknown as Json, updated_at: nowIso })
+              .eq("id", d.suggestionId);
+          }
+        }
+        return {
+          drafted: queued,
+          skipped: skippedNoPhone.length + heldOffAllowlist.length,
+          proxyEmailMessageId: null,
+          sendError:
+            heldOffAllowlist.length > 0
+              ? `${heldOffAllowlist.length} held — not on your test allowlist (queue test mode).`
+              : null,
+        };
       }
 
       let proxyEmailMessageId: string | null = null;

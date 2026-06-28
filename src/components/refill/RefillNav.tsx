@@ -60,7 +60,7 @@ const ITEMS: RefillNavItem[] = [
   // Route namespace stays /recognition (same labels-over-namespace pattern as
   // Recapture over /recovery); the shell's deriveActiveKey routes each sub-path
   // to the right chip.
-  { key: "buying",  to: "/app/refill/recognition/inventory", label: "Buying",  shortLabel: "Buying" },
+  { key: "buying",  to: "/app/refill/recognition/deal", label: "Buying",  shortLabel: "Buying" },
   { key: "rewards", to: "/app/refill/recognition/rewards",   label: "Rewards", shortLabel: "Rewards" },
   // The Refill Solution: prevent (reminders) + recover (rescue) no-shows.
   // v2.175.1: chip labeled "Recapture" to match the page title (closing the
