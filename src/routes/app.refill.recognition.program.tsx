@@ -28,6 +28,7 @@ import {
 
 import { PageHeader } from "@/components/PageHeader";
 import { BuyingTabs } from "@/components/refill/BuyingTabs";
+import { WhatYouReallyPayCard } from "@/components/refill/WhatYouReallyPayCard";
 import { supabase } from "@/integrations/supabase/client";
 import { useTenantMembership } from "@/lib/use-tenant-membership";
 import { getProgramIntelFn, type ProgramIntel } from "@/server/program-intel.functions";
@@ -103,7 +104,8 @@ function ProgramPage() {
       />
       <BuyingTabs active="tiers" />
 
-      <div className="px-6 lg:px-10 py-6 max-w-[860px] mx-auto">
+      <div className="px-6 lg:px-10 py-6 max-w-[860px] mx-auto space-y-5">
+        <WhatYouReallyPayCard />
         {loading ? (
           <div className="text-sm text-ink-faint">Reading your program…</div>
         ) : !intel || !intel.captured ? (

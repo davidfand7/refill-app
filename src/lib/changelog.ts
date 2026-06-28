@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 
 export const CHANGELOG: ChangelogEntry[] = [
   {
+    version: "v2.203.0",
+    date: "June 2026",
+    items: [
+      "<strong>v2.203.0 &mdash; “What you really pay”: the switch-math (Buying phase 3).</strong> The official tier price is a lie of omission &mdash; a rep's samples amortize into a lower <strong>effective cost</strong> that's on no sheet. New <strong>“What you really pay”</strong> card on <strong>Buying → Tiers</strong> shows, per substitutable group (tox↔tox, filler by area), each brand's <strong>official cost · incentive · effective cost · retail · margin now</strong> side-by-side, badges the best-margin option, and spells out the switch: e.g. <em>“Botox needs ~3 free per 4 bought to match Jeuveau · must be standing, not one-time.”</em> It flags when a margin edge rides a <strong>one-time</strong> incentive (it reverts) and greys “pricing incomplete” where retail is unset. <strong>Reuses the existing brand-economics engine</strong> (<code>getBrandEconomics</code> already fuses cost + incentives → effective margin) &mdash; the new bit is a pure <code>switch-math.ts</code> lib (effective cost, break-even on free units, durability, substitution grouping), proven by <code>verify-switch-math.ts</code> (20/20, incl. the Botox $656 vs Jeuveau $375 → 3-per-4 case). Links to the full Brand Economics table. <strong>Touched</strong>: <code>switch-math.ts</code> + <code>verify-switch-math.ts</code> (new), <code>WhatYouReallyPayCard.tsx</code> (new), <code>app.refill.recognition.program.tsx</code> (Tiers). <strong>No migration.</strong> Completes the Buying arc (phases 1–3).",
+    ],
+  },
+  {
     version: "v2.202.0",
     date: "June 2026",
     items: [
